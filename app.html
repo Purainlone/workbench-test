@@ -1526,6 +1526,7 @@ table.paper td.l{text-align:left;font-weight:600}
           <select id="scListExam" onchange="scRenderList()"><option value="">全部考试</option></select>
           <input id="scListQ" oninput="scRenderList()" placeholder="搜姓名…" style="flex:1;min-width:110px">
           <button class="btn2 sm ghost" onclick="scExportCsv()">⬇️ 导出 CSV</button>
+          <button class="btn2 sm ghost" onclick="scExportXlsx()">⬇️ 导出 Excel</button>
           <span class="sctip" id="scListStat"></span>
         </div>
         <div class="scroll" id="scListBox"></div>
@@ -6681,7 +6682,393 @@ function scWordDownload(){
     }
     s+='</tr>';
   }
-  s+='</table></body></html>';
+  s+='</table><script>
+/* ===== 成绩导入导出（vT7）===== 依赖按需从 npmmirror 加载 */
+var WB_LIB_SRC = {
+  xlsx: 'https://registry.npmmirror.com/xlsx/0.18.5/files/dist/xlsx.full.min.js',
+  jszip: 'https://registry.npmmirror.com/jszip/3.10.1/files/dist/jszip.min.js',
+  tesseract: 'https://registry.npmmirror.com/tesseract.js/4.1.1/files/dist/tesseract.min.js'
+};
+var WB_LIB_LOADING = {};
+function wbLoadLib(key) {
+  var have = { xlsx: window.XLSX, jszip: window.JSZip, tesseract: window.Tesseract };
+  if (have[key]) return Promise.resolve(have[key]);
+  if (!WB_LIB_LOADING[key]) {
+    WB_LIB_LOADING[key] = new Promise(function (res, rej) {
+      var s = document.createElement('script');
+      s.src = WB_LIB_SRC[key];
+      s.onload = function () {
+        var got = { xlsx: window.XLSX, jszip: window.JSZip, tesseract: window.Tesseract }[key];
+        got ? res(got) : rej(new Error(key + ' 未就绪'));
+      };
+      s.onerror = function () { rej(new Error(key + ' 加载失败，请检查网络后重试')); };
+      document.head.appendChild(s);
+    });
+  }
+  return WB_LIB_LOADING[key];
+}
+
+function wbNameKey(s) {
+  return String(s || '').replace(/\s+/g, '')
+    .replace(/[！-～]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); })
+    .toLowerCase();
+}
+function wbEscXml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+/* 编辑距离（OCR 名字模糊匹配用） */
+function wbEditDist(a, b) {
+  var m = a.length, n = b.length, prev = [], cur = [], i, j;
+  if (!m) return n; if (!n) return m;
+  for (j = 0; j <= n; j++) prev[j] = j;
+  for (i = 1; i <= m; i++) {
+    cur[0] = i;
+    for (j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    for (j = 0; j <= n; j++) prev[j] = cur[j];
+  }
+  return prev[n];
+}
+/* 从一行文本 / 一列候选里匹配名单中的学生：先精确后模糊（姓一致、差 1 字内） */
+function wbMatchName(text, names) {
+  var t = wbNameKey(text).replace(/[0-9.、:：,， ]/g, '');
+  if (!t) return null;
+  var best = null, bestD = 99;
+  for (var i = 0; i < names.length; i++) {
+    var nm = wbNameKey(names[i]);
+    if (!nm || nm.length < 2) continue;
+    if (t.indexOf(nm) > -1) return names[i];
+    if (t.length < 2) continue;
+    for (var st = 0; st + nm.length <= t.length + 1; st++) {
+      var seg = t.substr(st, nm.length);
+      if (seg.length < 2 || seg[0] !== nm[0]) continue;
+      var d = wbEditDist(seg, nm);
+      if (d < bestD) { bestD = d; best = names[i]; }
+    }
+  }
+  return (best && bestD <= 1) ? best : null;
+}
+
+/* ---------- 往 <w:tc> 填文字（保留原样式） ---------- */
+function wbFillTc(tc, text) {
+  text = wbEscXml(text);
+  var m = tc.match(/<w:t[^>]*>[^<]+<\/w:t>/);
+  if (m) return tc.replace(m[0], m[0].replace(/(<w:t[^>]*>)[^<]+(<\/w:t>)/, function (_, a, b) { return a + text + b; }));
+  m = tc.match(/<w:t[^>]*><\/w:t>/);
+  if (m) return tc.replace(m[0], m[0].replace(/(<w:t[^>]*>)(<\/w:t>)/, function (_, a, b) { return a + text + b; }));
+  var run = '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:eastAsia="宋体"/><w:sz w:val="24"/></w:rPr><w:t>' + text + '</w:t></w:r>';
+  if (tc.indexOf('</w:pPr>') > -1) return tc.replace('</w:pPr>', '</w:pPr>' + run);
+  return tc.replace(/(<w:p[ >])/, '$1' + run);
+}
+
+/* ---------- 导出 Word 统计表（真实学校模板 docx） ----------
+   opt: {subject, cls, date, students:[{name,score}]}  students 按名单顺序（序号即名次/学号） */
+function wbExportDocx(opt) {
+  return wbLoadLib('jszip').then(function (JSZip) {
+    return JSZip.loadAsync(WB_TPL_B64, { base64: true });
+  }).then(function (zip) {
+    return zip.file('word/document.xml').async('string').then(function (xml) {
+      /* 1. 标题区：学科 + 年月日 */
+      var mp = xml.match(/<w:p[ >](?:(?!<\/w:p>)[\s\S])*?学科(?:(?!<\/w:p>)[\s\S])*?<\/w:p>/);
+      if (mp) {
+        var para = mp[0];
+        var np = para.replace('学科：', '学科：' + wbEscXml(opt.subject || ''), 1);
+        var d = String(opt.date || '');
+        var p2 = d.split('-');
+        if (p2.length === 3) {
+          np = np.replace('年', p2[0] + ' 年').replace('月', String(Number(p2[1])) + ' 月').replace('日', String(Number(p2[2])) + ' 日');
+        }
+        xml = xml.replace(para, function () { return np; });
+      }
+      /* 2. 表格 */
+      var mt = xml.match(/<w:tbl>[\s\S]*?<\/w:tbl>/);
+      var tbl = mt[0];
+      var rows = tbl.match(/<w:tr[ >][\s\S]*?<\/w:tr>/g) || [];
+      /* 统计行（第 3 行） */
+      var st = opt.students || [];
+      var scored = st.filter(function (x) { return x.score != null && x.score !== ''; });
+      var full = Number(opt.full) || 100;
+      function rt(x) { return Number(x.score) / full * 100; }
+      var segN = [0, 0, 0, 0, 0, 0], below = 0, total = 0, pass = 0, exc = 0;
+      scored.forEach(function (x) {
+        var r = rt(x); total += Number(x.score);
+        if (r >= 60) pass++;
+        if (r >= 90) exc++;
+        if (r < 31) { below++; return; }
+        if (r < 60) segN[0]++;
+        else if (r < 70) segN[1]++;
+        else if (r < 80) segN[2]++;
+        else if (r < 90) segN[3]++;
+        else if (r < 100) segN[4]++;
+        else segN[5]++;
+      });
+      var n = scored.length;
+      var stats = [opt.cls || '', String(n)].concat(segN.map(String))
+        .concat([n ? String(total) : '', n ? (Math.round(total / n * 10) / 10).toFixed(1) : '',
+                 n ? Math.round(pass / n * 100) + '%' : '', n ? Math.round(exc / n * 100) + '%' : '']);
+      if (rows[2]) {
+        var cells2 = rows[2].match(/<w:tc>[\s\S]*?<\/w:tc>/g) || [];
+        var nr2 = rows[2];
+        for (var i = 0; i < cells2.length && i < stats.length; i++) {
+          (function (tc, val) { nr2 = nr2.replace(tc, function () { return wbFillTc(tc, val); }); })(cells2[i], stats[i]);
+        }
+        tbl = tbl.replace(rows[2], function () { return nr2; });
+      }
+      /* 学生行（行5~25）：序号格 [0,4,8]，姓名格 [1,5,9]，成绩格 [2,6,10]；模板序号=名单序号 */
+      for (var ri = 4; ri < rows.length; ri++) {
+        var row = rows[ri];
+        var cells = row.match(/<w:tc>[\s\S]*?<\/w:tc>/g) || [];
+        if (cells.length < 11) continue;
+        var nr = row;
+        [[0, 1, 2], [4, 5, 6], [8, 9, 10]].forEach(function (idx) {
+          var m = (cells[idx[0]].match(/<w:t[^>]*>([^<]*)<\/w:t>/) || []);
+          var no = m[1] && /^\s*\d+\s*$/.test(m[1]) ? parseInt(m[1], 10) : null;
+          if (no == null) return;
+          var s = st[no - 1];
+          if (!s) return;
+          (function (cn, cv, cs2, sv) {
+            nr = nr.replace(cn, function () { return wbFillTc(cn, cv); });
+            nr = nr.replace(cs2, function () { return wbFillTc(cs2, sv); });
+          })(cells[idx[1]], s.name, cells[idx[2]], s.score == null ? '' : s.score);
+        });
+        tbl = tbl.replace(row, function () { return nr; });
+      }
+      xml = xml.replace(mt[0], function () { return tbl; });
+      zip.file('word/document.xml', xml);
+      return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    });
+  }).then(function (blob) {
+    var name = (opt.cls || '班级') + '_' + (opt.subject || '') + '_成绩统计表.docx';
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+    return name;
+  });
+}
+
+/* ---------- 导出 Excel ---------- */
+/* opt: {head:[...], rows:[[...]], fileName} */
+function wbExportXlsx(opt) {
+  return wbLoadLib('xlsx').then(function (XLSX) {
+    var ws = XLSX.utils.aoa_to_sheet([opt.head].concat(opt.rows));
+    ws['!cols'] = opt.head.map(function (h) { return { wch: Math.max(10, String(h).length * 2 + 2) }; });
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '成绩');
+    XLSX.writeFile(wb, opt.fileName, { bookType: 'xlsx' });
+    return opt.fileName;
+  });
+}
+
+/* ---------- 解析 Excel / CSV → 二维数组 ---------- */
+function wbParseExcel(file) {
+  return wbLoadLib('xlsx').then(function (XLSX) {
+    return new Promise(function (res, rej) {
+      var fr = new FileReader();
+      fr.onload = function () {
+        try {
+          var wb = XLSX.read(new Uint8Array(fr.result), { type: 'array' });
+          var ws = wb.Sheets[wb.SheetNames[0]];
+          var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+          res(aoa.map(function (r) { return (r || []).map(function (c) { return String(c == null ? '' : c).trim(); }); }));
+        } catch (e) { rej(new Error('Excel 解析失败：' + e.message)); }
+      };
+      fr.onerror = function () { rej(new Error('文件读取失败')); };
+      fr.readAsArrayBuffer(file);
+    });
+  });
+}
+
+/* ---------- OCR 图片 → 二维数组 ---------- */
+function wbOcrImage(file, onStage) {
+  return wbLoadLib('tesseract').then(function (Tesseract) {
+    return Tesseract.createWorker('chi_sim+eng', 1, {
+      langPath: 'https://unpkg.com/@tesseract.js-data',
+      logger: function (m) {
+        if (onStage && m && m.status) {
+          var zh = { 'loading tesseract core': '加载识别引擎', 'initializing tesseract': '初始化引擎', 'loading language traineddata': '下载中文语言包（首次较慢）', 'initializing api': '准备识别', 'recognizing text': '正在识别' };
+          onStage(zh[m.status] || m.status, m.progress || 0);
+        }
+      }
+    }).then(function (w) { return w.recognize(file); }).then(function (r) {
+      try { w && w.terminate && w.terminate(); } catch (e) {}
+      var txt = (r && r.data && r.data.text) || '';
+      var lines = String(txt).split('\n').map(function (l) { return l.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
+      var rows = [];
+      lines.forEach(function (l) {
+        var m = l.match(/^(.*?)[\s:：]*(\d{1,3}(?:\.\d)?)\s*分?\s*$/);
+        if (m && m[1]) {
+          var nm = m[1].replace(/[0-9.、,，:：\-—]/g, '').trim();
+          if (nm.length >= 2 && nm.length <= 6) { rows.push([nm, m[2]]); return; }
+        }
+        rows.push([l, '']);
+      });
+      return rows;
+    });
+  });
+}
+
+/* ---------- 二维数组 → [{name,score}]（结合名单猜列 + 模糊匹配） ---------- */
+function wbAoaToScores(aoa, names) {
+  var rows = (aoa || []).filter(function (r) { return (r || []).some(function (c) { return String(c).trim() !== ''; }); });
+  if (!rows.length) return [];
+  /* 找表头行（含「姓名」或匹配到名单最多的行） */
+  var hi = -1, best = 0;
+  for (var i = 0; i < Math.min(rows.length, 6); i++) {
+    var hits = 0, hasHd = false;
+    rows[i].forEach(function (c) {
+      if (/姓名|名字|学生/.test(c)) hasHd = true;
+      if (names.some(function (n) { return wbNameKey(n) === wbNameKey(c) && n; })) hits++;
+    });
+    var sc = hits * 2 + (hasHd ? 1 : 0);
+    if (sc > best) { best = sc; hi = i; }
+  }
+  var body = hi >= 0 ? rows.slice(hi + 1) : rows;
+  if (!body.length) body = rows;
+  /* 姓名列：匹配名单最多的列；分数列：数字最多的列 */
+  var nCol = -1, nBest = 0, sCol = -1, sBest = 0;
+  var colN = Math.max.apply(null, body.map(function (r) { return r.length; }));
+  for (var c = 0; c < colN; c++) {
+    var nh = 0, sh = 0;
+    body.forEach(function (r) {
+      var v = String(r[c] || '').trim();
+      if (!v) return;
+      if (names.some(function (n) { return wbNameKey(n) === wbNameKey(v); })) nh++;
+      if (/^\d{1,3}(\.\d)?$/.test(v)) sh++;
+    });
+    if (nh > nBest) { nBest = nh; nCol = c; }
+    if (sh > sBest) { sBest = sh; sCol = c; }
+  }
+  if (nCol < 0) nCol = 0;
+  if (sCol < 0 || sCol === nCol) sCol = nCol + 1;
+  var out = [];
+  body.forEach(function (r) {
+    var rawName = String(r[nCol] || '').trim();
+    if (!rawName) return;
+    var name = wbMatchName(rawName, names) || rawName;
+    var v = String(r[sCol] == null ? '' : r[sCol]).replace(/[^\d.]/g, '');
+    out.push({ name: name, score: v === '' ? '' : Number(v) });
+  });
+  return out;
+}
+
+/* ---------- 校对层（模态表格，可改可删） ---------- */
+/* rows:[{name,score}]  onConfirm(rows) */
+function wbReview(rows, onConfirm, onCancel) {
+  var old = document.getElementById('wbImpMask');
+  if (old) old.remove();
+  var mask = document.createElement('div');
+  mask.id = 'wbImpMask';
+  mask.style.cssText = 'position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:99990;display:flex;align-items:center;justify-content:center;padding:20px';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:16px;padding:18px 20px;max-width:560px;width:100%;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.2)';
+  var h = document.createElement('div');
+  h.style.cssText = 'font-weight:700;font-size:15px;margin-bottom:6px';
+  h.textContent = '📥 识别结果校对（' + rows.length + ' 条）';
+  box.appendChild(h);
+  var tip = document.createElement('div');
+  tip.style.cssText = 'font-size:12px;color:#6b8a7e;margin-bottom:10px;line-height:1.6';
+  tip.textContent = '识别可能出错，请核对：姓名认错的改成正确姓名（要和名单一致才会入库），分数直接改。点某行「删」可移除。确认后点下方按钮。';
+  box.appendChild(tip);
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'overflow:auto;flex:1;border:1px solid #e3efe8;border-radius:10px';
+  var tb = document.createElement('table');
+  tb.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px';
+  tb.innerHTML = '<thead><tr><th style="padding:6px;border-bottom:1px solid #e3efe8;background:#eef6f0">姓名</th><th style="padding:6px;border-bottom:1px solid #e3efe8;background:#eef6f0;width:90px">分数</th><th style="width:44px"></th></tr></thead>';
+  var body = document.createElement('tbody');
+  function render() {
+    body.innerHTML = '';
+    rows.forEach(function (r, i) {
+      var tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid #f0f5f2';
+      var inN = document.createElement('input');
+      inN.value = r.name;
+      inN.style.cssText = 'width:96%;border:1px solid #dfeadf;border-radius:7px;padding:5px 7px;font-size:13px;font-family:inherit';
+      inN.oninput = function () { r.name = inN.value; };
+      var inS = document.createElement('input');
+      inS.value = r.score === '' ? '' : r.score;
+      inS.type = 'number';
+      inS.style.cssText = 'width:70px;border:1px solid #dfeadf;border-radius:7px;padding:5px 7px;font-size:13px;text-align:center;font-family:inherit';
+      inS.oninput = function () { r.score = inS.value === '' ? '' : Number(inS.value); };
+      var td1 = document.createElement('td'); td1.style.padding = '4px 6px'; td1.appendChild(inN);
+      var td2 = document.createElement('td'); td2.style.padding = '4px 6px'; td2.appendChild(inS);
+      var del = document.createElement('button');
+      del.textContent = '删';
+      del.style.cssText = 'border:0;background:none;color:#c2410c;cursor:pointer;font-size:13px';
+      del.onclick = function () { rows.splice(i, 1); render(); };
+      var td3 = document.createElement('td'); td3.style.textAlign = 'center'; td3.appendChild(del);
+      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+      body.appendChild(tr);
+    });
+    if (!rows.length) body.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:20px;color:#98a8b3">没有可导入的行</td></tr>';
+  }
+  render();
+  tb.appendChild(body);
+  wrap.appendChild(tb);
+  box.appendChild(wrap);
+  var ops = document.createElement('div');
+  ops.style.cssText = 'display:flex;gap:10px;margin-top:14px';
+  var ok = document.createElement('button');
+  ok.textContent = '✅ 确认导入这 ' + rows.length + ' 条';
+  ok.style.cssText = 'flex:1;border:0;border-radius:10px;padding:11px;background:#2d8f63;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit';
+  ok.onclick = function () {
+    var clean = rows.filter(function (r) { return String(r.name).trim() !== '' && r.score !== '' && r.score != null && !isNaN(Number(r.score)); });
+    mask.remove();
+    onConfirm(clean);
+  };
+  var cc = document.createElement('button');
+  cc.textContent = '取消';
+  cc.style.cssText = 'flex:0 0 90px;border:0;border-radius:10px;padding:11px;background:#e3efe8;color:#1f5c3d;font-size:14px;cursor:pointer;font-family:inherit';
+  cc.onclick = function () { mask.remove(); onCancel && onCancel(); };
+  ops.appendChild(ok); ops.appendChild(cc);
+  box.appendChild(ops);
+  mask.appendChild(box);
+  document.body.appendChild(mask);
+}
+
+
+/* ===== vT7 导出 Excel（与 scExportCsv 同数据源，格式为真 .xlsx） ===== */
+function scExportXlsx() {
+  wbLoadLib('xlsx').then(function (XLSX) {
+    var head = ['学生姓名', '学号', '科目', '考试类型', '考试名称', '分数', '满分', '考试日期', '学期', '备注'];
+    var sub = document.getElementById('scListSub').value;
+    var ex = document.getElementById('scListExam').value;
+    var rows = SC_ROWS.filter(function (r) {
+      if (sub && fval(r, '科目') !== sub) return false;
+      if (ex && fval(r, '考试名称') !== ex) return false;
+      return true;
+    }).map(function (r) {
+      return head.map(function (k) { var v = fval(r, k); return String(v == null ? '' : v); });
+    });
+    if (!rows.length) { toastMsg('这个筛选下没有成绩记录'); return; }
+    var ws = XLSX.utils.aoa_to_sheet([head].concat(rows));
+    ws['!cols'] = head.map(function (h) { return { wch: Math.max(10, h.length * 2 + 2) }; });
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '成绩记录');
+    XLSX.writeFile(wb, '成绩记录_' + new Date().toISOString().slice(0, 10) + '.xlsx', { bookType: 'xlsx' });
+    toastMsg('✅ 已导出 Excel（' + rows.length + ' 条）');
+  }).catch(function (e) { toastMsg('❌ ' + e.message); });
+}
+
+/* ===== vT7 导出 Word：升级为真实学校模板 docx（原 HTML 伪装版替换） ===== */
+function scWordDownload() {
+  if (!SC_WORD) { toastMsg('请先选择考试'); return; }
+  var d = SC_WORD, st = scWordData();
+  if (!d.date) {
+    var hit = SC_ROWS.filter(function (r) { return fval(r, '科目') === d.sub && fval(r, '考试名称') === d.exam; })[0];
+    d.date = hit ? (fval(hit, '考试日期') || fval(hit, '日期') || '') : '';
+  }
+  var students = st.list.map(function (x) { return { name: x.name, score: x.v }; });
+  toastMsg('正在生成 Word 统计表…');
+  wbExportDocx({
+    subject: d.sub, cls: d.cls || '', date: d.date || '', full: 100,
+    students: students
+  }).then(function (n) { toastMsg('✅ 已生成 ' + n); })
+    .catch(function (e) { toastMsg('❌ 生成失败：' + e.message); });
+}
+
+</script>
+</body></html>';
   var blob=new Blob(['\ufeff'+s],{type:'application/msword'});
   var a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
