@@ -12306,8 +12306,8 @@ function openRCManager(){
   var curKind='core';
   var seg=el('div','rcseg');
   var bCore=el('button','on','课内'),bExtra=el('button',null,'课外');
-  bCore.onclick=function(){curKind='core';bCore.classList.add('on');bExtra.classList.remove('on')};
-  bExtra.onclick=function(){curKind='extra';bExtra.classList.add('on');bCore.classList.remove('on')};
+  bCore.onclick=function(){curKind='core';bCore.classList.add('on');bExtra.classList.remove('on');if(window.bBtn)bBtn.textContent='批量导入为课内'};
+  bExtra.onclick=function(){curKind='extra';bExtra.classList.add('on');bCore.classList.remove('on');if(window.bBtn)bBtn.textContent='批量导入为课外'};
   seg.appendChild(bCore);seg.appendChild(bExtra);
   var inp=document.createElement('input');inp.placeholder='新增篇目，如 5《古诗三首》';
   inp.style.cssText='flex:1;padding:10px 13px;border:1px solid #e2ece7;border-radius:9px;font-size:14px';
@@ -12327,18 +12327,19 @@ function openRCManager(){
   var bta=document.createElement('textarea');
   bta.placeholder='批量导入：每行一篇，粘贴后点右侧按钮\n如：\n《行路难》（李白）\n《登楼》（杜甫）';
   bta.rows=3;bta.style.cssText='flex:1;padding:10px 13px;border:1px solid #e2ece7;border-radius:9px;font-size:13px;font-family:inherit;resize:vertical';
-  var bBtn=el('button','btn','批量导入为课外');
+  var bBtn=el('button','btn','批量导入为课内');   /* 跟随上方「课内/课外」开关变化 */
+  window.bBtn=bBtn;
   bBtn.style.whiteSpace='nowrap';
   bBtn.onclick=function(){
     var lines=(bta.value||'').split('\n').map(function(x){return x.trim()}).filter(Boolean);
     if(!lines.length){toastMsg('先在左边粘贴篇目，每行一篇');return}
-    var add=0;
+    var add=0,kn=curKind==='extra'?'课外':'课内';
     lines.forEach(function(v){
       if(RC_TITLES.some(function(x){return rcTName(x)===v}))return;
-      RC_TITLES.push(rcMakeTitle(v,'extra'));add++;
+      RC_TITLES.push(rcMakeTitle(v,curKind));add++;
     });
     if(add){rcSaveTitles();draw();renderRecite();}
-    toastMsg(add?('✅ 已导入 '+add+' 个课外篇目'+(lines.length-add>0?('，跳过重复 '+(lines.length-add)+' 个'):'')):'没有新增（粘贴的篇目都已存在）');
+    toastMsg(add?('✅ 已导入 '+add+' 个'+kn+'篇目'+(lines.length-add>0?('，跳过重复 '+(lines.length-add)+' 个'):'')):'没有新增（粘贴的篇目都已存在）');
     if(add)bta.value='';
   };
   brow.appendChild(bta);brow.appendChild(bBtn);
