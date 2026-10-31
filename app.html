@@ -1226,6 +1226,7 @@ table.paper td.l{text-align:left;font-weight:600}
     <button data-s="notice">📢 <span class="lbl">通知中心</span><span class="new">新</span></button>
     <button data-s="desk">🖥️ <span class="lbl">教室桌面</span><span class="new">新</span></button>
     <button data-s="classic">📜 <span class="lbl">经典内容</span><span class="new">新</span></button>
+    <button data-s="detain">⏰ <span class="lbl">留堂名单</span><span class="new">新</span></button>
     <button data-s="comment">✍️ <span class="lbl">学生评语</span><span class="new">新</span></button>
 
     <div class="navgrp">科任教师</div>
@@ -1646,6 +1647,21 @@ table.paper td.l{text-align:left;font-weight:600}
       <summary style="cursor:pointer;font-size:14px;font-weight:700">💡 推荐内容（点一下就加进内容库，可再编辑 / 设为今天）</summary>
       <div id="clRecoList" style="margin-top:8px"></div>
     </details>
+  </section>
+
+  <!-- ============ 今日留堂（作业未完成默认选中，同步教室大屏/家长端） ============ -->
+  <section class="section" id="s-detain">
+    <h2>今日留堂 <span style="font-size:13px;font-weight:400;color:#c2410c;background:#fdeee8;border-radius:8px;padding:2px 10px;vertical-align:middle">作业未完成默认选中</span></h2>
+    <div class="sub">勾选今天需要留堂的学生（打开本页默认按<b>今日作业未完成</b>预选，可手动增减）· 保存后约 3~20 秒同步到教室大屏，<b>每天 16:05 大屏放大提醒并语音播报</b>，同时推送到家长端。</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0">
+      <input id="dtDate" type="date" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
+      <button class="btn2 sm primary" onclick="dtPreselect()">📥 按今日作业未完成预选</button>
+      <button class="btn2 sm" onclick="dtSelAll(true)">✅ 全选</button>
+      <button class="btn2 sm ghost" onclick="dtSelAll(false)">🚫 清空</button>
+      <button class="btn2 primary" onclick="dtSave()">💾 保存今日留堂名单</button>
+    </div>
+    <div class="chartbox"><div id="dtGrid" style="display:flex;gap:6px;flex-wrap:wrap"></div></div>
+    <div class="chartbox sub" id="dtSaved" style="margin-top:10px"></div>
   </section>
 
   <!-- ============ 拍照登记（贴在作业本上的二维码贴纸） ============ -->
@@ -28998,7 +29014,7 @@ function cwInit(){
   if (window.__WB_NT_LOADED__) return; window.__WB_NT_LOADED__ = true;
 
   /* ---------- 数据层 ---------- */
-  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排 */
+  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 */
   var NT_STORE_KEY = 'wb_nt_v1';
   function ntLoad() {
     try { var o = JSON.parse(localStorage.getItem(NT_STORE_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} }
@@ -29522,6 +29538,67 @@ function cwInit(){
     ntUpsert('s-classic', rec); clRender(); ntChanged();
     toastMsg('✅ 已加入内容库，可在列表里编辑或「设为今天」');
   }
+  /* ================= vT16 今日留堂（s-detain，同步教室大屏 + 16:05 提醒 + 家长端） ================= */
+  var dtSel = {}, dtAuto = false;
+  function dtToday() { var d = document.getElementById('dtDate'); return (d && d.value) || new Date().toISOString().slice(0, 10); }
+  function dtRender() {
+    var grid = document.getElementById('dtGrid'); if (!grid) return;
+    var dEl = document.getElementById('dtDate');
+    if (dEl && !dEl.value) dEl.value = new Date().toISOString().slice(0, 10);
+    if (!dtAuto) { dtAuto = true; try { dtPreselect(true); } catch (e) {} }   /* 首次打开按作业未完成自动预选 */
+    var roster = stuRoster();
+    grid.innerHTML = roster.length ? roster.map(function (s) {
+      var on = !!dtSel[s.姓名];
+      return '<label style="border:1px solid ' + (on ? '#7fc7a4' : 'var(--line)') + ';background:' + (on ? '#e8f4ee' : '#fff') + ';border-radius:9px;padding:5px 10px;font-size:13px;cursor:pointer;user-select:none">' +
+        '<input type="checkbox" data-nm="' + esc(s.姓名) + '"' + (on ? ' checked' : '') + ' onchange="dtToggle(this)"> ' + esc(s.姓名) + '</label>';
+    }).join('') : '<span class="sub">还没有学生名单</span>';
+    var d = dtToday();
+    var names = [];
+    ntRows('s-detain').forEach(function (r) {
+      if (r && !r.deleted && String(r.date || '').slice(0, 10) === d && r.name && names.indexOf(r.name) < 0) names.push(r.name);
+    });
+    var saved = document.getElementById('dtSaved');
+    if (saved) saved.innerHTML = names.length
+      ? ('📋 已保存 ' + d + ' 留堂名单（' + names.length + ' 人）：' + esc(names.join('、')) + '　—— 同步教室大屏与家长端，16:05 大屏提醒')
+      : ('📋 ' + d + ' 还没有保存留堂名单');
+  }
+  window.dtToggle = function (cb) { dtSel[cb.getAttribute('data-nm')] = cb.checked; };
+  window.dtSelAll = function (on) {
+    stuRoster().forEach(function (s) { dtSel[s.姓名] = !!on; });
+    dtRender(); toastMsg(on ? '✅ 已全选' : '已清空勾选');
+  };
+  window.dtPreselect = function (silent) {
+    var d = dtToday();
+    var items = HW_ITEMS.filter(function (it) { return hwDateOnly(it.date) === d; });
+    if (!items.length) { if (!silent) toastMsg('今天还没有作业列，无法按作业预选，请手动勾选'); dtRender(); return }
+    var m = hwMapRows();
+    stuRoster().forEach(function (s) {
+      var undone = items.some(function (it) { return !m[hwKey(s.姓名, it.name)]; });
+      if (undone) dtSel[s.姓名] = true;
+    });
+    dtRender();
+    if (!silent) {
+      var n = stuRoster().filter(function (s) { return dtSel[s.姓名]; }).length;
+      toastMsg('📥 已按今日 ' + items.length + ' 项作业预选 ' + n + ' 名未完成学生，可手动增减');
+    }
+  };
+  window.dtSave = function () {
+    var d = dtToday(); if (!d) { toastMsg('⚠️ 先选日期'); return }
+    var d8 = d.replace(/-/g, ''), n = 0;
+    stuRoster().forEach(function (s) {
+      var want = !!dtSel[s.姓名], hit = null;
+      ntRows('s-detain').forEach(function (r) { if (r && !r.deleted && String(r.date || '').slice(0, 10) === d && r.name === s.姓名) hit = r; });
+      if (want && !hit) {
+        ntUpsert('s-detain', { id: 'dt_' + d8 + '_' + s.姓名, date: d, name: s.姓名, by: '班主任', subject: '语文', deleted: false, ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher' });
+        n++;
+      } else if (!want && hit) {
+        hit.deleted = true; hit.ts = Date.now(); hit.updatedAt = new Date().toISOString();
+        ntUpsert('s-detain', hit); n++;
+      }
+    });
+    ntChanged(); dtRender();
+    toastMsg(n ? '💾 已保存，教室大屏与家长端约 3~20 秒同步' : '名单没有变化');
+  };
   function clRender() {
     var list = document.getElementById('clList'); if (!list) return;
     var tf = document.getElementById('clThemeFilter');
@@ -29665,7 +29742,7 @@ function cwInit(){
   window.clTab = clTab; window.clRender = clRender; window.clAdd = clAdd; window.clEdit = clEdit;
   window.clDel = clDel; window.clSetToday = clSetToday; window.clCloseForm = clCloseForm; window.clSaveForm = clSaveForm;
   window.csSave = csSave; window.csDel = csDel;
-  try { clRender(); csRender(); } catch (e) {}
+  try { clRender(); csRender(); dtRender(); } catch (e) {}
 
   /* ================= vT14 学生评语 ================= */
   var CM_TPL_KEY = 'wb_cm_tpl_v1', CM_TRAIT_KEY = 'wb_cm_trait_v1', CM_AI_KEY = 'wb_cm_ai_v1';
@@ -30343,7 +30420,8 @@ function cwInit(){
     try { deskFillCfgForm() } catch (e) {}
     try { asRender() } catch (e) {}   /* vT13 布置作业列表刷新 */
     try { cmAfterSync() } catch (e) {}   /* vT14 学生评语刷新 */
-    try { clRender(); csRender(); } catch (e) {}   /* vT15 经典内容管理刷新 */
+    try { clRender(); csRender(); dtRender(); } catch (e) {}   /* vT15 经典内容管理刷新 */
+    try { dtRender() } catch (e) {}   /* vT16 留堂名单刷新 */
   }
   function ntInit() {
     try {
