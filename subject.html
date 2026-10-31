@@ -111,18 +111,32 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
         <button class="btn sec" onclick="pull(true);renderHome()">🔄 刷新</button>
         <span class="sub" id="homeDate"></span>
       </div>
-      <div id="homeWrap" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px">
+      <div id="homeWrap" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;align-items:start">
         <div style="border:1px solid #e3efe7;border-radius:12px;padding:12px;background:#fafdfb">
           <div style="font-weight:700;margin-bottom:8px;color:#1f6b4a">📋 未交作业名单</div>
           <div id="homeHw"></div>
         </div>
         <div style="border:1px solid #f0d9cf;border-radius:12px;padding:12px;background:#fffaf7">
-          <div style="font-weight:700;margin-bottom:8px;color:#a5512b">⏰ 今日留堂</div>
-          <div id="homeDetain"></div>
+          <h3 style="margin:0 0 8px;font-size:15px">⏰ 今日留堂 <span class="sub">默认勾选本科目今日作业未完成的学生 · 保存后同步教室大屏与家长端</span></h3>
+          <div id="dtGrid" style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0"></div>
+          <div class="row">
+            <button class="btn sec" onclick="dtPreselect()">📥 按本科目今日未完成预选</button>
+            <button class="btn sec" onclick="dtSelAll(true)">✅ 全选</button>
+            <button class="btn sec" onclick="dtSelAll(false)">🚫 清空</button>
+            <button class="btn" onclick="dtSave()">💾 保存今日留堂名单</button>
+            <span class="sub" id="dtMsg"></span>
+          </div>
+          <div class="sub" id="dtSaved" style="margin-top:8px"></div>
         </div>
         <div style="border:1px solid #d9e3f0;border-radius:12px;padding:12px;background:#f8fafd">
-          <div style="font-weight:700;margin-bottom:8px;color:#2a5a9e">📢 今日布置作业</div>
-          <div id="homeAssign"></div>
+          <h3 style="margin:0 0 8px;font-size:15px">📢 布置作业（几秒内同步到教室大屏「今日作业」）</h3>
+          <div class="row">
+            <input type="date" id="asDate" style="width:150px" onchange="renderAssign()">
+            <textarea id="asText" rows="2" placeholder="今天要做的作业，如：练习册 P23；听写第三课词语" style="flex:1;min-width:240px"></textarea>
+            <button class="btn" onclick="assignPush()">📢 布置</button>
+          </div>
+          <div id="asList"></div>
+          <div class="msg" id="asMsg"></div>
         </div>
       </div>
     </div>
@@ -153,26 +167,6 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
         <button class="btn sec" onclick="sendSpeakFromHw()">🔊 播报未交名单（最新一列）</button>
       </div>
       <div class="msg" id="hwMsg"></div>
-
-      <h3 style="margin-top:16px">⏰ 今日留堂 <span class="sub">默认勾选本科目今日作业未完成的学生 · 保存后同步教室大屏与家长端</span></h3>
-      <div id="dtGrid" style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0"></div>
-      <div class="row">
-        <button class="btn sec" onclick="dtPreselect()">📥 按本科目今日未完成预选</button>
-        <button class="btn sec" onclick="dtSelAll(true)">✅ 全选</button>
-        <button class="btn sec" onclick="dtSelAll(false)">🚫 清空</button>
-        <button class="btn" onclick="dtSave()">💾 保存今日留堂名单</button>
-        <span class="sub" id="dtMsg"></span>
-      </div>
-      <div class="sub" id="dtSaved" style="margin-top:8px"></div>
-
-      <h3 style="margin-top:16px">📢 布置作业（几秒内同步到教室大屏「今日作业」）</h3>
-      <div class="row">
-        <input type="date" id="asDate" style="width:150px" onchange="renderAssign()">
-        <textarea id="asText" rows="2" placeholder="今天要做的作业，如：练习册 P23；听写第三课词语" style="flex:1;min-width:240px"></textarea>
-        <button class="btn" onclick="assignPush()">📢 布置</button>
-      </div>
-      <div id="asList"></div>
-      <div class="msg" id="asMsg"></div>
     </div>
 
     <!-- ② 成绩 -->
@@ -496,23 +490,9 @@ function renderHome() {
         '</div>';
     }).join('');
   }
-  /* 2. 今日留堂 */
-  var dtNames = [];
-  ((DOC && DOC.tables && DOC.tables['s-detain']) || []).forEach(function (r) {
-    if (r && !r.deleted && String(r.date || '').slice(0, 10) === d && r.name && dtNames.indexOf(r.name) < 0) dtNames.push(r.name);
-  });
-  var db = $('homeDetain');
-  db.innerHTML = dtNames.length
-    ? '<div style="display:flex;flex-wrap:wrap;gap:4px">' + dtNames.map(function (n) { return '<span style="font-size:12px;background:#fbe9df;color:#a5512b;border-radius:8px;padding:2px 8px">' + esc(n) + '</span>'; }).join('') + '</div>'
-    : '<div class="sub">今天还没有留堂名单</div>';
-  /* 3. 今日布置作业 */
-  var rows = (SA || []).filter(function (r) {
-    return r && !r.deleted && String(r.date || '').slice(0, 10) === d && (r.subject || '') === subj;
-  }).sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
-  var ab = $('homeAssign');
-  ab.innerHTML = rows.length
-    ? rows.map(function (r) { return '<div style="font-size:13.5px;padding:4px 0;border-bottom:1px dashed #e3e9f2">' + esc(r.content || '') + '</div>'; }).join('')
-    : '<div class="sub">今天还没有布置' + esc(subj) + '作业</div>';
+  /* 2 & 3. 今日留堂 / 布置作业：主页直接承载可操作面板，调用各自渲染函数 */
+  try { dtRender() } catch (e) {}
+  try { renderAssign() } catch (e) {}
 }
 function hwItemKey(x) { return String(x.item) + '|' + String(x.date || '').slice(0, 10) }
 
