@@ -36,6 +36,21 @@ textarea { width:100%; }
 table { border-collapse:collapse; width:100%; font-size:13px; margin-top:8px; }
 th,td { border:1px solid #dfeadf; padding:5px 8px; text-align:left; }
 th { background:#eef6f0; color:#24503a; }
+/* ===== 作业登记表格（vT5）：首列姓名 + 首行作业列 ===== */
+.hwwrap { overflow-x:auto; margin-top:10px; border:1px solid #e0ece5; border-radius:10px; background:#fff; max-height:62vh; overflow-y:auto; }
+.hwtable { margin-top:0; font-size:12.5px; border-collapse:separate; border-spacing:0; }
+.hwtable th, .hwtable td { border:none; border-right:1px solid #e8f1eb; border-bottom:1px solid #e8f1eb; padding:6px 9px; text-align:center; white-space:nowrap; }
+.hwtable thead th { background:#eef6f0; color:#24503a; cursor:pointer; user-select:none; position:sticky; top:0; z-index:2; font-weight:600; }
+.hwtable thead th small { display:block; font-weight:400; color:#7d9a8c; font-size:10.5px; }
+.hwtable thead th.on { background:#cde8d8; color:#1f5c3d; }
+.hwtable td.name { background:#f7fbf8; font-weight:600; text-align:left; position:sticky; left:0; z-index:1; min-width:64px; }
+.hwtable tbody td:not(.name) { cursor:pointer; min-width:52px; color:#33473d; }
+.hwtable tbody td.empty { color:#c2d4ca; }
+.hwtable tbody td.优 { background:#ffe9a8; color:#7a5c00; }
+.hwtable tbody td.良 { background:#b8e6c9; color:#1f5c3d; }
+.hwtable tbody td.中 { background:#dbe9f5; color:#2a5578; }
+.hwtable tbody td.差 { background:#f8b4ad; color:#7a231b; }
+.hwtable tbody tr:hover td:not(.name) { filter:brightness(.96); }
 .stat { margin-top:10px; font-size:13px; color:#555; }
 .msg { margin-top:10px; font-size:13px; color:#2d8f63; min-height:18px; }
 .err { color:#c0392b !important; }
@@ -89,11 +104,10 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
     <div class="card" id="tabHw">
       <h3>📝 登记「<span id="hwSubj">—</span>」作业</h3>
       <div class="row">
-        <span class="sub">作业列</span>
-        <select id="hwSel" style="min-width:230px" onchange="renderGrid()"></select>
         <input id="newHwName" placeholder="新建作业，如：练习册 P23" style="width:200px">
         <input type="date" id="newHwDate" style="width:150px">
         <button class="btn sec" onclick="createHwItem()">➕ 建列</button>
+        <button class="btn sec" id="modeBtn" onclick="toggleMode()">✏️ 进入登记</button>
       </div>
       <div class="row">
         <span class="sub">等级：</span>
@@ -101,13 +115,15 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
         <button class="btn sec" data-lv="良" onclick="pickLv('良')">良</button>
         <button class="btn sec" data-lv="中" onclick="pickLv('中')">中</button>
         <button class="btn sec" data-lv="差" onclick="pickLv('差')">差/未交</button>
-        <span class="sub" style="margin-left:8px">点学生格子登记；格子有颜色=已登记，点其他等级可改。</span>
+        <span class="sub" style="margin-left:8px" id="hwTip">浏览模式：点击表格不会改动。进入登记后：点格子＝记为选中等级，先换等级再点格子可修改。</span>
       </div>
-      <div class="grid" id="hwGrid"></div>
+      <div class="hwwrap">
+        <table class="hwtable" id="hwTable"></table>
+      </div>
       <div class="stat" id="hwStat"></div>
       <div class="row">
         <button class="btn" onclick="flushHw(true)">💾 保存登记</button>
-        <button class="btn sec" onclick="sendSpeakFromHw()">🔊 播报未交名单</button>
+        <button class="btn sec" onclick="sendSpeakFromHw()">🔊 播报未交名单（最新一列）</button>
       </div>
       <div class="msg" id="hwMsg"></div>
     </div>
@@ -159,6 +175,36 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
 
 <script>
 'use strict';
+/* ===== 自动更新（vT5）：检测 Pages 上文件变化，自动刷新到新版本，不用手动 Ctrl+F5 ===== */
+(function () {
+  var KEY = 'wb_etag_' + location.pathname;
+  function tip(t) {
+    var d = document.createElement('div');
+    d.textContent = t;
+    d.style.cssText = 'position:fixed;left:50%;top:18px;transform:translateX(-50%);background:#2d8f63;color:#fff;padding:10px 22px;border-radius:30px;font-size:14px;z-index:99999;box-shadow:0 6px 20px rgba(0,0,0,.25)';
+    document.body.appendChild(d);
+  }
+  function check() {
+    try {
+      fetch(location.pathname + '?t=' + Date.now(), { method: 'HEAD', cache: 'no-store' }).then(function (r) {
+        var et = r.headers.get('ETag') || r.headers.get('Last-Modified') || '';
+        if (!et) return;
+        var old = null;
+        try { old = sessionStorage.getItem(KEY) } catch (e) {}
+        if (!old) { try { sessionStorage.setItem(KEY, et) } catch (e) {} return }
+        if (old !== et) {
+          try { sessionStorage.setItem(KEY, et) } catch (e) {}
+          tip('✨ 发现新版本，正在自动更新…');
+          setTimeout(function () { location.replace(location.pathname + '?v=' + Date.now()) }, 1200);
+        }
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  setTimeout(check, 8000);
+  setInterval(check, 5 * 60 * 1000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) check() });
+})();
+
 /* ================= 科任教师 · 电脑版 =================
    登录：粘贴班主任生成的「电脑接入码」
          WBTEA|<登录码>|<姓名>|<科目>|<权限5位>|<base64(设置码)>
@@ -169,6 +215,8 @@ var ME = null, DOC = null, SHA = '', BRANCH = '';
 var STU = [], HWI = [], HW = [], SC = [];
 var LV_SCORE = { '优': 2, '良': 1, '中': 0, '差': -1 };
 var dirtyHw = {}, flushTimer = null, curLv = '优';
+/* vT5 表格视图状态 */
+var editMode = false, sortKey = '', sortDir = 0, COLS = [];
 
 function $(id) { return document.getElementById(id) }
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
@@ -328,44 +376,94 @@ function renderAll() {
   renderHwTab(); renderScList(); renderSpkSel(); buildSpeak();
 }
 function hwItemKey(x) { return String(x.item) + '|' + String(x.date || '').slice(0, 10) }
+
+/* vT5 作业表格：首列=姓名，首行=作业列；只显示自己科目的列，旧的在左、最新在右 */
 function renderHwTab() {
-  /* 本科目优先，旧的在前、最新的在后并默认选中 */
   var mine = HWI.filter(function (x) { return (x.subject || '') === ME.subject });
-  var other = HWI.filter(function (x) { return (x.subject || '') !== ME.subject });
-  var list = mine.concat(other);
-  var sel = $('hwSel');
-  var keep = sel.value;
-  sel.innerHTML = list.map(function (x) {
-    return '<option value="' + esc(hwItemKey(x)) + '">' + esc(x.item + ' · ' + String(x.date || '').slice(0, 10)) + '</option>';
-  }).join('');
-  if (keep) sel.value = keep;
-  if (!sel.value && list.length) sel.value = hwItemKey(list[list.length - 1]);
+  mine.sort(function (a, b) {
+    var d = String(a.date || '').localeCompare(String(b.date || ''));
+    return d !== 0 ? d : String(a.item).localeCompare(String(b.item));
+  });
+  COLS = mine.slice(-12).map(function (x) {
+    return { key: hwItemKey(x), item: x.item, date: String(x.date || '').slice(0, 10) };
+  });
   renderSpkSel();
-  renderGrid();
+  renderHwTable();
+}
+function lvRank(lv) { return lv === '优' ? 4 : lv === '良' ? 3 : lv === '中' ? 2 : lv === '差' ? 1 : 0 }
+function hwDoneMap(key) {
+  var p = key.split('|'), item = p[0], date = p.slice(1).join('|');
+  var m = {};
+  HW.forEach(function (r) {
+    if (r && r.item === item && String(r.date).slice(0, 10) === date && r.name) m[r.name] = r.level;
+  });
+  return m;
+}
+function renderHwTable() {
+  var tb = $('hwTable');
+  if (!tb) return;
+  if (!COLS.length) {
+    tb.innerHTML = '<tr><td style="border:none;text-align:left;color:#6b8a7e;padding:14px">还没有本科目作业列，在上方填名字后点「➕ 建列」。</td></tr>';
+    $('hwStat').textContent = '';
+    return;
+  }
+  var maps = {};
+  COLS.forEach(function (c) { maps[c.key] = hwDoneMap(c.key) });
+
+  /* 行顺序：默认按名单；点列头按该列等级排序（优良中差，再点逆序，第三次恢复） */
+  var rows = STU.slice();
+  if (sortKey && sortDir) {
+    var m = maps[sortKey] || {};
+    rows.sort(function (a, b) {
+      var d = lvRank(m[a.name] || '') - lvRank(m[b.name] || '');
+      return sortDir === 1 ? d : -d;   /* 同等级保持名单原顺序（稳定） */
+    });
+  }
+
+  var head = '<tr><th style="text-align:left;cursor:default" onclick="sortHwReset()">姓名</th>' + COLS.map(function (c) {
+    var arrow = (c.key === sortKey && sortDir) ? (sortDir === 1 ? ' ▲' : ' ▼') : ' ↕';
+    var on = (c.key === sortKey && sortDir) ? ' class="on"' : '';
+    return '<th' + on + ' data-k="' + esc(c.key) + '" onclick="sortHw(this)">' + esc(c.item) +
+      '<small>' + esc(String(c.date).slice(5)) + arrow + '</small></th>';
+  }).join('') + '</tr>';
+
+  var body = rows.map(function (s) {
+    return '<tr><td class="name">' + esc(s.name) + '</td>' + COLS.map(function (c) {
+      var lv = maps[c.key][s.name] || '';
+      return '<td class="' + esc(lv) + (lv ? '' : ' empty') + '" data-n="' + esc(s.name) + '" data-k="' + esc(c.key) + '" onclick="tapCell(this)">' + esc(lv || '·') + '</td>';
+    }).join('') + '</tr>';
+  }).join('');
+  tb.innerHTML = '<thead>' + head + '</thead><tbody>' + body + '</tbody>';
+
+  /* 统计：以最新一列为准 */
+  var last = COLS[COLS.length - 1];
+  var lm = maps[last.key];
+  var doneN = STU.filter(function (s) { return lm[s.name] }).length;
+  var miss = STU.filter(function (s) { return !lm[s.name] }).map(function (s) { return s.name });
+  $('hwStat').innerHTML = '最新列「' + esc(last.item) + '」已登记 <b>' + doneN + '</b> / ' + STU.length + ' 人' +
+    (miss.length ? ' · 未交：<span style="color:#a04a32">' + esc(miss.join('、')) + '</span>' : ' · 全部交齐 🎉');
+}
+function sortHw(el) {
+  var k = el.getAttribute('data-k');
+  if (sortKey !== k) { sortKey = k; sortDir = 1; }
+  else { sortDir = sortDir === 1 ? 2 : sortDir === 2 ? 0 : 1; if (!sortDir) sortKey = ''; }
+  renderHwTable();
+}
+function sortHwReset() { sortKey = ''; sortDir = 0; renderHwTable(); }
+function toggleMode() {
+  editMode = !editMode;
+  var b = $('modeBtn');
+  b.textContent = editMode ? '🔒 锁定（浏览）' : '✏️ 进入登记';
+  b.className = editMode ? 'btn' : 'btn sec';
+  $('hwTip').textContent = editMode
+    ? '登记中：点格子＝记为选中的等级；要先点上面「优/良/中/差」换等级，再点格子。'
+    : '浏览模式：点击表格不会改动。进入登记后：点格子＝记为选中等级。';
+  $('hwMsg').textContent = editMode ? '✏️ 已进入登记模式，现在可以点格子了' : '🔒 已锁定，点击不会改动';
 }
 function curItem() {
-  var v = $('hwSel').value || '';
-  var p = v.split('|');
-  var item = p[0] || '', date = p.slice(1).join('|') || today();
-  return item ? { item: item, date: date } : null;
-}
-function renderGrid() {
-  var box = $('hwGrid');
-  var it = curItem();
-  if (!it) { box.innerHTML = '<div class="sub">还没有作业列，先在上方新建一个。</div>'; $('hwStat').textContent = ''; return }
-  var done = {};
-  HW.forEach(function (r) {
-    if (r && r.item === it.item && String(r.date).slice(0, 10) === it.date && r.name) done[r.name] = r.level;
-  });
-  box.innerHTML = STU.map(function (s) {
-    var lv = done[s.name] || '';
-    return '<div class="cell ' + esc(lv) + '" data-n="' + esc(s.name) + '" onclick="tapStu(this)">' +
-      '<span class="n">' + esc(s.name) + '</span><span class="l">' + esc(lv) + '</span></div>';
-  }).join('') || '<div class="sub">班级名单是空的</div>';
-  var total = STU.length, doneN = Object.keys(done).length;
-  var miss = STU.filter(function (s) { return !done[s.name] }).map(function (s) { return s.name });
-  $('hwStat').innerHTML = '已登记 <b>' + doneN + '</b> / ' + total + ' 人' +
-    (miss.length ? ' · 未交：<span style="color:#a04a32">' + esc(miss.join('、')) + '</span>' : ' · 全部交齐 🎉');
+  if (!COLS.length) return null;
+  var c = COLS[COLS.length - 1];
+  return { item: c.item, date: c.date };
 }
 function pickLv(lv) {
   curLv = lv;
@@ -374,10 +472,13 @@ function pickLv(lv) {
     b.style.outline = (b.getAttribute('data-lv') === lv) ? '2px solid #2d8f63' : 'none';
   });
 }
-function tapStu(el) {
+function tapCell(el) {
+  if (!editMode) { $('hwMsg').textContent = '🔒 浏览模式不会改动；点「✏️ 进入登记」后再点格子'; return; }
   if (!ME.perm.hw) return;
-  var it = curItem(); if (!it) return;
   var name = el.getAttribute('data-n');
+  var key = el.getAttribute('data-k');
+  var p = key.split('|');
+  var it = { item: p[0], date: p.slice(1).join('|') || today() };
   var lv = curLv;
   /* 本地立即生效 + 记入待写盘 */
   HW.forEach(function (r) {
@@ -396,38 +497,35 @@ function tapStu(el) {
       ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'subj-' + ME.name
     });
   }
-  dirtyHw[name] = lv;
-  renderGrid();
+  dirtyHw[name + '|' + key] = { name: name, it: it, lv: lv };
+  renderHwTable();
   $('hwMsg').textContent = '已点 ' + name + ' → ' + lv + '（自动保存中…）';
   if (flushTimer) clearTimeout(flushTimer);
   flushTimer = setTimeout(function () { flushHw(false) }, 2500);
 }
 async function flushHw(manual) {
-  var names = Object.keys(dirtyHw);
-  if (!names.length) { if (manual) $('hwMsg').textContent = '没有需要保存的改动'; return }
-  var batch = {};
-  names.forEach(function (n) { batch[n] = dirtyHw[n] });
+  var keys = Object.keys(dirtyHw);
+  if (!keys.length) { if (manual) $('hwMsg').textContent = '没有需要保存的改动'; return }
+  var batch = keys.map(function (k) { return dirtyHw[k] });
   dirtyHw = {};
   $('hwMsg').textContent = '保存中…';
-  var it = curItem();
   try {
     await writeDoc(function (doc) {
       var arr = Array.isArray(doc.tables.hw) ? doc.tables.hw : [];
-      Object.keys(batch).forEach(function (name) {
-        var lv = batch[name];
+      batch.forEach(function (b) {
         var rec = null;
         for (var i = 0; i < arr.length; i++) {
           var r = arr[i];
-          if (r && r.item === it.item && String(r.date).slice(0, 10) === it.date && r.name === name) { rec = r; break }
+          if (r && r.item === b.it.item && String(r.date).slice(0, 10) === b.it.date && r.name === b.name) { rec = r; break }
         }
         if (rec) {
-          rec.level = lv; rec.score = LV_SCORE[lv] || 0;
+          rec.level = b.lv; rec.score = LV_SCORE[b.lv] || 0;
           rec.by = ME.name; rec.bycode = ME.code; rec.subject = rec.subject || ME.subject;
           rec.ts = Date.now(); rec.updatedAt = new Date().toISOString(); rec.updatedBy = 'subj-' + ME.name;
         } else {
           arr.push({
-            id: 'hw_' + name + '_' + String(it.date).replace(/-/g, '') + '_' + String(it.item),
-            date: it.date, item: it.item, name: name, level: lv, score: LV_SCORE[lv] || 0,
+            id: 'hw_' + b.name + '_' + String(b.it.date).replace(/-/g, '') + '_' + String(b.it.item),
+            date: b.it.date, item: b.it.item, name: b.name, level: b.lv, score: LV_SCORE[b.lv] || 0,
             subject: ME.subject || '', by: ME.name, bycode: ME.code, note: '',
             ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'subj-' + ME.name
           });
@@ -435,9 +533,9 @@ async function flushHw(manual) {
       });
       doc.tables.hw = arr;
     });
-    $('hwMsg').textContent = '✅ 已保存 ' + Object.keys(batch).length + ' 条登记（' + nowStr() + '）';
+    $('hwMsg').textContent = '✅ 已保存 ' + batch.length + ' 条登记（' + nowStr() + '）';
   } catch (e) {
-    Object.keys(batch).forEach(function (n) { dirtyHw[n] = batch[n] });   /* 失败放回，稍后重试 */
+    batch.forEach(function (b) { dirtyHw[b.name + '|' + b.it.item + '|' + b.it.date] = b });   /* 失败放回，稍后重试 */
     $('hwMsg').textContent = '❌ 保存失败：' + (e.message || '') + '（已记下，稍后点「保存登记」重试）';
     $('hwMsg').className = 'msg err';
   }
@@ -571,7 +669,8 @@ function renderSpkSel() {
   var sel = $('spkSel');
   if (!sel) return;
   var keep = sel.value;
-  sel.innerHTML = HWI.map(function (x) {
+  /* vT5 只列自己科目的作业列 */
+  sel.innerHTML = HWI.filter(function (x) { return (x.subject || '') === ME.subject }).map(function (x) {
     return '<option value="' + esc(hwItemKey(x)) + '">' + esc(x.item + ' · ' + String(x.date || '').slice(0, 10)) + '</option>';
   }).join('');
   if (keep) sel.value = keep;
