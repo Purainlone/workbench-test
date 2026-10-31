@@ -6154,29 +6154,71 @@ function scDistCard(rows, exams) {
   return box;
 }
 
-/* ---------- 多科分析：语数英 + 全科 ---------- */
-function scMultiSubCard() {
-  var box = el('div', 'chartbox');
-  box.appendChild(el('h3', null, '🧮 多科分析（语数英 + 全科）'));
-  /* 收集所有科目 */
-  var bySub = {};
+/* ---------- 多科综合分析：自选科目组合（vT12） ---------- */
+var SC_MULTI_SEL = null;   /* null=全部科目参与；否则 {科目:true} 只算勾选的 */
+function scMultiAllSubs() {
+  var seen = {};
   SC_ROWS.forEach(function (r) {
     var s = fval(r, '科目'), v = fnum(r, '分数'), nm = fval(r, '学生姓名');
-    if (!s || v == null || !nm) return;
-    (bySub[s] = bySub[s] || {});
-    (bySub[s][nm] = bySub[s][nm] || []).push(v);
+    if (s && v != null && nm) seen[s] = 1;
   });
-  var subs = Object.keys(bySub);
-  if (!subs.length) { box.appendChild(el('div', 'note', '还没有成绩。')); return box }
-  /* 常用科目优先 */
   var order = ['语文', '数学', '英语'];
-  subs.sort(function (a, b) {
+  return Object.keys(seen).sort(function (a, b) {
     var ia = order.indexOf(a), ib = order.indexOf(b);
     if (ia >= 0 && ib >= 0) return ia - ib;
     if (ia >= 0) return -1; if (ib >= 0) return 1;
     return a.localeCompare(b);
   });
-
+}
+function scMultiSelSubs() {
+  var all = scMultiAllSubs();
+  if (!SC_MULTI_SEL) return all;
+  var sel = all.filter(function (s) { return SC_MULTI_SEL[s] });
+  return sel.length ? sel : all;   /* 至少保留一科 */
+}
+function scMultiChips() {
+  var wrap = el('div', '');
+  wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 12px;align-items:center';
+  var all = scMultiAllSubs();
+  var sel = scMultiSelSubs();
+  all.forEach(function (s) {
+    var on = sel.indexOf(s) >= 0;
+    var b = el('button', null, (on ? '✓ ' : '+ ') + s);
+    b.style.cssText = 'border:1px solid ' + (on ? '#1a9c5b' : '#cfd8d3') + ';background:' + (on ? '#e8f6ee' : '#f4f7f5') + ';color:' + (on ? '#14683f' : '#7a8a80') + ';border-radius:16px;padding:4px 14px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:600';
+    b.onclick = function () { scMultiToggle(s) };
+    wrap.appendChild(b);
+  });
+  var tip = el('span', null, '← 点科目选择参与综合分析的科目');
+  tip.style.cssText = 'font-size:12px;color:#93a89b';
+  wrap.appendChild(tip);
+  return wrap;
+}
+function scMultiToggle(s) {
+  var all = scMultiAllSubs();
+  if (!SC_MULTI_SEL) {
+    SC_MULTI_SEL = {};
+    all.forEach(function (x) { SC_MULTI_SEL[x] = true });
+  }
+  SC_MULTI_SEL[s] = !SC_MULTI_SEL[s];
+  var old = document.getElementById('scMultiCard');
+  if (old) old.replaceWith(scMultiSubCard());
+  var oldB = document.getElementById('scBiasCard');
+  if (oldB) oldB.replaceWith(scBiasRadarCard());
+}
+function scMultiSubCard() {
+  var box = el('div', 'chartbox'); box.id = 'scMultiCard';
+  box.appendChild(el('h3', null, '🧮 多科综合分析（自选科目组合）'));
+  box.appendChild(scMultiChips());
+  var subs = scMultiSelSubs();
+  /* 勾选范围内：每科每人的所有场次分数 */
+  var bySub = {};
+  SC_ROWS.forEach(function (r) {
+    var s = fval(r, '科目'), v = fnum(r, '分数'), nm = fval(r, '学生姓名');
+    if (!s || v == null || !nm || subs.indexOf(s) < 0) return;
+    (bySub[s] = bySub[s] || {});
+    (bySub[s][nm] = bySub[s][nm] || []).push(v);
+  });
+  if (!subs.length) { box.appendChild(el('div', 'note', '还没有成绩。')); return box }
   /* 各科统计对比 */
   function avgOf(o) {
     var vs = [];
@@ -6191,7 +6233,6 @@ function scMultiSubCard() {
   ['科目', '人数', '平均分', '中位数', '最高', '最低', '标准差', '及格率', '优秀率'].forEach(function (h) { trh.appendChild(el('th', null, h)) });
   th.appendChild(trh); t.appendChild(th);
   var tb = el('tbody');
-  var allPerStu = {};
   subs.forEach(function (s) {
     var st = avgOf(bySub[s]);
     if (!st) return;
@@ -6206,23 +6247,24 @@ function scMultiSubCard() {
     r.appendChild(el('td', null, st.passR.toFixed(0) + '%'));
     r.appendChild(el('td', null, st.excR.toFixed(0) + '%'));
     tb.appendChild(r);
-    /* 累计到全科 */
-    Object.keys(bySub[s]).forEach(function (nm) {
+  });
+  /* 综合：每人各科均分（per[科目]=均分），综合均分 = 各科均分再平均（避免科目多的同学占便宜） */
+  var perStu = {};
+  subs.forEach(function (s) {
+    Object.keys(bySub[s] || {}).forEach(function (nm) {
       var a = bySub[s][nm], m = a.reduce(function (x, y) { return x + y }, 0) / a.length;
-      (allPerStu[nm] = allPerStu[nm] || []).push(m);
+      (perStu[nm] = perStu[nm] || {})[s] = m;
     });
   });
-  /* 全科（把每人各科均分再平均，避免科目多的同学占便宜） */
-  var allVals = [];
-  Object.keys(allPerStu).forEach(function (nm) {
-    var a = allPerStu[nm];
-    allVals.push(a.reduce(function (x, y) { return x + y }, 0) / a.length);
+  var allVals = Object.keys(perStu).map(function (nm) {
+    var o = perStu[nm], ks = Object.keys(o);
+    return ks.reduce(function (a, k) { return a + o[k] }, 0) / ks.length;
   });
   if (allVals.length) {
     var stA = scStats(allVals);
     var r2 = el('tr');
     r2.style.fontWeight = '700'; r2.style.background = '#f2f8f4';
-    r2.appendChild(el('td', 'nm', '全科（各科均分再平均）'));
+    r2.appendChild(el('td', 'nm', '综合（勾选科目均分再平均）'));
     r2.appendChild(el('td', null, String(stA.n)));
     r2.appendChild(el('td', null, stA.mean.toFixed(1)));
     r2.appendChild(el('td', null, stA.mid.toFixed(1)));
@@ -6237,33 +6279,47 @@ function scMultiSubCard() {
   box.appendChild(t);
 
   if (subs.length === 1) {
-    box.appendChild(el('div', 'note', '目前只有 ' + subs[0] + ' 一科。把数学、英语成绩也录进来（录入时科目选一下），这里会自动做多科对比和全科排名。'));
+    box.appendChild(el('div', 'note', '当前只勾选了 ' + subs[0] + ' 一科。点上方科目条可以勾选语文、数学、英语等多科一起综合分析。'));
     return box;
   }
 
-  /* 全科总分排名 */
-  var rank = Object.keys(allPerStu).map(function (nm) {
-    var a = allPerStu[nm];
-    return { n: nm, avg: a.reduce(function (x, y) { return x + y }, 0) / a.length, cnt: a.length };
+  /* 完整综合排名：每人一行，含各勾选科目分数 */
+  var rank = Object.keys(perStu).map(function (nm) {
+    var o = perStu[nm], ks = Object.keys(o);
+    return {
+      n: nm, per: o, cnt: ks.length,
+      avg: ks.reduce(function (a, k) { return a + o[k] }, 0) / ks.length
+    };
   }).sort(function (a, b) { return b.avg - a.avg });
   var lb = el('div', '');
   lb.style.marginTop = '14px';
-  lb.appendChild(el('h4', null, '🏆 全科综合排名（前 10）'));
+  lb.appendChild(el('h4', null, '🏆 综合排名（' + subs.join('+') + ' · 共 ' + rank.length + ' 人）'));
+  var scroll = el('div', '');
+  scroll.style.cssText = 'max-height:420px;overflow:auto;border:1px solid #e8eef5;border-radius:8px';
   var tb2 = el('table', 'sct');
   var th2 = el('thead'), tr2 = el('tr');
-  ['名次', '姓名', '综合均分', '科目数'].forEach(function (h) { tr2.appendChild(el('th', null, h)) });
+  ['名次', '姓名'].concat(subs).concat(['综合均分', '科目数']).forEach(function (h) { tr2.appendChild(el('th', null, h)) });
   th2.appendChild(tr2); tb2.appendChild(th2);
   var b2 = el('tbody');
-  rank.slice(0, 10).forEach(function (x, i) {
+  rank.forEach(function (x, i) {
     var r = el('tr');
-    r.appendChild(el('td', 'nm', String(i + 1)));
+    r.appendChild(el('td', null, String(i + 1)));
     r.appendChild(el('td', 'nm', x.n));
+    subs.forEach(function (s) {
+      var td = el('td');
+      if (x.per[s] != null) {
+        td.textContent = x.per[s].toFixed(1);
+        if (x.per[s] < 60) td.style.color = '#dc2626';
+      } else td.textContent = '—';
+      r.appendChild(td);
+    });
     r.appendChild(el('td', null, x.avg.toFixed(1)));
     r.appendChild(el('td', null, String(x.cnt)));
     b2.appendChild(r);
   });
-  tb2.appendChild(b2); lb.appendChild(tb2);
+  tb2.appendChild(b2); scroll.appendChild(tb2); lb.appendChild(scroll);
   box.appendChild(lb);
+  box.appendChild(el('div', 'note', '综合均分 = 各勾选科目的个人均分再平均；「—」表示该生这一科还没有成绩，综合时只平均有分的科目。'));
   return box;
 }
 
@@ -6444,7 +6500,7 @@ function scRankDeltaCard(rows, exams) {
 
 /* ---------- 偏科：雷达图 + 标准分（Z 分数） ---------- */
 function scBiasRadarCard() {
-  var box = el('div', 'chartbox');
+  var box = el('div', 'chartbox'); box.id = 'scBiasCard';
   box.appendChild(el('h3', null, '⚖️ 偏科诊断（标准分对比）'));
   var byStu = {}, subs = {};
   SC_ROWS.forEach(function (r) {
@@ -6455,8 +6511,10 @@ function scBiasRadarCard() {
     (byStu[nm][s] = byStu[nm][s] || []).push(v);
   });
   var subList = Object.keys(subs);
+  /* vT12 联动「多科综合分析」的科目勾选：勾了哪些科目就诊断哪些 */
+  if (SC_MULTI_SEL) subList = subList.filter(function (s) { return SC_MULTI_SEL[s] });
   if (subList.length < 2) {
-    box.appendChild(el('div', 'note', '偏科需要至少两科。目前只有 ' + (subList[0] || '无') +
+    box.appendChild(el('div', 'note', '偏科诊断至少要两科' + (SC_MULTI_SEL ? '（当前勾选不足两科，可到上方「多科综合分析」调整勾选）' : '') + '。目前只有 ' + (subList[0] || '无') +
       '。把数学、英语也录进来，这里会用标准分（Z 分数）算出每个人的强弱项——比直接比分数公平，因为各科难度不同。'));
     return box;
   }
