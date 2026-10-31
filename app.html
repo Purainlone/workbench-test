@@ -29221,9 +29221,11 @@ function cwInit(){
     document.getElementById('rotaRuleOrder').value = rule['排序'] === '学号' ? '学号' : '名单';
     document.getElementById('rotaRuleExcl').value = (rule['排除'] || []).join(',');
     var fixSave = rule['固定周'] || {}, rosterFix = stuRoster();
+    /* 固定排班已保存的人自动并入轮换名单勾选（免得勾两次） */
+    ['周一', '周二', '周三', '周四', '周五'].forEach(function (w) { if (fixSave[w]) rotaRuleNamesSel[fixSave[w]] = true; });
     document.getElementById('rotaRuleFix').innerHTML = ['周一', '周二', '周三', '周四', '周五'].map(function (w) {
       return '<span style="font-size:12px">' + w +
-        ' <select data-wd="' + w + '" style="border:1px solid var(--line);border-radius:8px;padding:3px 6px;font-size:12px;max-width:110px">' +
+        ' <select data-wd="' + w + '" onchange="rotaFixPick(this)" style="border:1px solid var(--line);border-radius:8px;padding:3px 6px;font-size:12px;max-width:110px">' +
         '<option value="">（空）</option>' +
         rosterFix.map(function (s) { return '<option value="' + esc(s.姓名) + '"' + (fixSave[w] === s.姓名 ? ' selected' : '') + '>' + esc(s.姓名) + '</option>' }).join('') +
         '</select></span>';
@@ -29240,6 +29242,13 @@ function cwInit(){
   };
   window.rotaCloseRule = function () { var b = document.getElementById('rotaRuleBox'); if (b) b.style.display = 'none' };
   window.rotaRuleNameToggle = function (cb) { rotaRuleNamesSel[cb.getAttribute('data-nm')] = cb.checked };
+  /* 固定排班下拉选人 → 自动勾进下方轮换名单（避免填两次） */
+  window.rotaFixPick = function (sel) {
+    var nm = sel.value; if (!nm) return;
+    rotaRuleNamesSel[nm] = true;
+    var cbs = document.querySelectorAll('#rotaRuleNames input[data-nm]');
+    for (var i = 0; i < cbs.length; i++) if (cbs[i].getAttribute('data-nm') === nm) cbs[i].checked = true;
+  };
   window.rotaSaveRule = function (andGen) {
     var shiftTxt = (document.getElementById('rotaRuleShift').value || '').split('\n');
     var shifts = [];
