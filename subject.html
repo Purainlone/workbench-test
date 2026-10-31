@@ -931,6 +931,9 @@ function wbExportDocx(opt) {
       if (mp) {
         var para = mp[0];
         var np = para.replace('学科：', '学科：' + wbEscXml(opt.subject || ''), 1);
+        /* 模板「学科：」后预留了 41 个手写空格，填了学科名后要压缩掉，
+           否则「2026 年 10 月 31 日」会被挤到第二行 */
+        if (opt.subject) np = np.replace(/ {3,}/g, '  ');
         var d = String(opt.date || '');
         var p2 = d.split('-');
         if (p2.length === 3) {
