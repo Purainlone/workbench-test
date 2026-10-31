@@ -1592,6 +1592,17 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2 primary" onclick="hwAddItem()">➕ 新建作业列</button>
       <span class="sctip" id="hwTip"></span>
     </div>
+    <div class="chartbox" style="margin:12px 0">
+      <h3 style="font-size:14px">📢 布置作业（几秒内同步到教室大屏「今日作业」）</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="asSubj" list="asSubjList" placeholder="科目" style="width:100px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
+        <datalist id="asSubjList"><option>语文</option><option>数学</option><option>英语</option><option>科学</option><option>道德与法治</option><option>音乐</option><option>美术</option></datalist>
+        <input id="asDate" type="date" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
+        <input id="asText" placeholder="今天要做的作业内容，如：练习册 P23；听写第三课词语" style="flex:1;min-width:240px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
+        <button class="btn2 primary" onclick="asPush()">📢 布置到教室</button>
+      </div>
+      <div id="asList" style="margin-top:8px"></div>
+    </div>
     <div class="hwstat" id="hwStat"></div>
     <div class="rcwrap" id="hwWrap" style="max-height:min(72vh,660px)">
       <table class="hw" id="hwTable"></table>
@@ -28761,7 +28772,7 @@ function cwInit(){
   if (window.__WB_NT_LOADED__) return; window.__WB_NT_LOADED__ = true;
 
   /* ---------- 数据层 ---------- */
-  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop'];
+  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign'];   /* vT13 + s-assign 布置作业 */
   var NT_STORE_KEY = 'wb_nt_v1';
   function ntLoad() {
     try { var o = JSON.parse(localStorage.getItem(NT_STORE_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} }
@@ -29117,6 +29128,43 @@ function cwInit(){
     ntUpsert('s-notice', rec); noticeRenderHistory(); ntChanged();
     toastMsg('已撤回，教室端将不再显示');
   };
+  /* ===== vT13 布置作业（s-assign，随 nt 机制同步到教室桌面）===== */
+  window.asPush = function () {
+    var txt = (document.getElementById('asText').value || '').trim();
+    var sub = (document.getElementById('asSubj').value || '').trim();
+    if (!sub) { toastMsg('⚠️ 先填科目'); return }
+    if (!txt) { toastMsg('⚠️ 先写作业内容'); return }
+    var dEl = document.getElementById('asDate');
+    var d = (dEl && dEl.value) || new Date().toISOString().slice(0, 10);
+    var rec = { id: 'as_' + Date.now() + Math.floor(Math.random() * 9000 + 1000),
+      date: d, subject: sub, content: txt, by: '班主任', deleted: false,
+      ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher' };
+    ntUpsert('s-assign', rec);
+    document.getElementById('asText').value = '';
+    asRender(); ntChanged();
+    toastMsg('📢 已布置，教室大屏「今日作业」约 3~20 秒内显示');
+  };
+  window.asDel = function (id) {
+    if (!confirm('删除这条布置？教室大屏将不再显示')) return;
+    var rec = ntGet('s-assign', id); if (!rec) return;
+    rec.deleted = true; rec.ts = Date.now(); rec.updatedAt = new Date().toISOString();
+    ntUpsert('s-assign', rec); asRender(); ntChanged();
+    toastMsg('已删除这条布置');
+  };
+  window.asRender = function () {
+    var box = document.getElementById('asList'); if (!box) return;
+    var dEl = document.getElementById('asDate');
+    var d = (dEl && dEl.value) || new Date().toISOString().slice(0, 10);
+    var rows = ntRows('s-assign').filter(function (r) { return r && !r.deleted && String(r.date || '').slice(0, 10) === d; });
+    rows.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0) });
+    box.innerHTML = rows.map(function (r) {
+      return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed #e3ede7">' +
+        '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#e8f4ee;color:#2d5a45;flex-shrink:0">' + esc(r.subject || '') + '</span>' +
+        '<span style="flex:1;font-size:13px">' + esc(r.content || '') + '</span>' +
+        '<span style="font-size:11px;color:#93a89b;flex-shrink:0">' + esc(r.by || '') + '</span>' +
+        '<button class="btn2 sm ghost" style="color:#c2410c" onclick="asDel(\'' + r.id + '\')">删</button></div>';
+    }).join('') || '<div class="sub">这一天还没有布置作业</div>';
+  };
   window.noticeRenderHistory = function () {
     var box = document.getElementById('noticeHistory'); if (!box) return;
     var a = ntRows('s-notice').slice().sort(function (x, y) { return (Number(y.ts) || 0) - (Number(x.ts) || 0) }).slice(0, 30);
@@ -29405,6 +29453,7 @@ function cwInit(){
     try { noticeRenderInbox() } catch (e) {}
     try { noticeRenderHistory() } catch (e) {}
     try { deskFillCfgForm() } catch (e) {}
+    try { asRender() } catch (e) {}   /* vT13 布置作业列表刷新 */
   }
   function ntInit() {
     try {
