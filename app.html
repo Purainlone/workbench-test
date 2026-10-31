@@ -1880,6 +1880,10 @@ table.paper td.l{text-align:left;font-weight:600}
         <button class="btn2 sm" onclick="rotaCloseEdit()">关闭</button>
       </div>
     </div>
+    <div class="card" id="trainBox" style="display:none;margin-top:10px;border-color:#e8b48a;background:#fffaf5">
+      <h3>🎯 展示训练营</h3>
+      <div id="trainList" class="sub"></div>
+    </div>
     <div class="card" id="rotaRuleBox" style="display:none;margin-top:10px;border-color:#7fc7a4;background:#f7fdfa">
       <h3 id="rotaRuleTitle">轮换规则</h3>
       <div class="sub">从学生名单里勾选参加轮换的人（顺序即轮换顺序），系统按规则自动排班；「手动指定」过的日子不会被自动排班覆盖。</div>
@@ -29079,7 +29083,7 @@ function cwInit(){
   if (window.__WB_NT_LOADED__) return; window.__WB_NT_LOADED__ = true;
 
   /* ---------- 数据层 ---------- */
-  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 */
+  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain', 's-train'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 / s-train 展示训练营 */
   var NT_STORE_KEY = 'wb_nt_v1';
   function ntLoad() {
     try { var o = JSON.parse(localStorage.getItem(NT_STORE_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} }
@@ -29219,8 +29223,22 @@ function cwInit(){
       var b = document.getElementById('rotaTab-' + x);
       if (b) b.className = 'btn2' + (x === k ? ' primary' : '');
     });
-    rotaRender();
+    rotaRender(); renderTrain();
   };
+  /* vT16 展示训练营：课前展示「待提升」自动登记（教室大屏评价写入 s-train） */
+  function renderTrain() {
+    var box = document.getElementById('trainBox'); if (!box) return;
+    box.style.display = rotaCur === 's-speech' ? 'block' : 'none';
+    var list = document.getElementById('trainList'); if (!list) return;
+    var cnt = {};
+    ntRows('s-train').forEach(function (r) { if (r && !r.deleted && r.name) cnt[r.name] = (cnt[r.name] || 0) + 1; });
+    var rows = Object.keys(cnt).map(function (n) { return { n: n, c: cnt[n] }; })
+      .sort(function (a, b) { return b.c - a.c; });
+    list.innerHTML = rows.length
+      ? ('共 ' + rows.length + ' 人：' + rows.map(function (x) { return '<b>' + esc(x.n) + '</b>（' + x.c + ' 次）'; }).join('、') +
+         '<br>按学号轮完一整轮后，会优先安排这些同学再展示一轮；名单变化后重新点「✨ 生成本月排班」即可生效')
+      : '暂无同学进入训练营（课前展示被评为「待提升」会自动登记）';
+  }
   window.rotaShiftMonth = function (n) { rotaMonth.setMonth(rotaMonth.getMonth() + n); rotaRender() };
   window.rotaGoToday = function () { rotaMonth = new Date(); rotaMonth.setDate(1); rotaRender() };
   window.rotaRender = function () {
@@ -29427,11 +29445,29 @@ function cwInit(){
       cur.setDate(cur.getDate() + 1);
     }
     var def = ROTA_DEFS[rotaCur];
-    var genN = 0, keepN = 0, ptr = 0;   /* ptr：课前展示跨天连续指针（按学号循环） */
+    var genN = 0, keepN = 0;
+    /* vT16 训练营插轮：按学号轮完一整轮 → 训练营同学（待提升）优先再展示一轮 → 回到正常轮流 */
+    var train = [];
+    ntRows('s-train').forEach(function (r) { if (r && !r.deleted && r.name && train.indexOf(r.name) < 0) train.push(r.name); });
+    if (train.length) {
+      var tNo = {};
+      stuRoster().forEach(function (s) { tNo[s.姓名] = parseInt(s.学号, 10) || 9999; });
+      train.sort(function (a, b) { return (tNo[a] || 9999) - (tNo[b] || 9999) || String(a).localeCompare(String(b)); });
+    }
+    var wPass = 0, wI = 0;
+    function nextSeqName() {
+      var trainPass = (wPass % 2 === 1) && train.length > 0;
+      var pool = trainPass ? train : names;
+      var nm = pool[wI % pool.length];
+      wI++;
+      if (wI >= pool.length) { wI = 0; wPass++; }
+      return nm;
+    }
+    function skipSeq(n) { for (var z = 0; z < n; z++) nextSeqName(); }
     var cnN = function (ds) { return cnWd ? (cnWd[WD[new Date(ds + 'T00:00:00').getDay()]] || []).length : 1 };
     seq.forEach(function (ds, pos) {
       var old = rotaDayRec(ds);
-      if (old && old['来源'] === '手动' && rotaNamesOf(old).length) { keepN++; ptr += Math.max(1, cnN(ds)); return }
+      if (old && old['来源'] === '手动' && rotaNamesOf(old).length) { keepN++; skipSeq(Math.max(1, cnN(ds))); return }
       if (rotaCur === 's-speech' && cnWd) {
         /* 每节语文课一条记录（含节次）；当天没语文课则清空该日 */
         var list = cnWd[WD[new Date(ds + 'T00:00:00').getDay()]] || [];
@@ -29441,8 +29477,8 @@ function cwInit(){
           return;
         }
         list.forEach(function (p, i) {
-          ntUpsert(rotaCur, { id: 'r' + ds.replace(/-/g, '') + (i ? '_' + i : ''), '节次': String(p['名目'] || '').split(' ')[0] || '', '姓名': names[ptr % names.length], '日期': base['日期'], '来源': '自动', ts: base.ts, updatedAt: base.updatedAt, updatedBy: 'teacher' });
-          ptr++; genN++;
+          ntUpsert(rotaCur, { id: 'r' + ds.replace(/-/g, '') + (i ? '_' + i : ''), '节次': String(p['名目'] || '').split(' ')[0] || '', '姓名': nextSeqName(), '日期': base['日期'], '来源': '自动', ts: base.ts, updatedAt: base.updatedAt, updatedBy: 'teacher' });
+          genN++;
         });
         return;
       }
@@ -29807,7 +29843,7 @@ function cwInit(){
   window.clTab = clTab; window.clRender = clRender; window.clAdd = clAdd; window.clEdit = clEdit;
   window.clDel = clDel; window.clSetToday = clSetToday; window.clCloseForm = clCloseForm; window.clSaveForm = clSaveForm;
   window.csSave = csSave; window.csDel = csDel;
-  try { clRender(); csRender(); dtRender(); } catch (e) {}
+  try { clRender(); csRender(); dtRender(); renderTrain(); } catch (e) {}
 
   /* ================= vT14 学生评语 ================= */
   var CM_TPL_KEY = 'wb_cm_tpl_v1', CM_TRAIT_KEY = 'wb_cm_trait_v1', CM_AI_KEY = 'wb_cm_ai_v1';
@@ -30485,8 +30521,9 @@ function cwInit(){
     try { deskFillCfgForm() } catch (e) {}
     try { asRender() } catch (e) {}   /* vT13 布置作业列表刷新 */
     try { cmAfterSync() } catch (e) {}   /* vT14 学生评语刷新 */
-    try { clRender(); csRender(); dtRender(); } catch (e) {}   /* vT15 经典内容管理刷新 */
+    try { clRender(); csRender(); dtRender(); renderTrain(); } catch (e) {}   /* vT15 经典内容管理刷新 */
     try { dtRender() } catch (e) {}   /* vT16 留堂名单刷新 */
+    try { renderTrain() } catch (e) {}   /* vT16 展示训练营刷新 */
   }
   function ntInit() {
     try {
