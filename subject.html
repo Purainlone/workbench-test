@@ -30,15 +30,24 @@ textarea { width:100%; }
 .cell .n { display:block; font-size:13px; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .cell .l { display:block; font-size:11px; color:#9ab3a6; min-height:16px; margin-top:2px; }
 .cell:hover { border-color:#2d8f63; }
-.cell.优 { background:#b8e6c9; border-color:#8fceaa; }   /* 优=绿（与班主任工作台一致） */
-.cell.良 { background:#ffe9a8; border-color:#e8cf7a; }   /* 良=黄 */
-.cell.中 { background:#dbe9f5; border-color:#a9c8e0; }   /* 中=蓝 */
-.cell.差 { background:#f8b4ad; border-color:#e59088; }   /* 差=红 */
+.cell.优 { background:#1a9c5b; color:#fff; border-color:#14854b; }   /* 优=绿（与班主任工作台一致） */
+.cell.良 { background:#f0b429; color:#3a2c00; border-color:#d9a305; }   /* 良=橙 */
+.cell.中 { background:#cfe6fb; color:#1d5fbf; border-color:#a9c8e0; }   /* 中=浅蓝 */
+.cell.差 { background:#dc2626; color:#fff; border-color:#b91c1c; }   /* 差=红 */
 table { border-collapse:collapse; width:100%; font-size:13px; margin-top:8px; }
 th,td { border:1px solid #dfeadf; padding:5px 8px; text-align:left; }
 th { background:#eef6f0; color:#24503a; }
 /* ===== 作业登记表格（vT5）：首列姓名 + 首行作业列 ===== */
 .hwwrap { overflow-x:auto; margin-top:10px; border:1px solid #e0ece5; border-radius:10px; background:#fff; max-height:62vh; overflow-y:auto; }
+/* 等级分段控件：与班主任工作台一致 */
+.hwlv { display:inline-flex; border:1px solid #d9e6df; border-radius:10px; overflow:hidden; background:#fff; vertical-align:middle; }
+.hwlv button { border:0; background:none; padding:7px 16px; font-size:13.5px; cursor:pointer; color:#5b6b62; font-family:inherit; border-right:1px solid #d9e6df; font-weight:600; }
+.hwlv button:last-child { border-right:0; }
+.hwlv button.on { color:#fff; font-weight:700; }
+.hwlv button.on.g { background:#1a9c5b; }
+.hwlv button.on.y { background:#d9a305; }
+.hwlv button.on.z { background:#2f6fd0; }
+.hwlv button.on.r { background:#dc2626; }
 .hwtable { margin-top:0; font-size:12.5px; border-collapse:separate; border-spacing:0; }
 .hwtable th, .hwtable td { border:none; border-right:1px solid #e8f1eb; border-bottom:1px solid #e8f1eb; padding:6px 9px; text-align:center; white-space:nowrap; }
 .hwtable thead th { background:#eef6f0; color:#24503a; cursor:pointer; user-select:none; position:sticky; top:0; z-index:2; font-weight:600; }
@@ -47,16 +56,32 @@ th { background:#eef6f0; color:#24503a; }
 .hwtable td.name { background:#f7fbf8; font-weight:600; text-align:left; position:sticky; left:0; z-index:1; min-width:64px; }
 .hwtable tbody td:not(.name) { cursor:pointer; min-width:52px; color:#33473d; }
 .hwtable tbody td.empty { color:#c2d4ca; }
-.hwtable tbody td.优 { background:#b8e6c9; color:#1f5c3d; }   /* 优=绿 */
-.hwtable tbody td.良 { background:#ffe9a8; color:#7a5c00; }   /* 良=黄 */
-.hwtable tbody td.中 { background:#dbe9f5; color:#2a5578; }   /* 中=蓝 */
-.hwtable tbody td.差 { background:#f8b4ad; color:#7a231b; }   /* 差=红 */
+/* 作业等级配色：与班主任工作台 / 小程序统一（优绿 良橙 中浅蓝 差红） */
+.hwtable tbody td.g { background:#1a9c5b; color:#fff; font-weight:600; }
+.hwtable tbody td.y { background:#f0b429; color:#3a2c00; font-weight:600; }
+.hwtable tbody td.z { background:#cfe6fb; color:#1d5fbf; font-weight:600; }
+.hwtable tbody td.r { background:#dc2626; color:#fff; font-weight:600; }
 .hwtable tbody tr:hover td:not(.name) { filter:brightness(.96); }
 .hwtable thead th .delx { float:right; margin:-2px 0 0 8px; color:#c0392b; cursor:pointer; font-weight:700; opacity:.5; font-size:12px; }
 .hwtable thead th .delx:hover { opacity:1; }
 .hwtable th.pcell, .hwtable td.pcell { background:#f1f6f3; color:#234; font-weight:700; min-width:54px; }
 .hwtable td.pcell.pos { color:#1f7a46; }
 .hwtable td.pcell.neg { color:#b3261e; }
+/* 姓名下的学号（小字灰） */
+.hwtable td.name .sno { display:block; font-weight:400; font-size:10px; color:#9bb3a8; margin-top:1px; }
+
+/* vT18 作业卡片行：每次作业一张卡，显示 优/良/中/差 分布 + 待登记（横向滚动） */
+.hwcards { display:flex; gap:10px; overflow-x:auto; padding:6px 0 8px; margin-top:6px; }
+.hwcard { flex:0 0 auto; min-width:150px; background:#f6f8fb; border:1px solid #e7eef2; border-radius:12px; padding:9px 13px; }
+.hwcard.on { border-color:#1f6feb; background:#eef3fd; }
+.hwc-name { font-size:13.5px; font-weight:600; color:#22303f; }
+.hwc-date { font-size:11px; color:#9aa3b2; margin-bottom:4px; }
+.hwc-stat { font-size:11.5px; display:flex; gap:8px; flex-wrap:wrap; }
+.hwc-stat .st-y { color:#12a150; }
+.hwc-stat .st-l { color:#d9a305; }
+.hwc-stat .st-z { color:#1f6feb; }
+.hwc-stat .st-c { color:#e5484d; }
+.hwc-und { font-size:11px; color:#9aa3b2; margin-top:3px; }
 .stat { margin-top:10px; font-size:13px; color:#555; }
 .msg { margin-top:10px; font-size:13px; color:#2d8f63; min-height:18px; }
 .err { color:#c0392b !important; }
@@ -148,7 +173,10 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
 
     <!-- ① 作业 -->
     <div class="card hidden" id="tabHw">
-      <h3>📝 登记「<span id="hwSubj">—</span>」作业</h3>
+      <div class="row" style="justify-content:space-between;align-items:baseline">
+        <h3>📝 登记「<span id="hwSubj">—</span>」作业</h3>
+        <span class="sub" id="hwHeadInfo"></span>
+      </div>
       <div class="row">
         <input id="newHwName" placeholder="新建作业，如：练习册 P23" style="width:200px">
         <input type="date" id="newHwDate" style="width:150px">
@@ -156,13 +184,18 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
         <button class="btn sec" id="modeBtn" onclick="toggleMode()">✏️ 进入登记</button>
       </div>
       <div class="row">
-        <span class="sub">等级：</span>
-        <button class="btn sec" data-lv="优" onclick="pickLv('优')">优</button>
-        <button class="btn sec" data-lv="良" onclick="pickLv('良')">良</button>
-        <button class="btn sec" data-lv="中" onclick="pickLv('中')">中</button>
-        <button class="btn sec" data-lv="差" onclick="pickLv('差')">差/未交</button>
+        <span class="sub">等级（按分计）：</span>
+        <span class="hwlv" id="hwLvBar">
+          <button data-lv="优" onclick="pickLv('优')">优 +2</button>
+          <button data-lv="良" onclick="pickLv('良')">良 +1</button>
+          <button data-lv="中" onclick="pickLv('中')">中 0</button>
+          <button data-lv="差" onclick="pickLv('差')">差 −1</button>
+        </span>
         <span class="sub" style="margin-left:8px" id="hwTip">浏览模式：点击表格不会改动。进入登记后：点格子＝记为选中等级，先换等级再点格子可修改。</span>
       </div>
+      <!-- 每次作业的 优/良/中/差 分布 + 待登记（横向滚动） -->
+      <div class="hwcards" id="hwCards"></div>
+      <input id="hwSearch" placeholder="搜索姓名 / 学号" style="width:220px;margin:4px 0 6px" oninput="renderHwTable()">
       <div class="hwwrap">
         <table class="hwtable" id="hwTable"></table>
       </div>
@@ -373,6 +406,7 @@ function switchTab(t) {
   if (t === 'an' && ME) switchTabAn();
   if (t === 'hp') renderHp();
   if (t === 'home') renderHome();
+  if (t === 'hw') { renderHwTable(); pickLv(curLv); }
 }
 
 /* ---------- Gitee 读写 ---------- */
@@ -524,6 +558,9 @@ function renderHwTab() {
   });
   renderSpkSel();
   renderHwTable();
+  renderHwCards();
+  var hi = $('hwHeadInfo');
+  if (hi) hi.textContent = COLS.length + ' 次作业 · ' + STU.length + ' 人';
 }
 function lvRank(lv) { return lv === '优' ? 4 : lv === '良' ? 3 : lv === '中' ? 2 : lv === '差' ? 1 : 0 }
 function hwDoneMap(key) {
@@ -546,14 +583,16 @@ function renderHwTable() {
   COLS.forEach(function (c) { maps[c.key] = hwDoneMap(c.key) });
 
   /* 行顺序：默认按名单；点列头按该列等级排序（优良中差，再点逆序，第三次恢复） */
+  var q = (($('hwSearch') && $('hwSearch').value) || '').trim();
   var rows = STU.slice();
   if (sortKey && sortDir) {
-    var m = maps[sortKey] || {};
+    var m0 = maps[sortKey] || {};
     rows.sort(function (a, b) {
-      var d = lvRank(m[a.name] || '') - lvRank(m[b.name] || '');
+      var d = lvRank(m0[a.name] || '') - lvRank(m0[b.name] || '');
       return sortDir === 1 ? d : -d;   /* 同等级保持名单原顺序（稳定） */
     });
   }
+  if (q) rows = rows.filter(function (s) { return s.name.indexOf(q) > -1 || String(s.no || '').indexOf(q) > -1; });
 
   var head = '<tr><th style="text-align:left;cursor:default" onclick="sortHwReset()">姓名</th>' + COLS.map(function (c) {
     var arrow = (c.key === sortKey && sortDir) ? (sortDir === 1 ? ' ▲' : ' ▼') : ' ↕';
@@ -569,11 +608,12 @@ function renderHwTable() {
     var cells = COLS.map(function (c) {
       var lv = maps[c.key][s.name] || '';
       if (lv) { var v = LV_SCORE[lv] || 0; sum += v; clsSum += v; }
-      return '<td class="' + esc(lv) + (lv ? '' : ' empty') + '" data-n="' + esc(s.name) + '" data-k="' + esc(c.key) + '" onclick="tapCell(this)">' + esc(lv || '·') + '</td>';
+      var cellCls = lv ? ({'优':'g','良':'y','中':'z','差':'r'}[lv] || '') : 'empty';
+      return '<td class="' + cellCls + '" data-n="' + esc(s.name) + '" data-k="' + esc(c.key) + '" onclick="tapCell(this)">' + esc(lv || '·') + '</td>';
     }).join('');
     var sumTxt = sum > 0 ? '+' + sum : (sum < 0 ? String(sum) : '—');
     var sumCls = sum > 0 ? ' pos' : (sum < 0 ? ' neg' : '');
-    return '<tr><td class="name">' + esc(s.name) + '</td>' + cells + '<td class="pcell' + sumCls + '">' + sumTxt + '</td></tr>';
+    return '<tr><td class="name">' + esc(s.name) + '<span class="sno">' + esc(String(s.no || '')) + '号</span></td>' + cells + '<td class="pcell' + sumCls + '">' + sumTxt + '</td></tr>';
   }).join('');
   tb.innerHTML = '<thead>' + head + '</thead><tbody>' + body + '</tbody>';
 
@@ -585,6 +625,30 @@ function renderHwTable() {
   $('hwStat').innerHTML = '最新列「' + esc(last.item) + '」已登记 <b>' + doneN + '</b> / ' + STU.length + ' 人' +
     (miss.length ? ' · 未交：<span style="color:#a04a32">' + esc(miss.join('、')) + '</span>' : ' · 全部交齐 🎉') +
     ' ｜ 全班作业积分合计 <b>' + (clsSum > 0 ? '+' + clsSum : clsSum) + '</b>';
+}
+/* vT18 作业卡片行：每次作业一张卡，显示 优/良/中/差 分布 + 待登记人数 */
+function renderHwCards() {
+  var box = $('hwCards');
+  if (!box) return;
+  if (!COLS.length) { box.innerHTML = ''; return; }
+  var maps = {};
+  COLS.forEach(function (c) { maps[c.key] = hwDoneMap(c.key); });
+  box.innerHTML = COLS.map(function (c, i) {
+    var m = maps[c.key], you = 0, liang = 0, zhong = 0, cha = 0, done = 0;
+    STU.forEach(function (s) {
+      var lv = m[s.name];
+      if (!lv) return;
+      done++;
+      if (lv === '优') you++; else if (lv === '良') liang++; else if (lv === '中') zhong++; else if (lv === '差') cha++;
+    });
+    var und = STU.length - done;
+    return '<div class="hwcard' + (i === COLS.length - 1 ? ' on' : '') + '">' +
+      '<div class="hwc-name">' + esc(c.item) + '</div>' +
+      '<div class="hwc-date">' + esc(String(c.date).slice(5)) + '</div>' +
+      '<div class="hwc-stat"><span class="st-y">' + you + '优</span><span class="st-l">' + liang + '良</span>' +
+      '<span class="st-z">' + zhong + '中</span><span class="st-c">' + cha + '差</span></div>' +
+      '<div class="hwc-und">待登记 ' + und + '</div></div>';
+  }).join('');
 }
 function sortHw(el) {
   var k = el.getAttribute('data-k');
@@ -610,9 +674,10 @@ function curItem() {
 }
 function pickLv(lv) {
   curLv = lv;
-  document.querySelectorAll('[data-lv]').forEach(function (b) {
-    b.style.fontWeight = (b.getAttribute('data-lv') === lv) ? '800' : '600';
-    b.style.outline = (b.getAttribute('data-lv') === lv) ? '2px solid #2d8f63' : 'none';
+  var map = { '优': 'g', '良': 'y', '中': 'z', '差': 'r' };
+  document.querySelectorAll('#hwLvBar button').forEach(function (b) {
+    var k = b.getAttribute('data-lv');
+    b.className = (k === lv) ? ('on ' + map[lv]) : '';
   });
 }
 function tapCell(el) {
