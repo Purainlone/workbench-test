@@ -13981,6 +13981,12 @@ function stuPoints(){
     if(isNaN(v)){v=HW_SCORE[fval(r,'等级')]||0}
     hwP[n]=(hwP[n]||0)+v;
   });
+  /* vT17 科任端作业积分加减（s-hwadj）并入作业积分 */
+  ntRows('s-hwadj').forEach(function(r){
+    if(!r||r.deleted||!r.name)return;
+    var v=Number(r.delta)||0;if(!v)return;
+    hwP[r.name]=(hwP[r.name]||0)+v;
+  });
   ST_ROWS.forEach(function(r){
     var n=fval(r,'姓名');if(!n)return;
     var v=parseFloat(fval(r,'奖惩分值'));
@@ -14178,6 +14184,12 @@ function openStuPanel(name){
     if(!t)return;                      /* 档案占位行没有事项，不进流水 */
     var v=parseFloat(fval(r,'奖惩分值'));if(isNaN(v)||!v)return;
     flow.push({d:fval(r,'日期'),t:'奖惩 · '+t,v:v,src:'rw',id:recId(r)});
+  });
+  /* vT17 科任端作业积分加减（s-hwadj）进流水 */
+  ntRows('s-hwadj').forEach(function(r){
+    if(!r||r.deleted||r.name!==name)return;
+    var v=Number(r.delta)||0;if(!v)return;
+    flow.push({d:r.date,t:'作业积分 · '+(r.subject||'')+(r.reason?'（'+r.reason+'）':''),v:v,src:'hwadj',id:r.id});
   });
   flow.sort(function(a,b){return String(b.d||'').localeCompare(String(a.d||''))});
   if(!flow.length)ul.appendChild(el('li','empty','还没有积分记录'));
@@ -29083,13 +29095,14 @@ function cwInit(){
   if (window.__WB_NT_LOADED__) return; window.__WB_NT_LOADED__ = true;
 
   /* ---------- 数据层 ---------- */
-  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain', 's-train'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 / s-train 展示训练营 */
+  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain', 's-train', 's-hwadj'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 / s-train 展示训练营；vT17 + s-hwadj 科任端作业积分加减（并入作业积分汇总） */
   var NT_STORE_KEY = 'wb_nt_v1';
   function ntLoad() {
     try { var o = JSON.parse(localStorage.getItem(NT_STORE_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} }
   }
   function ntSave(db) { try { localStorage.setItem(NT_STORE_KEY, JSON.stringify(db)) } catch (e) {} }
   function ntRows(tid) { var db = ntLoad(); return Array.isArray(db[tid]) ? db[tid] : [] }
+  window.ntRows = ntRows;   /* vT17 暴露给班级档案/积分汇总等外部作用域读取 s-hwadj 等表 */
   function ntGet(tid, id) { var a = ntRows(tid); for (var i = 0; i < a.length; i++) if (a[i] && a[i].id === id) return a[i]; return null }
   function ntUpsert(tid, rec) {
     if (!rec || !rec.id) return;
