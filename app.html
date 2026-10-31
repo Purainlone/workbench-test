@@ -1397,6 +1397,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2" id="rcCompactBtn" onclick="rcToggleCompact()" title="压缩行高列宽，一屏塞下更多人">📐 紧凑</button>
       <button class="btn2" id="rcRankBtn" onclick="rcToggleRank()" title="按完成篇数排名，看谁快谁慢">🏆 排名</button>
       <button class="btn2" id="rcHideFullBtn" onclick="rcToggleHideFull()" title="全班都背完的篇目整列隐藏，表更清爽">🙈 已背完隐藏</button>
+      <button class="btn2" onclick="rcOpenCert()" title="为背完篇目的同学生成精美通关证书，可打印">📜 通关证书</button>
       <button data-page-node-id="G5GdPMfht73z7907cW81gf" class="btn2 ghost" onclick="rcClearAll()"><!--pnid:J35nXVodFWDtyRxsfFvnS2-->🧹 清空本表打卡</button>
       <span data-page-node-id="SKrlV8316R18sUOxbCyWVn" class="rcstat" id="rcStat"></span>
     </div>
@@ -1610,6 +1611,37 @@ table.paper td.l{text-align:left;font-weight:600}
     </div>
   </section>
 
+  <!-- ============ 经典内容管理（每日一句 / 古诗词 / 小古文，教师自选 + 每日安排） ============ -->
+  <section class="section" id="s-classic">
+    <h2>经典内容管理 <span style="font-size:13px;font-weight:400;color:#2d8f63;background:#e8f4ee;border-radius:8px;padding:2px 10px;vertical-align:middle">每日一句 · 古诗词 · 小古文</span></h2>
+    <div class="sub">在这里设置<b>教室大屏每天展示</b>的「每日一句 / 古诗词 / 小古文」。可自建内容并打<b>主题</b>标签（不限于毛主席诗词），还能按日期指定某天显示哪一篇；没指定的日子走内置轮换。改动约 3~20 秒同步到教室大屏。</div>
+
+    <div class="tabs" id="clTabs" style="display:flex;gap:6px;margin:10px 0">
+      <button class="btn2 sm on" data-t="quote" onclick="clTab('quote')">🌅 每日一句</button>
+      <button class="btn2 sm" data-t="poem" onclick="clTab('poem')">📜 古诗词</button>
+      <button class="btn2 sm" data-t="wen" onclick="clTab('wen')">📖 小古文</button>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <span style="font-size:12px;color:#7a8a80">主题筛选</span>
+      <select id="clThemeFilter" onchange="clRender()" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px"></select>
+      <button class="btn2 sm primary" onclick="clAdd()">➕ 新增一条</button>
+    </div>
+    <div id="clList" class="chartbox" style="margin:6px 0"></div>
+
+    <div class="chartbox" style="margin:14px 0">
+      <h3 style="font-size:14px">📅 每日安排（指定某天大屏显示哪一篇）</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="csDate" type="date" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
+        <span style="font-size:12px">每日一句</span><select id="csQuote" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;max-width:200px"></select>
+        <span style="font-size:12px">古诗词</span><select id="csPoem" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;max-width:200px"></select>
+        <span style="font-size:12px">小古文</span><select id="csWen" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;max-width:200px"></select>
+        <button class="btn2 primary" onclick="csSave()">💾 保存该日安排</button>
+      </div>
+      <div id="csList" style="margin-top:8px"></div>
+    </div>
+  </section>
+
   <!-- ============ 拍照登记（贴在作业本上的二维码贴纸） ============ -->
   <section class="section" id="s-scan">
     <h2>拍照登记</h2>
@@ -1797,11 +1829,11 @@ table.paper td.l{text-align:left;font-weight:600}
   <!-- ============ vT2 值日安排 ============ -->
   <section class="section" id="s-rota">
     <h2>值日安排</h2>
-    <div class="sub">值日组长 / 安全管理员 / 演讲同学 · 名单自动轮流 + 手动微调（调休错乱随时改）· 改动自动推送到教室桌面</div>
+    <div class="sub">值日组长 / 安全管理员 / 课前展示 · 名单自动轮流 + 手动微调（调休错乱随时改）· 改动自动推送到教室桌面</div>
     <div class="ttctl" id="rotaTabs">
       <button class="btn2 primary" id="rotaTab-s-rota" onclick="rotaSwitch('s-rota')">🧹 值日组长</button>
       <button class="btn2" id="rotaTab-s-safety" onclick="rotaSwitch('s-safety')">🛡️ 安全管理员</button>
-      <button class="btn2" id="rotaTab-s-speech" onclick="rotaSwitch('s-speech')">🎤 演讲同学</button>
+      <button class="btn2" id="rotaTab-s-speech" onclick="rotaSwitch('s-speech')">🎤 课前展示</button>
     </div>
     <div class="card" style="margin-top:10px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -1832,6 +1864,14 @@ table.paper td.l{text-align:left;font-weight:600}
         <span>起始日期 <input type="date" id="rotaRuleStart"></span>
         <span>每人连续 <input type="number" id="rotaRuleGap" min="1" max="14" style="width:52px" value="1"> 天</span>
         <label><input type="checkbox" id="rotaRuleWeekend"> 含周末</label>
+        <span>轮换顺序 <select id="rotaRuleOrder" style="border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:12.5px;font-family:inherit"><option value="名单">名单勾选顺序</option><option value="学号">按学号从小到大</option></select></span>
+      </div>
+      <div id="rotaRuleFixRow" style="display:none;margin-top:8px">
+        <div class="sub"><b>固定排班（周一~周五）</b>：五天都指定了人 → 按固定排班生成（每周同一天固定同一人）；留空则走轮流。手动指定的日子不会被覆盖。</div>
+        <div id="rotaRuleFix" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px"></div>
+      </div>
+      <div id="rotaRuleExclRow" style="display:none;margin-top:8px">
+        <span class="sub">不参与的同学（逗号分隔，应用于「每节语文课轮流」） <input type="text" id="rotaRuleExcl" value="方浩轩,柯骏豪" style="width:240px;border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:12.5px"></span>
       </div>
       <div style="margin-top:8px">
         <div class="sub">节假日调休（一行一条，格式：放假日期=补课日期，如 2026-10-01=2026-09-27，表示国庆放假、9月27日按10月1日的轮换顺序排）</div>
@@ -11546,6 +11586,90 @@ function rcMakeTitle(name,kind){ return {t:(name+'').trim(),k:(kind==='extra'?'e
 /* 浏览器、iPad 的触摸都会带“滑动“，用这个判断是不是真的“点了一下“，
    防止滚动表格时手指划过就误涂。 */
 var RC_DOWN=null;
+/* ---------- vT16 诵读通关荣誉证书 ---------- */
+function rcDoneTitles(name){
+  return RC_TITLES.filter(function(t){ return RC_MAP[rcKey(name, rcTName(t))]; }).map(rcTName);
+}
+var RC_CERT_HONORS = ['记忆王者', '最强大脑', '诵读之星', '博览群书'];
+var RC_CERT_PRAISES = [
+  '你与经典为伴，字正腔圆、熟读成诵，展现出出色的记忆力与坚持力！',
+  '一篇篇诗文在你口中流转成韵，你的专注与努力令人赞叹！',
+  '日积月累，水滴石穿，你用坚持赢得了这份荣誉！'
+];
+function rcOpenCert(){
+  var rows = rcStudents().map(function(s){ var nm=(s&&(s.姓名||s.name))||s; return { nm:nm, done:rcDoneTitles(nm) }; })
+    .filter(function(x){ return x.done.length; })
+    .sort(function(a,b){ return b.done.length-a.done.length; });
+  var box = document.getElementById('rcCertBox');
+  if(!box){ box=document.createElement('div'); box.id='rcCertBox'; document.body.appendChild(box); }
+  if(!rows.length){
+    box.innerHTML='<div style="position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:9999;display:flex;align-items:center;justify-content:center"><div style="background:#fff;border-radius:14px;padding:24px;text-align:center"><div style="margin-bottom:12px">还没有同学背完任何篇目，先去登记吧</div><button class="btn2" onclick="rcCloseCert()">好的</button></div></div>';
+    return;
+  }
+  box.innerHTML =
+    '<div style="position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)rcCloseCert()">' +
+    '<div style="background:#fff;border-radius:14px;padding:22px;width:460px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.25)">' +
+    '<h3 style="margin:0 0 14px;font-size:16px">📜 诵读通关荣誉证书</h3>' +
+    '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">颁给谁（按背完篇数排序）</div>' +
+    '<select id="rcCertStu" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px">' +
+    rows.map(function(x){ return '<option value="'+esc(x.nm)+'">'+esc(x.nm)+'（已背 '+x.done.length+' 篇）</option>'; }).join('') +
+    '</select></div>' +
+    '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">荣誉称号（推荐「记忆王者」：最贴合背诵主题，孩子也喜欢）</div>' +
+    '<select id="rcCertHonor" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px">' +
+    RC_CERT_HONORS.map(function(hn){ return '<option value="'+hn+'"'+(hn==='记忆王者'?' selected':'')+'>'+hn+'</option>'; }).join('') +
+    '</select></div>' +
+    '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">自拟称号（留空则用上面选的）</div>' +
+    '<input id="rcCertCustom" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px" placeholder="如：背诵小状元"></div>' +
+    '<div style="margin-bottom:14px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">表扬语</div>' +
+    '<select id="rcCertPraise" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px">' +
+    RC_CERT_PRAISES.map(function(p){ return '<option value="'+esc(p)+'">'+esc(p)+'</option>'; }).join('') +
+    '</select></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn2" onclick="rcCloseCert()">取消</button>' +
+    '<button class="btn2 primary" onclick="rcMakeCert()">🖨️ 生成并打印</button></div>' +
+    '</div></div>';
+}
+function rcCloseCert(){ var b=document.getElementById('rcCertBox'); if(b) b.innerHTML=''; }
+function rcMakeCert(){
+  var name=(document.getElementById('rcCertStu')||{}).value||'';
+  var honor=((document.getElementById('rcCertCustom')||{}).value||'').trim()||(document.getElementById('rcCertHonor')||{}).value||'记忆王者';
+  var praise=(document.getElementById('rcCertPraise')||{}).value||'';
+  var done=rcDoneTitles(name);
+  if(!name||!done.length){ toastMsg('这位同学还没有背完的篇目'); return; }
+  var d=new Date();
+  var ds=d.getFullYear()+' 年 '+(d.getMonth()+1)+' 月 '+d.getDate()+' 日';
+  var enc='愿你继续徜徉书海，让经典浸润童年，做一名腹有诗书气自华的少年！';
+  var w=window.open('','_blank');
+  if(!w){ toastMsg('浏览器拦截了弹窗，请允许弹窗后重试'); return; }
+  var h='<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>诵读通关荣誉证书 · '+esc(name)+'</title><style>'
+    +'@page{size:A4 landscape;margin:0}html,body{margin:0;padding:0}'
+    +'.cert{width:297mm;height:210mm;box-sizing:border-box;background:#fffdf6;position:relative;font-family:"KaiTi","STKaiti","楷体",serif;color:#4a3a20}'
+    +'.frame{position:absolute;left:8mm;top:8mm;right:8mm;bottom:8mm;border:5px double #b8860b;border-radius:4px}'
+    +'.frame2{position:absolute;left:11mm;top:11mm;right:11mm;bottom:11mm;border:1px solid #d4af37;border-radius:2px}'
+    +'.corner{position:absolute;font-size:26pt;color:#c9a227;line-height:1}'
+    +'.c1{left:14mm;top:13mm}.c2{right:14mm;top:13mm}.c3{left:14mm;bottom:13mm}.c4{right:14mm;bottom:13mm}'
+    +'.ttl{text-align:center;font-size:40pt;font-weight:700;color:#8b1a1a;letter-spacing:6pt;margin-top:24mm}'
+    +'.honor{text-align:center;margin-top:9mm}'
+    +'.honor span{display:inline-block;font-size:26pt;color:#7a5c00;letter-spacing:4pt;padding:3mm 14mm;border-top:2px solid #d4af37;border-bottom:2px solid #d4af37;background:linear-gradient(#fff8e1,#f7e8b5)}'
+    +'.body{width:220mm;margin:11mm auto 0;font-size:15.5pt;line-height:2.1}'
+    +'.list{width:232mm;margin:5mm auto 0;text-align:center;font-size:14.5pt;line-height:2;color:#5a4a30}'
+    +'.enc{text-align:center;margin-top:7mm;font-size:14pt;color:#7a5c00}'
+    +'.sig{position:absolute;left:0;right:20mm;bottom:19mm;text-align:right;font-size:15pt}'
+    +'.seal{position:absolute;right:56mm;bottom:22mm;width:30mm;height:30mm;border:3px solid rgba(192,57,43,.8);border-radius:50%;color:rgba(192,57,43,.85);display:flex;align-items:center;justify-content:center;text-align:center;font-size:12pt;line-height:1.3;transform:rotate(-14deg);font-weight:700}'
+    +'</style></head><body><div class="cert">'
+    +'<div class="frame"></div><div class="frame2"></div>'
+    +'<div class="corner c1">❁</div><div class="corner c2">❁</div><div class="corner c3">❁</div><div class="corner c4">❁</div>'
+    +'<div class="ttl">诵读通关 · 荣誉证书</div>'
+    +'<div class="honor"><span>授予「'+esc(honor)+'」称号</span></div>'
+    +'<div class="body">'+esc(name)+' 同学：'+esc(praise)+'经考核，你已熟练背诵以下 <b>'+done.length+'</b> 篇：</div>'
+    +'<div class="list">'+esc(done.join('　'))+'</div>'
+    +'<div class="enc">'+enc+'</div>'
+    +'<div class="sig">教师签名：____________　　'+esc(ds)+'</div>'
+    +'<div class="seal">诵读<br>通关</div>'
+    +'</div></body></html>';
+  w.document.open(); w.document.write(h); w.document.close();
+  setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 500);
+  rcCloseCert();
+}
 /* 触屏设备打标记：名单滚动行为按触屏优化 */
 try{if(window.matchMedia&&matchMedia('(pointer:coarse)').matches)document.body.classList.add('touchdev')}catch(e){}
 document.addEventListener('pointerdown',function(e){
@@ -28798,7 +28922,7 @@ function cwInit(){
   if (window.__WB_NT_LOADED__) return; window.__WB_NT_LOADED__ = true;
 
   /* ---------- 数据层 ---------- */
-  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语 */
+  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排 */
   var NT_STORE_KEY = 'wb_nt_v1';
   function ntLoad() {
     try { var o = JSON.parse(localStorage.getItem(NT_STORE_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} }
@@ -28915,7 +29039,7 @@ function cwInit(){
   var ROTA_DEFS = {
     's-rota':   { title: '值日组长', cap: 1, fields: ['姓名'] },
     's-safety': { title: '安全管理员', cap: 2, fields: ['人员1', '人员2'] },
-    's-speech': { title: '演讲同学', cap: 1, fields: ['姓名'] }
+    's-speech': { title: '课前展示', cap: 1, fields: ['姓名'] }
   };
   var rotaCur = 's-rota', rotaMonth = new Date();
   rotaMonth.setDate(1);
@@ -28990,7 +29114,7 @@ function cwInit(){
     } else {
       document.getElementById('rotaEditBody').innerHTML =
         '<span>' + def.title + '</span><select id="rotaEditP1">' + opts(rec ? rec['姓名'] : '') + '</select>' +
-        '<span class="sub">演讲主题（可选）</span><input type="text" id="rotaEditTopic" style="width:180px" value="' + esc(rec ? (rec['主题'] || '') : '') + '">';
+        '<span class="sub">展示内容（可选）</span><input type="text" id="rotaEditTopic" style="width:180px" value="' + esc(rec ? (rec['主题'] || '') : '') + '">';
     }
     box.style.display = 'block';
     try { box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) } catch (e) {}
@@ -29026,6 +29150,18 @@ function cwInit(){
     document.getElementById('rotaRuleStart').value = rule['起始日期'] || dstr(new Date());
     document.getElementById('rotaRuleGap').value = rule['间隔天数'] || 1;
     document.getElementById('rotaRuleWeekend').checked = !!rule['含周末'];
+    document.getElementById('rotaRuleOrder').value = rule['排序'] === '学号' ? '学号' : '名单';
+    document.getElementById('rotaRuleExcl').value = (rule['排除'] || []).join(',');
+    var fixSave = rule['固定周'] || {}, rosterFix = stuRoster();
+    document.getElementById('rotaRuleFix').innerHTML = ['周一', '周二', '周三', '周四', '周五'].map(function (w) {
+      return '<span style="font-size:12px">' + w +
+        ' <select data-wd="' + w + '" style="border:1px solid var(--line);border-radius:8px;padding:3px 6px;font-size:12px;max-width:110px">' +
+        '<option value="">（空）</option>' +
+        rosterFix.map(function (s) { return '<option value="' + esc(s.姓名) + '"' + (fixSave[w] === s.姓名 ? ' selected' : '') + '>' + esc(s.姓名) + '</option>' }).join('') +
+        '</select></span>';
+    }).join('');
+    document.getElementById('rotaRuleFixRow').style.display = rotaCur === 's-rota' ? 'block' : 'none';
+    document.getElementById('rotaRuleExclRow').style.display = rotaCur === 's-speech' ? 'block' : 'none';
     document.getElementById('rotaRuleShift').value = (rule['调休表'] || []).map(function (x) { return x['放假'] + '=' + x['补课'] }).join('\n');
     var box = document.getElementById('rotaRuleNames');
     box.innerHTML = roster.length ? roster.map(function (s) {
@@ -29054,6 +29190,13 @@ function cwInit(){
       '含周末': document.getElementById('rotaRuleWeekend').checked,
       '调休表': shifts,
       '安全两两': rotaCur === 's-safety',
+      '排序': (document.getElementById('rotaRuleOrder') || {}).value === '学号' ? '学号' : '名单',
+      '固定周': (function () {
+        var mp = {};
+        document.querySelectorAll('#rotaRuleFix select').forEach(function (sel) { mp[sel.getAttribute('data-wd')] = sel.value; });
+        return mp;
+      })(),
+      '排除': ((document.getElementById('rotaRuleExcl') || {}).value || '').split(/[,，]/).map(function (s) { return s.trim() }).filter(Boolean),
       ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher',
       '旧指针': old['旧指针']
     };
@@ -29066,10 +29209,40 @@ function cwInit(){
     var rule = rotaRuleRec();
     if (!rule || !(rule['名单'] || []).length) { toastMsg('⚠️ 请先点「⚙️ 轮换规则」配置轮换名单'); return }
     var names = rule['名单'], gap = Math.max(1, Number(rule['间隔天数']) || 1);
+    /* vT16 轮换顺序：按学号从小到大（默认名单勾选顺序） */
+    if (rule['排序'] === '学号') {
+      var noMap = {};
+      stuRoster().forEach(function (s) { noMap[s.姓名] = parseInt(s.学号, 10) || 9999; });
+      names = names.slice().sort(function (a, b) { return (noMap[a] || 9999) - (noMap[b] || 9999) || String(a).localeCompare(String(b)); });
+    }
+    /* vT16 课前展示：不参与名单（默认方浩轩、柯骏豪） */
+    if (rotaCur === 's-speech') {
+      var exclList = (rule['排除'] || []).map(function (s) { return String(s).trim() }).filter(Boolean);
+      if (exclList.length) names = names.filter(function (n) { return exclList.indexOf(n) < 0 });
+    }
+    if (!names.length) { toastMsg('⚠️ 按当前规则筛选后没有人参加，请检查轮换名单或不参与名单'); return }
     var weekend = !!rule['含周末'];
     var skip = {}, extra = {};
     (rule['调休表'] || []).forEach(function (x) { skip[x['放假']] = 1; extra[x['补课']] = 1 });
     var startS = rule['起始日期'] || dstr(new Date());
+    /* vT16 值日组长固定排班：周一~周五都指定了人 → 每周同一天固定同一人 */
+    var fix = (rotaCur === 's-rota') ? (rule['固定周'] || null) : null;
+    var fixOn = !!(fix && ['周一', '周二', '周三', '周四', '周五'].every(function (w) { return fix[w] }));
+    /* vT16 课前展示：从生效课表取每天语文节数，每节语文课前一人、按学号跨天连续循环 */
+    var WD = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    var cnWd = null;
+    if (rotaCur === 's-speech') {
+      try {
+        var ttr = ttExportRec();
+        var tb = ttr && ttr['表'];
+        if (tb) {
+          cnWd = {};
+          WD.forEach(function (w) {
+            cnWd[w] = (tb[w] || []).filter(function (p) { return p && String(p['科目'] || '').indexOf('语文') >= 0 });
+          });
+        }
+      } catch (_ttE) {}
+    }
     /* 从起始日期走到本月末，收集工作日序列 */
     var y = rotaMonth.getFullYear(), m = rotaMonth.getMonth();
     var cur = new Date(startS + 'T00:00:00'), monthEnd = new Date(y, m + 1, 0);
@@ -29082,12 +29255,29 @@ function cwInit(){
       cur.setDate(cur.getDate() + 1);
     }
     var def = ROTA_DEFS[rotaCur];
-    var genN = 0, keepN = 0;
+    var genN = 0, keepN = 0, ptr = 0;   /* ptr：课前展示跨天连续指针（按学号循环） */
+    var cnN = function (ds) { return cnWd ? (cnWd[WD[new Date(ds + 'T00:00:00').getDay()]] || []).length : 1 };
     seq.forEach(function (ds, pos) {
       var old = rotaDayRec(ds);
-      if (old && old['来源'] === '手动' && rotaNamesOf(old).length) { keepN++; return }
+      if (old && old['来源'] === '手动' && rotaNamesOf(old).length) { keepN++; ptr += Math.max(1, cnN(ds)); return }
+      if (rotaCur === 's-speech' && cnWd) {
+        /* 每节语文课一条记录（含节次）；当天没语文课则清空该日 */
+        var list = cnWd[WD[new Date(ds + 'T00:00:00').getDay()]] || [];
+        var base = { '日期': ds, '来源': '自动', ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher' };
+        if (!list.length) {
+          ntUpsert(rotaCur, { id: 'r' + ds.replace(/-/g, ''), '姓名': '', '日期': base['日期'], '来源': '自动', ts: base.ts, updatedAt: base.updatedAt, updatedBy: 'teacher' }); genN++;
+          return;
+        }
+        list.forEach(function (p, i) {
+          ntUpsert(rotaCur, { id: 'r' + ds.replace(/-/g, '') + (i ? '_' + i : ''), '节次': String(p['名目'] || '').split(' ')[0] || '', '姓名': names[ptr % names.length], '日期': base['日期'], '来源': '自动', ts: base.ts, updatedAt: base.updatedAt, updatedBy: 'teacher' });
+          ptr++; genN++;
+        });
+        return;
+      }
       var rec = { id: 'r' + ds.replace(/-/g, ''), '日期': ds, '来源': '自动', ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher' };
-      if (def.cap === 2) {
+      if (fixOn) {
+        rec['姓名'] = fix[WD[new Date(ds + 'T00:00:00').getDay()]] || '';
+      } else if (def.cap === 2) {
         rec['人员1'] = names[(pos * 2) % names.length];
         rec['人员2'] = names[(pos * 2 + 1) % names.length];
       } else {
@@ -29191,6 +29381,159 @@ function cwInit(){
         '<button class="btn2 sm ghost" style="color:#c2410c" onclick="asDel(\'' + r.id + '\')">删</button></div>';
     }).join('') || '<div class="sub">这一天还没有布置作业</div>';
   };
+
+  /* ================= vT15 经典内容管理（每日一句/古诗词/小古文：s-classic 内容库 + s-csched 每日安排，随 nt 同步到教室大屏） ================= */
+  var CL_TYPE_NAMES = { quote: '每日一句', poem: '古诗词', wen: '小古文' };
+  var clCurType = 'quote';
+  function clTab(t) {
+    clCurType = t;
+    var btns = document.querySelectorAll('#clTabs button');
+    for (var i = 0; i < btns.length; i++) btns[i].className = 'btn2 sm' + (btns[i].getAttribute('data-t') === t ? ' on' : '');
+    clRender();
+  }
+  function clLib(type) {
+    return ntRows('s-classic').filter(function (r) { return r && !r.deleted && (r.type || 'quote') === type; });
+  }
+  function clRender() {
+    var list = document.getElementById('clList'); if (!list) return;
+    var tf = document.getElementById('clThemeFilter');
+    var theme = tf ? tf.value : '';
+    if (tf) {
+      var seen = {}, opts = ['<option value="">全部主题</option>'];
+      ntRows('s-classic').forEach(function (r) {
+        if (r && !r.deleted && r.theme && !seen[r.theme]) { seen[r.theme] = 1; opts.push('<option value="' + esc(r.theme) + '">' + esc(r.theme) + '</option>'); }
+      });
+      tf.innerHTML = opts.join(''); tf.value = theme;
+    }
+    var rows = clLib(clCurType).filter(function (r) { return !theme || r.theme === theme; });
+    list.innerHTML = rows.length ? rows.map(function (r) {
+      var main = clCurType === 'quote'
+        ? '<div style="font-size:14px">“' + esc(r.content || '') + '”<span style="color:#93a89b;font-size:12px"> —— ' + esc(r.src || '') + '</span></div>'
+        : '<div style="font-size:14px;font-weight:700">《' + esc(r.title || '') + '》</div>' +
+          '<div style="font-size:13px;color:#445;margin-top:2px">' + esc(String(r.content || '').replace(/\n/g, ' / ')) + '</div>' +
+          '<div style="font-size:12px;color:#93a89b;margin-top:2px">' + esc(r.src || '') + '</div>';
+      return '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed #e3ede7">' +
+        '<div style="flex:1;min-width:0">' + main +
+        (r.theme ? ' <span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#eef4ff;color:#3b6fb0;white-space:nowrap">' + esc(r.theme) + '</span>' : '') + '</div>' +
+        '<button class="btn2 sm" onclick="clSetToday(\'' + r.id + '\')">设为今天</button>' +
+        '<button class="btn2 sm" onclick="clEdit(\'' + r.id + '\')">编辑</button>' +
+        '<button class="btn2 sm ghost" style="color:#c2410c" onclick="clDel(\'' + r.id + '\')">删</button></div>';
+    }).join('') : '<div class="sub">还没有「' + CL_TYPE_NAMES[clCurType] + '」内容。点「➕ 新增一条」添加，可打主题标签；每条都能一键「设为今天」推到教室大屏。</div>';
+    csFillSelects();
+  }
+  function clOpenForm(id) {
+    var rec = id ? ntGet('s-classic', id) : null;
+    var type = rec ? (rec.type || 'quote') : clCurType;
+    var box = document.getElementById('clFormBox');
+    if (!box) { box = document.createElement('div'); box.id = 'clFormBox'; document.body.appendChild(box); }
+    box.innerHTML =
+      '<div style="position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)clCloseForm()">' +
+      '<div style="background:#fff;border-radius:14px;padding:20px;width:460px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.25)">' +
+      '<h3 style="margin:0 0 14px;font-size:16px">' + (id ? '编辑' : '新增') + CL_TYPE_NAMES[type] + '</h3>' +
+      '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">类型</div>' +
+      '<select id="clFType"' + (id ? ' disabled' : '') + ' style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px">' +
+      Object.keys(CL_TYPE_NAMES).map(function (k) { return '<option value="' + k + '"' + (k === type ? ' selected' : '') + '>' + CL_TYPE_NAMES[k] + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">篇名 / 标题（每日一句可留空）</div>' +
+      '<input id="clFTitle" value="' + esc(rec ? (rec.title || '') : '') + '" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px"></div>' +
+      '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">内容（古诗词 / 小古文可多行，回车换行）</div>' +
+      '<textarea id="clFContent" rows="4" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px;font-family:inherit">' + esc(rec ? (rec.content || '') : '') + '</textarea></div>' +
+      '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">出处 / 作者</div>' +
+      '<input id="clFSrc" value="' + esc(rec ? (rec.src || '') : '') + '" placeholder="如：—— 《沁园春·雪》 或 唐·李白" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px"></div>' +
+      '<div style="margin-bottom:14px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">主题标签（如：励志 / 节气 / 节日 / 毛主席诗词）</div>' +
+      '<input id="clFTheme" value="' + esc(rec ? (rec.theme || '') : '') + '" placeholder="可留空" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px"></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn2" onclick="clCloseForm()">取消</button>' +
+      '<button class="btn2 primary" onclick="clSaveForm(\'' + (id || '') + '\')">💾 保存</button></div>' +
+      '</div></div>';
+  }
+  function clCloseForm() { var b = document.getElementById('clFormBox'); if (b) b.innerHTML = ''; }
+  function clAdd() { clOpenForm(null); }
+  function clEdit(id) { clOpenForm(id); }
+  function clSaveForm(id) {
+    var type = (document.getElementById('clFType') || {}).value || 'quote';
+    var title = (document.getElementById('clFTitle').value || '').trim();
+    var content = (document.getElementById('clFContent').value || '').trim();
+    var src = (document.getElementById('clFSrc').value || '').trim();
+    var theme = (document.getElementById('clFTheme').value || '').trim();
+    if (!content) { toastMsg('⚠️ 请填内容'); return }
+    if (type !== 'quote' && !title) { toastMsg('⚠️ 古诗词 / 小古文请填篇名'); return }
+    var rec = id ? ntGet('s-classic', id) : null;
+    if (!rec) rec = { id: 'cl_' + Date.now() + Math.floor(Math.random() * 9000 + 1000) };
+    rec.type = type; rec.title = title; rec.content = content; rec.src = src; rec.theme = theme;
+    rec.deleted = false; rec.ts = Date.now(); rec.updatedAt = new Date().toISOString(); rec.updatedBy = 'teacher';
+    ntUpsert('s-classic', rec);
+    clCloseForm(); clRender(); ntChanged();
+    toastMsg('已保存，约 3~20 秒同步到教室大屏');
+  }
+  function clDel(id) {
+    if (!confirm('删除这条内容？若教室大屏当天正显示它，会回退到内置轮换。')) return;
+    var rec = ntGet('s-classic', id); if (!rec) return;
+    rec.deleted = true; rec.ts = Date.now(); rec.updatedAt = new Date().toISOString();
+    ntUpsert('s-classic', rec); clRender(); ntChanged();
+    toastMsg('已删除');
+  }
+  function clSetToday(id) {
+    var rec = ntGet('s-classic', id); if (!rec) return;
+    var d = new Date().toISOString().slice(0, 10);
+    var sch = ntGet('s-csched', 'cs_' + d);
+    if (!sch) sch = { id: 'cs_' + d, date: d };
+    var key = rec.type === 'quote' ? 'quoteId' : (rec.type === 'poem' ? 'poemId' : 'wenId');
+    sch[key] = rec.id; sch.deleted = false; sch.ts = Date.now(); sch.updatedAt = new Date().toISOString();
+    ntUpsert('s-csched', sch); csRender(); ntChanged();
+    toastMsg('已设为 ' + d + ' 大屏展示「' + (rec.title || String(rec.content || '').slice(0, 12)) + '」');
+  }
+  function csFillSelects() {
+    ['quote', 'poem', 'wen'].forEach(function (type) {
+      var sel = document.getElementById('cs' + type.charAt(0).toUpperCase() + type.slice(1));
+      if (!sel) return;
+      var rows = clLib(type);
+      sel.innerHTML = ['<option value="">（内置轮换）</option>'].concat(rows.map(function (r) {
+        var label = type === 'quote' ? String(r.content || '').slice(0, 16) : (r.title || '');
+        return '<option value="' + esc(r.id) + '">' + esc(label) + (r.theme ? ' · ' + esc(r.theme) : '') + '</option>';
+      })).join('');
+    });
+  }
+  function csRender() {
+    var box = document.getElementById('csList'); if (!box) return;
+    var rows = ntRows('s-csched').filter(function (r) { return r && !r.deleted; });
+    rows.sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
+    if (!rows.length) { box.innerHTML = '<div class="sub">还没有按日期指定的安排，没指定的日子走内置轮换。</div>'; return; }
+    box.innerHTML = rows.map(function (r) {
+      var parts = ['quote', 'poem', 'wen'].map(function (type) {
+        var key = type === 'quote' ? 'quoteId' : (type === 'poem' ? 'poemId' : 'wenId');
+        var e = r[key] ? ntGet('s-classic', r[key]) : null;
+        return CL_TYPE_NAMES[type] + '：' + (e ? (type === 'quote' ? String(e.content || '').slice(0, 14) : (e.title || '')) : '内置轮换');
+      }).join(' ｜ ');
+      return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed #e3ede7">' +
+        '<span style="font-size:13px;font-weight:700;flex-shrink:0">' + esc(r.date) + '</span>' +
+        '<span style="flex:1;font-size:12px;color:#556">' + esc(parts) + '</span>' +
+        '<button class="btn2 sm ghost" style="color:#c2410c" onclick="csDel(\'' + r.id + '\')">删</button></div>';
+    }).join('');
+  }
+  function csSave() {
+    var dEl = document.getElementById('csDate');
+    var d = (dEl && dEl.value) || new Date().toISOString().slice(0, 10);
+    var sch = ntGet('s-csched', 'cs_' + d);
+    if (!sch) sch = { id: 'cs_' + d, date: d };
+    ['quote', 'poem', 'wen'].forEach(function (type) {
+      var sel = document.getElementById('cs' + type.charAt(0).toUpperCase() + type.slice(1));
+      sch[type === 'quote' ? 'quoteId' : (type === 'poem' ? 'poemId' : 'wenId')] = sel ? sel.value : '';
+    });
+    sch.deleted = false; sch.ts = Date.now(); sch.updatedAt = new Date().toISOString();
+    ntUpsert('s-csched', sch); csRender(); ntChanged();
+    toastMsg('已保存 ' + d + ' 的安排，约 3~20 秒同步到教室大屏');
+  }
+  function csDel(id) {
+    if (!confirm('删除这一天的安排？该日将回退到内置轮换。')) return;
+    var rec = ntGet('s-csched', id); if (!rec) return;
+    rec.deleted = true; rec.ts = Date.now(); rec.updatedAt = new Date().toISOString();
+    ntUpsert('s-csched', rec); csRender(); ntChanged();
+    toastMsg('已删除该日安排');
+  }
+  window.clTab = clTab; window.clRender = clRender; window.clAdd = clAdd; window.clEdit = clEdit;
+  window.clDel = clDel; window.clSetToday = clSetToday; window.clCloseForm = clCloseForm; window.clSaveForm = clSaveForm;
+  window.csSave = csSave; window.csDel = csDel;
+  try { clRender(); csRender(); } catch (e) {}
 
   /* ================= vT14 学生评语 ================= */
   var CM_TPL_KEY = 'wb_cm_tpl_v1', CM_TRAIT_KEY = 'wb_cm_trait_v1', CM_AI_KEY = 'wb_cm_ai_v1';
@@ -29828,6 +30171,7 @@ function cwInit(){
     try { deskFillCfgForm() } catch (e) {}
     try { asRender() } catch (e) {}   /* vT13 布置作业列表刷新 */
     try { cmAfterSync() } catch (e) {}   /* vT14 学生评语刷新 */
+    try { clRender(); csRender(); } catch (e) {}   /* vT15 经典内容管理刷新 */
   }
   function ntInit() {
     try {
