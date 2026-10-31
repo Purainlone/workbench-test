@@ -13981,12 +13981,12 @@ function stuPoints(){
     if(isNaN(v)){v=HW_SCORE[fval(r,'等级')]||0}
     hwP[n]=(hwP[n]||0)+v;
   });
-  /* vT17 科任端作业积分加减（s-hwadj）并入作业积分 */
-  ntRows('s-hwadj').forEach(function(r){
-    if(!r||r.deleted||!r.name)return;
-    var v=Number(r.delta)||0;if(!v)return;
-    hwP[r.name]=(hwP[r.name]||0)+v;
-  });
+  /* vT17 科任端作业积分加减（s-hwadj）并入作业积分 —— 直接读 NT 本地库，避免依赖 IIFE 时序 */
+  (function(){ try{
+    var _db=JSON.parse(localStorage.getItem('wb_nt_v1')||'{}');
+    var _a=Array.isArray(_db['s-hwadj'])?_db['s-hwadj']:[];
+    _a.forEach(function(r){ if(!r||r.deleted||!r.name)return; var v=Number(r.delta)||0; if(!v)return; hwP[r.name]=(hwP[r.name]||0)+v; });
+  }catch(e){} })();
   ST_ROWS.forEach(function(r){
     var n=fval(r,'姓名');if(!n)return;
     var v=parseFloat(fval(r,'奖惩分值'));
@@ -14185,12 +14185,12 @@ function openStuPanel(name){
     var v=parseFloat(fval(r,'奖惩分值'));if(isNaN(v)||!v)return;
     flow.push({d:fval(r,'日期'),t:'奖惩 · '+t,v:v,src:'rw',id:recId(r)});
   });
-  /* vT17 科任端作业积分加减（s-hwadj）进流水 */
-  ntRows('s-hwadj').forEach(function(r){
-    if(!r||r.deleted||r.name!==name)return;
-    var v=Number(r.delta)||0;if(!v)return;
-    flow.push({d:r.date,t:'作业积分 · '+(r.subject||'')+(r.reason?'（'+r.reason+'）':''),v:v,src:'hwadj',id:r.id});
-  });
+  /* vT17 科任端作业积分加减（s-hwadj）进流水 —— 直接读 NT 本地库，避免依赖 IIFE 时序 */
+  (function(){ try{
+    var _db=JSON.parse(localStorage.getItem('wb_nt_v1')||'{}');
+    var _a=Array.isArray(_db['s-hwadj'])?_db['s-hwadj']:[];
+    _a.forEach(function(r){ if(!r||r.deleted||r.name!==name)return; var v=Number(r.delta)||0; if(!v)return; flow.push({d:r.date,t:'作业积分 · '+(r.subject||'')+(r.reason?'（'+r.reason+'）':''),v:v,src:'hwadj',id:r.id}); });
+  }catch(e){} })();
   flow.sort(function(a,b){return String(b.d||'').localeCompare(String(a.d||''))});
   if(!flow.length)ul.appendChild(el('li','empty','还没有积分记录'));
   flow.forEach(function(f){
@@ -30537,6 +30537,7 @@ function cwInit(){
     try { clRender(); csRender(); dtRender(); renderTrain(); } catch (e) {}   /* vT15 经典内容管理刷新 */
     try { dtRender() } catch (e) {}   /* vT16 留堂名单刷新 */
     try { renderTrain() } catch (e) {}   /* vT16 展示训练营刷新 */
+    try { renderStu() } catch (e) {}   /* vT17 科任端作业积分(s-hwadj)并入作业积分后刷新学生表 */
   }
   function ntInit() {
     try {
