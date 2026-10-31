@@ -12268,6 +12268,27 @@ function openRCManager(){
   inp.onkeydown=function(e){if(e.key==='Enter')addBtn.click()};
   row.appendChild(addBtn);
   panel.appendChild(row);
+  /* vT16 批量导入：每行一篇，一键导入为课外篇目（跳过重复） */
+  var brow=el('div','addrow');brow.style.marginTop='8px';
+  var bta=document.createElement('textarea');
+  bta.placeholder='批量导入：每行一篇，粘贴后点右侧按钮\n如：\n《行路难》（李白）\n《登楼》（杜甫）';
+  bta.rows=3;bta.style.cssText='flex:1;padding:10px 13px;border:1px solid #e2ece7;border-radius:9px;font-size:13px;font-family:inherit;resize:vertical';
+  var bBtn=el('button','btn','批量导入为课外');
+  bBtn.style.whiteSpace='nowrap';
+  bBtn.onclick=function(){
+    var lines=(bta.value||'').split('\n').map(function(x){return x.trim()}).filter(Boolean);
+    if(!lines.length){toastMsg('先在左边粘贴篇目，每行一篇');return}
+    var add=0;
+    lines.forEach(function(v){
+      if(RC_TITLES.some(function(x){return rcTName(x)===v}))return;
+      RC_TITLES.push(rcMakeTitle(v,'extra'));add++;
+    });
+    if(add){rcSaveTitles();draw();renderRecite();}
+    toastMsg(add?('✅ 已导入 '+add+' 个课外篇目'+(lines.length-add>0?('，跳过重复 '+(lines.length-add)+' 个'):'')):'没有新增（粘贴的篇目都已存在）');
+    if(add)bta.value='';
+  };
+  brow.appendChild(bta);brow.appendChild(bBtn);
+  panel.appendChild(brow);
   var ul=document.createElement('ul');panel.appendChild(ul);
   function draw(){
     ul.textContent='';
