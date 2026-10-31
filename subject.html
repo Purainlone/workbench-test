@@ -205,10 +205,6 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
         <button class="btn sec" onclick="sendSpeakFromHw()">🔊 播报未交名单（最新一列）</button>
       </div>
       <div class="msg" id="hwMsg"></div>
-      <div class="row" id="hwUndoRow" style="display:none;margin-top:8px">
-        <button class="btn sec" onclick="hwUndo()">⟲ 撤回恢复刚才删除的作业</button>
-        <span class="sub" id="hwUndoInfo"></span>
-      </div>
     </div>
 
     <!-- ② 成绩 -->
@@ -768,17 +764,19 @@ function createHwItem() {
   });
 }
 
-/* ---------- 作业列删除（删除某项作业，含 20 秒撤回恢复） ---------- */
-var _hwUndo = null, _hwUndoT = null;
+/* ---------- 作业列删除（删除某项作业，直接生效，无撤回） ---------- */
 function delHwItemFromTh(el) { var k = el && el.parentNode ? el.parentNode.getAttribute('data-del') : ''; if (k) delHwItem(k); }
 function delHwItem(key) {
   if (!ME || !ME.perm || !ME.perm.hw) { $('hwMsg').textContent = '⚠️ 没有「登记作业」权限，无法删除'; $('hwMsg').className = 'msg err'; return; }
   var p = String(key || '').split('|'), item = p[0], date = p.slice(1).join('|') || today();
   if (!item) return;
-  if (!confirm('删除作业「' + item + '」(' + date + ')？\n该列所有登记也会一起删除（删除后可在下方「⟲ 撤回恢复」）。')) return;
-  var itemRec = (HWI || []).filter(function (x) { return x && x.item === item && String(x.date || '').slice(0, 10) === date; });
-  var recs = (HW || []).filter(function (r) { return r && r.item === item && String(r.date || '').slice(0, 10) === date; });
-  _hwUndo = { item: item, date: date, itemRec: itemRec, recs: recs };
+  if (!confirm('删除作业「' + item + '」(' + date + ')？\n该列所有登记也会一起从云端删除，且不可恢复，请确认无误。')) return;
+  /* 清掉该列的待写盘记录 + 取消待触发的自动保存，避免删除后被 flushHw 重新写回（表现为删不掉） */
+  if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+  Object.keys(dirtyHw).forEach(function (k) {
+    var p2 = k.split('|');
+    if (p2.length >= 3 && p2[1] === item && p2.slice(2).join('|') === date) delete dirtyHw[k];
+  });
   $('hwMsg').textContent = '删除中…'; $('hwMsg').className = 'msg';
   writeDoc(function (doc) {
     var arr = Array.isArray(doc.tables.hwItems) ? doc.tables.hwItems : [];
@@ -786,33 +784,10 @@ function delHwItem(key) {
     var ha = Array.isArray(doc.tables.hw) ? doc.tables.hw : [];
     doc.tables.hw = ha.filter(function (r) { return !(r && r.item === item && String(r.date || '').slice(0, 10) === date); });
   }).then(function () {
-    $('hwMsg').textContent = '✅ 已删除「' + item + '」(' + date + ')';
+    $('hwMsg').textContent = '✅ 已删除「' + item + '」(' + date + ')，已从云端移除';
     try { renderHwTab() } catch (e) {}
-    var row = $('hwUndoRow'); if (row) row.style.display = 'flex';
-    var inf = $('hwUndoInfo'); if (inf) inf.textContent = '（含 ' + recs.length + ' 条登记，20 秒内可撤回）';
-    if (_hwUndoT) clearTimeout(_hwUndoT);
-    _hwUndoT = setTimeout(function () { _hwUndo = null; var r = $('hwUndoRow'); if (r) r.style.display = 'none'; }, 20000);
   }).catch(function (e) {
     $('hwMsg').textContent = '❌ 删除失败：' + (e.message || ''); $('hwMsg').className = 'msg err';
-  });
-}
-function hwUndo() {
-  if (!_hwUndo) return;
-  var u = _hwUndo; _hwUndo = null;
-  var row = $('hwUndoRow'); if (row) row.style.display = 'none';
-  $('hwMsg').textContent = '恢复中…'; $('hwMsg').className = 'msg';
-  writeDoc(function (doc) {
-    var arr = Array.isArray(doc.tables.hwItems) ? doc.tables.hwItems : [];
-    u.itemRec.forEach(function (x) { if (!arr.some(function (y) { return y && y.item === x.item && String(y.date || '').slice(0, 10) === String(x.date || '').slice(0, 10); })) arr.push(x); });
-    doc.tables.hwItems = arr;
-    var ha = Array.isArray(doc.tables.hw) ? doc.tables.hw : [];
-    u.recs.forEach(function (x) { if (!ha.some(function (y) { return y && y.id === x.id; })) ha.push(x); });
-    doc.tables.hw = ha;
-  }).then(function () {
-    $('hwMsg').textContent = '⟲ 已恢复「' + u.item + '」(' + u.date + ')';
-    try { renderHwTab() } catch (e) {}
-  }).catch(function (e) {
-    $('hwMsg').textContent = '❌ 恢复失败：' + (e.message || ''); $('hwMsg').className = 'msg err';
   });
 }
 /* ---------- 今日留堂（s-detain：勾选同步教室大屏 16:05 提醒与家长端） ---------- */
