@@ -127,6 +127,15 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
         <button class="btn sec" onclick="sendSpeakFromHw()">🔊 播报未交名单（最新一列）</button>
       </div>
       <div class="msg" id="hwMsg"></div>
+
+      <h3 style="margin-top:16px">📢 布置作业（几秒内同步到教室大屏「今日作业」）</h3>
+      <div class="row">
+        <input type="date" id="asDate" style="width:150px" onchange="renderAssign()">
+        <textarea id="asText" rows="2" placeholder="今天要做的作业，如：练习册 P23；听写第三课词语" style="flex:1;min-width:240px"></textarea>
+        <button class="btn" onclick="assignPush()">📢 布置</button>
+      </div>
+      <div id="asList"></div>
+      <div class="msg" id="asMsg"></div>
     </div>
 
     <!-- ② 成绩 -->
@@ -247,7 +256,7 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
         拉-改-推 + 409 冲突重试，LWW 按 ts。 */
 
 var ME = null, DOC = null, SHA = '', BRANCH = '';
-var STU = [], HWI = [], HW = [], SC = [];
+var STU = [], HWI = [], HW = [], SC = [], SA = [];   /* SA = s-assign 布置作业 */
 var LV_SCORE = { '优': 2, '良': 1, '中': 0, '差': -1 };
 var dirtyHw = {}, flushTimer = null, curLv = '优';
 /* vT5 表格视图状态 */
@@ -390,6 +399,8 @@ function applyDoc(doc) {
   HWI = (t.hwItems || []).filter(function (r) { return r && r.item });
   HW = t.hw || [];
   SC = t.scores || [];
+  SA = t['s-assign'] || [];
+  try { renderAssign() } catch (e) {}
   $('meSync').textContent = '已同步 · ' + nowStr();
 }
 
@@ -409,7 +420,7 @@ async function pull(showMsg) {
 
 /* ---------- 渲染 ---------- */
 function renderAll() {
-  renderHwTab(); renderScList(); renderSpkSel(); buildSpeak();
+  renderHwTab(); renderScList(); renderSpkSel(); buildSpeak(); renderAssign();
 }
 function hwItemKey(x) { return String(x.item) + '|' + String(x.date || '').slice(0, 10) }
 
@@ -594,6 +605,54 @@ function createHwItem() {
     $('hwMsg').textContent = '❌ 建列失败：' + (e.message || '');
     $('hwMsg').className = 'msg err';
   });
+}
+
+/* ---------- 布置作业（s-assign，同步到教室大屏） ---------- */
+function asToday() {
+  var d = $('asDate');
+  if (d && d.value) return d.value;
+  return today();
+}
+function assignPush() {
+  if (!ME || !ME.perm || !ME.perm.hw) { $('asMsg').textContent = '⚠️ 没有作业权限'; return; }
+  var txt = ($('asText').value || '').trim();
+  if (!txt) { $('asMsg').textContent = '⚠️ 先写作业内容'; return; }
+  var rec = { id: 'as_' + Date.now() + Math.floor(Math.random() * 9000 + 1000),
+    date: asToday(), subject: ME.subject || '', content: txt, by: ME.name || '', deleted: false,
+    ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'subj-web' };
+  writeDoc(function (doc) {
+    var arr = Array.isArray(doc.tables['s-assign']) ? doc.tables['s-assign'] : [];
+    arr.push(rec);
+    doc.tables['s-assign'] = arr;
+  }).then(function () {
+    $('asText').value = '';
+    $('asMsg').textContent = '✅ 已布置，教室大屏「今日作业」几秒内显示';
+    renderAssign();
+  }).catch(function (e) { $('asMsg').textContent = '❌ 布置失败：' + (e.message || ''); });
+}
+function renderAssign() {
+  var box = $('asList'); if (!box) return;
+  var dEl = $('asDate');
+  if (dEl && !dEl.value) dEl.value = today();
+  var d = asToday();
+  var mine = ME ? (ME.subject || '') : '';
+  var rows = (SA || []).filter(function (r) {
+    return r && !r.deleted && String(r.date || '').slice(0, 10) === d && (r.subject || '') === mine;
+  });
+  rows.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0) });
+  box.innerHTML = rows.map(function (r) {
+    return '<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed #e3efe7">' +
+      '<span style="flex:1;font-size:13.5px">' + esc(r.content || '') + '</span>' +
+      '<button class="btn sec" style="padding:2px 10px" onclick="asDel(\'' + r.id + '\')">删</button></div>';
+  }).join('') || '<div class="sub">这一天还没有布置' + esc(mine) + '作业</div>';
+}
+function asDel(id) {
+  if (!confirm('删除这条布置？教室大屏将不再显示')) return;
+  writeDoc(function (doc) {
+    var arr = Array.isArray(doc.tables['s-assign']) ? doc.tables['s-assign'] : [];
+    arr.forEach(function (r) { if (r && r.id === id) { r.deleted = true; r.ts = Date.now(); r.updatedAt = new Date().toISOString(); } });
+    doc.tables['s-assign'] = arr;
+  }).then(function () { renderAssign(); }).catch(function (e) { $('asMsg').textContent = '❌ 删除失败：' + (e.message || ''); });
 }
 
 /* ---------- 成绩 ---------- */
