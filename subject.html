@@ -106,7 +106,7 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
       <div class="tab" data-t="nt" onclick="switchTab('nt')">📢 发通知</div>
       <div class="tab" data-t="spk" onclick="switchTab('spk')">🔊 播报未交名单</div>
       <div class="tab" data-t="an" onclick="switchTab('an')">📈 成绩分析</div>
-      <div class="tab" data-t="hp" onclick="switchTab('hp')">📋 作业积分</div>
+      <div class="tab" data-t="hp" onclick="switchTab('hp')">📋 本科作业积分</div>
     </div>
 
     <!-- 主页：未交作业 / 今日留堂 / 布置作业 聚合 -->
@@ -256,11 +256,10 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
     </div>
 
     <div class="card hidden" id="tabHp">
-      <h3>📋 本班作业积分</h3>
-      <div class="sub">作业积分 = 作业等级分（优+2 / 良+1 / 中0 / 差−1，全科目合计）+ 科任老师加减分。点右列按钮即可对该生作业积分加减，约 3~20 秒同步到班主任端积分汇总。</div>
+      <h3>📋 本科作业积分（只读）</h3>
+      <div class="sub">本科目作业积分 = 作业等级分（优+2 / 良+1 / 中0 / 差−1），在「作业登记」打等级时自动计入，无需手动操作。科任老师仅可查看，不能加减分；如有班主任加减分也会一并列在「班主任加减分」列。</div>
       <div class="row" style="margin:10px 0">
         <button class="btn sec" onclick="pull(true);renderHp()">🔄 刷新</button>
-        <span class="sub" id="hpTip"></span>
       </div>
       <div id="hpTable"></div>
     </div>
@@ -812,19 +811,19 @@ window.dtSave = function () {
   });
 };
 
-/* ---------- 作业积分：查看 + 科任老师加减分（写入 s-hwadj，班主任端汇总可见） ---------- */
-function hpBase() {   /* 作业等级分合计（全科目，与班主任端作业积分口径一致） */
-  var m = {};
+/* ---------- 作业积分：只读查看（仅本科目，登记作业时按等级自动计入；科任老师不可手动加减） ---------- */
+function hpBase() {   /* 本科目作业等级分合计（优+2/良+1/中0/差−1） */
+  var subj = ME.subject || '', m = {};
   (HW || []).forEach(function (r) {
-    if (!r || !r.name) return;
+    if (!r || !r.name || (r.subject || '') !== subj) return;
     var v = Number(r.score); if (isNaN(v)) v = LV_SCORE[r.level] || 0;
     m[r.name] = (m[r.name] || 0) + v;
   });
   return m;
 }
-function hpAdj() {     /* 科任老师加减分（s-hwadj） */
-  var m = {}, arr = (DOC && DOC.tables && DOC.tables['s-hwadj']) || [];
-  arr.forEach(function (r) { if (!r || r.deleted || !r.name) return; var v = Number(r.delta) || 0; if (!v) return; m[r.name] = (m[r.name] || 0) + v; });
+function hpAdj() {     /* 本科目加减分（s-hwadj，只读展示；由班主任端写入） */
+  var subj = ME.subject || '', m = {}, arr = (DOC && DOC.tables && DOC.tables['s-hwadj']) || [];
+  arr.forEach(function (r) { if (!r || r.deleted || !r.name || (r.subject || '') !== subj) return; var v = Number(r.delta) || 0; if (!v) return; m[r.name] = (m[r.name] || 0) + v; });
   return m;
 }
 function renderHp() {
@@ -836,35 +835,20 @@ function renderHp() {
     return { name: s.name, no: (s.no || s.学号 || ''), b: b, a: a, t: Math.round((b + a) * 10) / 10 };
   });
   list.sort(function (x, y) { return (y.t - x.t) || String(x.name).localeCompare(String(y.name), 'zh'); });
-  var bt = 'border:0;border-radius:8px;padding:4px 9px;font-size:12px;font-weight:700;cursor:pointer;margin:0 2px';
   var rows = list.map(function (s) {
     var col = s.t > 0 ? '#0f7a46' : (s.t < 0 ? '#b91c1c' : '#333');
+    var adjTxt = s.a ? (s.a > 0 ? '+' + s.a : s.a) : '—';
     return '<tr style="border-bottom:1px solid #eef2f7">' +
       '<td style="padding:6px 8px">' + esc(s.name) + '</td>' +
       '<td style="padding:6px 8px;color:#889">' + esc(s.no || '') + '</td>' +
+      '<td style="padding:6px 8px;font-weight:700;color:' + col + '">' + (s.b > 0 ? '+' : '') + s.b + '</td>' +
+      '<td style="padding:6px 8px;color:#667">' + adjTxt + '</td>' +
       '<td style="padding:6px 8px;font-weight:700;color:' + col + '">' + (s.t > 0 ? '+' : '') + s.t + '</td>' +
-      '<td style="padding:6px 8px">' +
-        '<button class="hpbt" data-nm="' + esc(s.name) + '" data-d="2" style="' + bt + ';background:#e8f4ee;color:#0f7a46">+2</button> ' +
-        '<button class="hpbt" data-nm="' + esc(s.name) + '" data-d="1" style="' + bt + ';background:#e8f4ee;color:#0f7a46">+1</button> ' +
-        '<button class="hpbt" data-nm="' + esc(s.name) + '" data-d="-1" style="' + bt + ';background:#fdecec;color:#b91c1c">−1</button> ' +
-        '<button class="hpbt" data-nm="' + esc(s.name) + '" data-d="-2" style="' + bt + ';background:#fdecec;color:#b91c1c">−2</button>' +
-      '</td></tr>';
+      '</tr>';
   }).join('');
   box.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#f3f6fa;text-align:left">' +
-    '<th style="padding:6px 8px">姓名</th><th style="padding:6px 8px">学号</th><th style="padding:6px 8px">作业积分</th><th style="padding:6px 8px">科任加减分</th></tr></thead><tbody>' + rows + '</tbody></table>';
-  box.querySelectorAll('.hpbt').forEach(function (b) { b.onclick = function () { hpAdd(b.getAttribute('data-nm'), Number(b.getAttribute('data-d'))); }; });
+    '<th style="padding:6px 8px">姓名</th><th style="padding:6px 8px">学号</th><th style="padding:6px 8px">等级分（本学科）</th><th style="padding:6px 8px">班主任加减分</th><th style="padding:6px 8px">合计</th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
-window.hpAdd = function (name, delta) {
-  if (!ME) return;
-  var reason = (delta > 0 ? '表扬' : '提醒') + (ME.subject || '') + '作业';
-  var tip = $('hpTip'); if (tip) tip.textContent = '保存中…';
-  writeDoc(function (doc) {
-    var arr = Array.isArray(doc.tables['s-hwadj']) ? doc.tables['s-hwadj'] : [];
-    arr.push({ id: 'ha_' + name + '_' + Date.now(), name: name, delta: delta, reason: reason, subject: ME.subject || '', by: ME.name || '', bycode: ME.code || '', date: today(), ts: Date.now() });
-    doc.tables['s-hwadj'] = arr;
-  }).then(function () { renderHp(); if (tip) tip.textContent = '✅ 已为 ' + name + (delta > 0 ? ' 加 ' : ' 减 ') + Math.abs(delta) + ' 分'; })
-    .catch(function (e) { if (tip) tip.textContent = '❌ 失败：' + (e.message || ''); });
-};
 
 /* ---------- 布置作业（s-assign，同步到教室大屏） ---------- */
 function asToday() {
