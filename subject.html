@@ -30,10 +30,10 @@ textarea { width:100%; }
 .cell .n { display:block; font-size:13px; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .cell .l { display:block; font-size:11px; color:#9ab3a6; min-height:16px; margin-top:2px; }
 .cell:hover { border-color:#2d8f63; }
-.cell.优 { background:#ffe9a8; border-color:#e8cf7a; }
-.cell.良 { background:#b8e6c9; border-color:#8fceaa; }
-.cell.中 { background:#dbe9f5; border-color:#a9c8e0; }
-.cell.差 { background:#f8b4ad; border-color:#e59088; }
+.cell.优 { background:#b8e6c9; border-color:#8fceaa; }   /* 优=绿（与班主任工作台一致） */
+.cell.良 { background:#ffe9a8; border-color:#e8cf7a; }   /* 良=黄 */
+.cell.中 { background:#dbe9f5; border-color:#a9c8e0; }   /* 中=蓝 */
+.cell.差 { background:#f8b4ad; border-color:#e59088; }   /* 差=红 */
 table { border-collapse:collapse; width:100%; font-size:13px; margin-top:8px; }
 th,td { border:1px solid #dfeadf; padding:5px 8px; text-align:left; }
 th { background:#eef6f0; color:#24503a; }
@@ -47,10 +47,10 @@ th { background:#eef6f0; color:#24503a; }
 .hwtable td.name { background:#f7fbf8; font-weight:600; text-align:left; position:sticky; left:0; z-index:1; min-width:64px; }
 .hwtable tbody td:not(.name) { cursor:pointer; min-width:52px; color:#33473d; }
 .hwtable tbody td.empty { color:#c2d4ca; }
-.hwtable tbody td.优 { background:#ffe9a8; color:#7a5c00; }
-.hwtable tbody td.良 { background:#b8e6c9; color:#1f5c3d; }
-.hwtable tbody td.中 { background:#dbe9f5; color:#2a5578; }
-.hwtable tbody td.差 { background:#f8b4ad; color:#7a231b; }
+.hwtable tbody td.优 { background:#b8e6c9; color:#1f5c3d; }   /* 优=绿 */
+.hwtable tbody td.良 { background:#ffe9a8; color:#7a5c00; }   /* 良=黄 */
+.hwtable tbody td.中 { background:#dbe9f5; color:#2a5578; }   /* 中=蓝 */
+.hwtable tbody td.差 { background:#f8b4ad; color:#7a231b; }   /* 差=红 */
 .hwtable tbody tr:hover td:not(.name) { filter:brightness(.96); }
 .stat { margin-top:10px; font-size:13px; color:#555; }
 .msg { margin-top:10px; font-size:13px; color:#2d8f63; min-height:18px; }
