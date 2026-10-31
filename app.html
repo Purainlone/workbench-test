@@ -1884,7 +1884,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <textarea id="rotaRuleShift" rows="2" style="width:100%;font-size:12px" placeholder="2026-10-01=2026-09-27&#10;2026-10-04=2026-10-10"></textarea>
       </div>
       <div style="margin-top:8px">
-        <div class="sub">轮换名单（点选/取消，顺序即轮换顺序）：</div>
+        <div class="sub">轮换名单（点选/取消，顺序即轮换顺序）　<button class="btn2 sm" onclick="rotaSelAll(true)">✅ 全选</button> <button class="btn2 sm ghost" onclick="rotaSelAll(false)">🚫 清空</button></div>
         <div id="rotaRuleNames" style="display:flex;gap:6px;flex-wrap:wrap;max-height:150px;overflow:auto;margin-top:4px"></div>
       </div>
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
@@ -29256,6 +29256,12 @@ function cwInit(){
     rotaRuleNamesSel[nm] = true;
     var cbs = document.querySelectorAll('#rotaRuleNames input[data-nm]');
     for (var i = 0; i < cbs.length; i++) if (cbs[i].getAttribute('data-nm') === nm) cbs[i].checked = true;
+  };
+  /* 轮换名单全选 / 清空 */
+  window.rotaSelAll = function (on) {
+    var cbs = document.querySelectorAll('#rotaRuleNames input[data-nm]');
+    for (var i = 0; i < cbs.length; i++) { cbs[i].checked = !!on; rotaRuleNamesSel[cbs[i].getAttribute('data-nm')] = !!on; }
+    toastMsg(on ? ('✅ 已全选 ' + cbs.length + ' 人') : '已清空选择');
   };
   window.rotaSaveRule = function (andGen) {
     var shiftTxt = (document.getElementById('rotaRuleShift').value || '').split('\n');
