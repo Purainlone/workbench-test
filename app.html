@@ -4608,6 +4608,27 @@ function scExamLabel(){
   var term=(document.getElementById('scTerm').value||'').trim();
   return (term?term+' ':'')+t;
 }
+/* 分数解析：支持 92.5 / .5 / 92。5 / 92．5（全角点）；非法返回 null */
+function scParseNum(v){
+  var s=String(v==null?'':v).trim().replace(/。/g,'.').replace(/．/g,'.').replace(/[,，\s]/g,'');
+  if(!/^\d*\.?\d+$/.test(s))return null;
+  var n=parseFloat(s);
+  return isNaN(n)?null:n;
+}
+/* 分数输入实时校验：超出 0～满分 → 输入框变红 */
+function scCheckScoreInput(inp){
+  var full=parseFloat(inp.dataset.full)||100;
+  var v=(inp.value||'').trim();
+  var ok=true;
+  if(v!==''){
+    var n=scParseNum(v);
+    if(n==null||n<0||n>full)ok=false;
+  }
+  inp.style.borderColor=ok?'#e2ece7':'#e5484d';
+  inp.style.background=ok?'':'#fef2f2';
+  inp.title=ok?'':'⚠️ 分数要在 0～'+full+' 之间（支持 .5 这类小数）';
+}
+
 function scBuildGrid(){
   var subject=scSubjectNow();
   if(!subject){toastMsg('先填科目名称');return}
@@ -4652,9 +4673,11 @@ function scBuildGrid(){
     r.appendChild(el('td','nm',nm));
     var td=el('td');
     var inp=el('input','');
-    inp.type='number';inp.step='0.5';inp.min='0';inp.max=String(meta.full);
-    inp.dataset.nm=nm;inp.dataset.no=no;
+    inp.type='text';inp.inputMode='decimal';
+    inp.dataset.nm=nm;inp.dataset.no=no;inp.dataset.full=String(meta.full);
     inp.style.cssText='width:82px;border:1px solid #e2ece7;border-radius:7px;padding:5px 7px;font-size:13px;text-align:center;font-family:inherit';
+    inp.placeholder='分数';
+    inp.oninput=function(){scCheckScoreInput(inp)};
     var old=exists.filter(function(x){return fval(x,'学生姓名')===nm})[0];
     if(old){var sv=fnum(old,'分数');if(sv!=null)inp.value=sv}
     inp.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();var all=[].slice.call(document.querySelectorAll('#scGridBox tbody input'));var i=all.indexOf(inp);if(all[i+1])all[i+1].focus()}};
@@ -4706,12 +4729,11 @@ function scSubmitGrid(){
   inputs.forEach(function(i){
     var v=(i.value||'').trim();
     if(v==='')return;
-    var n=parseFloat(v);
-    if(isNaN(n)){bad.push(i.dataset.nm);return}
-    if(n<0||n>meta.full){bad.push(i.dataset.nm);return}
+    var n=scParseNum(v);
+    if(n==null||n<0||n>meta.full){bad.push(i.dataset.nm);scCheckScoreInput(i);return}
     todo.push({name:i.dataset.nm,no:i.dataset.no,score:n});
   });
-  if(bad.length){toastMsg('⚠️ 这些分数超出 0～'+meta.full+' 或不是数字：'+bad.slice(0,5).join('、'));return}
+  if(bad.length){toastMsg('⚠️ 这些分数超出 0～'+meta.full+' 或不是数字（红框已标出）：'+bad.slice(0,5).join('、'));return}
   if(!todo.length){toastMsg('还没填任何分数');return}
   scRememberSubject(meta.subject);
   var btn=document.querySelector('#scGridBox .btn2.primary');
@@ -6955,6 +6977,13 @@ function wbAoaToScores(aoa, names) {
 }
 
 /* ---------- 校对层（模态表格，可改可删） ---------- */
+/* 分数解析：支持 92.5 / .5 / 92。5（全角点）；非法返回 null */
+function wbParseScore(v) {
+  var s = String(v == null ? '' : v).trim().replace(/。/g, '.').replace(/．/g, '.').replace(/[,，\s]/g, '');
+  if (!/^\d*\.?\d+$/.test(s)) return null;
+  var n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
 /* rows:[{name,score}]  onConfirm(rows) */
 function wbReview(rows, onConfirm, onCancel) {
   var old = document.getElementById('wbImpMask');
@@ -6989,9 +7018,23 @@ function wbReview(rows, onConfirm, onCancel) {
       inN.oninput = function () { r.name = inN.value; };
       var inS = document.createElement('input');
       inS.value = r.score === '' ? '' : r.score;
-      inS.type = 'number';
+      inS.type = 'text'; inS.inputMode = 'decimal';
       inS.style.cssText = 'width:70px;border:1px solid #dfeadf;border-radius:7px;padding:5px 7px;font-size:13px;text-align:center;font-family:inherit';
-      inS.oninput = function () { r.score = inS.value === '' ? '' : Number(inS.value); };
+      inS.oninput = function () {
+        var v = String(inS.value || '').trim();
+        if (v === '') { r.score = ''; inS.style.borderColor = '#dfeadf'; inS.style.background = ''; inS.title = ''; return; }
+        var full = 100;
+        try { var fe = document.getElementById('scFull'); if (fe && Number(fe.value)) full = Number(fe.value); } catch (e) {}
+        var n = wbParseScore(v);
+        if (n == null || n < 0 || n > full) {
+          r.score = '';
+          inS.style.borderColor = '#e5484d'; inS.style.background = '#fef2f2';
+          inS.title = '⚠️ 分数要在 0～' + full + ' 之间，这行不会被导入';
+        } else {
+          r.score = n;
+          inS.style.borderColor = '#dfeadf'; inS.style.background = ''; inS.title = '';
+        }
+      };
       var td1 = document.createElement('td'); td1.style.padding = '4px 6px'; td1.appendChild(inN);
       var td2 = document.createElement('td'); td2.style.padding = '4px 6px'; td2.appendChild(inS);
       var del = document.createElement('button');
