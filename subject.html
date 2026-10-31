@@ -52,6 +52,11 @@ th { background:#eef6f0; color:#24503a; }
 .hwtable tbody td.中 { background:#dbe9f5; color:#2a5578; }   /* 中=蓝 */
 .hwtable tbody td.差 { background:#f8b4ad; color:#7a231b; }   /* 差=红 */
 .hwtable tbody tr:hover td:not(.name) { filter:brightness(.96); }
+.hwtable thead th .delx { float:right; margin:-2px 0 0 8px; color:#c0392b; cursor:pointer; font-weight:700; opacity:.5; font-size:12px; }
+.hwtable thead th .delx:hover { opacity:1; }
+.hwtable th.pcell, .hwtable td.pcell { background:#f1f6f3; color:#234; font-weight:700; min-width:54px; }
+.hwtable td.pcell.pos { color:#1f7a46; }
+.hwtable td.pcell.neg { color:#b3261e; }
 .stat { margin-top:10px; font-size:13px; color:#555; }
 .msg { margin-top:10px; font-size:13px; color:#2d8f63; min-height:18px; }
 .err { color:#c0392b !important; }
@@ -167,6 +172,10 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
         <button class="btn sec" onclick="sendSpeakFromHw()">🔊 播报未交名单（最新一列）</button>
       </div>
       <div class="msg" id="hwMsg"></div>
+      <div class="row" id="hwUndoRow" style="display:none;margin-top:8px">
+        <button class="btn sec" onclick="hwUndo()">⟲ 撤回恢复刚才删除的作业</button>
+        <span class="sub" id="hwUndoInfo"></span>
+      </div>
     </div>
 
     <!-- ② 成绩 -->
@@ -530,7 +539,7 @@ function renderHwTable() {
   var tb = $('hwTable');
   if (!tb) return;
   if (!COLS.length) {
-    tb.innerHTML = '<tr><td style="border:none;text-align:left;color:#6b8a7e;padding:14px">还没有本科目作业列，在上方填名字后点「➕ 建列」。</td></tr>';
+    tb.innerHTML = '<tr><td style="border:none;text-align:left;color:#6b8a7e;padding:14px">还没有本科目作业列，在上方填名字后点「➕ 建列」。列头上的 ✕ 可删除某次作业。</td></tr>';
     $('hwStat').textContent = '';
     return;
   }
@@ -550,15 +559,22 @@ function renderHwTable() {
   var head = '<tr><th style="text-align:left;cursor:default" onclick="sortHwReset()">姓名</th>' + COLS.map(function (c) {
     var arrow = (c.key === sortKey && sortDir) ? (sortDir === 1 ? ' ▲' : ' ▼') : ' ↕';
     var on = (c.key === sortKey && sortDir) ? ' class="on"' : '';
-    return '<th' + on + ' data-k="' + esc(c.key) + '" onclick="sortHw(this)">' + esc(c.item) +
-      '<small>' + esc(String(c.date).slice(5)) + arrow + '</small></th>';
-  }).join('') + '</tr>';
+    return '<th' + on + ' data-k="' + esc(c.key) + '" data-del="' + esc(c.key) + '" onclick="sortHw(this)">' +
+      '<span class="delx" onclick="event.stopPropagation();delHwItemFromTh(this)" title="删除这次作业">✕</span>' +
+      esc(c.item) + '<small>' + esc(String(c.date).slice(5)) + arrow + '</small></th>';
+  }).join('') + '<th class="pcell">积分</th></tr>';
 
+  var clsSum = 0;
   var body = rows.map(function (s) {
-    return '<tr><td class="name">' + esc(s.name) + '</td>' + COLS.map(function (c) {
+    var sum = 0;
+    var cells = COLS.map(function (c) {
       var lv = maps[c.key][s.name] || '';
+      if (lv) { var v = LV_SCORE[lv] || 0; sum += v; clsSum += v; }
       return '<td class="' + esc(lv) + (lv ? '' : ' empty') + '" data-n="' + esc(s.name) + '" data-k="' + esc(c.key) + '" onclick="tapCell(this)">' + esc(lv || '·') + '</td>';
-    }).join('') + '</tr>';
+    }).join('');
+    var sumTxt = sum > 0 ? '+' + sum : (sum < 0 ? String(sum) : '—');
+    var sumCls = sum > 0 ? ' pos' : (sum < 0 ? ' neg' : '');
+    return '<tr><td class="name">' + esc(s.name) + '</td>' + cells + '<td class="pcell' + sumCls + '">' + sumTxt + '</td></tr>';
   }).join('');
   tb.innerHTML = '<thead>' + head + '</thead><tbody>' + body + '</tbody>';
 
@@ -568,7 +584,8 @@ function renderHwTable() {
   var doneN = STU.filter(function (s) { return lm[s.name] }).length;
   var miss = STU.filter(function (s) { return !lm[s.name] }).map(function (s) { return s.name });
   $('hwStat').innerHTML = '最新列「' + esc(last.item) + '」已登记 <b>' + doneN + '</b> / ' + STU.length + ' 人' +
-    (miss.length ? ' · 未交：<span style="color:#a04a32">' + esc(miss.join('、')) + '</span>' : ' · 全部交齐 🎉');
+    (miss.length ? ' · 未交：<span style="color:#a04a32">' + esc(miss.join('、')) + '</span>' : ' · 全部交齐 🎉') +
+    ' ｜ 全班作业积分合计 <b>' + (clsSum > 0 ? '+' + clsSum : clsSum) + '</b>';
 }
 function sortHw(el) {
   var k = el.getAttribute('data-k');
@@ -687,6 +704,53 @@ function createHwItem() {
   });
 }
 
+/* ---------- 作业列删除（删除某项作业，含 20 秒撤回恢复） ---------- */
+var _hwUndo = null, _hwUndoT = null;
+function delHwItemFromTh(el) { var k = el && el.parentNode ? el.parentNode.getAttribute('data-del') : ''; if (k) delHwItem(k); }
+function delHwItem(key) {
+  if (!ME || !ME.perm || !ME.perm.hw) { $('hwMsg').textContent = '⚠️ 没有「登记作业」权限，无法删除'; $('hwMsg').className = 'msg err'; return; }
+  var p = String(key || '').split('|'), item = p[0], date = p.slice(1).join('|') || today();
+  if (!item) return;
+  if (!confirm('删除作业「' + item + '」(' + date + ')？\n该列所有登记也会一起删除（删除后可在下方「⟲ 撤回恢复」）。')) return;
+  var itemRec = (HWI || []).filter(function (x) { return x && x.item === item && String(x.date || '').slice(0, 10) === date; });
+  var recs = (HW || []).filter(function (r) { return r && r.item === item && String(r.date || '').slice(0, 10) === date; });
+  _hwUndo = { item: item, date: date, itemRec: itemRec, recs: recs };
+  $('hwMsg').textContent = '删除中…'; $('hwMsg').className = 'msg';
+  writeDoc(function (doc) {
+    var arr = Array.isArray(doc.tables.hwItems) ? doc.tables.hwItems : [];
+    doc.tables.hwItems = arr.filter(function (x) { return !(x && x.item === item && String(x.date || '').slice(0, 10) === date); });
+    var ha = Array.isArray(doc.tables.hw) ? doc.tables.hw : [];
+    doc.tables.hw = ha.filter(function (r) { return !(r && r.item === item && String(r.date || '').slice(0, 10) === date); });
+  }).then(function () {
+    $('hwMsg').textContent = '✅ 已删除「' + item + '」(' + date + ')';
+    try { renderHwTab() } catch (e) {}
+    var row = $('hwUndoRow'); if (row) row.style.display = 'flex';
+    var inf = $('hwUndoInfo'); if (inf) inf.textContent = '（含 ' + recs.length + ' 条登记，20 秒内可撤回）';
+    if (_hwUndoT) clearTimeout(_hwUndoT);
+    _hwUndoT = setTimeout(function () { _hwUndo = null; var r = $('hwUndoRow'); if (r) r.style.display = 'none'; }, 20000);
+  }).catch(function (e) {
+    $('hwMsg').textContent = '❌ 删除失败：' + (e.message || ''); $('hwMsg').className = 'msg err';
+  });
+}
+function hwUndo() {
+  if (!_hwUndo) return;
+  var u = _hwUndo; _hwUndo = null;
+  var row = $('hwUndoRow'); if (row) row.style.display = 'none';
+  $('hwMsg').textContent = '恢复中…'; $('hwMsg').className = 'msg';
+  writeDoc(function (doc) {
+    var arr = Array.isArray(doc.tables.hwItems) ? doc.tables.hwItems : [];
+    u.itemRec.forEach(function (x) { if (!arr.some(function (y) { return y && y.item === x.item && String(y.date || '').slice(0, 10) === String(x.date || '').slice(0, 10); })) arr.push(x); });
+    doc.tables.hwItems = arr;
+    var ha = Array.isArray(doc.tables.hw) ? doc.tables.hw : [];
+    u.recs.forEach(function (x) { if (!ha.some(function (y) { return y && y.id === x.id; })) ha.push(x); });
+    doc.tables.hw = ha;
+  }).then(function () {
+    $('hwMsg').textContent = '⟲ 已恢复「' + u.item + '」(' + u.date + ')';
+    try { renderHwTab() } catch (e) {}
+  }).catch(function (e) {
+    $('hwMsg').textContent = '❌ 恢复失败：' + (e.message || ''); $('hwMsg').className = 'msg err';
+  });
+}
 /* ---------- 今日留堂（s-detain：勾选同步教室大屏 16:05 提醒与家长端） ---------- */
 var dtSel = {}, dtAuto = false;
 function dtRender() {
