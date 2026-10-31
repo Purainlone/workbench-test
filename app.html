@@ -1583,6 +1583,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <span id="hwModeTxt">👀 浏览模式 · 格子只读，不会误改</span>
       <button class="btn2 sm primary" id="hwModeBtn" onclick="toggleHWMode()">✍️ 开始登记</button>
       <span class="mt" id="hwModeTip">先选等级，点「开始登记」后点格子才涂色</span>
+      <button class="btn2 sm ghost" id="hwAutoBtn" onclick="hwToggleAuto()">🙈 已自动隐藏 0 列 · 显示</button>
     </div>
     <div class="gpset">
       <div class="hwlv" id="hwLv">
@@ -12360,6 +12361,51 @@ function openRCManager(){
   };
   brow.appendChild(bta);brow.appendChild(bBtn);
   panel.appendChild(brow);
+  /* vT16 学期归档：换学期一键归档本学期篇目并清空，随时恢复查看 */
+  var ARCH='wb_rc_archive_v1';
+  function archAll(){try{return JSON.parse(localStorage.getItem(ARCH)||'[]')||[]}catch(e){return[]}}
+  function archSave(a){localStorage.setItem(ARCH,JSON.stringify(a.slice(-8)))}
+  var arow=el('div','addrow');arow.style.marginTop='10px';
+  var aBtn=el('button','btn','📦 归档本学期篇目并清空（开始新学期）');
+  aBtn.style.whiteSpace='nowrap';
+  aBtn.onclick=function(){
+    if(!RC_TITLES.length){toastMsg('篇目已是空的，直接批量导入新学期篇目即可');return}
+    var term=window.prompt('给本学期起个名字（如：2026-2027学年第一学期）：','2026-2027学年第一学期');
+    if(!term)return;
+    var a=archAll();
+    a.push({term:String(term).trim()||'未命名学期',titles:RC_TITLES.slice(),at:Date.now()});
+    archSave(a);
+    RC_TITLES=[];rcSaveTitles();draw();renderRecite();
+    drawArch();
+    toastMsg('📦 已归档（'+a[a.length-1].titles.length+' 篇），现在可批量导入新学期篇目；打卡历史数据仍保留');
+  };
+  arow.appendChild(aBtn);
+  panel.appendChild(arow);
+  var alist=el('div');alist.style.cssText='margin-top:8px';
+  panel.appendChild(alist);
+  function drawArch(){
+    var a=archAll();
+    alist.textContent='';
+    if(!a.length){alist.appendChild(el('div','meta','暂无历史学期归档'));return}
+    a.forEach(function(x,i){
+      var row=el('div');row.style.cssText='display:flex;gap:8px;align-items:center;padding:4px 0';
+      var lab=el('span',null,'📚 '+x.term+'（'+x.titles.length+' 篇）');
+      lab.style.cssText='flex:1;font-size:13px';
+      var rb=el('button','btn','恢复');
+      rb.style.cssText='padding:4px 10px;font-size:12px';
+      rb.onclick=function(){
+        if(!confirm('恢复「'+x.term+'」的篇目清单？将覆盖当前篇目（如当前篇目还需要，请先归档）。'))return;
+        RC_TITLES=x.titles.slice();rcSaveTitles();draw();renderRecite();
+        toastMsg('已恢复「'+x.term+'」篇目（'+x.titles.length+' 篇）');
+      };
+      var db=el('button','btn','删除归档');
+      db.style.cssText='padding:4px 10px;font-size:12px';
+      db.onclick=function(){if(!confirm('删除归档「'+x.term+'」？不可恢复。'))return;a.splice(i,1);archSave(a);drawArch()};
+      row.appendChild(lab);row.appendChild(rb);row.appendChild(db);
+      alist.appendChild(row);
+    });
+  }
+  drawArch();
   var ul=document.createElement('ul');panel.appendChild(ul);
   function draw(){
     ul.textContent='';
@@ -12766,6 +12812,22 @@ function hwToggleCell(td,name,item){
   });
 }
 var HW_MODE_READY=false;
+/* vT16 作业列自动隐藏：超过两周 或 全班都已登记 的列不再显示（数据保留，可点按钮临时查看） */
+var HW_SHOW_AUTO=false;
+function hwAutoSplit(){
+  var m=hwMapRows(),roster=stuRoster();
+  var lim=new Date(Date.now()-14*86400000),p=function(n){return (n<10?'0':'')+n};
+  var limStr=lim.getFullYear()+'-'+p(lim.getMonth()+1)+'-'+p(lim.getDate());
+  var vis=[],hid=[];
+  HW_ITEMS.forEach(function(it){
+    var d=hwDateOnly(it.date);
+    var old=d&&d<limStr;
+    var full=roster.length>0&&roster.every(function(s){return !!m[hwKey(s.姓名,it)]});
+    (old||full?hid:vis).push(it);
+  });
+  return {vis:vis,hid:hid};
+}
+window.hwToggleAuto=function(){HW_SHOW_AUTO=!HW_SHOW_AUTO;renderHW()};
 function renderHW(){
   if(!HW_MODE_READY){HW_MODE_READY=true;hwLoadMode()}
   var box=document.getElementById('hwTable');
@@ -12773,15 +12835,18 @@ function renderHW(){
   var stu=stuRoster();
   var m=hwMapRows();
   hwBuildItemsOnRender();
+  var split=hwAutoSplit(),items=HW_SHOW_AUTO?HW_ITEMS:split.vis;
+  var ab=document.getElementById('hwAutoBtn');
+  if(ab){ab.textContent='🙈 已自动隐藏 '+split.hid+' 列 · '+(HW_SHOW_AUTO?'恢复隐藏':'显示');ab.className='btn2 sm'+(HW_SHOW_AUTO?'':' ghost')}
   if(!stu.length){
     box.textContent='';var tb=document.createElement('tbody');
     var tr=document.createElement('tr');var td=el('td','empty','还没有学生数据');
-    td.colSpan=Math.max(2,HW_ITEMS.length+2);tr.appendChild(td);tb.appendChild(tr);box.appendChild(tb);
+    td.colSpan=Math.max(2,items.length+2);tr.appendChild(td);tb.appendChild(tr);box.appendChild(tb);
     return;
   }
   var thead=document.createElement('thead');var hr=document.createElement('tr');
   hr.appendChild(el('th','corner','学生 \\ 作业'));
-  HW_ITEMS.forEach(function(it){
+  items.forEach(function(it){
     var th=el('th','itemcol',it.name);
     th.title=it.name+'　'+(it.date||'');
     hr.appendChild(th);
@@ -12796,7 +12861,7 @@ function renderHW(){
     if(s.学号)nm.appendChild(el('span','sn',s.学号+'号'));
     tr.appendChild(nm);
     var pts=0;
-    HW_ITEMS.forEach(function(it){
+    items.forEach(function(it){
       var k=hwKey(s.姓名,it);
       var rec=m[k];
       var lv=rec?fval(rec,'等级'):'';
@@ -12814,7 +12879,7 @@ function renderHW(){
   box.textContent='';
   box.appendChild(thead);box.appendChild(tbody);
   hwPaintMode();
-  hwRenderStat(stu,m);
+  hwRenderStat(stu,m,items);
   try{scnPaintItems();scnPaintList()}catch(e){}
 }
 /* 保留用户刚新建、还没写库的新列 */
@@ -12825,10 +12890,10 @@ function hwBuildItemsOnRender(){
     if(!HW_ITEMS.some(function(y){return y.name===x.name&&y.date===x.date}))HW_ITEMS.push(x);
   });
 }
-function hwRenderStat(stu,m){
+function hwRenderStat(stu,m,items){
   var host=document.getElementById('hwStat');if(!host)return;
   fill(host);
-  HW_ITEMS.forEach(function(it){
+  (items||HW_ITEMS).forEach(function(it){
     var c={'优':0,'良':0,'中':0,'差':0};
     stu.forEach(function(s){
       var rec=m[hwKey(s.姓名,it)];
