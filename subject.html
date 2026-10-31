@@ -129,6 +129,17 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
       </div>
       <div class="msg" id="hwMsg"></div>
 
+      <h3 style="margin-top:16px">⏰ 今日留堂 <span class="sub">默认勾选本科目今日作业未完成的学生 · 保存后同步教室大屏与家长端</span></h3>
+      <div id="dtGrid" style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0"></div>
+      <div class="row">
+        <button class="btn sec" onclick="dtPreselect()">📥 按本科目今日未完成预选</button>
+        <button class="btn sec" onclick="dtSelAll(true)">✅ 全选</button>
+        <button class="btn sec" onclick="dtSelAll(false)">🚫 清空</button>
+        <button class="btn" onclick="dtSave()">💾 保存今日留堂名单</button>
+        <span class="sub" id="dtMsg"></span>
+      </div>
+      <div class="sub" id="dtSaved" style="margin-top:8px"></div>
+
       <h3 style="margin-top:16px">📢 布置作业（几秒内同步到教室大屏「今日作业」）</h3>
       <div class="row">
         <input type="date" id="asDate" style="width:150px" onchange="renderAssign()">
@@ -607,6 +618,67 @@ function createHwItem() {
     $('hwMsg').className = 'msg err';
   });
 }
+
+/* ---------- 今日留堂（s-detain：勾选同步教室大屏 16:05 提醒与家长端） ---------- */
+var dtSel = {}, dtAuto = false;
+function dtRender() {
+  var grid = $('dtGrid'); if (!grid) return;
+  if (!dtAuto) { dtAuto = true; try { dtPreselect(true) } catch (e) {} }
+  grid.innerHTML = (STU || []).length ? STU.map(function (s) {
+    var on = !!dtSel[s.name];
+    return '<label style="border:1px solid ' + (on ? '#7fc7a4' : '#dde5ee') + ';background:' + (on ? '#e8f4ee' : '#fff') + ';border-radius:9px;padding:5px 10px;font-size:13px;cursor:pointer;user-select:none">' +
+      '<input type="checkbox" data-nm="' + esc(s.name) + '"' + (on ? ' checked' : '') + ' onchange="dtToggle(this)"> ' + esc(s.name) + '</label>';
+  }).join('') : '<span class="sub">还没有学生名单</span>';
+  var d = today();
+  var names = [];
+  ((DOC && DOC.tables && DOC.tables['s-detain']) || []).forEach(function (r) {
+    if (r && !r.deleted && String(r.date || '').slice(0, 10) === d && r.name && names.indexOf(r.name) < 0) names.push(r.name);
+  });
+  var sv = $('dtSaved');
+  if (sv) sv.textContent = names.length ? ('📋 已保存 ' + d + ' 留堂名单（' + names.length + ' 人）：' + names.join('、')) : ('📋 ' + d + ' 还没有保存留堂名单');
+}
+window.dtToggle = function (cb) { dtSel[cb.getAttribute('data-nm')] = cb.checked };
+window.dtSelAll = function (on) {
+  (STU || []).forEach(function (s) { dtSel[s.name] = !!on });
+  dtRender();
+};
+window.dtPreselect = function (silent) {
+  var d = today();
+  var cols = (COLS || []).filter(function (c) { return c.date === d; });
+  if (!cols.length) { if (!silent) $('dtMsg').textContent = '今天还没有本科目作业列，请手动勾选'; dtRender(); return }
+  (STU || []).forEach(function (s) {
+    var undone = cols.some(function (c) { var m = hwDoneMap(c.key); return !(s.name in m); });
+    if (undone) dtSel[s.name] = true;
+  });
+  dtRender();
+  if (!silent) {
+    var n = (STU || []).filter(function (s) { return dtSel[s.name]; }).length;
+    $('dtMsg').textContent = '📥 已按今日 ' + cols.length + ' 项作业预选 ' + n + ' 名未完成学生，可手动增减';
+  }
+};
+window.dtSave = function () {
+  var d = today(), d8 = d.replace(/-/g, '');
+  $('dtMsg').textContent = '保存中…';
+  writeDoc(function (doc) {
+    var arr = Array.isArray(doc.tables['s-detain']) ? doc.tables['s-detain'] : [];
+    (STU || []).forEach(function (s) {
+      var want = !!dtSel[s.name], hit = null;
+      arr.forEach(function (r) { if (r && !r.deleted && String(r.date || '').slice(0, 10) === d && r.name === s.name) hit = r; });
+      if (want && !hit) {
+        arr.push({ id: 'dt_' + d8 + '_' + s.name, date: d, name: s.name, by: (ME && (ME.name || ME.teacher)) || '科任老师', subject: (ME && ME.subject) || '', deleted: false, ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher' });
+      } else if (!want && hit) {
+        hit.deleted = true; hit.ts = Date.now(); hit.updatedAt = new Date().toISOString();
+      }
+    });
+    doc.tables['s-detain'] = arr;
+  }).then(function () {
+    var n = (STU || []).filter(function (s) { return dtSel[s.name]; }).length;
+    $('dtMsg').textContent = '✅ 已保存（' + n + ' 人），教室大屏与家长端约 3~20 秒同步';
+    return pull(false);
+  }).then(function () { dtRender(); }).catch(function (e) {
+    $('dtMsg').textContent = '❌ 保存失败：' + (e.message || '');
+  });
+};
 
 /* ---------- 布置作业（s-assign，同步到教室大屏） ---------- */
 function asToday() {
