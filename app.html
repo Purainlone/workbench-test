@@ -918,6 +918,7 @@ table.sct td .del:hover{color:#c2410c}
 .hwlv button.on.y{background:#d9a305}
 .hwlv button.on.r{background:#dc2626}
 .hwlv button.on.z{background:#2f6fd0}
+.hwlv button.on.x{background:#dc2626}   /* 超时未交 */
 table.hw{border-collapse:separate;border-spacing:0;font-size:13px;width:100%}
 table.hw th,table.hw td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:0;text-align:center}
 table.hw th{background:#eaf5ef;font-weight:600;padding:8px 6px;position:sticky;top:0;z-index:3;white-space:nowrap;min-width:74px}
@@ -928,7 +929,7 @@ table.hw td.spacer,table.hw th.spacer{border-right:0;border-bottom:1px solid var
 table.hw td.nm{position:sticky;left:0;z-index:2;background:#fff;text-align:left;padding:0 10px;white-space:nowrap;width:112px;min-width:112px;max-width:112px;overflow:hidden;text-overflow:ellipsis}
 table.hw tbody tr:nth-child(even) td.nm{background:#fafcfb}
 table.hw td.cell{height:38px;cursor:pointer;position:relative;background:#fff}
-table.hw td.cell:not(.g):not(.y):not(.r):not(.z):after{content:"";position:absolute;inset:7px;border:1px dashed #d5e5dd;border-radius:5px}
+table.hw td.cell:not(.g):not(.y):not(.r):not(.z):not(.x):after{content:"";position:absolute;inset:7px;border:1px dashed #d5e5dd;border-radius:5px}
 table.hw td.cell:hover{box-shadow:inset 0 0 0 1px #a9d9bf}
 table.hw td.cell .mk{font-size:15px;font-weight:800;line-height:1;display:block;color:#fff}
 table.hw td.cell.g{background:#1a9c5b}
@@ -937,12 +938,14 @@ table.hw td.cell.y{background:#f0b429}
 table.hw td.cell.z{background:#cfe6fb}
 table.hw td.cell.z .mk{color:#1d5fbf}
 table.hw td.cell.r{background:#dc2626}
+table.hw td.cell.x{background:#dc2626}   /* 超时未交 = 红底白叉 */
+table.hw td.cell.x .mk{color:#fff}
 table.hw td.cell.busy{opacity:.5;cursor:progress}
 table.hw td.sum{background:#f7fbf9;font-weight:700;color:var(--primary);width:56px}
 /* 浏览模式：作业格子只读，不响应点击，避免翻名单时误涂 */
 table.hw.viewonly td.cell{cursor:default}
 table.hw.viewonly td.cell:hover{box-shadow:none}
-table.hw.viewonly td.cell:not(.g):not(.y):not(.r):not(.z):after{border-color:#eef4f1}
+table.hw.viewonly td.cell:not(.g):not(.y):not(.r):not(.z):not(.x):after{border-color:#eef4f1}
 /* 浏览模式时等级按钮置灰，提示先开始登记 */
 .hwlv.dim{opacity:.45;pointer-events:none}
 .hwstat{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;font-size:12.5px}
@@ -950,6 +953,8 @@ table.hw.viewonly td.cell:not(.g):not(.y):not(.r):not(.z):after{border-color:#ee
 .hwstat .pill.g{background:#e4f5ec;color:#0f7a46}
 .hwstat .pill.y{background:#fdf3dc;color:#92650a}
 .hwstat .pill.r{background:#fde8e8;color:#b91c1c}
+.hwstat .pill.x{background:#fde8e8;color:#dc2626}
+.hwstat b.x{color:#dc2626}   /* 超时未交 */
 
 
 /* ---------- 小组活动 ---------- */
@@ -1594,6 +1599,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2 sm primary" id="hwModeBtn" onclick="toggleHWMode()">✍️ 开始登记</button>
       <span class="mt" id="hwModeTip">先选等级，点「开始登记」后点格子才涂色</span>
       <button class="btn2 sm ghost" id="hwAutoBtn" onclick="hwToggleAuto()">🙈 已自动隐藏 0 列 · 显示</button>
+      <button class="btn2 sm danger" onclick="hwMarkAllOverdue()">⏰ 余下记超时未交（−2）</button>
     </div>
     <div class="gpset">
       <div class="hwlv" id="hwLv">
@@ -1601,6 +1607,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <button data-lv="良" onclick="hwSetLv('良')">良 +1</button>
         <button data-lv="中" onclick="hwSetLv('中')">中 0</button>
         <button data-lv="差" onclick="hwSetLv('差')">差 −1</button>
+        <button data-lv="超时未交" onclick="hwSetLv('超时未交')">超时 −2</button>
       </div>
       <span style="font-size:12px;font-weight:700;color:#2d5a45;background:#e8f4ee;border-radius:8px;padding:8px 12px;flex-shrink:0">语文</span>
       <input id="hwName" placeholder="作业名称，如：第一单元听写" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit;width:220px">
@@ -1692,6 +1699,7 @@ table.paper td.l{text-align:left;font-weight:600}
           <button data-lv="良" type="button" onclick="scnSetLv('良')">良 +1</button>
           <button data-lv="中" type="button" onclick="scnSetLv('中')">中 0</button>
           <button data-lv="差" type="button" onclick="scnSetLv('差')">差 −1</button>
+          <button data-lv="超时未交" type="button" onclick="scnSetLv('超时未交')">超时 −2</button>
         </div>
         <span class="sctip">整个班都交齐的作业，选一个等级扫一遍就行；个别不一样的分开扫</span>
       </div>
@@ -12580,9 +12588,11 @@ function rcClearAll(){
 var HW_DB='fCfl0cuMIVzFDi0iDuAEv2';
 var GA_DB='6WdxjXnbbwiitPJTmlS55m';
 var ST_DB='2mthbbHsJeABzmnerNt6sK';
-var HW_SCORE={'优':2,'良':1,'中':0,'差':-1};   /* 2.6.35 四级赋分 */
-var HW_CLS={'优':'g','良':'y','中':'z','差':'r'};
-var HW_MARK={'优':'优','良':'良','中':'中','差':'差'};
+var HW_SCORE={'优':2,'良':1,'中':0,'差':-1,'超时未交':-2};   /* 2.6.35 四级赋分 + 超时未交 */
+var HW_CLS={'优':'g','良':'y','中':'z','差':'r','超时未交':'x'};
+var HW_MARK={'优':'优','良':'良','中':'中','差':'差','超时未交':'✕'};
+var HW_LV_FIELD_ID='';          /* 飞书「等级」单选字段 id（读 schema 后填） */
+var HW_LV_SCHEMA=[];            /* 云端「等级」当前已有选项文本 */
 var GA_RANK_SCORE={1:5,2:3,3:2};
 var GA_DEFAULT_SCORE=1;
 var HW_ROWS=[],GA_ROWS=[],ST_ROWS=[];
@@ -12788,6 +12798,76 @@ function hwMapRows(){
   });
   return m;
 }
+/* 读飞书表结构，取出「等级」单选字段的 id 与当前选项（用于把「超时未交」补进云端） */
+function hwLoadLvSchema(onDone){
+  if(!db||!db.getDatabaseSchema){if(onDone)onDone();return}
+  db.getDatabaseSchema({databaseId:HW_DB}).then(function(sc){
+    var ps=(sc&&sc.properties)||[];
+    ps.forEach(function(p){
+      if(p.name==='等级'){
+        HW_LV_FIELD_ID=p.id||'';
+        HW_LV_SCHEMA=((p.config&&p.config.options)||[]).map(function(o){return o.text});
+      }
+    });
+    if(onDone)onDone();
+  }).catch(function(e){
+    console.warn('[作业] 读表结构失败，等级选项同步暂缓',e);
+    if(onDone)onDone();
+  });
+}
+/* 把「超时未交」选项补到飞书「等级」单选字段（幂等，失败不打断正常登记） */
+function hwSyncLvCloud(){
+  if(!dbReady||!db||!db.updateField)return;
+  if(!HW_LV_FIELD_ID){
+    /* 没拿到字段 id 就先读结构，读一次后重试 */
+    hwLoadLvSchema(function(){hwSyncLvCloud()});
+    return;
+  }
+  if(HW_LV_SCHEMA.indexOf('超时未交')>=0)return;   /* 云端已存在，跳过 */
+  var opts=HW_LV_SCHEMA.concat(['超时未交']);
+  db.updateField({
+    databaseId:HW_DB,fieldId:HW_LV_FIELD_ID,
+    property:{name:'等级',config:{select:{options:opts.map(function(t){return {text:t}})}}}
+  }).then(function(){
+    HW_LV_SCHEMA=opts.slice();   /* 水位更新，避免重复提交 */
+    console.log('[作业] 已把「超时未交」加入飞书等级选项');
+  }).catch(function(e){
+    console.error('[作业] 同步「超时未交」选项到云端失败',e);
+  });
+}
+/* 一键把最新一列剩下没登记的学生全部记为「超时未交」（每人扣 2 分） */
+function hwMarkAllOverdue(){
+  if(!HW_MODE){toastMsg('👀 先点「开始登记」再一键超时');return}
+  if(!dbReady){toastMsg('⚠️ 未连接数据表');return}
+  var split=hwAutoSplit(),items=HW_SHOW_AUTO?HW_ITEMS:split.vis;
+  if(!items.length){toastMsg('还没有作业列');return}
+  var it=items[items.length-1];   /* 最新（最右侧）一列 */
+  var m=hwMapRows();
+  var roster=stuRoster();
+  var remain=roster.filter(function(s){return !m[hwKey(s.姓名,it)]});
+  if(!remain.length){toastMsg('「'+it.name+'」都已登记，没有可标记的');return}
+  if(!confirm('把「'+it.name+'」剩下 '+remain.length+' 名未登记学生记为超时未交（每人扣 2 分）？'))return;
+  toastMsg('⏳ 正在记录超时未交…');
+  Promise.all(remain.map(function(s){
+    return db.addRecord({databaseId:HW_DB,properties:{
+      '日期':{date:hwDateOnly(it.date)||ymd(new Date())},
+      '作业名称':{text:it.name},
+      '学生姓名':{text:s.姓名},
+      '等级':{select:'超时未交'},
+      '分值':{number:-2},
+      '备注':{text:''}
+    }}).then(function(r){
+      if(r&&r.id)HW_ROWS.push({id:r.id,'日期':it.date,'作业名称':it.name,'学生姓名':s.姓名,'等级':'超时未交','分值':-2});
+    });
+  })).then(function(){
+    renderHW();renderStu();setTimeout(function(){try{renderHome()}catch(e){}},0);
+    toastMsg('✅ 已记超时未交 '+remain.length+' 人');
+  }).catch(function(err){
+    console.error('[作业] 超时未交批量写入失败',err);
+    renderHW();renderStu();
+    toastMsg('⚠️ 部分未保存，请重试');
+  });
+}
 function hwItemLabel(r){return (fval(r,'作业名称')||'')+' ('+(fval(r,'日期')||'')+')'}
 function hwBuildItems(){
   var seen={},out=[];
@@ -12944,13 +13024,13 @@ function hwRenderStat(stu,m,items){
   var host=document.getElementById('hwStat');if(!host)return;
   fill(host);
   (items||HW_ITEMS).forEach(function(it){
-    var c={'优':0,'良':0,'中':0,'差':0};
+    var c={'优':0,'良':0,'中':0,'差':0,'超时未交':0};
     stu.forEach(function(s){
       var rec=m[hwKey(s.姓名,it)];
       var lv=rec?fval(rec,'等级'):'';
       if(lv&&c[lv]!=null)c[lv]++;
     });
-    var undone=stu.length-c['优']-c['良']-c['中']-c['差'];
+    var undone=stu.length-c['优']-c['良']-c['中']-c['差']-c['超时未交'];
     var card=el('div','pill b');
     card.style.fontWeight='400';
     card.appendChild(document.createTextNode(it.name+'　'));
@@ -12958,6 +13038,10 @@ function hwRenderStat(stu,m,items){
     card.appendChild(el('b',null,c['良']));card.appendChild(document.createTextNode(' 良 · '));
     card.appendChild(el('b',null,c['中']));card.appendChild(document.createTextNode(' 中 · '));
     card.appendChild(el('b',null,c['差']));card.appendChild(document.createTextNode(' 差'));
+    if(c['超时未交']){
+      card.appendChild(el('b','x',c['超时未交']));
+      card.appendChild(document.createTextNode(' 超时'));
+    }
     if(undone)card.appendChild(document.createTextNode(' · 待登记 '+undone));
     host.appendChild(card);
   });
@@ -14457,6 +14541,7 @@ function stuUndoClear(){
   Promise.all([loadHW(),loadGA(),loadST()]).then(function(){
     gpPaintEdit();renderHW();renderGroup();renderStu();
     setTimeout(function(){try{renderHome()}catch(e){console.error('[首页] 作业加载后刷新失败',e)}},0);
+    hwSyncLvCloud();   /* 确保飞书「等级」字段含「超时未交」选项，跨端同步才存得进 */
   });
   /* 别处（手机/电脑/表格界面）改了数据，这里自动刷新 */
   if(typeof db.onUpdated==='function'){
@@ -14580,6 +14665,9 @@ function hmWDName(d){
 /* ---------- 首页：第几周 + 未交作业（排除指定学生，如柯骏豪） ---------- */
 /* 不参与"未交"统计的学生（长期请假 / 免修等）：把姓名放进来即可 */
 var HM_HW_EXCLUDE={'柯骏豪':1,'方浩轩':1};   /* 不统计、不显示这两人（固定座同学） */
+/* 教室大屏「未交作业」卡可手动收起（点卡上的 × 收起，点已收起条再展开） */
+var HM_HW_HIDDEN=0;try{HM_HW_HIDDEN=localStorage.getItem('hm_hw_hidden')==='1'?1:0}catch(e){}
+function hmToggleHwCard(){HM_HW_HIDDEN=HM_HW_HIDDEN?0:1;try{localStorage.setItem('hm_hw_hidden',HM_HW_HIDDEN?'1':'0')}catch(e){}renderHome();}
 /* 本周一 00:00（以周一为一周起点） */
 function hmWeekStart(d){
   var x=new Date(d.getFullYear(),d.getMonth(),d.getDate());
@@ -14609,24 +14697,29 @@ function hmHwUndone(){
   if(!stu.length)return {week:[],past:[],weekN:0,pastN:0,total:total,exN:exN};
   var m=hwMapRows();
   var ws=hmWeekStart(new Date()),we=new Date(ws);we.setDate(we.getDate()+7);
-  var byItem={};
+  var byItem={},overByItem={};
   hmHwItemsAll().forEach(function(it){
-    var und=[];
+    var und=[],over=[];
     stu.forEach(function(s){
       var r=m[hwKey(s.姓名,it)];
-      if(!(r&&fval(r,'等级')))und.push(s.姓名);
+      var lv=r?fval(r,'等级'):'';
+      if(!lv)und.push(s.姓名);
+      else if(lv==='超时未交')over.push(s.姓名);
     });
-    if(!und.length)return;
     var d=it.date?new Date(it.date+'T00:00:00'):null;
+    if(over.length)overByItem[it.name+'||'+it.date]={name:it.name,date:it.date,und:over,isWeek:!!(d&&d>=ws&&d<we)};
+    if(!und.length)return;
     byItem[it.name+'||'+it.date]={name:it.name,date:it.date,und:und,isWeek:!!(d&&d>=ws&&d<we)};
   });
-  var week=[],past=[];
+  var week=[],past=[],over=[];
   Object.keys(byItem).forEach(function(k){(byItem[k].isWeek?week:past).push(byItem[k])});
+  Object.keys(overByItem).forEach(function(k){over.push(overByItem[k])});
   function byDate(a,b){return String(b.date).localeCompare(String(a.date))||String(b.name).localeCompare(String(b.name))}
-  week.sort(byDate);past.sort(byDate);
-  return {week:week,past:past,
+  week.sort(byDate);past.sort(byDate);over.sort(byDate);
+  return {week:week,past:past,over:over,
           weekN:week.reduce(function(s,v){return s+v.und.length},0),
           pastN:past.reduce(function(s,v){return s+v.und.length},0),
+          overN:over.reduce(function(s,v){return s+v.und.length},0),
           total:total,exN:exN};
 }
 /* 渲染一个分组（本周 / 过往） */
@@ -14792,32 +14885,54 @@ function renderHome(){
 
   gf.appendChild(grid);
 
-  /* ---------- 2.4 未交作业（本周 + 过往，排除柯骏豪） ---------- */
+  /* ---------- 2.4 未交作业（本周 + 过往 + 超时未交，排除柯骏豪） ---------- */
   try{
-    var hwU=hmHwUndone();
-    var cHw=el('div','hm-card');
-    cHw.style.marginBottom='16px';
-    cHw.style.border='2px solid #f0a23c';                       /* 2.6.55 整卡加橙色描边，更显眼 */
-    cHw.style.boxShadow='0 2px 12px rgba(240,162,60,.18)';
-    var hdHw=el('div','hm-hd');
-    var hHw=el('h4');
-    hHw.appendChild(document.createTextNode('📝 未交作业'));
-    if(hwU.exN)hHw.appendChild(el('span','hm-hwex','（已排除 '+hwU.exN+' 人不统计）'));
-    hdHw.appendChild(hHw);
-    var mHw=el('button','more','去作业登记 →');
-    mHw.type='button';
-    mHw.onclick=function(){hmGo('hw')};
-    hdHw.appendChild(mHw);
-    cHw.appendChild(hdHw);
-    if(!hwU.week.length&&!hwU.past.length){
-      cHw.appendChild(el('div','hm-empty','🎉 全部交齐，没有未交作业'));
+    if(HM_HW_HIDDEN){
+      var cHwHidden=el('div','hm-card');
+      cHwHidden.style.marginBottom='16px';
+      cHwHidden.style.border='1px dashed #e0c9a6';
+      cHwHidden.style.background='#fffdf8';
+      cHwHidden.style.cursor='pointer';
+      cHwHidden.onclick=function(){hmToggleHwCard()};
+      var hh=el('div','hm-hd');
+      hh.appendChild(el('h4',null,'📝 未交作业（已收起，点此展开）'));
+      cHwHidden.appendChild(hh);
+      gf.appendChild(cHwHidden);
     }else{
-      var hwWrap=el('div','hm-hw');
-      if(hwU.week.length)hwWrap.appendChild(hmHwGroup('📌 本周未交（共 '+hwU.weekN+' 人）',hwU.week));
-      if(hwU.past.length)hwWrap.appendChild(hmHwGroup('🕓 过往未交（共 '+hwU.pastN+' 人）',hwU.past));
-      cHw.appendChild(hwWrap);
+      var hwU=hmHwUndone();
+      var cHw=el('div','hm-card');
+      cHw.style.marginBottom='16px';
+      cHw.style.border='2px solid #f0a23c';                       /* 2.6.55 整卡加橙色描边，更显眼 */
+      cHw.style.boxShadow='0 2px 12px rgba(240,162,60,.18)';
+      var hdHw=el('div','hm-hd');
+      var hHw=el('h4');
+      hHw.appendChild(document.createTextNode('📝 未交作业'));
+      if(hwU.exN)hHw.appendChild(el('span','hm-hwex','（已排除 '+hwU.exN+' 人不统计）'));
+      hdHw.appendChild(hHw);
+      var hwRight=el('div');hwRight.style.cssText='display:flex;gap:8px;align-items:center';
+      var mHw=el('button','more','去作业登记 →');
+      mHw.type='button';
+      mHw.onclick=function(){hmGo('hw')};
+      hwRight.appendChild(mHw);
+      var xHw=el('button','more','×');
+      xHw.type='button';
+      xHw.title='收起未交作业卡（点已收起条可重新展开）';
+      xHw.style.cssText='background:none;border:0;font-size:20px;line-height:1;cursor:pointer;color:#b08968;padding:0 4px';
+      xHw.onclick=function(e){e.stopPropagation();hmToggleHwCard()};
+      hwRight.appendChild(xHw);
+      hdHw.appendChild(hwRight);
+      cHw.appendChild(hdHw);
+      if(!hwU.week.length&&!hwU.past.length&&!hwU.over.length){
+        cHw.appendChild(el('div','hm-empty','🎉 全部交齐，没有未交作业'));
+      }else{
+        var hwWrap=el('div','hm-hw');
+        if(hwU.week.length)hwWrap.appendChild(hmHwGroup('📌 本周未交（共 '+hwU.weekN+' 人）',hwU.week));
+        if(hwU.past.length)hwWrap.appendChild(hmHwGroup('🕓 过往未交（共 '+hwU.pastN+' 人）',hwU.past));
+        if(hwU.over.length)hwWrap.appendChild(hmHwGroup('⏰ 超时未交（共 '+hwU.overN+' 人）',hwU.over));
+        cHw.appendChild(hwWrap);
+      }
+      gf.appendChild(cHw);
     }
-    gf.appendChild(cHw);
   }catch(e){console.error('[首页] 未交作业卡片失败',e)}
 
   /* ---------- 2.5 班务上还没跟完的事 ---------- */
@@ -15030,7 +15145,7 @@ function dtMemos(now){
 /* 主窗口调用：把当前该显示的一切打包成纯数据 */
 function dtData(){
   var now=new Date(),tt=dtPeriods(now),hw={weekN:0,pastN:0,week:[],past:[]};
-  try{var r=hmHwUndone();hw={weekN:r.weekN,pastN:r.pastN,week:(r.week||[]).slice(0,4),past:(r.past||[]).slice(0,2)}}catch(e){}
+  try{var r=hmHwUndone();hw={weekN:r.weekN,pastN:r.pastN,overN:r.overN,week:(r.week||[]).slice(0,4),past:(r.past||[]).slice(0,2),over:(r.over||[]).slice(0,4)}}catch(e){}
   return {date:(now.getMonth()+1)+'月'+now.getDate()+'日',wd:hmWDName(now),week:NOW_WEEK,
           duty:dtDuty(now),memos:dtMemos(now),now:tt.now,next:tt.next,my:tt.my,
           hw:hw,cfg:dtCfg(),ts:now.getTime()};
@@ -15085,15 +15200,19 @@ function dtRenderHTML(d){
   }
   if(c.hw){
     var b3='';
-    if(!d.hw.weekN&&!d.hw.pastN){
+    if(!d.hw.weekN&&!d.hw.pastN&&!d.hw.overN){
       b3='<div class="dt-empty">全部交齐 ✅</div>';
     }else{
-      b3+='<div class="dt-row"><b>本周未交 '+d.hw.weekN+' 人次</b>'+(d.hw.pastN?' · 过往 '+d.hw.pastN+' 人次':'')+'</div>';
+      b3+='<div class="dt-row"><b>本周未交 '+d.hw.weekN+' 人次</b>'+(d.hw.pastN?' · 过往 '+d.hw.pastN+' 人次':'')+(d.hw.overN?' · 超时 '+d.hw.overN+' 人次':'')+'</div>';
       (d.hw.week||[]).forEach(function(it){
         b3+='<div class="dt-hw"><div class="dt-hw-t">'+dtEsc(it.name)+'<span class="dt-t">'+dtEsc(it.date)+'</span></div>'+
             '<div class="dt-names">'+it.und.map(function(n){return '<span>'+dtEsc(n)+'</span>'}).join('')+'</div></div>';
       });
       if(d.hw.pastN)b3+='<div class="dt-sub">过往还有 '+d.hw.pastN+' 人次没补</div>';
+      (d.hw.over||[]).forEach(function(it){
+        b3+='<div class="dt-hw"><div class="dt-hw-t">⏰ '+dtEsc(it.name)+'<span class="dt-t">'+dtEsc(it.date)+'</span></div>'+
+            '<div class="dt-names">'+it.und.map(function(n){return '<span class="dt-ov">'+dtEsc(n)+'</span>'}).join('')+'</div></div>';
+      });
     }
     h+=sec('📝 未交作业',b3);
   }
@@ -15127,6 +15246,7 @@ function dtShellHTML(){
    +'.dt-hw{margin-top:8px}.dt-hw-t{font-size:13px;font-weight:600}'
    +'.dt-names{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}'
    +'.dt-names span{background:#fff3e8;color:#a8601a;border-radius:5px;padding:2px 6px;font-size:12px}'
+   +'.dt-names span.dt-ov{background:#fde8e8;color:#dc2626;font-weight:600}'
    +'.dt-empty{color:#98a2b0;font-size:13px;padding:6px 0}'
    +'.dt-stale{background:#fff6e5;color:#8a5a12;border-radius:8px;padding:8px 10px;font-size:12.5px;margin-bottom:8px}'
    +'.dt-foot{color:#98a2b0;font-size:11.5px;text-align:center;padding:6px 0 12px}'
@@ -29160,6 +29280,13 @@ function cwInit(){
     if (!hit) a.push(rec);
     db[tid] = a; ntSave(db);
   }
+  /* 删除某条记录（用于「关闭」通知） */
+  window.ntDel = function (tid, id) {
+    var db = ntLoad(), a = Array.isArray(db[tid]) ? db[tid] : [];
+    var b = a.filter(function (r) { return !(r && r.id === id) });
+    if (b.length !== a.length) { db[tid] = b; ntSave(db); return true }
+    return false;
+  };
   /* LWW：按 id 配对，ts 新者胜 */
   function ntLww(local, remote) {
     var out = {}, order = [];
@@ -30318,6 +30445,16 @@ function cwInit(){
     });
     noticeRenderInbox(); ntChanged();
   };
+  /* 关闭（彻底移除）单条通知 */
+  window.noticeClose = function (id) {
+    try { ntDel('s-msg', id) } catch (e) {}
+    noticeRenderInbox(); ntChanged();
+  };
+  /* 清空所有已读通知 */
+  window.noticeCloseAllRead = function () {
+    ntRows('s-msg').forEach(function (r) { if (r && r['已读']) { try { ntDel('s-msg', r.id) } catch (e) {} } });
+    noticeRenderInbox(); ntChanged();
+  };
   window.noticeRenderInbox = function () {
     var card = document.getElementById('noticeInboxCard'), box = document.getElementById('noticeInbox'); if (!box) return;
     var unread = ntRows('s-msg').filter(function (r) { return r && !r['已读'] })
@@ -30331,8 +30468,9 @@ function cwInit(){
         '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#fbeaea;color:#8a3a3a">' + esc(r['类型'] || '呼叫老师') + '</span>' +
         '<span style="flex:1;min-width:160px;font-size:13px">' + esc(r['内容'] || '') + '</span>' +
         '<button class="btn2 sm" onclick="noticeMarkRead(\'' + esc(r.id) + '\')">标记已读</button>' +
+        '<button class="btn2 sm ghost" onclick="noticeClose(\'' + esc(r.id) + '\')">关闭</button>' +
         '</div>';
-    }).join('') + (unread.length ? '<div style="margin-top:8px"><button class="btn2 sm" onclick="noticeMarkAllRead()">全部标为已读</button></div>' : '');
+    }).join('') + (unread.length ? '<div style="margin-top:8px;display:flex;gap:8px"><button class="btn2 sm" onclick="noticeMarkAllRead()">全部标为已读</button><button class="btn2 sm ghost" onclick="noticeCloseAllRead()">清空已读</button></div>' : '');
   };
 
   /* ================= 教室桌面 ================= */
