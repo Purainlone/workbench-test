@@ -925,6 +925,11 @@ table.hw th{background:#eaf5ef;font-weight:600;padding:8px 6px;position:sticky;t
 table.hw th.corner{left:0;z-index:5;text-align:left;padding-left:12px;width:112px;min-width:112px;max-width:112px}
 /* 作业列固定宽度，剩余空间由一个透明吸收列吃掉，避免单列被拉成一条 */
 table.hw th.itemcol,table.hw td.cell{width:78px;min-width:78px;max-width:78px}
+/* 作业列头删除按钮：悬停列头时显示右上角红色 ✕，点按删除整列作业 */
+table.hw th.itemcol{position:relative}
+.hwcoldel{position:absolute;top:1px;right:1px;width:18px;height:18px;line-height:16px;border:0;border-radius:4px;background:rgba(220,38,38,.14);color:#dc2626;font-size:12px;font-weight:700;cursor:pointer;padding:0;opacity:0;transition:opacity .12s}
+table.hw th.itemcol:hover .hwcoldel{opacity:1}
+.hwcoldel:hover{background:#dc2626;color:#fff}
 table.hw td.spacer,table.hw th.spacer{border-right:0;border-bottom:1px solid var(--line);width:auto;background:#fff}
 table.hw td.nm{position:sticky;left:0;z-index:2;background:#fff;text-align:left;padding:0 10px;white-space:nowrap;width:112px;min-width:112px;max-width:112px;overflow:hidden;text-overflow:ellipsis}
 table.hw tbody tr:nth-child(even) td.nm{background:#fafcfb}
@@ -12858,6 +12863,7 @@ function hwMarkAllOverdue(){
       '备注':{text:''}
     }}).then(function(r){
       if(r&&r.id)HW_ROWS.push({id:r.id,'日期':it.date,'作业名称':it.name,'学生姓名':s.姓名,'等级':'超时未交','分值':-2});
+      hwSubjSet(it.name,it.date,it.subject||'语文');   /* 记住本列科目，工作台主页据此过滤 */
     });
   })).then(function(){
     renderHW();renderStu();setTimeout(function(){try{renderHome()}catch(e){}},0);
@@ -12889,12 +12895,36 @@ function hwAddItem(){
   var dup=HW_ITEMS.some(function(x){return x.name===name&&x.date===date});
   if(dup){toastMsg('这次作业已经建过了');return}
   HW_ITEMS.push({name:name,date:date,subject:'语文',pending:true});   /* 班主任兼语文：新建作业列自动归入语文 */
+  hwSubjSet(name,date,'语文');   /* 记住这一列是语文，工作台主页/桌面标签只显示语文 */
   document.getElementById('hwName').value='';
   renderHW();
   setTimeout(function(){try{renderHome()}catch(e){}},0);
   /* 刚建完就把「拍照登记」的目标作业切到这一列，免得扫完写进上一次的作业 */
   try{scnSelectItem(name,date)}catch(e){}
   toastMsg('已新建「'+name+'」，去拍几本就登记好了');
+}
+/* 删除一整列作业（含该列所有学生的登记记录）。仅删本机数据表记录，
+   其它端会在下一轮同步按墓碑清掉；科目映射里这一列也一并移除。 */
+function hwDeleteColumn(name,date){
+  if(!name)return;
+  var dk=hwSubjKey(name,date);
+  if(!confirm('确定删除作业「'+name+'」？\n\n该列所有学生的登记记录都会一并删除，且无法撤销。\n（仅删除作业登记，不影响成绩/诵读等其它数据）'))return;
+  var ymdD=hwDateOnly(date);
+  var ids=HW_ROWS.filter(function(r){return fval(r,'作业名称')===name&&hwDateOnly(fval(r,'日期'))===ymdD}).map(function(r){return recId(r)}).filter(Boolean);
+  function finish(){
+    HW_ROWS=HW_ROWS.filter(function(r){return !(fval(r,'作业名称')===name&&hwDateOnly(fval(r,'日期'))===ymdD)});
+    HW_ITEMS=HW_ITEMS.filter(function(it){return !(it.name===name&&hwDateOnly(it.date)===ymdD)});
+    try{delete HW_SUBJECT_MAP[dk];localStorage.setItem('wb_hw_subj',JSON.stringify(HW_SUBJECT_MAP))}catch(e){}
+    try{if(typeof hwBuildItems==='function')hwBuildItems()}catch(e){}
+    renderHW();renderStu();setTimeout(function(){try{renderHome()}catch(e){}},0);
+    toastMsg('🗑 已删除「'+name+'」');
+  }
+  if(!ids.length||!dbReady){finish();return}
+  var i=0;
+  (function step(){
+    if(i>=ids.length){finish();return}
+    db.deleteRecord({databaseId:HW_DB,recordId:ids[i]}).then(function(){i++;step()},function(){i++;step()});
+  })();
 }
 function hwToggleCell(td,name,item){
   if(!HW_MODE){toastMsg('👀 现在是浏览模式，先点「✍️ 开始登记」才能涂色');return}
@@ -12929,6 +12959,7 @@ function hwToggleCell(td,name,item){
     }}).then(function(r){
       if(!(r&&r.id))throw new Error('addRecord 未返回 id');
       HW_ROWS.push({id:r.id,'日期':item.date,'作业名称':item.name,'学生姓名':name,'等级':HW_LV,'分值':HW_SCORE[HW_LV]});
+      hwSubjSet(item.name,item.date,item.subject||'语文');   /* 记住本列科目，工作台主页据此过滤 */
     },function(err){throw err});
   }
   task.then(function(){
@@ -12966,6 +12997,8 @@ function renderHW(){
   var m=hwMapRows();
   hwBuildItemsOnRender();
   var split=hwAutoSplit(),items=HW_SHOW_AUTO?HW_ITEMS:split.vis;
+  /* 学科隔离：班主任工作台只显示语文本列，科任各科目（道德与法治/数学…）不混入 */
+  items=items.filter(function(it){return hwSubjOf(it)==='语文'});
   var ab=document.getElementById('hwAutoBtn');
   if(ab){ab.textContent='🙈 已自动隐藏 '+split.hid+' 列 · '+(HW_SHOW_AUTO?'恢复隐藏':'显示');ab.className='btn2 sm'+(HW_SHOW_AUTO?'':' ghost')}
   if(!stu.length){
@@ -12979,6 +13012,13 @@ function renderHW(){
   items.forEach(function(it){
     var th=el('th','itemcol',it.name);
     th.title=it.name+'　'+(it.date||'');
+    (function(name,date){
+      var del=el('button','hwcoldel','✕');
+      del.type='button';
+      del.title='删除这一列作业（含该列所有学生的登记记录）';
+      del.onclick=function(e){e.stopPropagation();hwDeleteColumn(name,date)};
+      th.appendChild(del);
+    })(it.name,it.date);
     hr.appendChild(th);
   });
   hr.appendChild(el('th',null,'积分'));
@@ -13368,6 +13408,7 @@ function scnWriteOne(name,item,lv){
   }}).then(function(r){
     if(!(r&&r.id))throw new Error('addRecord 未返回 id');
     HW_ROWS.push({id:r.id,'日期':item.date,'作业名称':item.name,'学生姓名':name,'等级':lv,'分值':HW_SCORE[lv],'备注':'扫码登记'});
+    hwSubjSet(item.name,item.date,item.subject||'语文');   /* 记住本列科目，工作台主页据此过滤 */
   });
 }
 /* 手机没有摄像头权限时，还能手动输学号补录 */
@@ -14542,6 +14583,7 @@ function stuUndoClear(){
     gpPaintEdit();renderHW();renderGroup();renderStu();
     setTimeout(function(){try{renderHome()}catch(e){console.error('[首页] 作业加载后刷新失败',e)}},0);
     hwSyncLvCloud();   /* 确保飞书「等级」字段含「超时未交」选项，跨端同步才存得进 */
+    try{ hwBackfillSubjects(); }catch(e){}   /* 若本会话已拿到 Gitee 科目，先补一次；否则等同步周期补 */
   });
   /* 别处（手机/电脑/表格界面）改了数据，这里自动刷新 */
   if(typeof db.onUpdated==='function'){
@@ -14668,6 +14710,42 @@ var HM_HW_EXCLUDE={'柯骏豪':1,'方浩轩':1};   /* 不统计、不显示这�
 /* 教室大屏「未交作业」卡可手动收起（点卡上的 × 收起，点已收起条再展开） */
 var HM_HW_HIDDEN=0;try{HM_HW_HIDDEN=localStorage.getItem('hm_hw_hidden')==='1'?1:0}catch(e){}
 function hmToggleHwCard(){HM_HW_HIDDEN=HM_HW_HIDDEN?0:1;try{localStorage.setItem('hm_hw_hidden',HM_HW_HIDDEN?'1':'0')}catch(e){}renderHome();}
+/* 未交作业按科目显示：班主任工作台（我的工作台主页 / 桌面标签）只显示「语文」，
+   教室桌面显示全部学科。科目以"作业列"为单位记忆（localStorage）：班主任自建列归入语文，
+   科任的科目在 Gitee 同步时补入；科目为空 / 本机自建的一律兜底归语文（vT24 科目全程自动归类，
+   班主任布置归语文，科任跟着老师走，不用手选）。
+   飞书作业表没有「科目」字段且 SDK 不支持建字段，故用本地映射，跨端科目由同步补齐。 */
+var HM_HW_SUBJECT_FILTER='语文';   /* 工作台主页 / 桌面标签浮窗只显示这一科；教室桌面不过滤 */
+var HW_SUBJECT_MAP={};
+try{HW_SUBJECT_MAP=JSON.parse(localStorage.getItem('wb_hw_subj')||'{}')||{}}catch(e){HW_SUBJECT_MAP={}}
+function hwSubjKey(name,date){return String(name||'')+'||'+String(date||'').slice(0,10)}
+function hwSubjOf(it){return HW_SUBJECT_MAP[hwSubjKey(it&&it.name,it&&it.date)]||''}   /* 映射里没有的列由 hwBackfillSubjects 兜底归语文 */
+function hwSubjSet(name,date,subj){if(!name)return;HW_SUBJECT_MAP[hwSubjKey(name,date)]=subj||'语文';try{localStorage.setItem('wb_hw_subj',JSON.stringify(HW_SUBJECT_MAP))}catch(e){}}
+/* 用 Gitee 作业表（每条都带科目）作为权威，把"本机自己建的语文本列"补回语文，
+   把科任各科目（道德与法治/数学…）按真实科目标记 → 工作台只显示语文，其余全隔离。 */
+var HW_GITEE_HW=null;
+function hwBackfillSubjects(){
+  try{
+    if(!HW_GITEE_HW||!HW_GITEE_HW.length)return;
+    var gi={};
+    HW_GITEE_HW.forEach(function(r){
+      var it=String(r.item||''),dt=String(r.date||'').slice(0,10);
+      if(it)gi[it+'||'+dt]=r.subject||'';
+    });
+    var seen={};
+    HW_ROWS.forEach(function(r){
+      var it=String(fval(r,'作业名称')||''),dt=hwDateOnly(fval(r,'日期'));
+      if(!it)return;
+      var k=hwSubjKey(it,dt);
+      if(seen[k])return;seen[k]=1;
+      if(HW_SUBJECT_MAP[k])return;            /* 已知科目，不动 */
+      var gHas=(k in gi), g=gi[k];
+      if(gHas&&g)HW_SUBJECT_MAP[k]=g;          /* 科任科目 / 已回流的语文，按真实科目 */
+      else HW_SUBJECT_MAP[k]='语文';           /* Gitee 里没有、或科目为空 → 班主任建的列，自动归「语文」（vT24 科目全程自动，不手选） */
+    });
+    try{localStorage.setItem('wb_hw_subj',JSON.stringify(HW_SUBJECT_MAP))}catch(e){}
+  }catch(e){}
+}
 /* 本周一 00:00（以周一为一周起点） */
 function hmWeekStart(d){
   var x=new Date(d.getFullYear(),d.getMonth(),d.getDate());
@@ -14682,7 +14760,7 @@ function hmHwItemsAll(){
     if(!it)return;
     var k=it+'||'+dd;
     if(seen[k])return;seen[k]=1;
-    out.push({name:it,date:dd});
+    out.push({name:it,date:dd,subject:hwSubjOf({name:it,date:dd})});
   });
   out.sort(function(a,b){return String(b.date).localeCompare(String(a.date))||String(b.name).localeCompare(String(b.name))});
   return out;
@@ -14707,9 +14785,9 @@ function hmHwUndone(){
       else if(lv==='超时未交')over.push(s.姓名);
     });
     var d=it.date?new Date(it.date+'T00:00:00'):null;
-    if(over.length)overByItem[it.name+'||'+it.date]={name:it.name,date:it.date,und:over,isWeek:!!(d&&d>=ws&&d<we)};
+    if(over.length)overByItem[it.name+'||'+it.date]={name:it.name,date:it.date,und:over,isWeek:!!(d&&d>=ws&&d<we),subject:it.subject};
     if(!und.length)return;
-    byItem[it.name+'||'+it.date]={name:it.name,date:it.date,und:und,isWeek:!!(d&&d>=ws&&d<we)};
+    byItem[it.name+'||'+it.date]={name:it.name,date:it.date,und:und,isWeek:!!(d&&d>=ws&&d<we),subject:it.subject};
   });
   var week=[],past=[],over=[];
   Object.keys(byItem).forEach(function(k){(byItem[k].isWeek?week:past).push(byItem[k])});
@@ -14925,10 +15003,15 @@ function renderHome(){
       if(!hwU.week.length&&!hwU.past.length&&!hwU.over.length){
         cHw.appendChild(el('div','hm-empty','🎉 全部交齐，没有未交作业'));
       }else{
+        /* 工作台主页只显示指定学科（默认语文）；其余学科不在此卡出现 */
+        function hmHwKeepYuwen(items){return (items||[]).filter(function(it){return (it.subject||'')===HM_HW_SUBJECT_FILTER})}
+        var hwWk=hmHwKeepYuwen(hwU.week),hwPs=hmHwKeepYuwen(hwU.past),hwOv=hmHwKeepYuwen(hwU.over);
+        function hmHwCnt(a){return (a||[]).reduce(function(s,v){return s+v.und.length},0)}
+        var hwWkN=hmHwCnt(hwWk),hwPsN=hmHwCnt(hwPs),hwOvN=hmHwCnt(hwOv);
         var hwWrap=el('div','hm-hw');
-        if(hwU.week.length)hwWrap.appendChild(hmHwGroup('📌 本周未交（共 '+hwU.weekN+' 人）',hwU.week));
-        if(hwU.past.length)hwWrap.appendChild(hmHwGroup('🕓 过往未交（共 '+hwU.pastN+' 人）',hwU.past));
-        if(hwU.over.length)hwWrap.appendChild(hmHwGroup('⏰ 超时未交（共 '+hwU.overN+' 人）',hwU.over));
+        if(hwWk.length)hwWrap.appendChild(hmHwGroup('📌 本周未交（'+HM_HW_SUBJECT_FILTER+' · 共 '+hwWkN+' 人）',hwWk));
+        if(hwPs.length)hwWrap.appendChild(hmHwGroup('🕓 过往未交（'+HM_HW_SUBJECT_FILTER+' · 共 '+hwPsN+' 人）',hwPs));
+        if(hwOv.length)hwWrap.appendChild(hmHwGroup('⏰ 超时未交（'+HM_HW_SUBJECT_FILTER+' · 共 '+hwOvN+' 人）',hwOv));
         cHw.appendChild(hwWrap);
       }
       gf.appendChild(cHw);
@@ -15145,7 +15228,15 @@ function dtMemos(now){
 /* 主窗口调用：把当前该显示的一切打包成纯数据 */
 function dtData(){
   var now=new Date(),tt=dtPeriods(now),hw={weekN:0,pastN:0,week:[],past:[]};
-  try{var r=hmHwUndone();hw={weekN:r.weekN,pastN:r.pastN,overN:r.overN,week:(r.week||[]).slice(0,4),past:(r.past||[]).slice(0,2),over:(r.over||[]).slice(0,4)}}catch(e){}
+  try{
+    var r=hmHwUndone();
+    /* 桌面标签浮窗与工作台主页一致：只显示指定学科（默认语文），其余学科不出现 */
+    function dtHwKeepYuwen(a){return (a||[]).filter(function(it){return (it.subject||'')===HM_HW_SUBJECT_FILTER})}
+    var dWk=dtHwKeepYuwen(r.week),dPs=dtHwKeepYuwen(r.past),dOv=dtHwKeepYuwen(r.over);
+    function dtHwCnt(a){return (a||[]).reduce(function(s,v){return s+(v.und?v.und.length:0)},0)}
+    hw={weekN:dtHwCnt(dWk),pastN:dtHwCnt(dPs),overN:dtHwCnt(dOv),
+        week:dWk.slice(0,4),past:dPs.slice(0,2),over:dOv.slice(0,4)};
+  }catch(e){}
   return {date:(now.getMonth()+1)+'月'+now.getDate()+'日',wd:hmWDName(now),week:NOW_WEEK,
           duty:dtDuty(now),memos:dtMemos(now),now:tt.now,next:tt.next,my:tt.my,
           hw:hw,cfg:dtCfg(),ts:now.getTime()};
@@ -17106,6 +17197,9 @@ function syncCycleCore(manual) {
         /* 云端是旧格式/旧构建号的脏标记：不清数据、不刷新，等本页写回时自然纠正 */
       }
       var tables = doc.tables || {};
+      /* 作业科目隔离：把 Gitee 作业表（每条带科目）留底，供 hwBackfillSubjects 区分
+         本机自建的语文本列与科任各科目，避免把道德与法治等并到语文里 */
+      try{ HW_GITEE_HW = (tables && tables.hw) ? tables.hw : null; }catch(_g){ HW_GITEE_HW = null; }
       /* 2.6.56 本机从未同步过电脑侧数据（新设备 / 刚升级）→ 无条件以云端为准拉回 */
       if(!cloudLocalsAt() && doc.locals){
         try{
@@ -17144,6 +17238,8 @@ function syncCycleCore(manual) {
       var pAdd = res.empty ? Promise.resolve(0) : Promise.resolve(giteeMergeIntoLocal(tables));
       return pAdd.then(function (nAdd) {
         added = nAdd;
+        /* 作业科目隔离：同步拿到 Gitee 科目后，把本机语文本列补回、科任各科目隔离 */
+        try { hwBackfillSubjects(); setTimeout(function(){try{renderHome()}catch(e){}},0); } catch (_hb) {}
         /* vT2 教室端新表（s-rota/s-safety/s-speech/s-notice/s-msg/s-desktop）：
            每轮同步把远端这些表 LWW 并入本机缓存 wb_nt_v1，写回时再合并出去 */
         try { if (typeof ntPullRemote === 'function') ntPullRemote(tables) } catch (_ntP) {}
@@ -17550,6 +17646,8 @@ function mpToDesk(tables) {
     var _lv = String(r.level || '').trim();
     var p = { '作业名称': mpTxt(r.item), '学生姓名': mpTxt(r.name), '日期': mpTxt(r.date), '分值': mpNum(r.score || 0), '备注': mpTxt(r.note || '') };
     if (_lv) p['等级'] = { select: _lv };
+    /* 记住科任各列的科目，工作台主页据此把非语文学科过滤掉（只留语文） */
+    hwSubjSet(r.item, r.date, r.subject);
     return p;
   });
   recs(MP_SYNC.rc.table, tables.rc, function (r) {
@@ -17780,7 +17878,8 @@ function mpFromDeskBuild(o) {
   rows(MP_SYNC.hw.table).forEach(function (r) {
     var p = r.properties || {};
     var _hwk = 'hw|' + String(dv(p, '学生姓名') || '') + '|' + String(dv(p, '作业名称') || '') + '|' + String(dv(p, '日期') || '').slice(0, 10);
-    hw.push({ id: r.id, date: String(dv(p, '日期') || '').slice(0, 10), item: String(dv(p, '作业名称') || ''), name: String(dv(p, '学生姓名') || ''), level: String(dv(p, '等级') || ''), score: Number(dv(p, '分值')) || 0, note: String(dv(p, '备注') || ''), ts: mtStampAuto(_hwk, String(dv(p, '等级') || '') + '/' + String(dv(p, '分值') || '') + '/' + String(dv(p, '备注') || '')) });
+    var _hwSb = (String(dv(p, '科目') || '').trim()) || hwSubjOf({ name: String(dv(p, '作业名称') || ''), date: String(dv(p, '日期') || '').slice(0, 10) }) || '';
+    hw.push({ id: r.id, date: String(dv(p, '日期') || '').slice(0, 10), item: String(dv(p, '作业名称') || ''), name: String(dv(p, '学生姓名') || ''), level: String(dv(p, '等级') || ''), score: Number(dv(p, '分值')) || 0, note: String(dv(p, '备注') || ''), subject: _hwSb, ts: mtStampAuto(_hwk, String(dv(p, '等级') || '') + '/' + String(dv(p, '分值') || '') + '/' + String(dv(p, '备注') || '')) });
   });
   rows(MP_SYNC.rc.table).forEach(function (r) {
     var p = r.properties || {};
