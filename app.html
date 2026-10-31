@@ -1463,6 +1463,16 @@ table.paper td.l{text-align:left;font-weight:600}
   <section data-page-node-id="Sc1Kp8mNvQ2xRy7bTz4WdG" class="section" id="s-score">
     <h2 data-page-node-id="Sc1Kp8mNvQ2xRy7bTz4WdH"><!--pnid:Sc1Kp8mNvQ2xRy7bTz4WdC-->成绩管理</h2>
     <div data-page-node-id="Sc1Kp8mNvQ2xRy7bTz4WdI" class="sub"><!--pnid:Sc1Kp8mNvQ2xRy7bTz4WdD-->手动录入或上传 Excel / Word / 图片 · 七科加自定科目 · 进退步与偏科分析 · 数据同步到资料库</div>
+
+    <!-- 2.6.41 科目标签页：顶部按科目分类，点科目即统一筛选「已有记录 / 分析 / 管理 / 录入科目」 -->
+    <style>
+      .scsubjbar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
+      .scsubj{display:inline-block;padding:6px 16px;border-radius:999px;background:#eef2f6;color:#3b4a5a;font-size:13px;cursor:pointer;border:1px solid transparent;user-select:none}
+      .scsubj:hover{background:#e3e9ef}
+      .scsubj.on{background:#1f6feb;color:#fff;border-color:#1f6feb}
+    </style>
+    <div class="scsubjbar" id="scSubjTabs"><span class="scsubj on" data-subj="" onclick="scPickSubj('')">全部</span></div>
+
     <div data-page-node-id="Sc1Kp8mNvQ2xRy7bTz4WdJ" class="tabs" id="scTabs">
       <button data-page-node-id="gdEf1K3p0VOtbL5NK94j69" class="active" data-t="ent" onclick="scTab('ent')"><!--pnid:FqNUaNKKHYJIlaIlyQZLq2-->✍️ 成绩录入</button>
       <button data-page-node-id="mSmCWCv1F7KRSNGGBZVXbX" data-t="an" onclick="scTab('an')"><!--pnid:z3RAVGhq6nZ40k0YPnO9MS-->📈 成绩分析</button>
@@ -4752,6 +4762,35 @@ function scMode(m){
   }
 }
 
+/* 2.6.41 科目标签页：顶部按科目分类，点科目即统一筛选四处（已有记录 / 分析 / 管理 / 录入科目） */
+var SC_CUR_SUBJ='';
+function scRenderSubjTabs(){
+  var bar=document.getElementById('scSubjTabs');if(!bar)return;
+  var subs={};SC_ROWS.forEach(function(r){var s=fval(r,'科目');if(s)subs[s]=1;});
+  var list=[''].concat(Object.keys(subs).sort());
+  bar.innerHTML='';
+  list.forEach(function(s){
+    var o=el('span','scsubj'+(s===SC_CUR_SUBJ?' on':''), s||'全部');
+    o.setAttribute('data-subj',s||'');
+    o.setAttribute('onclick',"scPickSubj('"+String(s).replace(/'/g,"\\'")+"')");
+    bar.appendChild(o);
+  });
+}
+function scPickSubj(subj){
+  SC_CUR_SUBJ=subj||'';
+  scRenderSubjTabs();
+  var ls=document.getElementById('scListSub');if(ls){ls.value=SC_CUR_SUBJ;scRenderList();}
+  var an=document.getElementById('scAnSub');if(an){if(SC_CUR_SUBJ)an.value=SC_CUR_SUBJ;scRenderAn();}
+  var ss=document.getElementById('scSubject');
+  if(ss&&SC_CUR_SUBJ){
+    var found=false;[].slice.call(ss.options).forEach(function(o){if(o.value===SC_CUR_SUBJ)found=true;});
+    if(found){ss.value=SC_CUR_SUBJ;}
+    else{var o=el('option',null,SC_CUR_SUBJ);o.value=SC_CUR_SUBJ;ss.appendChild(o);ss.value=SC_CUR_SUBJ;}
+    scSubjSwap();
+  }
+  scMgRefresh();
+}
+
 /* ---------- 录入：生成按人头的表格 ---------- */
 var SC_GRID_META=null;
 function scExamLabel(){
@@ -4933,6 +4972,12 @@ function scFillFilters(){
       if(!have[s]){var o=el('option',null,s);o.value=s;selAn.appendChild(o);have[s]=1}
     });
     selAn.value=cur3;
+  }
+  scRenderSubjTabs();
+  if(SC_CUR_SUBJ){               /* 2.6.41 重新载入后保持科目筛选 */
+    if(selSub)selSub.value=SC_CUR_SUBJ;
+    if(selAn)selAn.value=SC_CUR_SUBJ;
+    scRenderList();scRenderAn();
   }
 }
 
@@ -7317,12 +7362,13 @@ function scMgRefresh(){
   SC_ROWS.forEach(function(r){
     var s=fval(r,'科目'),e=fval(r,'考试名称');
     if(!s||!e)return;
+    if(SC_CUR_SUBJ && s!==SC_CUR_SUBJ)return;   /* 2.6.41 科目标签筛选 */
     var k=s+'｜'+e;
     if(!seen[k]){seen[k]=1;keys.push(k)}
   });
   sel.innerHTML='';
   if(!keys.length){
-    sel.appendChild(el('option',null,'还没有成绩记录'));
+    sel.appendChild(el('option',null, SC_CUR_SUBJ?('「'+SC_CUR_SUBJ+'」还没有成绩记录'):'还没有成绩记录'));
   }else{
     keys.forEach(function(k){
       var o=el('option',null,k);o.value=k;sel.appendChild(o);
