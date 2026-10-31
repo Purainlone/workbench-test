@@ -2315,6 +2315,37 @@ table.paper td.l{text-align:left;font-weight:600}
   </section>
 </main>
 <script>
+/* ===== 自动更新：检测 Pages 上文件变化，自动刷新到新版本（发布后不用手动 Ctrl+F5） ===== */
+(function(){
+  var KEY='wb_etag_'+location.pathname;
+  function tip(t){
+    var d=document.createElement('div');
+    d.textContent=t;
+    d.style.cssText='position:fixed;left:50%;top:18px;transform:translateX(-50%);background:#1f6feb;color:#fff;padding:10px 22px;border-radius:30px;font-size:14px;z-index:99999;box-shadow:0 6px 20px rgba(0,0,0,.25)';
+    document.body.appendChild(d);
+  }
+  function check(){
+    try{
+      fetch(location.pathname+'?t='+Date.now(),{method:'HEAD',cache:'no-store'}).then(function(r){
+        var et=r.headers.get('ETag')||r.headers.get('Last-Modified')||'';
+        if(!et)return;
+        var old=null;
+        try{old=sessionStorage.getItem(KEY)}catch(e){}
+        if(!old){try{sessionStorage.setItem(KEY,et)}catch(e){}return}
+        if(old!==et){
+          try{sessionStorage.setItem(KEY,et)}catch(e){}
+          tip('✨ 发现新版本，正在自动更新…');
+          setTimeout(function(){location.replace(location.pathname+'?v='+Date.now())},1200);
+        }
+      }).catch(function(){});
+    }catch(e){}
+  }
+  setTimeout(check,8000);
+  setInterval(check,5*60*1000);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)check()});
+})();
+</script>
+<script>
 /* 桌面安装版桥接：页面 ⇄ 安装目录 data\workbench-data.json
    只在双击本地 html 时生效；在平台上打开时 window.chrome.webview 不存在，什么都不做。 */
 (function(){
