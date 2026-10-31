@@ -95,7 +95,8 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
     </div>
 
     <div class="tabs">
-      <div class="tab on" data-t="hw" onclick="switchTab('hw')">📝 作业登记</div>
+      <div class="tab on" data-t="home" onclick="switchTab('home')">🏠 主页</div>
+      <div class="tab" data-t="hw" onclick="switchTab('hw')">📝 作业登记</div>
       <div class="tab" data-t="sc" onclick="switchTab('sc')">📊 成绩登记</div>
       <div class="tab" data-t="nt" onclick="switchTab('nt')">📢 发通知</div>
       <div class="tab" data-t="spk" onclick="switchTab('spk')">🔊 播报未交名单</div>
@@ -103,8 +104,31 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
       <div class="tab" data-t="hp" onclick="switchTab('hp')">📋 作业积分</div>
     </div>
 
+    <!-- 主页：未交作业 / 今日留堂 / 布置作业 聚合 -->
+    <div class="card" id="tabHome">
+      <h3>🏠 主页 · 今日概览</h3>
+      <div class="row" style="margin:6px 0 12px">
+        <button class="btn sec" onclick="pull(true);renderHome()">🔄 刷新</button>
+        <span class="sub" id="homeDate"></span>
+      </div>
+      <div id="homeWrap" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px">
+        <div style="border:1px solid #e3efe7;border-radius:12px;padding:12px;background:#fafdfb">
+          <div style="font-weight:700;margin-bottom:8px;color:#1f6b4a">📋 未交作业名单</div>
+          <div id="homeHw"></div>
+        </div>
+        <div style="border:1px solid #f0d9cf;border-radius:12px;padding:12px;background:#fffaf7">
+          <div style="font-weight:700;margin-bottom:8px;color:#a5512b">⏰ 今日留堂</div>
+          <div id="homeDetain"></div>
+        </div>
+        <div style="border:1px solid #d9e3f0;border-radius:12px;padding:12px;background:#f8fafd">
+          <div style="font-weight:700;margin-bottom:8px;color:#2a5a9e">📢 今日布置作业</div>
+          <div id="homeAssign"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- ① 作业 -->
-    <div class="card" id="tabHw">
+    <div class="card hidden" id="tabHw">
       <h3>📝 登记「<span id="hwSubj">—</span>」作业</h3>
       <div class="row">
         <input id="newHwName" placeholder="新建作业，如：练习册 P23" style="width:200px">
@@ -341,11 +365,12 @@ function enterApp() {
   setInterval(function () { if (!Object.keys(dirtyHw).length) pull(false) }, 30000);
 }
 function switchTab(t) {
-  var map = { hw: 'tabHw', sc: 'tabSc', nt: 'tabNt', spk: 'tabSpk', an: 'tabAn', hp: 'tabHp' };
+  var map = { home: 'tabHome', hw: 'tabHw', sc: 'tabSc', nt: 'tabNt', spk: 'tabSpk', an: 'tabAn', hp: 'tabHp' };
   Object.keys(map).forEach(function (k) { $(map[k]).classList.toggle('hidden', k !== t) });
   document.querySelectorAll('.tab').forEach(function (el) { el.classList.toggle('on', el.getAttribute('data-t') === t) });
   if (t === 'an' && ME) switchTabAn();
   if (t === 'hp') renderHp();
+  if (t === 'home') renderHome();
 }
 
 /* ---------- Gitee 读写 ---------- */
@@ -444,7 +469,50 @@ async function pull(showMsg) {
 
 /* ---------- 渲染 ---------- */
 function renderAll() {
-  renderHwTab(); renderScList(); renderSpkSel(); buildSpeak(); renderAssign();
+  renderHwTab(); renderScList(); renderSpkSel(); buildSpeak(); renderAssign(); renderHome();
+}
+/* ---------- 主页：未交作业 / 今日留堂 / 布置作业 聚合 ---------- */
+function renderHome() {
+  var home = $('tabHome'); if (!home) return;
+  var subj = (ME && ME.subject) || '';
+  var d = today();
+  var hd = $('homeDate'); if (hd) hd.textContent = '日期 ' + d + ' · 科目 ' + subj;
+  /* 1. 未交作业（最近 5 个本科目作业列） */
+  var mine = (HWI || []).filter(function (x) { return (x.subject || '') === subj; });
+  mine.sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')) || String(b.item).localeCompare(String(a.item)); });
+  var recent = mine.slice(0, 5);
+  var hwBox = $('homeHw'); if (!hwBox) return;
+  if (!recent.length) {
+    hwBox.innerHTML = '<div class="sub">还没有本科目作业列</div>';
+  } else {
+    hwBox.innerHTML = recent.map(function (x) {
+      var it = { item: x.item, date: String(x.date || '').slice(0, 10) };
+      var miss = undoneOf(it);
+      var warn = miss.length > 0;
+      return '<div style="margin-bottom:9px">' +
+        '<div style="font-size:13.5px;margin-bottom:3px">' + esc(x.item) + ' <small style="color:#889">' + esc(it.date.slice(5)) + '</small> ' +
+        '<span style="font-size:12px;padding:1px 8px;border-radius:10px;' + (warn ? 'background:#fdecec;color:#b91c1c' : 'background:#e8f4ee;color:#0f7a46') + '">' + (warn ? miss.length + ' 人未交' : '全部交齐 🎉') + '</span></div>' +
+        (warn ? '<div style="display:flex;flex-wrap:wrap;gap:4px">' + miss.map(function (n) { return '<span style="font-size:12px;background:#fdecec;color:#b91c1c;border-radius:8px;padding:2px 8px">' + esc(n) + '</span>'; }).join('') + '</div>' : '') +
+        '</div>';
+    }).join('');
+  }
+  /* 2. 今日留堂 */
+  var dtNames = [];
+  ((DOC && DOC.tables && DOC.tables['s-detain']) || []).forEach(function (r) {
+    if (r && !r.deleted && String(r.date || '').slice(0, 10) === d && r.name && dtNames.indexOf(r.name) < 0) dtNames.push(r.name);
+  });
+  var db = $('homeDetain');
+  db.innerHTML = dtNames.length
+    ? '<div style="display:flex;flex-wrap:wrap;gap:4px">' + dtNames.map(function (n) { return '<span style="font-size:12px;background:#fbe9df;color:#a5512b;border-radius:8px;padding:2px 8px">' + esc(n) + '</span>'; }).join('') + '</div>'
+    : '<div class="sub">今天还没有留堂名单</div>';
+  /* 3. 今日布置作业 */
+  var rows = (SA || []).filter(function (r) {
+    return r && !r.deleted && String(r.date || '').slice(0, 10) === d && (r.subject || '') === subj;
+  }).sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+  var ab = $('homeAssign');
+  ab.innerHTML = rows.length
+    ? rows.map(function (r) { return '<div style="font-size:13.5px;padding:4px 0;border-bottom:1px dashed #e3e9f2">' + esc(r.content || '') + '</div>'; }).join('')
+    : '<div class="sub">今天还没有布置' + esc(subj) + '作业</div>';
 }
 function hwItemKey(x) { return String(x.item) + '|' + String(x.date || '').slice(0, 10) }
 
