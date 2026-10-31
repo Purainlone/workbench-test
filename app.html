@@ -11591,6 +11591,7 @@ function rcDoneTitles(name){
   return RC_TITLES.filter(function(t){ return RC_MAP[rcKey(name, rcTName(t))]; }).map(rcTName);
 }
 var RC_CERT_HONORS = ['记忆王者', '最强大脑', '诵读之星', '博览群书'];
+var RC_CERT_TERM = '2026—2027学年第一学期（六年级上学期）';
 var RC_CERT_PRAISES = [
   '你与经典为伴，字正腔圆、熟读成诵，展现出出色的记忆力与坚持力！',
   '一篇篇诗文在你口中流转成韵，你的专注与努力令人赞叹！',
@@ -11620,6 +11621,8 @@ function rcOpenCert(){
     '</select></div>' +
     '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">自拟称号（留空则用上面选的）</div>' +
     '<input id="rcCertCustom" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px" placeholder="如：背诵小状元"></div>' +
+    '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">学期信息（印在证书副标题，可改）</div>' +
+    '<input id="rcCertTerm" value="' + esc(RC_CERT_TERM) + '" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px"></div>' +
     '<div style="margin-bottom:14px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">表扬语</div>' +
     '<select id="rcCertPraise" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px">' +
     RC_CERT_PRAISES.map(function(p){ return '<option value="'+esc(p)+'">'+esc(p)+'</option>'; }).join('') +
@@ -11633,6 +11636,7 @@ function rcMakeCert(){
   var name=(document.getElementById('rcCertStu')||{}).value||'';
   var honor=((document.getElementById('rcCertCustom')||{}).value||'').trim()||(document.getElementById('rcCertHonor')||{}).value||'记忆王者';
   var praise=(document.getElementById('rcCertPraise')||{}).value||'';
+  var term=((document.getElementById('rcCertTerm')||{}).value||'').trim()||RC_CERT_TERM;
   var done=rcDoneTitles(name);
   if(!name||!done.length){ toastMsg('这位同学还没有背完的篇目'); return; }
   var d=new Date();
@@ -11698,7 +11702,7 @@ function rcMakeCert(){
     +'<svg class="cloud g2" viewBox="0 0 100 44"><path d="M10 32c-6-1-9-7-5-12 3-4 9-4 12-1 1-7 9-11 16-8 4 2 7 6 7 10 5-2 11 0 13 5 2 6-3 11-9 11H14c-1 0-3 0-4-1z" fill="none" stroke="#c9a227" stroke-width="2.6" stroke-linecap="round"/></svg>'
     +'<div class="vside">腹有诗书气自华</div>'
     +'<div class="ttl">诵读通关 · 荣誉证书</div>'
-    +'<div class="sub">───　经典诵读 · 背诵通关认证　───</div>'
+    +'<div class="sub">───　'+esc(term)+' · 经典诵读 · 背诵通关认证　───</div>'
     +'<div class="honor"><div class="medal">★</div><span>授予「'+esc(honor)+'」称号</span></div>'
     +'<div class="body"><span class="nm">'+esc(name)+'</span> 同学：'+esc(praise)+'经考核，你已熟练背诵以下 <b>'+done.length+'</b> 篇：</div>'
     +'<div class="div"><i></i><s>❖</s><i></i></div>'
