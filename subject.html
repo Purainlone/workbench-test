@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>科任教师 · 教室数据</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; scrollbar-width:none; }
+*::-webkit-scrollbar { display:none; }
+body { font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif; color:#1d3b2f; background:#f2f7f4; min-height:100vh; }
+.hidden { display:none !important; }
+.wrap { max-width:1080px; margin:0 auto; padding:20px 18px 60px; }
+.card { background:#fff; border-radius:16px; padding:18px 20px; margin-bottom:16px; box-shadow:0 4px 18px rgba(30,60,45,.07); }
+h1 { font-size:20px; margin-bottom:6px; }
+h3 { font-size:14.5px; color:#24503a; margin-bottom:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.sub { font-size:12.5px; color:#6b8a7e; line-height:1.7; }
+.row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0; }
+input,select,textarea { font-size:14px; padding:8px 10px; border:1px solid #cfe3d8; border-radius:9px; font-family:inherit; background:#fff; }
+input:focus,select:focus,textarea:focus { outline:2px solid #bfe3d0; }
+.btn { border:none; border-radius:9px; padding:9px 16px; font-size:13.5px; font-weight:600; cursor:pointer; background:#2d8f63; color:#fff; }
+.btn.sec { background:#e3efe8; color:#1f5c3d; }
+.btn:hover { filter:brightness(1.06); }
+textarea { width:100%; }
+.tabs { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+.tab { padding:10px 18px; border-radius:12px; background:#fff; color:#5a7d6d; font-size:14px; cursor:pointer; font-weight:600; box-shadow:0 2px 8px rgba(30,60,45,.06); }
+.tab.on { background:#2d8f63; color:#fff; }
+.grid { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.cell { width:96px; border:1px solid #e0ece5; border-radius:10px; padding:8px 6px; text-align:center; cursor:pointer; background:#fbfdfc; }
+.cell .n { display:block; font-size:13px; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cell .l { display:block; font-size:11px; color:#9ab3a6; min-height:16px; margin-top:2px; }
+.cell:hover { border-color:#2d8f63; }
+.cell.优 { background:#ffe9a8; border-color:#e8cf7a; }
+.cell.良 { background:#b8e6c9; border-color:#8fceaa; }
+.cell.中 { background:#dbe9f5; border-color:#a9c8e0; }
+.cell.差 { background:#f8b4ad; border-color:#e59088; }
+table { border-collapse:collapse; width:100%; font-size:13px; margin-top:8px; }
+th,td { border:1px solid #dfeadf; padding:5px 8px; text-align:left; }
+th { background:#eef6f0; color:#24503a; }
+.stat { margin-top:10px; font-size:13px; color:#555; }
+.msg { margin-top:10px; font-size:13px; color:#2d8f63; min-height:18px; }
+.err { color:#c0392b !important; }
+.sclist { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:6px; margin-top:8px; }
+.scitem { display:flex; align-items:center; gap:6px; background:#fbfdfc; border:1px solid #e6efe9; border-radius:9px; padding:5px 8px; }
+.scitem span { font-size:12.5px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.scitem input { width:64px; padding:4px 6px; text-align:center; }
+.me { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.me b { font-size:17px; }
+.me .subj { background:#e8f0ff; color:#1f6feb; border-radius:8px; padding:2px 12px; font-size:13px; }
+.me .out { margin-left:auto; }
+code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 登录 -->
+  <div class="card" id="loginCard">
+    <h1>👩‍🏫 科任教师登录</h1>
+    <div class="sub">把班主任微信发给你的「电脑接入码」整串粘贴到下面，点登录即可。
+      接入码以 <code>WBTEA|</code> 开头，一人一码，登记的作业和成绩都会记在你名下。
+      登录信息只保存在这台电脑的浏览器里，用完点「退出」即可清除。</div>
+    <div class="row" style="margin-top:14px">
+      <textarea id="codeIn" rows="3" placeholder="粘贴接入码（WBTEA| 开头的一整串）"></textarea>
+    </div>
+    <div class="row">
+      <button class="btn" onclick="doLogin()">登 录</button>
+      <span class="sub" id="loginMsg"></span>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="app" class="hidden">
+    <div class="card me">
+      <b id="meName">—</b>
+      <span class="subj" id="meSubj">—</span>
+      <span class="sub" id="meSync"></span>
+      <button class="btn sec" onclick="pull(true)">🔄 刷新</button>
+      <button class="btn sec out" onclick="doLogout()">退出</button>
+    </div>
+
+    <div class="tabs">
+      <div class="tab on" data-t="hw" onclick="switchTab('hw')">📝 作业登记</div>
+      <div class="tab" data-t="sc" onclick="switchTab('sc')">📊 成绩登记</div>
+      <div class="tab" data-t="nt" onclick="switchTab('nt')">📢 发通知</div>
+      <div class="tab" data-t="spk" onclick="switchTab('spk')">🔊 播报未交名单</div>
+    </div>
+
+    <!-- ① 作业 -->
+    <div class="card" id="tabHw">
+      <h3>📝 登记「<span id="hwSubj">—</span>」作业</h3>
+      <div class="row">
+        <span class="sub">作业列</span>
+        <select id="hwSel" style="min-width:230px" onchange="renderGrid()"></select>
+        <input id="newHwName" placeholder="新建作业，如：练习册 P23" style="width:200px">
+        <input type="date" id="newHwDate" style="width:150px">
+        <button class="btn sec" onclick="createHwItem()">➕ 建列</button>
+      </div>
+      <div class="row">
+        <span class="sub">等级：</span>
+        <button class="btn sec" data-lv="优" onclick="pickLv('优')">优</button>
+        <button class="btn sec" data-lv="良" onclick="pickLv('良')">良</button>
+        <button class="btn sec" data-lv="中" onclick="pickLv('中')">中</button>
+        <button class="btn sec" data-lv="差" onclick="pickLv('差')">差/未交</button>
+        <span class="sub" style="margin-left:8px">点学生格子登记；格子有颜色=已登记，点其他等级可改。</span>
+      </div>
+      <div class="grid" id="hwGrid"></div>
+      <div class="stat" id="hwStat"></div>
+      <div class="row">
+        <button class="btn" onclick="flushHw(true)">💾 保存登记</button>
+        <button class="btn sec" onclick="sendSpeakFromHw()">🔊 播报未交名单</button>
+      </div>
+      <div class="msg" id="hwMsg"></div>
+    </div>
+
+    <!-- ② 成绩 -->
+    <div class="card hidden" id="tabSc">
+      <h3>📊 登记「<span id="scSubj">—</span>」成绩</h3>
+      <div class="row">
+        <input id="scExam" placeholder="考试名称，如：第三单元" style="width:200px" onchange="fillOld()">
+        <span class="sub">满分</span><input id="scFull" type="number" value="100" style="width:80px">
+        <input type="date" id="scDate" style="width:150px">
+        <button class="btn sec" onclick="fillOld()">🔄 载入已有分数</button>
+      </div>
+      <div class="sclist" id="scList"></div>
+      <div class="row">
+        <button class="btn" onclick="submitScore()">✅ 提交成绩（<span id="scN">0</span> 人）</button>
+      </div>
+      <div class="msg" id="scMsg"></div>
+    </div>
+
+    <!-- ③ 通知 -->
+    <div class="card hidden" id="tabNt">
+      <h3>📢 发通知到教室桌面</h3>
+      <textarea id="ntText" rows="3" maxlength="200" placeholder="如：明天带三角尺；今天数学作业是练习册 P23"></textarea>
+      <div class="row">
+        <label class="sub"><input type="checkbox" id="ntTts" checked> 语音播报</label>
+        <label class="sub"><input type="checkbox" id="ntUrgent"> 紧急插队</label>
+        <button class="btn" onclick="sendNotice()">📤 发送到教室</button>
+      </div>
+      <div class="msg" id="ntMsg"></div>
+    </div>
+
+    <!-- ④ 播报 -->
+    <div class="card hidden" id="tabSpk">
+      <h3>🔊 播报未交作业名单（只念名单，不念分数）</h3>
+      <div class="row">
+        <span class="sub">作业列</span>
+        <select id="spkSel" style="min-width:230px" onchange="buildSpeak()"></select>
+        <button class="btn sec" onclick="buildSpeak()">🔄 重新生成</button>
+      </div>
+      <textarea id="spkText" rows="3"></textarea>
+      <div class="row">
+        <button class="btn" onclick="sendSpeak()">🔊 下发教室桌面播报</button>
+      </div>
+      <div class="msg" id="spkMsg"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ================= 科任教师 · 电脑版 =================
+   登录：粘贴班主任生成的「电脑接入码」
+         WBTEA|<登录码>|<姓名>|<科目>|<权限5位>|<base64(设置码)>
+   数据：直读直写 Gitee 同步文档（与教师工作台/小程序/教室桌面同一份），
+        拉-改-推 + 409 冲突重试，LWW 按 ts。 */
+
+var ME = null, DOC = null, SHA = '', BRANCH = '';
+var STU = [], HWI = [], HW = [], SC = [];
+var LV_SCORE = { '优': 2, '良': 1, '中': 0, '差': -1 };
+var dirtyHw = {}, flushTimer = null, curLv = '优';
+
+function $(id) { return document.getElementById(id) }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
+function pad2(n) { return (n < 10 ? '0' : '') + n }
+function today() { var d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) }
+function nowStr() { var d = new Date(); return today() + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) }
+function hash36(s) { var h = 5381, i = String(s || '').length; while (i) h = (h * 33) ^ String(s).charCodeAt(--i); return (h >>> 0).toString(36) }
+function b64dUtf(b) { return decodeURIComponent(escape(atob(String(b).replace(/\s/g, '')))) }
+
+/* ---------- 登录 ---------- */
+function parseLogin(raw) {
+  var s = String(raw || '').trim().replace(/\s+/g, '');
+  if (s.indexOf('WBTEA|') !== 0) return null;
+  var p = s.split('|');
+  if (p.length < 6) return null;
+  var perm = String(p[4] || '11010');
+  var cfg = null;
+  try { cfg = JSON.parse(b64dUtf(p[5])) } catch (e) { return null }
+  if (!cfg || !cfg.owner || !cfg.repo || !cfg.token) return null;
+  return {
+    code: p[1] || '', name: p[2] || '科任老师', subject: p[3] || '',
+    perm: {
+      hw: perm.charAt(0) !== '0', sc: perm.charAt(1) !== '0', nt: perm.charAt(2) !== '0',
+      spk: perm.charAt(3) !== '0', view: perm.charAt(4) !== '0'
+    },
+    cfg: cfg
+  };
+}
+function doLogin() {
+  var me = parseLogin($('codeIn').value);
+  if (!me) { $('loginMsg').textContent = '⚠️ 接入码不对：应以 WBTEA| 开头且包含完整接入信息'; $('loginMsg').className = 'sub err'; return }
+  ME = me;
+  try { localStorage.setItem('wb_subj_me', JSON.stringify(ME)) } catch (e) {}
+  enterApp();
+}
+function doLogout() {
+  if (!confirm('退出登录？这台电脑上保存的接入信息会被清除。')) return;
+  try { localStorage.removeItem('wb_subj_me') } catch (e) {}
+  location.reload();
+}
+function enterApp() {
+  $('loginCard').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  $('meName').textContent = ME.name;
+  $('meSubj').textContent = ME.subject || '未设科目';
+  $('hwSubj').textContent = ME.subject || '作业';
+  $('scSubj').textContent = ME.subject || '';
+  $('scDate').value = today();
+  $('newHwDate').value = today();
+  if (!ME.perm.hw) $('tabHw').innerHTML = '<h3>📝 登记作业</h3><div class="sub">⚠️ 班主任没有给你开放「登记作业」权限。</div>';
+  if (!ME.perm.sc) $('tabSc').innerHTML = '<h3>📊 登记成绩</h3><div class="sub">⚠️ 班主任没有给你开放「登记成绩」权限。</div>';
+  if (!ME.perm.nt) $('tabNt').innerHTML = '<h3>📢 发通知</h3><div class="sub">⚠️ 班主任没有给你开放「发通知」权限。</div>';
+  if (!ME.perm.spk) $('tabSpk').innerHTML = '<h3>🔊 播报</h3><div class="sub">⚠️ 班主任没有给你开放「播报」权限。</div>';
+  pull(true);
+  setInterval(function () { if (!Object.keys(dirtyHw).length) pull(false) }, 30000);
+}
+function switchTab(t) {
+  var map = { hw: 'tabHw', sc: 'tabSc', nt: 'tabNt', spk: 'tabSpk' };
+  Object.keys(map).forEach(function (k) { $(map[k]).classList.toggle('hidden', k !== t) });
+  document.querySelectorAll('.tab').forEach(function (el) { el.classList.toggle('on', el.getAttribute('data-t') === t) });
+}
+
+/* ---------- Gitee 读写 ---------- */
+function apiUrl() {
+  var c = ME.cfg;
+  return 'https://gitee.com/api/v5/repos/' + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo) +
+    '/contents/' + String(docPath()).split('/').map(encodeURIComponent).join('/');
+}
+function docPath() { var c = ME.cfg; return (c.path || 'wb_test_') + (c.classId || 'c1') + '.json' }
+
+async function apiGet() {
+  var base = apiUrl() + '?access_token=' + encodeURIComponent(ME.cfg.token);
+  var refs = ['', '&ref=master', '&ref=main'];
+  var lastErr = null;
+  for (var k = 0; k < refs.length; k++) {
+    try {
+      var r = await fetch(base + refs[k]);
+      var txt = await r.text();
+      var j = null; try { j = JSON.parse(txt) } catch (e) {}
+      if (r.status === 404) continue;
+      if (r.status === 401) throw new Error('令牌无效(401)');
+      if (r.status === 403) throw new Error('无权限或限流(403)');
+      if (r.status !== 200) { lastErr = new Error('HTTP ' + r.status); continue }
+      if (!j || !j.content) continue;
+      return {
+        doc: JSON.parse(b64dUtf(j.content)),
+        sha: j.sha,
+        branch: refs[k] ? refs[k].replace('&ref=', '') : ''
+      };
+    } catch (e) { lastErr = e }
+  }
+  if (lastErr) throw lastErr;
+  return { empty: true, sha: '' };
+}
+async function apiPut(doc, sha) {
+  var b64 = btoa(unescape(encodeURIComponent(JSON.stringify(doc))));
+  var body = { access_token: ME.cfg.token, content: b64, message: '科任教师(' + ME.name + ')同步 rev=' + (doc.rev || 0) };
+  var creating = !sha;
+  if (sha) body.sha = sha;
+  var r = await fetch(apiUrl(), { method: creating ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  var txt = await r.text();
+  if (r.status === 409) { var e = new Error('conflict'); e.conflict = true; throw e }
+  if ((r.status === 400 || r.status === 422) && /sha is (missing|empty)|已存在|exists/i.test(txt) && !sha) {
+    var g = await apiGet();
+    if (!g.empty) return apiPut(doc, g.sha);
+  }
+  if (!r.ok) throw new Error('写入失败(' + r.status + ')');
+  var jj = null; try { jj = JSON.parse(txt) } catch (e) {}
+  return { sha: (jj && jj.content && jj.content.sha) || sha };
+}
+/* 拉 → 改 → 推（409 重试），教师工作台/小程序/教室桌面共用这一份 */
+async function writeDoc(mutator, retried) {
+  retried = retried || 0;
+  var res = await apiGet();
+  var doc = res.empty ? { rev: 0, syncVersion: 3, tables: {}, deletes: [] } : res.doc;
+  if (!doc.tables) doc.tables = {};
+  mutator(doc);
+  doc.rev = (Number(doc.rev) || 0) + 1;
+  doc.updatedAt = new Date().toISOString();
+  doc.updatedBy = 'subj-' + (ME.name || '');
+  try {
+    var rr = await apiPut(doc, res.empty ? '' : res.sha);
+    SHA = rr.sha;
+    DOC = doc;
+    applyDoc(doc);
+    return true;
+  } catch (e) {
+    if (e.conflict && retried < 3) { await new Promise(function (r) { setTimeout(r, 1200) }); return writeDoc(mutator, retried + 1) }
+    throw e;
+  }
+}
+function applyDoc(doc) {
+  var t = doc.tables || {};
+  STU = (t.students || []).filter(function (r) { return r && r.name });
+  HWI = (t.hwItems || []).filter(function (r) { return r && r.item });
+  HW = t.hw || [];
+  SC = t.scores || [];
+  $('meSync').textContent = '已同步 · ' + nowStr();
+}
+
+async function pull(showMsg) {
+  if (!ME) return;
+  if (showMsg) $('meSync').textContent = '刷新中…';
+  try {
+    var res = await apiGet();
+    if (res.empty) { $('meSync').textContent = '⚠️ 云端还没有数据，请让班主任先在网页版同步一次'; return }
+    DOC = res.doc; SHA = res.sha; BRANCH = res.branch;
+    applyDoc(res.doc);
+    renderAll();
+  } catch (e) {
+    $('meSync').textContent = '❌ ' + (e.message || '读取失败');
+  }
+}
+
+/* ---------- 渲染 ---------- */
+function renderAll() {
+  renderHwTab(); renderScList(); renderSpkSel(); buildSpeak();
+}
+function hwItemKey(x) { return String(x.item) + '|' + String(x.date || '').slice(0, 10) }
+function renderHwTab() {
+  /* 本科目优先，旧的在前、最新的在后并默认选中 */
+  var mine = HWI.filter(function (x) { return (x.subject || '') === ME.subject });
+  var other = HWI.filter(function (x) { return (x.subject || '') !== ME.subject });
+  var list = mine.concat(other);
+  var sel = $('hwSel');
+  var keep = sel.value;
+  sel.innerHTML = list.map(function (x) {
+    return '<option value="' + esc(hwItemKey(x)) + '">' + esc(x.item + ' · ' + String(x.date || '').slice(0, 10)) + '</option>';
+  }).join('');
+  if (keep) sel.value = keep;
+  if (!sel.value && list.length) sel.value = hwItemKey(list[list.length - 1]);
+  renderSpkSel();
+  renderGrid();
+}
+function curItem() {
+  var v = $('hwSel').value || '';
+  var p = v.split('|');
+  var item = p[0] || '', date = p.slice(1).join('|') || today();
+  return item ? { item: item, date: date } : null;
+}
+function renderGrid() {
+  var box = $('hwGrid');
+  var it = curItem();
+  if (!it) { box.innerHTML = '<div class="sub">还没有作业列，先在上方新建一个。</div>'; $('hwStat').textContent = ''; return }
+  var done = {};
+  HW.forEach(function (r) {
+    if (r && r.item === it.item && String(r.date).slice(0, 10) === it.date && r.name) done[r.name] = r.level;
+  });
+  box.innerHTML = STU.map(function (s) {
+    var lv = done[s.name] || '';
+    return '<div class="cell ' + esc(lv) + '" data-n="' + esc(s.name) + '" onclick="tapStu(this)">' +
+      '<span class="n">' + esc(s.name) + '</span><span class="l">' + esc(lv) + '</span></div>';
+  }).join('') || '<div class="sub">班级名单是空的</div>';
+  var total = STU.length, doneN = Object.keys(done).length;
+  var miss = STU.filter(function (s) { return !done[s.name] }).map(function (s) { return s.name });
+  $('hwStat').innerHTML = '已登记 <b>' + doneN + '</b> / ' + total + ' 人' +
+    (miss.length ? ' · 未交：<span style="color:#a04a32">' + esc(miss.join('、')) + '</span>' : ' · 全部交齐 🎉');
+}
+function pickLv(lv) {
+  curLv = lv;
+  document.querySelectorAll('[data-lv]').forEach(function (b) {
+    b.style.fontWeight = (b.getAttribute('data-lv') === lv) ? '800' : '600';
+    b.style.outline = (b.getAttribute('data-lv') === lv) ? '2px solid #2d8f63' : 'none';
+  });
+}
+function tapStu(el) {
+  if (!ME.perm.hw) return;
+  var it = curItem(); if (!it) return;
+  var name = el.getAttribute('data-n');
+  var lv = curLv;
+  /* 本地立即生效 + 记入待写盘 */
+  HW.forEach(function (r) {
+    if (r && r.item === it.item && String(r.date).slice(0, 10) === it.date && r.name === name) {
+      if (r.level === lv) return;
+      r.level = lv; r.score = LV_SCORE[lv] || 0; r.by = ME.name; r.bycode = ME.code;
+      r.subject = r.subject || ME.subject; r.ts = Date.now();
+    }
+  });
+  var hit = HW.some(function (r) { return r && r.item === it.item && String(r.date).slice(0, 10) === it.date && r.name === name });
+  if (!hit) {
+    HW.push({
+      id: 'hw_' + name + '_' + String(it.date).replace(/-/g, '') + '_' + String(it.item),
+      date: it.date, item: it.item, name: name, level: lv, score: LV_SCORE[lv] || 0,
+      subject: ME.subject || '', by: ME.name, bycode: ME.code, note: '',
+      ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'subj-' + ME.name
+    });
+  }
+  dirtyHw[name] = lv;
+  renderGrid();
+  $('hwMsg').textContent = '已点 ' + name + ' → ' + lv + '（自动保存中…）';
+  if (flushTimer) clearTimeout(flushTimer);
+  flushTimer = setTimeout(function () { flushHw(false) }, 2500);
+}
+async function flushHw(manual) {
+  var names = Object.keys(dirtyHw);
+  if (!names.length) { if (manual) $('hwMsg').textContent = '没有需要保存的改动'; return }
+  var batch = {};
+  names.forEach(function (n) { batch[n] = dirtyHw[n] });
+  dirtyHw = {};
+  $('hwMsg').textContent = '保存中…';
+  var it = curItem();
+  try {
+    await writeDoc(function (doc) {
+      var arr = Array.isArray(doc.tables.hw) ? doc.tables.hw : [];
+      Object.keys(batch).forEach(function (name) {
+        var lv = batch[name];
+        var rec = null;
+        for (var i = 0; i < arr.length; i++) {
+          var r = arr[i];
+          if (r && r.item === it.item && String(r.date).slice(0, 10) === it.date && r.name === name) { rec = r; break }
+        }
+        if (rec) {
+          rec.level = lv; rec.score = LV_SCORE[lv] || 0;
+          rec.by = ME.name; rec.bycode = ME.code; rec.subject = rec.subject || ME.subject;
+          rec.ts = Date.now(); rec.updatedAt = new Date().toISOString(); rec.updatedBy = 'subj-' + ME.name;
+        } else {
+          arr.push({
+            id: 'hw_' + name + '_' + String(it.date).replace(/-/g, '') + '_' + String(it.item),
+            date: it.date, item: it.item, name: name, level: lv, score: LV_SCORE[lv] || 0,
+            subject: ME.subject || '', by: ME.name, bycode: ME.code, note: '',
+            ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'subj-' + ME.name
+          });
+        }
+      });
+      doc.tables.hw = arr;
+    });
+    $('hwMsg').textContent = '✅ 已保存 ' + Object.keys(batch).length + ' 条登记（' + nowStr() + '）';
+  } catch (e) {
+    Object.keys(batch).forEach(function (n) { dirtyHw[n] = batch[n] });   /* 失败放回，稍后重试 */
+    $('hwMsg').textContent = '❌ 保存失败：' + (e.message || '') + '（已记下，稍后点「保存登记」重试）';
+    $('hwMsg').className = 'msg err';
+  }
+}
+function createHwItem() {
+  var name = ($('newHwName').value || '').trim();
+  if (!name) { $('hwMsg').textContent = '⚠️ 先填作业名'; return }
+  var date = $('newHwDate').value || today();
+  $('hwMsg').textContent = '建列中…';
+  writeDoc(function (doc) {
+    var arr = Array.isArray(doc.tables.hwItems) ? doc.tables.hwItems : [];
+    var exist = arr.some(function (x) { return x && x.item === name && String(x.date).slice(0, 10) === date });
+    if (!exist) arr.push({ item: name, date: date, subject: ME.subject || '', ts: Date.now() });
+    doc.tables.hwItems = arr;
+  }).then(function () {
+    $('newHwName').value = '';
+    $('hwMsg').textContent = '✅ 已建作业列：' + name;
+    renderHwTab();
+  }).catch(function (e) {
+    $('hwMsg').textContent = '❌ 建列失败：' + (e.message || '');
+    $('hwMsg').className = 'msg err';
+  });
+}
+
+/* ---------- 成绩 ---------- */
+function renderScList() {
+  var box = $('scList');
+  if (!box || !ME.perm.sc) return;
+  box.innerHTML = STU.map(function (s, i) {
+    return '<div class="scitem"><span>' + esc(s.name) + '</span>' +
+      '<input type="number" data-i="' + i + '" data-n="' + esc(s.name) + '" oninput="scCount()" placeholder="分数"></div>';
+  }).join('');
+  $('scN').textContent = '0';
+}
+function scCount() {
+  var n = 0;
+  document.querySelectorAll('#scList input').forEach(function (inp) { if (String(inp.value).trim() !== '') n++ });
+  $('scN').textContent = n;
+}
+function fillOld() {
+  var exam = ($('scExam').value || '').trim();
+  if (!exam) return;
+  var have = {};
+  SC.forEach(function (r) {
+    if (r && r.exam === exam && r.subject === ME.subject && r.name) have[r.name] = r.score;
+  });
+  document.querySelectorAll('#scList input').forEach(function (inp) {
+    var n = inp.getAttribute('data-n');
+    inp.value = have[n] != null ? have[n] : '';
+  });
+  scCount();
+}
+async function submitScore() {
+  if (!ME.perm.sc) return;
+  var exam = ($('scExam').value || '').trim();
+  if (!exam) { $('scMsg').textContent = '⚠️ 先填考试名称'; $('scMsg').className = 'msg err'; return }
+  var full = Number($('scFull').value) || 100;
+  var date = $('scDate').value || today();
+  var rows = [];
+  document.querySelectorAll('#scList input').forEach(function (inp) {
+    var v = String(inp.value).trim();
+    if (v === '') return;
+    var sc = Number(v);
+    if (isNaN(sc)) return;
+    rows.push({ name: inp.getAttribute('data-n'), score: sc });
+  });
+  if (!rows.length) { $('scMsg').textContent = '⚠️ 还没有填分数'; return }
+  $('scMsg').textContent = '提交中…';
+  try {
+    await writeDoc(function (doc) {
+      var arr = Array.isArray(doc.tables.scores) ? doc.tables.scores : [];
+      rows.forEach(function (r) {
+        var hit = null;
+        for (var i = 0; i < arr.length; i++) {
+          var x = arr[i];
+          if (x && x.name === r.name && x.exam === exam && x.subject === ME.subject) { hit = x; break }
+        }
+        if (hit) {
+          hit.score = r.score; hit.full = full; hit.date = date;
+          hit.by = ME.name; hit.bycode = ME.code; hit.ts = Date.now();
+        } else {
+          arr.push({
+            id: 'sc_' + hash36(r.name + exam + ME.subject), exam: exam, subject: ME.subject || '',
+            full: full, date: date, name: r.name, no: '', score: r.score,
+            by: ME.name, bycode: ME.code, ts: Date.now()
+          });
+        }
+      });
+      doc.tables.scores = arr;
+    });
+    $('scMsg').textContent = '✅ 已提交 ' + rows.length + ' 条' + (ME.subject || '') + '成绩（' + exam + '）';
+  } catch (e) {
+    $('scMsg').textContent = '❌ 提交失败：' + (e.message || '');
+    $('scMsg').className = 'msg err';
+  }
+}
+
+/* ---------- 通知 ---------- */
+async function sendNotice() {
+  if (!ME.perm.nt) return;
+  var text = ($('ntText').value || '').trim();
+  if (!text) { $('ntMsg').textContent = '⚠️ 先写内容'; return }
+  $('ntMsg').textContent = '发送中…';
+  var rec = {
+    id: 'n' + Date.now() + Math.floor(Math.random() * 9000 + 1000),
+    '类型': '通知',
+    '内容': '【' + (ME.subject || '科任') + '·' + ME.name + '】' + text,
+    '目标姓名': '', '来源端': 'subj-web', '发布时间': nowStr(),
+    '到达时间': nowStr(), '到达时间戳': Date.now(),
+    '过期时间': '', '是否播报': $('ntTts').checked,
+    '优先级': $('ntUrgent').checked ? '紧急' : '普通',
+    '状态': '已发布',
+    ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'subj-web'
+  };
+  try {
+    await writeDoc(function (doc) {
+      var arr = Array.isArray(doc.tables['s-notice']) ? doc.tables['s-notice'] : [];
+      arr.push(rec);
+      doc.tables['s-notice'] = arr;
+    });
+    $('ntText').value = '';
+    $('ntMsg').textContent = '✅ 已发送，教室桌面几秒内显示';
+  } catch (e) {
+    $('ntMsg').textContent = '❌ 发送失败：' + (e.message || '');
+    $('ntMsg').className = 'msg err';
+  }
+}
+
+/* ---------- 播报 ---------- */
+function renderSpkSel() {
+  var sel = $('spkSel');
+  if (!sel) return;
+  var keep = sel.value;
+  sel.innerHTML = HWI.map(function (x) {
+    return '<option value="' + esc(hwItemKey(x)) + '">' + esc(x.item + ' · ' + String(x.date || '').slice(0, 10)) + '</option>';
+  }).join('');
+  if (keep) sel.value = keep;
+}
+function undoneOf(it) {
+  var done = {};
+  HW.forEach(function (r) {
+    if (r && r.item === it.item && String(r.date).slice(0, 10) === it.date && r.name) done[r.name] = 1;
+  });
+  return STU.filter(function (s) { return !done[s.name] }).map(function (s) { return s.name });
+}
+function buildSpeak() {
+  var sel = $('spkSel');
+  if (!sel || !sel.value) { if ($('spkText')) $('spkText').value = ''; return }
+  var p = sel.value.split('|');
+  var it = { item: p[0], date: p.slice(1).join('|') || today() };
+  var miss = undoneOf(it);
+  var text = miss.length
+    ? '提醒：' + it.item + ' 还有 ' + miss.length + ' 位同学没交：' + miss.join('、') + '。请尽快补交。'
+    : '今天「' + it.item + '」全班同学都已交齐，非常好。';
+  $('spkText').value = text;
+}
+async function pushSpeak(text, item, date) {
+  var id = 'spk_' + String(date).replace(/-/g, '') + '_' + hash36(item);
+  await writeDoc(function (doc) {
+    var arr = Array.isArray(doc.tables['s-speak']) ? doc.tables['s-speak'] : [];
+    var hit = false;
+    arr.forEach(function (r) {
+      if (r && r.id === id) {
+        r['文本'] = text; r['状态'] = '待播报'; r['时间'] = nowStr();
+        r['科目'] = ME.subject || ''; r['作业'] = item; r['日期'] = date;
+        r['发起人'] = ME.name; r.ts = Date.now(); hit = true;
+      }
+    });
+    if (!hit) {
+      arr.push({
+        id: id, '类型': '未交名单', '科目': ME.subject || '', '作业': item, '日期': date,
+        '文本': text, '状态': '待播报', '时间': nowStr(), '发起人': ME.name,
+        ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'subj-web'
+      });
+    }
+    doc.tables['s-speak'] = arr;
+  });
+}
+async function sendSpeak() {
+  if (!ME.perm.spk) return;
+  var sel = $('spkSel');
+  if (!sel.value) { $('spkMsg').textContent = '⚠️ 先选作业列'; return }
+  var p = sel.value.split('|');
+  var item = p[0], date = p.slice(1).join('|') || today();
+  var text = ($('spkText').value || '').trim();
+  if (!text) { $('spkMsg').textContent = '⚠️ 没有播报内容'; return }
+  if (!confirm('播报到教室桌面？\n\n' + text)) return;
+  $('spkMsg').textContent = '下发中…';
+  try {
+    await pushSpeak(text, item, date);
+    $('spkMsg').textContent = '✅ 已下发，教室桌面几秒内播报';
+  } catch (e) {
+    $('spkMsg').textContent = '❌ 下发失败：' + (e.message || '');
+    $('spkMsg').className = 'msg err';
+  }
+}
+async function sendSpeakFromHw() {
+  var it = curItem();
+  if (!it) { $('hwMsg').textContent = '⚠️ 先选作业列'; return }
+  if (!ME.perm.spk) { $('hwMsg').textContent = '⚠️ 没有播报权限'; return }
+  var miss = undoneOf(it);
+  var text = miss.length
+    ? '提醒：' + it.item + ' 还有 ' + miss.length + ' 位同学没交：' + miss.join('、') + '。请尽快补交。'
+    : '今天「' + it.item + '」全班同学都已交齐，非常好。';
+  if (!confirm('播报到教室桌面？\n\n' + text)) return;
+  $('hwMsg').textContent = '下发中…';
+  try {
+    await pushSpeak(text, it.item, it.date);
+    $('hwMsg').textContent = '✅ 已下发，教室桌面几秒内播报';
+  } catch (e) {
+    $('hwMsg').textContent = '❌ 下发失败：' + (e.message || '');
+    $('hwMsg').className = 'msg err';
+  }
+}
+
+/* ---------- 启动 ---------- */
+(function boot() {
+  pickLv('优');
+  try {
+    var saved = localStorage.getItem('wb_subj_me');
+    if (saved) {
+      ME = JSON.parse(saved);
+      if (ME && ME.cfg && ME.cfg.token) { $('codeIn').value = ''; enterApp(); return }
+      ME = null;
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
