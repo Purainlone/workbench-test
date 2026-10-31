@@ -443,6 +443,14 @@ function renderHwTab() {
     var d = String(a.date || '').localeCompare(String(b.date || ''));
     return d !== 0 ? d : String(a.item).localeCompare(String(b.item));
   });
+  /* vT16 自动隐藏：超过两周 或 全班都已登记 的列不再显示（数据保留） */
+  var lim = Date.now() - 14 * 86400000;
+  mine = mine.filter(function (x) {
+    var d = Date.parse(String(x.date || '').slice(0, 10) + 'T00:00:00');
+    if (!isNaN(d) && d < lim) return false;
+    var done = hwDoneMap(String(x.item) + '|' + String(x.date || '').slice(0, 10));
+    return !STU.length || STU.some(function (s) { return !(s.name in done); });
+  });
   COLS = mine.slice(-12).map(function (x) {
     return { key: hwItemKey(x), item: x.item, date: String(x.date || '').slice(0, 10) };
   });
