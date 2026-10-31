@@ -1225,6 +1225,7 @@ table.paper td.l{text-align:left;font-weight:600}
     <button data-s="rota">🧹 <span class="lbl">值日安排</span><span class="new">新</span></button>
     <button data-s="notice">📢 <span class="lbl">通知中心</span><span class="new">新</span></button>
     <button data-s="desk">🖥️ <span class="lbl">教室桌面</span><span class="new">新</span></button>
+    <button data-s="classic">📜 <span class="lbl">经典内容</span><span class="new">新</span></button>
     <button data-s="comment">✍️ <span class="lbl">学生评语</span><span class="new">新</span></button>
 
     <div class="navgrp">科任教师</div>
@@ -1640,6 +1641,11 @@ table.paper td.l{text-align:left;font-weight:600}
       </div>
       <div id="csList" style="margin-top:8px"></div>
     </div>
+
+    <details class="chartbox" style="margin:10px 0">
+      <summary style="cursor:pointer;font-size:14px;font-weight:700">💡 推荐内容（点一下就加进内容库，可再编辑 / 设为今天）</summary>
+      <div id="clRecoList" style="margin-top:8px"></div>
+    </details>
   </section>
 
   <!-- ============ 拍照登记（贴在作业本上的二维码贴纸） ============ -->
@@ -29472,6 +29478,43 @@ function cwInit(){
   function clLib(type) {
     return ntRows('s-classic').filter(function (r) { return r && !r.deleted && (r.type || 'quote') === type; });
   }
+  /* 主题快选（新增/编辑时点一下就填） */
+  var CL_THEMES = ['励志成长', '读书学习', '珍惜时间', '四季风光', '传统节日', '感恩亲情', '寓言故事', '毛主席诗词'];
+  /* 精选推荐内容库（公有领域，一键加入） */
+  var CL_RECO = [
+    { type: 'quote', content: '读书破万卷，下笔如有神。', src: '—— 杜甫《奉赠韦左丞丈二十二韵》', theme: '读书学习' },
+    { type: 'quote', content: '少壮不努力，老大徒伤悲。', src: '—— 汉乐府《长歌行》', theme: '珍惜时间' },
+    { type: 'quote', content: '问渠那得清如许？为有源头活水来。', src: '—— 朱熹《观书有感》', theme: '读书学习' },
+    { type: 'poem', title: '枫桥夜泊', content: '月落乌啼霜满天，江枫渔火对愁眠。\n姑苏城外寒山寺，夜半钟声到客船。', src: '唐·张继', theme: '写景抒情' },
+    { type: 'poem', title: '望天门山', content: '天门中断楚江开，碧水东流至此回。\n两岸青山相对出，孤帆一片日边来。', src: '唐·李白', theme: '山河壮美' },
+    { type: 'poem', title: '游子吟', content: '慈母手中线，游子身上衣。\n临行密密缝，意恐迟迟归。\n谁言寸草心，报得三春晖。', src: '唐·孟郊', theme: '感恩亲情' },
+    { type: 'wen', title: '守株待兔', content: '宋人有耕者。田中有株。兔走触株，折颈而死。因释其耒而守株，冀复得兔。兔不可复得，而身为宋国笑。', src: '《韩非子》', theme: '寓言故事' },
+    { type: 'wen', title: '揠苗助长', content: '宋人有闵其苗之不长而揠之者，芒芒然归，谓其人曰：今日病矣！予助苗长矣！其子趋而往视之，苗则槁矣。', src: '《孟子》', theme: '寓言故事' },
+    { type: 'wen', title: '掩耳盗铃', content: '范氏之亡也，百姓有得钟者，欲负而走，则钟大不可负；以椎毁之，钟况然有音。恐人闻之而夺己也，遽掩其耳。', src: '《吕氏春秋》', theme: '寓言故事' }
+  ];
+  function clRenderReco() {
+    var box = document.getElementById('clRecoList'); if (!box) return;
+    box.innerHTML = CL_RECO.map(function (r, i) {
+      var done = ntRows('s-classic').some(function (x) {
+        return x && !x.deleted && (x.type || 'quote') === r.type && (r.type === 'quote' ? x.content === r.content : x.title === r.title);
+      });
+      var label = r.type === 'quote' ? ('“' + r.content + '” ' + r.src) : ('《' + r.title + '》 ' + r.src);
+      return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed #e3ede7">' +
+        '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#eef4ff;color:#3b6fb0;flex-shrink:0">' + CL_TYPE_NAMES[r.type] + '</span>' +
+        '<span style="flex:1;font-size:13px">' + esc(label) + (r.theme ? ' <span style="font-size:11px;color:#3b6fb0">· ' + esc(r.theme) + '</span>' : '') + '</span>' +
+        (done ? '<span style="font-size:12px;color:#8aa79b;flex-shrink:0">已加入 ✓</span>'
+              : '<button class="btn2 sm primary" onclick="clAddReco(' + i + ')">＋ 加入</button>') +
+        '</div>';
+    }).join('');
+  }
+  function clAddReco(i) {
+    var r = CL_RECO[i]; if (!r) return;
+    var rec = { id: 'cl_' + Date.now() + Math.floor(Math.random() * 9000 + 1000),
+      type: r.type, title: r.title || '', content: r.content, src: r.src || '', theme: r.theme || '',
+      deleted: false, ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher' };
+    ntUpsert('s-classic', rec); clRender(); ntChanged();
+    toastMsg('✅ 已加入内容库，可在列表里编辑或「设为今天」');
+  }
   function clRender() {
     var list = document.getElementById('clList'); if (!list) return;
     var tf = document.getElementById('clThemeFilter');
@@ -29498,6 +29541,7 @@ function cwInit(){
         '<button class="btn2 sm ghost" style="color:#c2410c" onclick="clDel(\'' + r.id + '\')">删</button></div>';
     }).join('') : '<div class="sub">还没有「' + CL_TYPE_NAMES[clCurType] + '」内容。点「➕ 新增一条」添加，可打主题标签；每条都能一键「设为今天」推到教室大屏。</div>';
     csFillSelects();
+    clRenderReco();
   }
   function clOpenForm(id) {
     var rec = id ? ntGet('s-classic', id) : null;
@@ -29518,8 +29562,11 @@ function cwInit(){
       '<textarea id="clFContent" rows="4" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px;font-family:inherit">' + esc(rec ? (rec.content || '') : '') + '</textarea></div>' +
       '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">出处 / 作者</div>' +
       '<input id="clFSrc" value="' + esc(rec ? (rec.src || '') : '') + '" placeholder="如：—— 《沁园春·雪》 或 唐·李白" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px"></div>' +
-      '<div style="margin-bottom:14px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">主题标签（如：励志 / 节气 / 节日 / 毛主席诗词）</div>' +
+      '<div style="margin-bottom:8px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">主题标签（可点下面的推荐主题快速填写）</div>' +
       '<input id="clFTheme" value="' + esc(rec ? (rec.theme || '') : '') + '" placeholder="可留空" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px"></div>' +
+      '<div style="margin-bottom:14px;display:flex;gap:6px;flex-wrap:wrap">' +
+      CL_THEMES.map(function (t) { return '<button type="button" class="btn2 sm" onclick="document.getElementById(\'clFTheme\').value=\'' + t + '\'">' + t + '</button>'; }).join('') +
+      '</div>' +
       '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn2" onclick="clCloseForm()">取消</button>' +
       '<button class="btn2 primary" onclick="clSaveForm(\'' + (id || '') + '\')">💾 保存</button></div>' +
       '</div></div>';
