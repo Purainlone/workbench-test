@@ -189,7 +189,9 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
       <div class="row">
         <span class="sub">看哪场考试</span>
         <select id="anExam" style="min-width:230px" onchange="renderAn()"></select>
+        <button class="btn sec" id="anDelBtn" onclick="anDelClick()">🗑 删除这场考试</button>
       </div>
+      <div class="sub" style="margin-top:-4px">删除是两段确认：点一下按钮进入待确认（5 秒内再点一次才真删）。删错可点提示里的「⟲ 撤回恢复」，成绩原样回来。</div>
       <div id="anSingle"></div>
 
       <h3 style="margin-top:16px">📊 多次成绩跟踪</h3>
@@ -1471,6 +1473,107 @@ function impHistPick(input) {
   }).catch(function (e) {
     $('anMsg').textContent = '❌ ' + (e.message || '解析失败');
     $('anMsg').className = 'msg err';
+  });
+}
+
+
+/* ===== 删除整场考试（vT9）：两段确认 + 墓碑跨端同步 + 撤回恢复 ===== */
+var SC_TRASH_KEY = 'wb_sc_trash_v1';
+var anDelArm = 0;
+/* 姓名规范化：与桌面端/小程序 tomKey 完全一致（含异体字表），保证墓碑键相同 */
+function tomNormSub(name) {
+  var s = String(name == null ? '' : name);
+  s = s.replace(/[\u3000\s]+/g, '');
+  s = s.replace(/[\uFF01-\uFF5E]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); });
+  s = s.split('').map(function (c) { return ({ '铖': '成', '玥': '月', '琪': '其', '萱': '宣', '怡': '宜', '涵': '含', '轩': '宣', '瑶': '摇' })[c] || c; }).join('');
+  return s.toLowerCase();
+}
+function anDelBtnReset() {
+  var b = $('anDelBtn');
+  if (b) { b.textContent = '🗑 删除这场考试'; b.style.background = ''; b.style.color = ''; }
+}
+function anDelClick() {
+  var exam = $('anExam').value;
+  if (!exam) { $('anMsg').textContent = '⚠️ 先选一场考试'; return; }
+  var rows = anRows(exam);
+  if (!rows.length) { $('anMsg').textContent = '这场考试没有分数可删'; return; }
+  var now = Date.now();
+  if (!anDelArm || now - anDelArm > 5000) {
+    anDelArm = now;
+    var b = $('anDelBtn');
+    b.textContent = '⚠️ 再点一次确认删除（' + rows.length + ' 条）';
+    b.style.background = '#c0392b'; b.style.color = '#fff';
+    $('anMsg').textContent = '⚠️ 将删除「' + exam + '」的全部 ' + rows.length + ' 条成绩（云端+各端同步）。5 秒内再点一次按钮才执行；删错可撤回。';
+    setTimeout(function () { anDelArm = 0; anDelBtnReset(); }, 5000);
+    return;
+  }
+  anDelArm = 0;
+  anDelBtnReset();
+  anDelExam(exam, rows);
+}
+function anDelExam(exam, rows) {
+  /* 撤回备份：本机保留最近 5 次删除 */
+  try {
+    var t = JSON.parse(localStorage.getItem(SC_TRASH_KEY) || '[]');
+    t.push({ at: Date.now(), subject: ME.subject || '', exam: exam, rows: rows });
+    localStorage.setItem(SC_TRASH_KEY, JSON.stringify(t.slice(-5)));
+  } catch (e) {}
+  var tombs = rows.map(function (r) {
+    return { t: 'score', k: [ME.subject || '', exam || '', tomNormSub(r.name), String(r.date || '').slice(0, 10)].join('|'), at: Date.now() };
+  });
+  $('anMsg').textContent = '删除中…';
+  writeDoc(function (doc) {
+    doc.tables.scores = (doc.tables.scores || []).filter(function (r) {
+      return !(r && r.subject === ME.subject && r.exam === exam);
+    });
+    var del = Array.isArray(doc.deletes) ? doc.deletes : [];
+    tombs.forEach(function (tb) { del.push(tb); });
+    doc.deletes = del;
+  }).then(function () {
+    anCurExam = '';
+    switchTabAn();
+    $('anMsg').innerHTML = '🗑 已删除「' + esc(exam) + '」共 ' + rows.length + ' 条（已同步到手机/教室端）。' +
+      '<button class="btn sec" style="padding:4px 12px;margin-left:8px" onclick="anUndo()">⟲ 撤回恢复</button>' +
+      '<span class="sub" style="margin-left:8px">成绩暂存在这台电脑，随时可撤回</span>';
+  }).catch(function (e) {
+    $('anMsg').textContent = '❌ 删除失败：' + (e.message || '');
+    $('anMsg').className = 'msg err';
+  });
+}
+function anUndo() {
+  var t = [];
+  try { t = JSON.parse(localStorage.getItem(SC_TRASH_KEY) || '[]'); } catch (e) {}
+  var last = t.pop();
+  if (!last) { $('anMsg').textContent = '没有可撤回的删除记录'; return; }
+  try { localStorage.setItem(SC_TRASH_KEY, JSON.stringify(t)); } catch (e) {}
+  $('anMsg').textContent = '恢复中…';
+  writeDoc(function (doc) {
+    var arr = Array.isArray(doc.tables.scores) ? doc.tables.scores : [];
+    last.rows.forEach(function (r) {
+      var copy = {};
+      for (var k in r) copy[k] = r[k];
+      copy.updatedAt = new Date().toISOString();
+      copy.ts = Date.now();
+      arr.push(copy);
+    });
+    doc.tables.scores = arr;
+    /* 撤回 = 移除这批墓碑，免得其他端把恢复的记录又删掉 */
+    var ks = {};
+    last.rows.forEach(function (r) {
+      ks[[last.subject || '', last.exam || '', tomNormSub(r.name), String(r.date || '').slice(0, 10)].join('|')] = 1;
+    });
+    doc.deletes = (Array.isArray(doc.deletes) ? doc.deletes : []).filter(function (x) { return !(x && ks[x.k]); });
+  }).then(function () {
+    $('anMsg').textContent = '✅ 已撤回，恢复「' + last.exam + '」' + last.rows.length + ' 条成绩';
+    switchTabAn();
+  }).catch(function (e) {
+    $('anMsg').textContent = '❌ 撤回失败：' + (e.message || '') + '（数据还在本机，可再点撤回重试）';
+    $('anMsg').className = 'msg err';
+    try {
+      var t2 = JSON.parse(localStorage.getItem(SC_TRASH_KEY) || '[]');
+      t2.push(last);
+      localStorage.setItem(SC_TRASH_KEY, JSON.stringify(t2.slice(-5)));
+    } catch (e2) {}
   });
 }
 
