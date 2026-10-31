@@ -6773,15 +6773,24 @@ function wbMatchName(text, names) {
 }
 
 /* ---------- 往 <w:tc> 填文字（保留原样式） ---------- */
-function wbFillTc(tc, text) {
+function wbFillTc(tc, text, sz, squeeze) {
   text = wbEscXml(text);
   var m = tc.match(/<w:t[^>]*>[^<]+<\/w:t>/);
   if (m) return tc.replace(m[0], m[0].replace(/(<w:t[^>]*>)[^<]+(<\/w:t>)/, function (_, a, b) { return a + text + b; }));
   m = tc.match(/<w:t[^>]*><\/w:t>/);
   if (m) return tc.replace(m[0], m[0].replace(/(<w:t[^>]*>)(<\/w:t>)/, function (_, a, b) { return a + text + b; }));
-  var run = '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:eastAsia="宋体"/><w:sz w:val="24"/></w:rPr><w:t>' + text + '</w:t></w:r>';
-  if (tc.indexOf('</w:pPr>') > -1) return tc.replace('</w:pPr>', '</w:pPr>' + run);
-  return tc.replace(/(<w:p[ >])/, '$1' + run);
+  var szXml = sz ? '<w:sz w:val="' + sz + '"/><w:szCs w:val="' + sz + '"/>' : '<w:sz w:val="24"/>';
+  var run = '<w:r><w:rPr><w:rFonts w:hint="eastAsia" w:eastAsia="宋体"/>' + szXml + '</w:rPr><w:t>' + text + '</w:t></w:r>';
+  var out;
+  if (tc.indexOf('</w:pPr>') > -1) out = tc.replace('</w:pPr>', '</w:pPr>' + run);
+  else out = tc.replace(/(<w:p[ >])/, '$1' + run);
+  /* squeeze: 窄格把左右边距压成 0，防止「319.5」「100%」一个字符一行地竖排 */
+  if (squeeze && out.indexOf('<w:tcMar') < 0) {
+    var mar = '<w:tcMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tcMar>';
+    if (out.indexOf('<w:vAlign') > -1) out = out.replace('<w:vAlign', mar + '<w:vAlign');
+    else out = out.replace('</w:tcPr>', mar + '</w:tcPr>');
+  }
+  return out;
 }
 
 /* ---------- 导出 Word 统计表（真实学校模板 docx） ----------
@@ -6829,11 +6838,21 @@ function wbExportDocx(opt) {
       var stats = [opt.cls || '', String(n)].concat(segN.map(String))
         .concat([n ? String(total) : '', n ? (Math.round(total / n * 10) / 10).toFixed(1) : '',
                  n ? Math.round(pass / n * 100) + '%' : '', n ? Math.round(exc / n * 100) + '%' : '']);
+      /* 班级填子表头行的合并起点格（row1 c0，向下合并到统计行）；
+         填到统计行的合并延续格会被单元格合并吞掉（之前班级空白的原因） */
+      if (rows[1] && opt.cls) {
+        var cells1 = rows[1].match(/<w:tc>[\s\S]*?<\/w:tc>/g) || [];
+        if (cells1[0] && /<w:vMerge w:val="restart"\/>/.test(cells1[0])) {
+          var nc1 = rows[1].replace(cells1[0], function () { return wbFillTc(cells1[0], opt.cls, 14, true); });
+          tbl = tbl.replace(rows[1], function () { return nc1; });
+        }
+      }
       if (rows[2]) {
         var cells2 = rows[2].match(/<w:tc>[\s\S]*?<\/w:tc>/g) || [];
         var nr2 = rows[2];
-        for (var i = 0; i < cells2.length && i < stats.length; i++) {
-          (function (tc, val) { nr2 = nr2.replace(tc, function () { return wbFillTc(tc, val); }); })(cells2[i], stats[i]);
+        /* i 从 1 起：c0 是班级的合并延续格（已在上面填）；统计数字用 7pt 小字号+压边距，避免竖排 */
+        for (var i = 1; i < cells2.length && i < stats.length; i++) {
+          (function (tc, val) { nr2 = nr2.replace(tc, function () { return wbFillTc(tc, val, 14, true); }); })(cells2[i], stats[i]);
         }
         tbl = tbl.replace(rows[2], function () { return nr2; });
       }
@@ -6850,7 +6869,9 @@ function wbExportDocx(opt) {
           var s = st[no - 1];
           if (!s) return;
           (function (cn, cv, cs2, sv) {
-            nr = nr.replace(cn, function () { return wbFillTc(cn, cv); });
+            /* 姓名列窄：3 字以内 10pt、更长 8pt，避免换行把行高撑倍、整表分两页 */
+            var nsz = cv.length > 3 ? 16 : 20;
+            nr = nr.replace(cn, function () { return wbFillTc(cn, cv, nsz); });
             nr = nr.replace(cs2, function () { return wbFillTc(cs2, sv); });
           })(cells[idx[1]], s.name, cells[idx[2]], s.score == null ? '' : s.score);
         });
