@@ -1226,6 +1226,9 @@ table.paper td.l{text-align:left;font-weight:600}
     <button data-s="notice">📢 <span class="lbl">通知中心</span><span class="new">新</span></button>
     <button data-s="desk">🖥️ <span class="lbl">教室桌面</span><span class="new">新</span></button>
 
+    <div class="navgrp">科任教师</div>
+    <button data-s="teach">👩‍🏫 <span class="lbl">科任教师</span><span class="new">新</span></button>
+
     <div class="navgrp">其他</div>
     <button data-s="sync">🔄 <span class="lbl">数据同步</span><span class="new">新</span></button>
     <button data-page-node-id="0iSneqq5FBSl6xgp0WS7X8" data-s="dir">📇 <span class="lbl">通讯录</span></button>
@@ -1901,7 +1904,7 @@ table.paper td.l{text-align:left;font-weight:600}
       </div>
     </div>
     <div class="card">
-      <h3>🔊 教室端播报设置</h3>
+      <h3>🔊 教室端播报与显示设置</h3>
       <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:4px">
         <label><input type="checkbox" id="deskTtsOn" checked> 开启语音播报</label>
         <span>语速
@@ -1910,10 +1913,15 @@ table.paper td.l{text-align:left;font-weight:600}
         <span>音量
           <select id="deskTtsVol"><option value="40">40%</option><option value="60">60%</option><option value="80" selected>80%</option><option value="100">100%</option></select>
         </span>
+      </div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:8px">
+        <span>开学日期（教室桌面显示"第几周"用）
+          <input type="date" id="deskTermStart">
+        </span>
         <button class="btn2 primary" onclick="deskSaveCfg()">💾 保存设置</button>
         <span id="deskCfgMsg" class="sub"></span>
       </div>
-      <div class="sub" style="margin-top:4px">教室端本地也可自行调整，云端设置以最新一次保存为准。</div>
+      <div class="sub" style="margin-top:4px">开学日期填本学期第一天（周一），教室桌面自动计算并显示"第几周"。</div>
     </div>
     <div class="card">
       <h3>📱 教室端接入设置码</h3>
@@ -1924,6 +1932,161 @@ table.paper td.l{text-align:left;font-weight:600}
         <button class="btn2" onclick="deskCodeCopy()">复制</button>
       </div>
       <textarea id="deskCodeOut" rows="2" style="width:100%;margin-top:8px;font-size:11px" readonly></textarea>
+    </div>
+  </section>
+
+  <!-- ============ vT3 科任教师 ============ -->
+  <section class="section" id="s-teach">
+    <h2>科任教师</h2>
+    <div class="sub">给各科老师开账号、发码。科任老师用微信扫「身份码」，就能在自己手机上登记本科目作业与成绩；未交作业名单会实时出现在教室桌面，并可一键语音播报。</div>
+    <style>
+      .tc-tbl { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 8px }
+      .tc-tbl th, .tc-tbl td { border: 1px solid #dfeadf; padding: 6px 8px; text-align: left }
+      .tc-tbl th { background: #eef6f0; color: #24503a; font-weight: 600 }
+      .tc-tbl tr:nth-child(even) td { background: #fafdfb }
+      .tc-tag { display: inline-block; background: #e3efe8; color: #1f5c3d; border-radius: 6px; padding: 1px 7px; font-size: 11.5px; margin-right: 4px }
+      .tc-tag.off { background: #f0e3e3; color: #8a3b3b }
+      .tc-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px }
+      .tc-box { border: 1px dashed #cfe3d8; border-radius: 10px; padding: 10px; margin-top: 10px; background: #fbfefc }
+      #tcQr img { width: 190px; height: 190px; border: 1px solid #d9e9df; border-radius: 10px; background: #fff }
+      .tc-hint { font-size: 12px; color: #6b8a7e; margin-top: 6px }
+    </style>
+
+    <div class="card">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn2 primary" id="tcTabAcc" onclick="teachSwitch('acc')">👩‍🏫 教师账号</button>
+        <button class="btn2" id="tcTabFeed" onclick="teachSwitch('feed')">📋 登记动态</button>
+        <button class="btn2" id="tcTabExp" onclick="teachSwitch('exp')">📊 成绩导出</button>
+        <button class="btn2" id="tcTabSpk" onclick="teachSwitch('spk')">🔊 播报</button>
+      </div>
+    </div>
+
+    <!-- ① 教师账号 -->
+    <div class="card" id="tcPaneAcc">
+      <h3>👩‍🏫 教师账号</h3>
+      <div class="sub">每位科任老师一个账号。登录后只能登记<b>自己科目</b>的作业与成绩，班主任可在「登记动态」里看到谁登了什么。</div>
+      <div id="tcList"></div>
+
+      <div class="tc-box">
+        <h3 style="font-size:14px;margin:0 0 6px">➕ 新增 / 修改教师</h3>
+        <div class="tc-row">
+          <span>姓名 <input id="tcName" placeholder="如：张老师" style="width:110px"></span>
+          <span>科目 <input id="tcSubj" list="tcSubjList" placeholder="如：数学" style="width:110px">
+            <datalist id="tcSubjList">
+              <option value="语文"></option><option value="数学"></option><option value="英语"></option>
+              <option value="科学"></option><option value="道德与法治"></option><option value="体育"></option>
+              <option value="音乐"></option><option value="美术"></option><option value="信息科技"></option>
+              <option value="综合实践"></option>
+            </datalist>
+          </span>
+          <span>登录码 <input id="tcCode" placeholder="4~6位" style="width:90px" maxlength="6"></span>
+          <button class="btn2" onclick="teachGenCode()">🎲 生成</button>
+        </div>
+        <div class="tc-row">
+          <span>权限：</span>
+          <label><input type="checkbox" id="tcP1" checked> 登记作业</label>
+          <label><input type="checkbox" id="tcP2" checked> 登记成绩</label>
+          <label><input type="checkbox" id="tcP3" checked> 发通知</label>
+          <label><input type="checkbox" id="tcP4" checked> 播报未交名单</label>
+          <label><input type="checkbox" id="tcP5"> 查看全班成绩</label>
+        </div>
+        <div class="tc-row">
+          <button class="btn2 primary" onclick="teachSave()">💾 保存</button>
+          <button class="btn2" onclick="teachCancelEdit()">取消</button>
+          <span id="tcEditMsg" class="sub"></span>
+        </div>
+      </div>
+
+      <div class="tc-box">
+        <h3 style="font-size:14px;margin:0 0 6px">🎫 生成二维码（打印给科任老师）</h3>
+        <div class="tc-row">
+          <span>教师 <select id="tcQrWho" style="min-width:150px" onchange="teachQrKindSwitch()"></select></span>
+          <span>类型
+            <select id="tcQrKind" onchange="teachQrKindSwitch()">
+              <option value="tea">身份码（一人一码，长期有效）</option>
+              <option value="hw">作业登记码（一次作业一码）</option>
+            </select>
+          </span>
+          <button class="btn2 primary" onclick="teachMakeQr()">🧩 生成二维码</button>
+          <button class="btn2" onclick="teachPrintQr()">🖨️ 打印</button>
+          <button class="btn2" onclick="teachMakeAccess()">💻 生成电脑接入码</button>
+        </div>
+        <div class="row" id="tcAccessRow" style="display:none">
+          <textarea id="tcAccessOut" rows="2" style="flex:1;min-width:260px;font-size:11px" readonly></textarea>
+          <button class="btn2 primary" onclick="teachCopyAccess()">📋 复制</button>
+        </div>
+        <div class="sub" id="tcAccessHint" style="display:none">把上面这串发给科任老师（微信即可）。他在电脑上打开 <b>科任教师网页</b>（subject.html，和教师工作台同一个网址），粘贴登录。</div>
+        <div class="tc-row" id="tcQrHwRow" style="display:none">
+          <span>作业名 <input id="tcQrHwName" placeholder="如：数学练习册 P23" style="width:200px"></span>
+          <span>日期 <input type="date" id="tcQrHwDate" style="width:150px"></span>
+          <button class="btn2" onclick="teachFillLastHw()">填最近一次作业</button>
+        </div>
+        <div style="display:flex;gap:16px;align-items:flex-start;margin-top:10px;flex-wrap:wrap">
+          <div id="tcQr"></div>
+          <div style="flex:1;min-width:200px">
+            <div class="sub" id="tcQrText">还没有生成二维码</div>
+            <div class="tc-hint">①身份码：科任老师用小程序「扫码」扫一次，就登录到自己的科目，之后登记都归到他名下。②作业登记码：贴在作业收纳框或黑板上，谁扫谁直接进这次作业的登记页（不用再选作业列）。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ② 登记动态 -->
+    <div class="card" id="tcPaneFeed" style="display:none">
+      <h3>📋 登记动态</h3>
+      <div class="sub">谁在什么时间登记了什么（含教室端学生管理员的登记）。</div>
+      <div class="tc-row">
+        <span>教师 <select id="tcFeedWho" onchange="teachRenderFeed()"></select></span>
+        <span>科目 <select id="tcFeedSubj" onchange="teachRenderFeed()"></select></span>
+        <span>类型
+          <select id="tcFeedType" onchange="teachRenderFeed()">
+            <option value="">全部</option><option value="hw">作业</option><option value="sc">成绩</option>
+          </select>
+        </span>
+        <span>最近 <select id="tcFeedDays" onchange="teachRenderFeed()">
+          <option value="1">今天</option><option value="3">3天</option><option value="7" selected>7天</option><option value="30">30天</option><option value="0">全部</option>
+        </select></span>
+      </div>
+      <div id="tcFeed"></div>
+    </div>
+
+    <!-- ③ 成绩导出 -->
+    <div class="card" id="tcPaneExp" style="display:none">
+      <h3>📊 成绩导出</h3>
+      <div class="sub">按科目 / 考试导出成绩表（CSV，Excel 可直接打开）。也可导出「全班 × 多科」的汇总表。</div>
+      <div class="tc-row">
+        <span>科目 <select id="tcExpSubj" onchange="teachRenderExp()"></select></span>
+        <span>考试 <select id="tcExpExam" onchange="teachRenderExp()"></select></span>
+        <label><input type="checkbox" id="tcExpAll" onchange="teachRenderExp()"> 汇总表（全班 × 各科）</label>
+      </div>
+      <div class="tc-row">
+        <button class="btn2 primary" onclick="teachExportCsv()">📥 下载 CSV</button>
+        <button class="btn2" onclick="teachCopyExp()">📋 复制表格</button>
+        <span id="tcExpMsg" class="sub"></span>
+      </div>
+      <div id="tcExpView" style="max-height:420px;overflow:auto"></div>
+    </div>
+
+    <!-- ④ 播报 -->
+    <div class="card" id="tcPaneSpk" style="display:none">
+      <h3>🔊 播报（只播未交作业名单）</h3>
+      <div class="sub">生成未交名单并下发到教室桌面，由教室电脑语音念出来提醒补交。<b>不播报具体分数</b>，保护学生自尊。</div>
+      <div class="tc-row">
+        <span>作业列 <select id="tcSpkHw" onchange="teachBuildSpeak()" style="min-width:220px"></select></span>
+        <span>只念未交 <select id="tcSpkMax" onchange="teachBuildSpeak()">
+          <option value="0">全部未交</option><option value="5">最多 5 人</option><option value="10" selected>最多 10 人</option><option value="20">最多 20 人</option>
+        </select></span>
+        <button class="btn2" onclick="teachBuildSpeak()">🔄 重新生成</button>
+      </div>
+      <div class="tc-row" style="align-items:flex-start">
+        <textarea id="tcSpkText" rows="3" style="flex:1;min-width:260px;font-size:13px"></textarea>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="btn2 primary" onclick="teachSendSpeak()">🔊 下发教室桌面播报</button>
+          <button class="btn2" onclick="teachSpeakPreview()">👂 本机试听</button>
+        </div>
+      </div>
+      <div class="tc-hint">提示：播报会在教室桌面弹出横幅并朗读。同一条不会重复播（按作业列+日期去重）。</div>
+      <div id="tcSpkHist" style="margin-top:10px"></div>
     </div>
   </section>
 
@@ -15363,8 +15526,8 @@ function giteeCfg() {
    发现自己不是最新版 → 弹提示并自动刷新页面，本轮绝不写回。
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
-var WB_MY_VER = 'v134t';
-var WB_BUILD_DATE = '10-30', WB_BUILD_NO = '2.6.67';
+var WB_MY_VER = 'v135t';
+var WB_BUILD_DATE = '10-30', WB_BUILD_NO = '2.6.68';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -28572,11 +28735,13 @@ function cwInit(){
   };
   window.deskSaveCfg = function () {
     var old = deskCfgRec() || {};
+    var term = (document.getElementById('deskTermStart') || {}).value || old['学期开始日期'] || '';
     ntUpsert('s-desktop', {
       id: 'client_cfg',
       'TTS开关': document.getElementById('deskTtsOn').checked,
       '语速': parseFloat(document.getElementById('deskTtsRate').value) || 1,
       '音量': parseInt(document.getElementById('deskTtsVol').value, 10) || 80,
+      '学期开始日期': term,
       '悬浮球位置': old['悬浮球位置'] || '', '窗口模式': old['窗口模式'] || '',
       '更新时间': nowStr(),
       ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher'
@@ -28584,6 +28749,14 @@ function cwInit(){
     document.getElementById('deskCfgMsg').textContent = '✅ 已保存，教室端下次同步生效';
     setTimeout(function () { var m = document.getElementById('deskCfgMsg'); if (m) m.textContent = '' }, 3000);
     ntChanged();
+  };
+  window.deskFillCfgForm = function () {
+    var old = deskCfgRec();
+    if (!old) return;
+    var on = document.getElementById('deskTtsOn'); if (on) on.checked = old['TTS开关'] !== false;
+    var rate = document.getElementById('deskTtsRate'); if (rate && old['语速']) rate.value = String(old['语速']);
+    var vol = document.getElementById('deskTtsVol'); if (vol && old['音量']) vol.value = String(old['音量']);
+    var term = document.getElementById('deskTermStart'); if (term && old['学期开始日期']) term.value = old['学期开始日期'];
   };
   window.deskRenderStatus = function () {
     var elp = document.getElementById('deskStatus'); if (!elp) return;
@@ -28686,6 +28859,7 @@ function cwInit(){
     /* 远端有更新（如教室端发来的呼叫消息）→ 刷新通知中心 */
     try { noticeRenderInbox() } catch (e) {}
     try { noticeRenderHistory() } catch (e) {}
+    try { deskFillCfgForm() } catch (e) {}
   }
   function ntInit() {
     try {
@@ -28709,6 +28883,613 @@ function cwInit(){
   setTimeout(function () { try { mqttInit() } catch (e) {} try { ntInit() } catch (e) {} }, 600);
   window.ntAfterSync = ntAfterSync;
   window.ntInit = ntInit;
+  /* vT3（科任教师模块）需要触发同步与实时信号，这里一并暴露 */
+  window.ntChanged = ntChanged;
+  window.mqttPublishSignal = (typeof mqttPublishSignal === 'function') ? mqttPublishSignal : function () {};
+  window.ntSha256Hex = ntSha256Hex;
+})();
+</script>
+<script>
+/* ==================== vT3 科任教师模块 ====================
+   新增 2 张共享数据表（走同步文档 tables，三端共享）：
+     s-teachers 科任教师账号 {id,name,subject,code,perm{hw,sc,nt,spk,view},state}
+     s-speak    播报队列     {id,类型,科目,作业,日期,文本,状态,时间}
+   扩展字段（向后兼容，老记录没有该字段就是空）：
+     hw     + subject（科目）  + by（登记人姓名） + bycode（登录码）
+     scores + by（登记人姓名） + bycode
+   两种二维码（小程序内「扫码」识别）：
+     WBTEA|<登录码>          教师身份码：扫一次登录本科目身份，长期有效
+     WBHW1|<作业名>|<日期>   作业登记码：扫了直接进这次作业的登记页
+   本机缓存：localStorage 'wb_tc_v1'（含学生名单/作业/成绩的最近快照，
+   用于「登记动态」与「未交名单播报」，不依赖 Bitable 同步延迟）。 */
+(function () {
+  'use strict';
+  if (window.__WB_TC_LOADED__) return; window.__WB_TC_LOADED__ = true;
+
+  var TC_KEYS = ['s-teachers', 's-speak'];
+  var TC_STORE = 'wb_tc_v1';
+  var TC_EDIT = null;      /* 正在编辑的教师 id */
+
+  /* ---------- 数据层（与 vT2 同构） ---------- */
+  function tcLoad() { try { var o = JSON.parse(localStorage.getItem(TC_STORE) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} } }
+  function tcSave(db) { try { localStorage.setItem(TC_STORE, JSON.stringify(db)) } catch (e) {} }
+  function tcRows(tid) { var db = tcLoad(); return Array.isArray(db[tid]) ? db[tid] : [] }
+  function tcGet(tid, id) { var a = tcRows(tid); for (var i = 0; i < a.length; i++) if (a[i] && a[i].id === id) return a[i]; return null }
+  function tcUpsert(tid, rec) {
+    if (!rec || !rec.id) return;
+    rec.ts = rec.ts || Date.now();
+    rec.updatedAt = rec.updatedAt || new Date().toISOString();
+    rec.updatedBy = rec.updatedBy || 'teacher';
+    var db = tcLoad(), a = Array.isArray(db[tid]) ? db[tid] : [], hit = false;
+    for (var i = 0; i < a.length; i++) if (a[i] && a[i].id === rec.id) { a[i] = rec; hit = true; break }
+    if (!hit) a.push(rec);
+    db[tid] = a; tcSave(db); tcChanged();
+  }
+  function tcLww(local, remote) {
+    var out = {}, order = [];
+    function put(r) { if (!r || !r.id) return; var cur = out[r.id]; if (!cur) { out[r.id] = r; order.push(r.id); return } if ((Number(r.ts) || 0) > (Number(cur.ts) || 0)) out[r.id] = r; }
+    (Array.isArray(local) ? local : []).forEach(put);
+    (Array.isArray(remote) ? remote : []).forEach(put);
+    return order.map(function (k) { return out[k] });
+  }
+  function tcChanged() { try { syncScheduleSoon() } catch (e) {} try { if (window.mqttPublishSignal) window.mqttPublishSignal() } catch (e) {} }
+
+  /* 快照：学生名单 / 作业 / 成绩（直接来自同步文档，最实时） */
+  function tcSnap(key) { var db = tcLoad(); return Array.isArray(db['snap_' + key]) ? db['snap_' + key] : [] }
+  function tcSnapSet(key, arr) { var db = tcLoad(); db['snap_' + key] = arr; tcSave(db) }
+  function tcDigest(rt) {
+    if (!rt) return;
+    var db = tcLoad();
+    if (Array.isArray(rt['students']) && rt['students'].length) {
+      tcSnapSet('students', rt['students'].slice(0, 200).map(function (r) {
+        return { no: r.no || r['学号'] || '', name: String(r.name || r['姓名'] || ''), group: r.group || r['组别'] || '' };
+      }).filter(function (x) { return x.name }));
+    }
+    /* 作业/成绩各留最近 800 条 */
+    ['hw', 'scores'].forEach(function (k) {
+      var arr = Array.isArray(rt[k]) ? rt[k] : [];
+      if (!arr.length) return;
+      var rows = arr.map(function (r) {
+        if (!r) return null;
+        if (k === 'hw') return { name: r.name || '', item: r.item || '', date: String(r.date || '').slice(0, 10), level: r.level || '', subject: r.subject || '', by: r.by || '', ts: Number(r.ts) || 0 };
+        return { name: r.name || '', no: r.no || '', subject: r.subject || '', exam: r.exam || '', score: Number(r.score) || 0, full: Number(r.full) || 100, date: String(r.date || '').slice(0, 10), by: r.by || '', ts: Number(r.ts) || 0 };
+      }).filter(Boolean);
+      rows.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0) });
+      tcSnapSet(k, rows.slice(0, 800));
+    });
+    return db;
+  }
+
+  /* ---------- 同步钩子包装（在 vT2 之后执行） ---------- */
+  var _pull = window.ntPullRemote, _fill = window.ntFillOut;
+  window.ntPullRemote = function (rt) {
+    try {
+      if (rt) {
+        var db = tcLoad(), ch = false;
+        TC_KEYS.forEach(function (k) {
+          var rv = rt[k];
+          if (!Array.isArray(rv) || !rv.length) return;
+          var merged = tcLww(db[k], rv);
+          if (JSON.stringify(merged) !== JSON.stringify(db[k] || [])) { db[k] = merged; ch = true }
+        });
+        if (ch) tcSave(db);
+        tcDigest(rt);
+      }
+    } catch (e) {}
+    if (_pull) return _pull(rt);
+  };
+  window.ntFillOut = function (out, rt) {
+    if (_fill) _fill(out, rt);
+    try {
+      if (!out) return;
+      var rt2 = rt || {};
+      TC_KEYS.forEach(function (k) {
+        var merged = tcLww(tcRows(k), Array.isArray(rt2[k]) ? rt2[k] : []);
+        if (merged.length) out.tables[k] = merged;
+      });
+    } catch (e) {}
+  };
+
+  /* ---------- 通用 ---------- */
+  function pad2(n) { return (n < 10 ? '0' : '') + n }
+  function tcToday() { var d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) }
+  function tcNow() { var d = new Date(); return tcToday() + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
+  function $(id) { return document.getElementById(id) }
+  function val(id) { var e = $(id); return e ? String(e.value || '').trim() : '' }
+  function tcHash(s) { var h = 5381, i = String(s || '').length; while (i) h = (h * 33) ^ String(s).charCodeAt(--i); return (h >>> 0).toString(36) }
+
+  /* ---------- 数据源（优先本机 Bitable，回退同步快照） ---------- */
+  function tcStuRows() {
+    var out = [];
+    try {
+      (typeof ST_ROWS !== 'undefined' ? ST_ROWS : []).forEach(function (r) {
+        var n = (typeof fval === 'function') ? fval(r, '姓名') : (r['姓名'] || r.name);
+        if (n) out.push({ no: String((typeof fval === 'function' ? fval(r, '学号') : r['学号']) || ''), name: String(n), group: String((typeof fval === 'function' ? fval(r, '组别') : r['组别']) || '') });
+      });
+    } catch (e) {}
+    if (!out.length) tcSnap('students').forEach(function (r) { if (r && r.name) out.push({ no: String(r.no || ''), name: String(r.name), group: String(r.group || '') }) });
+    return out;
+  }
+  function tcHwRows() {
+    var out = [];
+    try {
+      (typeof HW_ROWS !== 'undefined' ? HW_ROWS : []).forEach(function (r) {
+        out.push({
+          name: String(fval(r, '学生姓名') || ''), item: String(fval(r, '作业名称') || ''),
+          date: String(fval(r, '日期') || '').slice(0, 10), level: String(fval(r, '等级') || ''),
+          subject: String(fval(r, '科目') || ''), by: String(fval(r, '登记人') || '')
+        });
+      });
+    } catch (e) {}
+    if (!out.length) {
+      tcSnap('hw').forEach(function (r) { if (r) out.push({ name: r.name || '', item: r.item || '', date: String(r.date || '').slice(0, 10), level: r.level || '', subject: r.subject || '', by: r.by || '' }) });
+    }
+    return out;
+  }
+  function tcScoreRows() {
+    var out = [];
+    try {
+      (typeof SC_ROWS !== 'undefined' ? SC_ROWS : []).forEach(function (r) {
+        out.push({
+          name: String(fval(r, '学生姓名') || ''), no: String(fval(r, '学号') || ''),
+          subject: String(fval(r, '科目') || ''), exam: String(fval(r, '考试名称') || ''),
+          score: Number(fval(r, '分数')) || 0, full: Number(fval(r, '满分')) || 100,
+          date: String(fval(r, '考试日期') || '').slice(0, 10), by: String(fval(r, '登记人') || '')
+        });
+      });
+    } catch (e) {}
+    if (!out.length) {
+      tcSnap('scores').forEach(function (r) { if (r) out.push({ name: r.name || '', no: r.no || '', subject: r.subject || '', exam: r.exam || '', score: Number(r.score) || 0, full: Number(r.full) || 100, date: String(r.date || '').slice(0, 10), by: r.by || '' }) });
+    }
+    return out;
+  }
+  function tcHwItems() {
+    var m = {}, out = [];
+    function put(n, d) { var k = n + '|' + d; if (!m[k]) { m[k] = 1; out.push({ name: n, date: d }) } }
+    try {
+      (typeof HW_ITEMS !== 'undefined' ? HW_ITEMS : []).forEach(function (r) {
+        var n = fval(r, '作业名称') || r.item || r.name, d = String(fval(r, '日期') || r.date || '').slice(0, 10);
+        if (n) put(String(n), d);
+      });
+    } catch (e) {}
+    tcHwRows().forEach(function (r) { if (r.item) put(r.item, r.date) });
+    out.sort(function (a, b) { return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0) });
+    return out;
+  }
+
+  /* ---------- ① 教师账号 ---------- */
+  window.teachSwitch = function (kind) {
+    var map = { acc: 'tcPaneAcc', feed: 'tcPaneFeed', exp: 'tcPaneExp', spk: 'tcPaneSpk' };
+    Object.keys(map).forEach(function (k) { var e = $(map[k]); if (e) e.style.display = (k === kind) ? '' : 'none' });
+    ['acc', 'feed', 'exp', 'spk'].forEach(function (k) {
+      var b = $('tcTab' + k.charAt(0).toUpperCase() + k.slice(1));
+      if (b) b.className = (k === kind) ? 'btn2 primary' : 'btn2';
+    });
+    if (kind === 'acc') teachRender();
+    if (kind === 'feed') { teachFillFeedSel(); teachRenderFeed(); }
+    if (kind === 'exp') teachRenderExp();
+    if (kind === 'spk') { teachFillSpkSel(); teachBuildSpeak(); teachRenderSpkHist(); }
+  };
+  function teachTeachers() { return tcRows('s-teachers').filter(function (t) { return t && t.id }) }
+  window.teachRender = function () {
+    var list = teachTeachers();
+    var box = $('tcList');
+    if (!box) return;
+    if (!list.length) { box.innerHTML = '<div class="sub">还没有科任教师账号。下面填姓名和科目，点保存即可。</div>'; return }
+    var h = '<table class="tc-tbl"><tr><th>姓名</th><th>科目</th><th>登录码</th><th>权限</th><th>状态</th><th>操作</th></tr>';
+    list.forEach(function (t) {
+      var p = t.perm || {};
+      var tags = (p.hw ? '<span class="tc-tag">作业</span>' : '') + (p.sc ? '<span class="tc-tag">成绩</span>' : '') +
+        (p.nt ? '<span class="tc-tag">通知</span>' : '') + (p.spk ? '<span class="tc-tag">播报</span>' : '') +
+        (p.view ? '<span class="tc-tag">看全班</span>' : '');
+      h += '<tr><td><b>' + esc(t.name) + '</b></td><td>' + esc(t.subject) + '</td><td><code>' + esc(t.code) + '</code></td><td>' + tags +
+        '</td><td>' + (t.state === 'off' ? '<span class="tc-tag off">已停用</span>' : '<span class="tc-tag">启用</span>') +
+        '</td><td><button class="btn2" onclick="teachEdit(\'' + esc(t.id) + '\')">改</button> ' +
+        '<button class="btn2" onclick="teachToggle(\'' + esc(t.id) + '\')">' + (t.state === 'off' ? '启用' : '停用') + '</button> ' +
+        '<button class="btn2" onclick="teachDel(\'' + esc(t.id) + '\')">删</button></td></tr>';
+    });
+    box.innerHTML = h + '</table>';
+    /* 二维码下拉 */
+    var sel = $('tcQrWho');
+    if (sel) {
+      var keep = sel.value;
+      sel.innerHTML = list.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.name + ' · ' + t.subject) + '</option>' }).join('');
+      if (keep) sel.value = keep;
+    }
+  };
+  window.teachGenCode = function () {
+    var c = '';
+    for (var i = 0; i < 5; i++) c += Math.floor(Math.random() * 10);
+    $('tcCode').value = c;
+  };
+  window.teachSave = function () {
+    var name = val('tcName'), subj = val('tcSubj'), code = val('tcCode');
+    var msg = $('tcEditMsg');
+    if (!name) { msg.textContent = '⚠️ 请填姓名'; return }
+    if (!subj) { msg.textContent = '⚠️ 请填科目'; return }
+    if (!code) { msg.textContent = '⚠️ 请填登录码（或点生成）'; return }
+    var dup = teachTeachers().filter(function (t) { return t.code === code && t.id !== TC_EDIT });
+    if (dup.length) { msg.textContent = '⚠️ 登录码重复了'; return }
+    var rec = {
+      id: TC_EDIT || ('t_' + Date.now().toString(36) + Math.floor(Math.random() * 90 + 10)),
+      name: name, subject: subj, code: code,
+      perm: { hw: $('tcP1').checked, sc: $('tcP2').checked, nt: $('tcP3').checked, spk: $('tcP4').checked, view: $('tcP5').checked },
+      state: 'on'
+    };
+    if (TC_EDIT) { var old = tcGet('s-teachers', TC_EDIT); if (old && old.state === 'off') rec.state = 'off' }
+    tcUpsert('s-teachers', rec);
+    TC_EDIT = null; teachCancelEdit();
+    msg.textContent = '✅ 已保存（同步后科任老师就能用）';
+    teachRender(); teachFillFeedSel();
+  };
+  window.teachEdit = function (id) {
+    var t = tcGet('s-teachers', id); if (!t) return;
+    TC_EDIT = id;
+    $('tcName').value = t.name || ''; $('tcSubj').value = t.subject || ''; $('tcCode').value = t.code || '';
+    var p = t.perm || {};
+    $('tcP1').checked = !!p.hw; $('tcP2').checked = !!p.sc; $('tcP3').checked = !!p.nt; $('tcP4').checked = !!p.spk; $('tcP5').checked = !!p.view;
+    $('tcEditMsg').textContent = '正在修改「' + t.name + '」，改完点保存';
+    $('tcName').focus();
+  };
+  window.teachCancelEdit = function () {
+    TC_EDIT = null;
+    ['tcName', 'tcSubj', 'tcCode'].forEach(function (k) { var e = $(k); if (e) e.value = '' });
+    ['tcP1', 'tcP2', 'tcP3', 'tcP4'].forEach(function (k) { var e = $(k); if (e) e.checked = true });
+    var e5 = $('tcP5'); if (e5) e5.checked = false;
+    var m = $('tcEditMsg'); if (m) m.textContent = '';
+  };
+  window.teachToggle = function (id) {
+    var t = tcGet('s-teachers', id); if (!t) return;
+    t.state = (t.state === 'off') ? 'on' : 'off';
+    tcUpsert('s-teachers', t); teachRender();
+  };
+  window.teachDel = function (id) {
+    var t = tcGet('s-teachers', id); if (!t) return;
+    if (!confirm('删除「' + t.name + '」的账号？已登记的数据不受影响。')) return;
+    var db = tcLoad(), a = tcRows('s-teachers').filter(function (x) { return x && x.id !== id });
+    db['s-teachers'] = a; tcSave(db); tcChanged(); teachRender(); teachFillFeedSel();
+  };
+
+  /* ---------- ② 二维码 ---------- */
+  window.teachQrKindSwitch = function () {
+    var k = val('tcQrKind');
+    var row = $('tcQrHwRow'); if (row) row.style.display = (k === 'hw') ? '' : 'none';
+  };
+  function tcQrPng(text) {
+    if (typeof ZXingWASM === 'undefined' || !ZXingWASM.writeBarcode) return Promise.reject(new Error('二维码库未加载'));
+    return ZXingWASM.writeBarcode({ format: 'QRCode', text: text, width: 512, height: 512 }).then(function (r) {
+      var b = r && r.image;
+      if (!b) throw new Error('没有生成图片');
+      return URL.createObjectURL(b);
+    });
+  }
+  var TC_QR_URL = '', TC_QR_LABEL = '';
+  window.teachMakeQr = function () {
+    var kind = val('tcQrKind'), text = '', label = '';
+    if (kind === 'tea') {
+      var t = tcGet('s-teachers', val('tcQrWho'));
+      if (!t) { $('tcQrText').textContent = '⚠️ 先选一位老师（若还没有账号，先在上面新增）'; return }
+      var p = t.perm || {};
+      var perm = (p.hw ? 1 : 0) + '' + (p.sc ? 1 : 0) + '' + (p.nt ? 1 : 0) + '' + (p.spk ? 1 : 0) + '' + (p.view ? 1 : 0);
+      text = 'WBTEA|' + t.code + '|' + t.name + '|' + t.subject + '|' + perm;
+      label = t.name + '（' + t.subject + '）的身份码 · 登录码 ' + t.code;
+    } else {
+      var item = val('tcQrHwName'), date = val('tcQrHwDate') || tcToday();
+      if (!item) { $('tcQrText').textContent = '⚠️ 先填作业名'; return }
+      text = 'WBHW1|' + item.replace(/\|/g, ' ') + '|' + date;
+      label = '作业登记码：' + item + '（' + date + '）';
+    }
+    TC_QR_LABEL = label + '\n登录码/内容：' + text;
+    $('tcQrText').innerHTML = '<b>' + esc(label) + '</b><br><code>' + esc(text) + '</code>';
+    tcQrPng(text).then(function (url) {
+      TC_QR_URL = url;
+      $('tcQr').innerHTML = '<img src="' + url + '" alt="二维码">';
+    }, function (err) {
+      TC_QR_URL = '';
+      $('tcQr').innerHTML = '<div class="sub">⚠️ 二维码生成失败（' + esc(err.message) + '）<br>可以把上面这串文字直接发给科任老师，在小程序里手输登录码也能用。</div>';
+    });
+  };
+  window.teachFillLastHw = function () {
+    var items = tcHwItems();
+    if (!items.length) { $('tcQrText').textContent = '还没有作业列，请手填'; return }
+    var last = items[items.length - 1];
+    $('tcQrHwName').value = last.name;
+    $('tcQrHwDate').value = last.date || tcToday();
+  };
+  /* 电脑接入码：身份码 + 设置码（含 Gitee 令牌）合成一串，
+     科任老师在电脑上打开 subject.html 粘贴即可登录，直写同一份云端数据 */
+  window.teachMakeAccess = function () {
+    var t = tcGet('s-teachers', val('tcQrWho'));
+    if (!t) { $('tcQrText').textContent = '⚠️ 先选一位老师'; return }
+    var s = null;
+    try { s = (typeof mpSyncSettings === 'function') ? mpSyncSettings() : null } catch (e) {}
+    if (!s || !s.gOwner || !s.gRepo || !s.gToken) { $('tcQrText').textContent = '⚠️ 请先在「数据同步」里配好 Gitee 三项设置'; return }
+    var p = t.perm || {};
+    var perm = (p.hw ? 1 : 0) + '' + (p.sc ? 1 : 0) + '' + (p.nt ? 1 : 0) + '' + (p.spk ? 1 : 0) + '' + (p.view ? 1 : 0);
+    var cfgB64 = '';
+    try { cfgB64 = b64eUtf(JSON.stringify({ owner: s.gOwner, repo: s.gRepo, token: s.gToken, path: s.gPath || 'wb_test_', classId: s.classId || 'c1' })) } catch (e) {}
+    var code = 'WBTEA|' + t.code + '|' + t.name + '|' + t.subject + '|' + perm + '|' + cfgB64;
+    var out = $('tcAccessOut'), row = $('tcAccessRow'), hint = $('tcAccessHint');
+    if (out) out.value = code;
+    if (row) row.style.display = '';
+    if (hint) hint.style.display = '';
+    $('tcQrText').textContent = '💻 已生成「' + t.name + '（' + t.subject + '）」的电脑接入码，复制后微信发给老师';
+  };
+  window.teachCopyAccess = function () {
+    var out = $('tcAccessOut');
+    if (!out || !out.value) { return }
+    if (window.wbCopyText) window.wbCopyText(out.value);
+    $('tcQrText').textContent = '✅ 接入码已复制，去微信粘贴发给科任老师';
+  };
+  window.teachPrintQr = function () {    if (!TC_QR_URL) { alert('先点「生成二维码」'); return }
+    var w = window.open('', '_blank', 'width=520,height=640');
+    if (!w) { alert('浏览器拦截了弹窗，请允许后重试'); return }
+    var d = w.document;
+    d.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>打印二维码</title>' +
+      '<style>body{font-family:-apple-system,"Microsoft YaHei",sans-serif;text-align:center;padding:24px}' +
+      'img{width:320px;height:320px}.l{font-size:20px;font-weight:700;margin-bottom:6px}' +
+      '.s{font-size:13px;color:#666;margin-top:10px;white-space:pre-wrap}</style></head><body>' +
+      '<div class="l">' + esc(TC_QR_LABEL.split('\n')[0]) + '</div>' +
+      '<img src="' + TC_QR_URL + '">' +
+      '<div class="s">' + esc(TC_QR_LABEL) + '\n用微信小程序里的「扫码」扫这张码</div>' +
+      '<script>setTimeout(function(){window.print()},400)<\/script></body></html>');
+    d.close();
+  };
+
+  /* ---------- ③ 登记动态 ---------- */
+  function teachFillFeedSel() {
+    var ts = teachTeachers();
+    var sel = $('tcFeedWho');
+    if (sel) {
+      var keep = sel.value;
+      sel.innerHTML = '<option value="">全部教师</option>' + ts.map(function (t) { return '<option value="' + esc(t.name) + '">' + esc(t.name + ' · ' + t.subject) + '</option>' }).join('') + '<option value="__none__">未署名（班主任/教室端）</option>';
+      if (keep) sel.value = keep;
+    }
+    var subs = {};
+    ts.forEach(function (t) { if (t.subject) subs[t.subject] = 1 });
+    tcHwRows().forEach(function (r) { if (r.subject) subs[r.subject] = 1 });
+    tcScoreRows().forEach(function (r) { if (r.subject) subs[r.subject] = 1 });
+    var s2 = $('tcFeedSubj');
+    if (s2) {
+      var k2 = s2.value;
+      s2.innerHTML = '<option value="">全部科目</option>' + Object.keys(subs).map(function (s) { return '<option value="' + esc(s) + '">' + esc(s) + '</option>' }).join('');
+      if (k2) s2.value = k2;
+    }
+  }
+  window.teachRenderFeed = function () {
+    var box = $('tcFeed'); if (!box) return;
+    var who = val('tcFeedWho'), subj = val('tcFeedSubj'), type = val('tcFeedType'), days = Number(val('tcFeedDays') || 7);
+    var lim = days > 0 ? (Date.now() - days * 86400000) : 0;
+    var rows = [];
+    tcHwRows().forEach(function (r) {
+      if (!r.name || !r.item) return;
+      if (subj && r.subject !== subj) return;
+      if (who === '__none__' ? !!r.by : (who && r.by !== who)) return;
+      rows.push({ t: 'hw', who: r.by || '（未署名）', subj: r.subject || '', name: r.name, what: r.item, ext: r.level || '', date: r.date, ts: 0 });
+    });
+    tcScoreRows().forEach(function (r) {
+      if (!r.name || !r.subject) return;
+      if (subj && r.subject !== subj) return;
+      if (who === '__none__' ? !!r.by : (who && r.by !== who)) return;
+      rows.push({ t: 'sc', who: r.by || '（未署名）', subj: r.subject, name: r.name, what: r.exam || '', ext: String(r.score), date: r.date, ts: 0 });
+    });
+    /* 快照里带 ts 的优先用于排序 */
+    if (type === 'hw') rows = rows.filter(function (x) { return x.t === 'hw' });
+    if (type === 'sc') rows = rows.filter(function (x) { return x.t === 'sc' });
+    if (!rows.length) { box.innerHTML = '<div class="sub">这个条件下还没有登记记录。</div>'; return }
+    var cnt = {};
+    rows.forEach(function (r) { var k = r.who + '|' + r.subj + '|' + r.t + '|' + r.what + '|' + r.date; cnt[k] = (cnt[k] || 0) + 1 });
+    var agg = Object.keys(cnt).map(function (k) { var p = k.split('|'); return { who: p[0], subj: p[1], t: p[2], what: p[3], date: p[4], n: cnt[k] } });
+    agg.sort(function (a, b) { return a.date < b.date ? 1 : -1 });
+    var h = '<table class="tc-tbl"><tr><th>日期</th><th>登记人</th><th>科目</th><th>类型</th><th>内容</th><th>条数</th></tr>';
+    agg.slice(0, 120).forEach(function (a) {
+      h += '<tr><td>' + esc(a.date || '-') + '</td><td>' + esc(a.who) + '</td><td>' + esc(a.subj || '-') + '</td><td>' +
+        (a.t === 'hw' ? '作业' : '成绩') + '</td><td>' + esc(a.what) + '</td><td>' + a.n + '</td></tr>';
+    });
+    box.innerHTML = h + '</table><div class="tc-hint">共 ' + rows.length + ' 条登记记录（按 人/科目/内容 汇总显示）。</div>';
+  };
+
+  /* ---------- ④ 成绩导出 ---------- */
+  window.teachRenderExp = function () {
+    var rows = tcScoreRows();
+    var subs = {}; rows.forEach(function (r) { if (r.subject) subs[r.subject] = 1 });
+    teachTeachers().forEach(function (t) { if (t.subject) subs[t.subject] = 1 });
+    var sSel = $('tcExpSubj');
+    if (sSel) {
+      var k = sSel.value;
+      sSel.innerHTML = Object.keys(subs).map(function (s) { return '<option value="' + esc(s) + '">' + esc(s) + '</option>' }).join('') || '<option value="">（暂无）</option>';
+      if (k) sSel.value = k;
+    }
+    var subj = val('tcExpSubj');
+    var exams = {}; rows.forEach(function (r) { if (r.subject === subj && r.exam) exams[r.exam] = 1 });
+    var eSel = $('tcExpExam');
+    if (eSel) {
+      var k2 = eSel.value;
+      eSel.innerHTML = Object.keys(exams).map(function (s) { return '<option value="' + esc(s) + '">' + esc(s) + '</option>' }).join('') || '<option value="">（暂无）</option>';
+      if (k2) eSel.value = k2;
+    }
+    var box = $('tcExpView');
+    if (!box) return;
+    if ($('tcExpAll') && $('tcExpAll').checked) {
+      /* 汇总表：每人一行，每科一列（取该科最近一次考试） */
+      var stus = tcStuRows(), subjList = Object.keys(subs);
+      var cell = {};
+      rows.forEach(function (r) {
+        if (!r.name || !r.subject) return;
+        var k = r.name + '|' + r.subject;
+        if (!cell[k] || (r.date || '') >= (cell[k].date || '')) cell[k] = r;
+      });
+      var h = '<table class="tc-tbl"><tr><th>学号</th><th>姓名</th>';
+      subjList.forEach(function (s) { h += '<th>' + esc(s) + '</th>' });
+      h += '<th>平均分</th></tr>';
+      stus.forEach(function (s) {
+        h += '<tr><td>' + esc(s.no) + '</td><td>' + esc(s.name) + '</td>';
+        var sum = 0, n = 0;
+        subjList.forEach(function (sb) {
+          var r = cell[s.name + '|' + sb];
+          h += '<td>' + (r ? esc(String(r.score)) : '') + '</td>';
+          if (r) { sum += Number(r.score) || 0; n++ }
+        });
+        h += '<td>' + (n ? (sum / n).toFixed(1) : '') + '</td></tr>';
+      });
+      box.innerHTML = h + '</table>';
+    } else {
+      var exam = val('tcExpExam');
+      var list = rows.filter(function (r) { return r.subject === subj && (!exam || r.exam === exam) });
+      if (!list.length) { box.innerHTML = '<div class="sub">没有可显示的成绩。</div>'; return }
+      var h2 = '<table class="tc-tbl"><tr><th>学号</th><th>姓名</th><th>科目</th><th>考试</th><th>分数</th><th>满分</th><th>得分率</th><th>日期</th><th>登记人</th></tr>';
+      list.sort(function (a, b) { return (parseInt(a.no, 10) || 999) - (parseInt(b.no, 10) || 999) });
+      list.forEach(function (r) {
+        h2 += '<tr><td>' + esc(r.no) + '</td><td>' + esc(r.name) + '</td><td>' + esc(r.subject) + '</td><td>' + esc(r.exam) +
+          '</td><td>' + esc(String(r.score)) + '</td><td>' + esc(String(r.full)) + '</td><td>' +
+          (r.full ? (Number(r.score) / Number(r.full) * 100).toFixed(1) + '%' : '') + '</td><td>' + esc(r.date) + '</td><td>' + esc(r.by || '') + '</td></tr>';
+      });
+      box.innerHTML = h2 + '</table>';
+    }
+  };
+  function tcCsvCell(v) { var s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+  function tcDownload(name, text) {
+    var blob = new Blob(['\ufeff' + text], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a) }, 600);
+  }
+  window.teachExportCsv = function () {
+    var rows = tcScoreRows();
+    var lines = [], name;
+    if ($('tcExpAll') && $('tcExpAll').checked) {
+      var subs = {}; rows.forEach(function (r) { if (r.subject) subs[r.subject] = 1 });
+      teachTeachers().forEach(function (t) { if (t.subject) subs[t.subject] = 1 });
+      var subjList = Object.keys(subs), cell = {};
+      rows.forEach(function (r) {
+        if (!r.name || !r.subject) return;
+        var k = r.name + '|' + r.subject;
+        if (!cell[k] || (r.date || '') >= (cell[k].date || '')) cell[k] = r;
+      });
+      lines.push(['学号', '姓名'].concat(subjList).concat(['平均分']).map(tcCsvCell).join(','));
+      tcStuRows().forEach(function (s) {
+        var line = [s.no, s.name], sum = 0, n = 0;
+        subjList.forEach(function (sb) { var r = cell[s.name + '|' + sb]; line.push(r ? r.score : ''); if (r) { sum += Number(r.score) || 0; n++ } });
+        line.push(n ? (sum / n).toFixed(1) : '');
+        lines.push(line.map(tcCsvCell).join(','));
+      });
+      name = '成绩汇总_' + tcToday() + '.csv';
+    } else {
+      var subj = val('tcExpSubj'), exam = val('tcExpExam');
+      var list = rows.filter(function (r) { return r.subject === subj && (!exam || r.exam === exam) });
+      if (!list.length) { $('tcExpMsg').textContent = '⚠️ 没有可导出的成绩'; return }
+      list.sort(function (a, b) { return (parseInt(a.no, 10) || 999) - (parseInt(b.no, 10) || 999) });
+      lines.push(['学号', '姓名', '科目', '考试', '分数', '满分', '得分率', '考试日期', '登记人'].map(tcCsvCell).join(','));
+      list.forEach(function (r) {
+        lines.push([r.no, r.name, r.subject, r.exam, r.score, r.full, (r.full ? (Number(r.score) / Number(r.full) * 100).toFixed(1) + '%' : ''), r.date, r.by || ''].map(tcCsvCell).join(','));
+      });
+      name = '成绩_' + (subj || '全科') + '_' + (exam || '') + '_' + tcToday() + '.csv';
+    }
+    tcDownload(name, lines.join('\r\n'));
+    $('tcExpMsg').textContent = '✅ 已导出 ' + (lines.length - 1) + ' 行：' + name;
+  };
+  window.teachCopyExp = function () {
+    var box = $('tcExpView'); if (!box) return;
+    var text = box.innerText || '';
+    if (!text.trim()) { $('tcExpMsg').textContent = '⚠️ 没有内容'; return }
+    if (window.wbCopyText) window.wbCopyText(text);
+    $('tcExpMsg').textContent = '✅ 已复制，可直接粘到 Excel / 微信';
+  };
+
+  /* ---------- ⑤ 播报（只播未交作业名单） ---------- */
+  function teachFillSpkSel() {
+    var sel = $('tcSpkHw'); if (!sel) return;
+    var items = tcHwItems();
+    var keep = sel.value;
+    sel.innerHTML = items.length
+      ? items.map(function (it) { return '<option value="' + esc(it.name + '|' + it.date) + '">' + esc(it.name + ' · ' + it.date) + '</option>' }).join('')
+      : '<option value="">（还没有作业列）</option>';
+    if (keep) sel.value = keep;
+  }
+  window.teachBuildSpeak = function () {
+    var sel = $('tcSpkHw'); if (!sel) return;
+    var v = val('tcSpkHw'), p = v.split('|');
+    var item = p[0] || '', date = p.slice(1).join('|') || tcToday();
+    var box = $('tcSpkText'); if (!box) return;
+    if (!item) { box.value = '（还没有作业列，先在「作业」里建一次作业）'; return }
+    var done = {};
+    tcHwRows().forEach(function (r) { if (r.item === item && r.date === date && r.name) done[r.name] = 1 });
+    var all = tcStuRows().map(function (s) { return s.name });
+    var undone = all.filter(function (n) { return !done[n] });
+    var maxN = Number(val('tcSpkMax')) || 0;
+    var text;
+    if (!undone.length) {
+      text = '今天「' + item + '」全班同学都已交齐，非常好。';
+    } else {
+      var list = maxN ? undone.slice(0, maxN) : undone;
+      text = '提醒：' + item + ' 还有 ' + undone.length + ' 位同学没交：' + list.join('、') + '。请尽快补交。';
+    }
+    box.value = text;
+  };
+  window.teachSendSpeak = function () {
+    var v = val('tcSpkHw'), p = v.split('|');
+    var item = p[0] || '作业', date = p.slice(1).join('|') || tcToday();
+    var text = (val('tcSpkText') || '').trim();
+    if (!text) { alert('没有播报内容'); return }
+    var subj = '';
+    tcHwRows().forEach(function (r) { if (!subj && r.item === item) subj = r.subject || '' });
+    if (!subj) {
+      var ts = teachTeachers();
+      for (var i = 0; i < ts.length; i++) { if (item.indexOf(ts[i].subject) >= 0) { subj = ts[i].subject; break } }
+    }
+    var id = 'spk_' + String(date).replace(/-/g, '') + '_' + tcHash(item);
+    tcUpsert('s-speak', {
+      id: id, '类型': '未交名单', '科目': subj, '作业': item, '日期': date,
+      '文本': text, '状态': '待播报', '时间': tcNow(), '发起人': '班主任'
+    });
+    teachRenderSpkHist();
+    alert('已下发到教室桌面，几秒内会语音播报。');
+  };
+  window.teachSpeakPreview = function () {
+    var text = (val('tcSpkText') || '').trim();
+    if (!text) return;
+    try {
+      if (!window.speechSynthesis) { alert('当前浏览器不支持试听'); return }
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-CN'; u.rate = 1;
+      window.speechSynthesis.speak(u);
+    } catch (e) { alert('试听失败：' + e.message) }
+  };
+  window.teachRenderSpkHist = function () {
+    var box = $('tcSpkHist'); if (!box) return;
+    var rows = tcRows('s-speak').slice().sort(function (a, b) { return (Number(b.ts) || 0) - (Number(a.ts) || 0) }).slice(0, 10);
+    if (!rows.length) { box.innerHTML = '<div class="sub">还没有下发过播报。</div>'; return }
+    var h = '<table class="tc-tbl"><tr><th>时间</th><th>科目</th><th>作业</th><th>内容</th><th>状态</th></tr>';
+    rows.forEach(function (r) {
+      h += '<tr><td>' + esc(r['时间'] || '') + '</td><td>' + esc(r['科目'] || '') + '</td><td>' + esc(r['作业'] || '') +
+        '</td><td>' + esc(r['文本'] || '') + '</td><td>' + esc(r['状态'] || '') + '</td></tr>';
+    });
+    box.innerHTML = h + '</table>';
+  };
+
+  /* ---------- 初始化 ---------- */
+  var TC_READY = false;
+  function teachInit() {
+    if (TC_READY) return;
+    if (!$('tcList')) return;
+    TC_READY = true;
+    var d = $('tcQrHwDate'); if (d && !d.value) d.value = tcToday();
+    teachRender(); teachFillFeedSel(); teachFillSpkSel(); teachQrKindSwitch(); teachSwitch('acc');
+  }
+  setTimeout(function () { try { teachInit() } catch (e) {} }, 900);
+  if (!window.__WB_TC_TICK__) {
+    window.__WB_TC_TICK__ = setInterval(function () {
+      var active = document.querySelector('section.section.active');
+      if (!active || active.id !== 's-teach') return;
+      try { teachInit() } catch (e) {}
+      try { if (window.ntAfterSync) { /* 数据变化后顺带刷新当前面板 */ } } catch (e) {}
+    }, 5000);
+  }
+  window.teachInit = teachInit;
+  window.tcRows = tcRows;
+  window.tcUpsert = tcUpsert;
 })();
 </script>
 </body>
