@@ -1225,6 +1225,7 @@ table.paper td.l{text-align:left;font-weight:600}
     <button data-s="rota">🧹 <span class="lbl">值日安排</span><span class="new">新</span></button>
     <button data-s="notice">📢 <span class="lbl">通知中心</span><span class="new">新</span></button>
     <button data-s="desk">🖥️ <span class="lbl">教室桌面</span><span class="new">新</span></button>
+    <button data-s="comment">✍️ <span class="lbl">学生评语</span><span class="new">新</span></button>
 
     <div class="navgrp">科任教师</div>
     <button data-s="teach">👩‍🏫 <span class="lbl">科任教师</span><span class="new">新</span></button>
@@ -1884,6 +1885,79 @@ table.paper td.l{text-align:left;font-weight:600}
     <div class="card">
       <h3>🕘 最近通知（30 条）</h3>
       <div id="noticeHistory"></div>
+    </div>
+  </section>
+
+  <!-- ============ vT14 学生评语 ============ -->
+  <section class="section" id="s-comment">
+    <h2>学生评语</h2>
+    <div class="sub">按主题（哪吒 / 西游记 / 小王子……）管理评语模板，逐个或批量生成评语，支持 AI 生成与模板拼装，可导出 Word / Excel。评语结果自动云同步。</div>
+    <style>
+      #s-comment .cm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:9px;margin-top:8px}
+      #s-comment .cm-item{border:1px solid #dfe9e2;border-radius:10px;padding:8px 10px;background:#fbfdfc}
+      #s-comment .cm-item textarea{width:100%;min-height:96px;border:1px solid #dfe9e2;border-radius:8px;padding:6px 8px;font-size:13px;line-height:1.6;resize:vertical;box-sizing:border-box;font-family:inherit}
+      #s-comment .cm-item textarea:focus{outline:2px solid #bcd9c9}
+      #s-comment .cm-stu{display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed #eef3ef}
+      #s-comment .cm-stu:last-child{border-bottom:none}
+      #s-comment .cm-stu label{width:64px;flex-shrink:0;font-size:13.5px;cursor:pointer}
+      #s-comment .cm-stu input[type=text]{flex:1;min-width:0;border:1px solid #dfe9e2;border-radius:7px;padding:4px 8px;font-size:12.5px}
+      #s-comment .cm-stu .cm-has{font-size:11px;color:#2d7a4f;flex-shrink:0}
+    </style>
+    <div class="card">
+      <h3>📚 模板库</h3>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">
+        <span>主题：</span>
+        <select id="cmThemeSel" onchange="cmThemeRender()" style="min-width:130px"></select>
+        <input type="text" id="cmThemeNew" placeholder="新主题名，如：小王子" style="width:150px">
+        <button class="btn2" onclick="cmThemeAdd()">➕ 新建主题</button>
+        <button class="btn2 ghost" style="color:#b91c1c" onclick="cmThemeDel()">🗑️ 删除当前主题</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+        <label class="btn2" style="cursor:pointer">📥 导入模板（txt / csv / xlsx，每行一条）
+          <input type="file" id="cmTplFile" accept=".txt,.csv,.xlsx,.xls" style="display:none" onchange="cmImportTpl(event)">
+        </label>
+        <span class="sub" id="cmTplCount"></span>
+      </div>
+      <textarea id="cmTplText" placeholder="每行一条模板。可用占位符：{姓名} {特点}&#10;导入后可在这里直接修改，点「保存模板」生效" style="width:100%;min-height:130px;margin-top:8px;border:1px solid #dfe9e2;border-radius:8px;padding:8px;font-size:12.5px;line-height:1.6;box-sizing:border-box;font-family:inherit"></textarea>
+      <div style="margin-top:8px"><button class="btn2 primary" onclick="cmTplSaveText()">💾 保存模板</button></div>
+    </div>
+    <div class="card">
+      <h3>🎓 选择学生</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 2px">
+        <button class="btn2 sm" onclick="cmSelAll(true)">全选</button>
+        <button class="btn2 sm ghost" onclick="cmSelAll(false)">清空</button>
+        <span class="sub">每行可填学生特点（性格 / 爱好 / 近期表现），生成时用</span>
+      </div>
+      <div id="cmStuList"></div>
+    </div>
+    <div class="card">
+      <h3>✨ 生成评语</h3>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:4px 0">
+        <span>篇幅：</span>
+        <select id="cmLen"><option value="80">短（约 80 字）</option><option value="120" selected>中（约 120 字）</option><option value="180">长（约 180 字）</option></select>
+        <button class="btn2 primary" id="cmAiBtn" onclick="cmGenAI()">🤖 AI 生成（勾选的学生）</button>
+        <button class="btn2" onclick="cmGenTpl()">🎲 模板拼装（勾选的学生）</button>
+      </div>
+      <div class="sub" id="cmGenMsg" style="margin-top:6px"></div>
+      <details style="margin-top:10px" id="cmAiBox">
+        <summary style="cursor:pointer;font-size:13px;color:#2d5a45">⚙️ AI 接口设置（OpenAI 兼容格式，填一次记住）</summary>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
+          <input type="text" id="cmAiUrl" placeholder="接口地址，如 https://api.xx.com/v1" style="width:250px">
+          <input type="password" id="cmAiKey" placeholder="API Key" style="width:180px">
+          <input type="text" id="cmAiModel" placeholder="模型名，如 gpt-4o-mini" style="width:170px">
+          <button class="btn2" onclick="cmAiSave()">💾 保存</button>
+          <button class="btn2 ghost" onclick="cmAiTest()">🔍 测试连通</button>
+        </div>
+        <div class="sub" id="cmAiMsg" style="margin-top:6px">提示：填 OpenAI 兼容接口（地址 + 密钥 + 模型名）。接口需允许浏览器跨域调用；生成失败时可用「模板拼装」兜底。</div>
+      </details>
+    </div>
+    <div class="card">
+      <h3>📝 评语结果 <span class="sub" id="cmResCount"></span></h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 6px">
+        <button class="btn2 primary" onclick="cmExportWord()">📄 导出 Word</button>
+        <button class="btn2" onclick="cmExportExcel()">📊 导出 Excel</button>
+      </div>
+      <div id="cmResultList"></div>
     </div>
   </section>
 
@@ -17954,6 +18028,7 @@ document.getElementById('nav').addEventListener('click',e=>{
   if(b.dataset.s==='home'){try{renderHome()}catch(e){console.error(e)}}
   if(b.dataset.s==='scan'){try{scnInit()}catch(e){console.error('[扫描] 初始化失败',e)}}
   if(b.dataset.s==='sync'){try{syncInit()}catch(e){console.error('[同步] 初始化失败',e)}}
+  if(b.dataset.s==='comment'){try{cmThemeRender()}catch(e){}try{cmRosterRender()}catch(e){}try{cmResultRender()}catch(e){}}   /* vT14 学生评语 */
   /* 2.0.6：每次进诵读页都重新拉一次。以前只在页面加载时拉一次，
      导入互传包 / 换了数据源之后切回来还是老画面（"导入了没变化"）。 */
   if(b.dataset.s==='recite'){try{if(typeof loadReciteFromDB==='function')loadReciteFromDB()}catch(e){console.error('[诵读] 刷新失败',e)}}
@@ -28772,7 +28847,7 @@ function cwInit(){
   if (window.__WB_NT_LOADED__) return; window.__WB_NT_LOADED__ = true;
 
   /* ---------- 数据层 ---------- */
-  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign'];   /* vT13 + s-assign 布置作业 */
+  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语 */
   var NT_STORE_KEY = 'wb_nt_v1';
   function ntLoad() {
     try { var o = JSON.parse(localStorage.getItem(NT_STORE_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} }
@@ -29165,6 +29240,353 @@ function cwInit(){
         '<button class="btn2 sm ghost" style="color:#c2410c" onclick="asDel(\'' + r.id + '\')">删</button></div>';
     }).join('') || '<div class="sub">这一天还没有布置作业</div>';
   };
+
+  /* ================= vT14 学生评语 ================= */
+  var CM_TPL_KEY = 'wb_cm_tpl_v1', CM_TRAIT_KEY = 'wb_cm_trait_v1', CM_AI_KEY = 'wb_cm_ai_v1';
+  function cmTplLoad() {
+    try { var o = JSON.parse(localStorage.getItem(CM_TPL_KEY) || 'null'); if (o && o.themes) return o } catch (e) {}
+    return { themes: {} };
+  }
+  function cmTplStore(db) { try { localStorage.setItem(CM_TPL_KEY, JSON.stringify(db)) } catch (e) {} }
+  function cmTraitLoad() { try { var o = JSON.parse(localStorage.getItem(CM_TRAIT_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} } }
+  function cmTraitStore(o) { try { localStorage.setItem(CM_TRAIT_KEY, JSON.stringify(o)) } catch (e) {} }
+  function cmAiCfg() { try { var o = JSON.parse(localStorage.getItem(CM_AI_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} } }
+  window.cmThemeSelRender = function () {
+    var sel = document.getElementById('cmThemeSel'); if (!sel) return;
+    var themes = Object.keys(cmTplLoad().themes);
+    var cur = sel.value;
+    sel.innerHTML = themes.length ? themes.map(function (t) { return '<option>' + esc(t) + '</option>' }).join('') : '<option value="">（还没有主题）</option>';
+    if (cur && themes.indexOf(cur) > -1) sel.value = cur;
+  };
+  window.cmThemeRender = function () { cmThemeSelRender(); cmTplTextRender(); };
+  window.cmThemeAdd = function () {
+    var inp = document.getElementById('cmThemeNew');
+    var name = (inp.value || '').trim();
+    if (!name) { toastMsg('⚠️ 先输入主题名'); return }
+    var db = cmTplLoad();
+    if (db.themes[name]) { toastMsg('⚠️ 主题已存在'); return }
+    db.themes[name] = []; cmTplStore(db);
+    inp.value = ''; cmThemeSelRender();
+    document.getElementById('cmThemeSel').value = name;
+    cmTplTextRender();
+    toastMsg('✅ 已创建主题「' + name + '」，可以导入或填写模板了');
+  };
+  window.cmThemeDel = function () {
+    var sel = document.getElementById('cmThemeSel'); var name = sel ? sel.value : '';
+    if (!name) return;
+    if (!confirm('删除主题「' + name + '」及其全部模板？（已生成的评语不受影响）')) return;
+    var db = cmTplLoad(); delete db.themes[name]; cmTplStore(db);
+    cmThemeRender(); toastMsg('已删除主题「' + name + '」');
+  };
+  window.cmImportTpl = function (ev) {
+    var f = ev.target.files && ev.target.files[0]; ev.target.value = '';
+    var sel = document.getElementById('cmThemeSel');
+    var theme = sel ? sel.value : '';
+    if (!theme) { toastMsg('⚠️ 先新建/选择一个主题再导入'); return }
+    if (!f) return;
+    var done = function (lines) {
+      lines = (lines || []).map(function (s) { return String(s).trim() }).filter(Boolean);
+      if (!lines.length) { toastMsg('⚠️ 没有从文件里读到有效内容'); return }
+      var db = cmTplLoad();
+      var old = db.themes[theme] || [];
+      var seen = {}; old.forEach(function (s) { seen[s] = 1 });
+      var add = lines.filter(function (s) { return !seen[s] });
+      db.themes[theme] = old.concat(add); cmTplStore(db);
+      cmTplTextRender();
+      toastMsg('✅ 已导入 ' + add.length + ' 条到「' + theme + '」' + (lines.length - add.length ? '（去重跳过 ' + (lines.length - add.length) + ' 条）' : ''));
+    };
+    if (/\.(xlsx|xls|csv)$/i.test(f.name)) {
+      wbParseExcel(f).then(function (aoa) {
+        var lines = [];
+        aoa.forEach(function (r) {
+          var cell = (r || []).filter(function (c) { return c }).join(' ');
+          if (cell) lines.push(cell);
+        });
+        done(lines);
+      }).catch(function (e) { toastMsg('❌ ' + e.message) });
+    } else {
+      var fr = new FileReader();
+      fr.onload = function () { done(String(fr.result || '').split(/\r?\n/)) };
+      fr.onerror = function () { toastMsg('❌ 文件读取失败') };
+      fr.readAsText(f, 'utf-8');
+    }
+  };
+  window.cmTplTextRender = function () {
+    var sel = document.getElementById('cmThemeSel'), ta = document.getElementById('cmTplText'), cnt = document.getElementById('cmTplCount');
+    if (!sel || !ta) return;
+    var theme = sel.value, arr = theme ? (cmTplLoad().themes[theme] || []) : [];
+    ta.value = arr.join('\n');
+    ta.disabled = !theme;
+    if (cnt) cnt.textContent = theme ? '「' + theme + '」共 ' + arr.length + ' 条模板' : '';
+  };
+  window.cmTplSaveText = function () {
+    var sel = document.getElementById('cmThemeSel'), ta = document.getElementById('cmTplText');
+    var theme = sel ? sel.value : '';
+    if (!theme) { toastMsg('⚠️ 先新建/选择一个主题'); return }
+    var arr = ta.value.split(/\r?\n/).map(function (s) { return s.trim() }).filter(Boolean);
+    var db = cmTplLoad(); db.themes[theme] = arr; cmTplStore(db);
+    cmTplTextRender();
+    toastMsg('💾 已保存「' + theme + '」' + arr.length + ' 条模板');
+  };
+  window.cmRosterRender = function () {
+    var box = document.getElementById('cmStuList'); if (!box) return;
+    var traits = cmTraitLoad();
+    var has = {}; ntRows('c-comment').forEach(function (r) { if (r && !r.deleted && r.text) has[r.name] = 1 });
+    box.innerHTML = stuRoster().map(function (s, i) {
+      var n = esc(s.姓名);
+      return '<div class="cm-stu"><input type="checkbox" class="cmChk" id="cmk' + i + '" value="' + n + '">' +
+        '<label for="cmk' + i + '">' + n + '</label>' +
+        '<input type="text" placeholder="特点：性格 / 爱好 / 近期表现（可空）" value="' + esc(traits[s.姓名] || '') + '" data-n="' + n + '" oninput="cmTraitSet(this)">' +
+        (has[s.姓名] ? '<span class="cm-has">✓已有</span>' : '') + '</div>';
+    }).join('') || '<div class="sub">名单为空：先在座位表 / 学生管理里登记学生</div>';
+  };
+  var __cmTraitTimer = {};
+  window.cmTraitSet = function (el) {
+    var n = el.getAttribute('data-n'); if (!n) return;
+    clearTimeout(__cmTraitTimer[n]);
+    __cmTraitTimer[n] = setTimeout(function () {
+      var o = cmTraitLoad();
+      if (el.value.trim()) o[n] = el.value.trim(); else delete o[n];
+      cmTraitStore(o);
+    }, 500);
+  };
+  window.cmSelAll = function (v) {
+    document.querySelectorAll('#cmStuList .cmChk').forEach(function (c) { c.checked = !!v });
+  };
+  function cmGather() {
+    var chks = Array.prototype.slice.call(document.querySelectorAll('#cmStuList .cmChk:checked'));
+    if (!chks.length) { toastMsg('⚠️ 先在上方勾选要生成评语的学生'); return null }
+    var traits = cmTraitLoad();
+    return chks.map(function (c) { return { name: c.value, trait: (traits[c.value] || '').trim() } });
+  }
+  function cmRec(name) {
+    var hit = null;
+    ntRows('c-comment').forEach(function (r) { if (r && r.name === name && !r.deleted) hit = r });
+    return hit;
+  }
+  function cmUpsert(name, theme, text, trait) {
+    var old = cmRec(name) || {};
+    ntUpsert('c-comment', {
+      id: 'cm_' + name, name: name, theme: theme || old.theme || '', text: text,
+      trait: (trait != null ? trait : (old.trait || '')), deleted: false,
+      ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher'
+    });
+  }
+  var __cmTextTimer = {};
+  window.cmTextSet = function (name, val) {
+    clearTimeout(__cmTextTimer[name]);
+    __cmTextTimer[name] = setTimeout(function () {
+      var old = cmRec(name);
+      cmUpsert(name, old ? old.theme : '', val, old ? old.trait : '');
+      ntChanged();
+    }, 700);
+  };
+  function cmByRoster(rows) {
+    var order = []; stuRoster().forEach(function (s) { order.push(s.姓名) });
+    return rows.sort(function (a, b) {
+      var ia = order.indexOf(a.name), ib = order.indexOf(b.name);
+      return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+    });
+  }
+  window.cmResultRender = function () {
+    var box = document.getElementById('cmResultList'); if (!box) return;
+    var rows = cmByRoster(ntRows('c-comment').filter(function (r) { return r && !r.deleted && r.text }));
+    var cnt = document.getElementById('cmResCount');
+    if (cnt) cnt.textContent = rows.length ? '（' + rows.length + ' 人）' : '';
+    box.innerHTML = rows.length ? ('<div class="cm-grid">' + rows.map(function (r) {
+      var n = esc(r.name);
+      return '<div class="cm-item"><div style="display:flex;gap:6px;align-items:center;margin-bottom:5px">' +
+        '<b style="font-size:14px">' + n + '</b>' +
+        (r.theme ? '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#e8f4ee;color:#2d5a45">' + esc(r.theme) + '</span>' : '') +
+        '<span style="flex:1"></span>' +
+        '<button class="btn2 sm ghost" onclick="cmRegenOne(\'' + n + '\')">↻ 重生成</button>' +
+        '<button class="btn2 sm ghost" style="color:#b91c1c" onclick="cmDelOne(\'' + n + '\')">删</button></div>' +
+        '<textarea oninput="cmTextSet(\'' + n + '\', this.value)">' + esc(r.text) + '</textarea></div>';
+    }).join('') + '</div>') : '<div class="sub">还没有评语。勾选学生后点「AI 生成」或「模板拼装」。</div>';
+  };
+  window.cmDelOne = function (name) {
+    if (!confirm('删除 ' + name + ' 的评语？')) return;
+    var r = cmRec(name); if (!r) return;
+    r.deleted = true; r.ts = Date.now(); r.updatedAt = new Date().toISOString();
+    ntUpsert('c-comment', r); cmResultRender(); cmRosterRender(); ntChanged();
+  };
+  /* 模板拼装：洗牌后逐人取一条，取尽重洗（尽量不重复） */
+  function cmShuffle(a) {
+    var p = a.slice();
+    for (var i = p.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = p[i]; p[i] = p[j]; p[j] = t }
+    return p;
+  }
+  function cmTplPick(tpl, n) {
+    var out = [], pool = [];
+    for (var k = 0; k < n; k++) {
+      if (!pool.length) pool = cmShuffle(tpl);
+      out.push(pool.pop());
+    }
+    return out;
+  }
+  function cmFillTpl(line, name, trait) {
+    return line.replace(/\{姓名\}|\{name\}/g, name).replace(/\{特点\}/g, trait || '你');
+  }
+  window.cmGenTpl = function () {
+    var list = cmGather(); if (!list) return;
+    var theme = document.getElementById('cmThemeSel').value;
+    var tpl = theme ? (cmTplLoad().themes[theme] || []) : [];
+    if (!tpl.length) { toastMsg('⚠️ 当前主题没有模板：先导入或填写模板（也可用 AI 生成）'); return }
+    var picks = cmTplPick(tpl, list.length);
+    list.forEach(function (s, i) {
+      cmUpsert(s.name, theme, cmFillTpl(picks[i], s.name, s.trait), s.trait);
+    });
+    cmResultRender(); cmRosterRender(); ntChanged();
+    toastMsg('🎲 已为 ' + list.length + ' 名学生按模板生成评语（可在结果区逐个修改）');
+  };
+  window.cmAiSave = function () {
+    var url = (document.getElementById('cmAiUrl').value || '').trim();
+    var key = (document.getElementById('cmAiKey').value || '').trim();
+    var model = (document.getElementById('cmAiModel').value || '').trim();
+    if (!url || !key || !model) { toastMsg('⚠️ 接口地址、密钥、模型名都要填'); return }
+    localStorage.setItem(CM_AI_KEY, JSON.stringify({ url: url, key: key, model: model }));
+    toastMsg('💾 AI 接口设置已保存');
+  };
+  window.cmAiTest = function () {
+    var cfg = cmAiCfg(), msg = document.getElementById('cmAiMsg');
+    if (!cfg.url || !cfg.key || !cfg.model) { msg.textContent = '⚠️ 先填写接口地址、密钥、模型名（保存后会记住）'; return }
+    msg.textContent = '测试中…';
+    fetch(cfg.url.replace(/\/+$/, '') + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.key },
+      body: JSON.stringify({ model: cfg.model, messages: [{ role: 'user', content: '请只回复两个字：连通' }], max_tokens: 10 })
+    }).then(function (r) { return r.json() }).then(function (j) {
+      if (j && j.choices && j.choices[0]) msg.textContent = '✅ 连通正常：' + ((j.choices[0].message || {}).content || '').trim();
+      else msg.textContent = '❌ 接口返回异常：' + ((j && j.error && j.error.message) || JSON.stringify(j).slice(0, 140));
+    }).catch(function (e) { msg.textContent = '❌ 连接失败（可能是跨域限制或地址不对）：' + e.message });
+  };
+  function cmAiOne(s, theme, tpl, wc) {
+    var cfg = cmAiCfg();
+    var sys = '你是一位有爱心、懂教育的小学班主任，擅长写温暖、具体、有针对性的学生评语。要求：①用第二人称"你"，像面对面聊天；②结合学生特点写出具体表现，不写空话套话；③结尾有鼓励和期待；④正文约' + wc + '字，直接输出评语正文，不要标题和署名。' +
+      (theme ? '整体风格化用「' + theme + '」的语气和意象（自然融入，不堆砌角色名）。' : '');
+    var usr = '学生：' + s.name + '\n' +
+      (s.trait ? '特点：' + s.trait + '\n' : '') +
+      (tpl.length ? '参考模板（学习其口吻和结构，不要照抄）：\n- ' + tpl.join('\n- ') + '\n' : '') +
+      '\n请为 ' + s.name + ' 写一段评语。';
+    return fetch(cfg.url.replace(/\/+$/, '') + '/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.key },
+      body: JSON.stringify({
+        model: cfg.model, temperature: 0.8,
+        messages: [{ role: 'system', content: sys }, { role: 'user', content: usr }]
+      })
+    }).then(function (r) { return r.json() }).then(function (j) {
+      var t = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+      if (!t) throw new Error((j && j.error && j.error.message) || '接口返回为空');
+      return String(t).trim().replace(/^["“”]+|["“”]+$/g, '');
+    });
+  }
+  window.cmGenAI = function () {
+    var list = cmGather(); if (!list) return;
+    var cfg = cmAiCfg();
+    if (!cfg.url || !cfg.key || !cfg.model) {
+      var bx = document.getElementById('cmAiBox'); if (bx) bx.open = true;
+      toastMsg('⚠️ 先展开「AI 接口设置」填写并保存'); return;
+    }
+    var theme = document.getElementById('cmThemeSel').value;
+    var wc = document.getElementById('cmLen').value;
+    var tpl = theme ? (cmTplLoad().themes[theme] || []).slice(0, 5) : [];
+    var msg = document.getElementById('cmGenMsg'), btn = document.getElementById('cmAiBtn');
+    btn.disabled = true; btn.textContent = '生成中…';
+    var i = 0, ok = 0, fail = [];
+    (function next() {
+      if (i >= list.length) {
+        btn.disabled = false; btn.textContent = '🤖 AI 生成（勾选的学生）';
+        msg.textContent = '';
+        cmResultRender(); cmRosterRender(); ntChanged();
+        toastMsg('✅ 完成：成功 ' + ok + ' 人' + (fail.length ? '，失败 ' + fail.length + ' 人（' + fail.join('、') + '）' : ''));
+        return;
+      }
+      var s = list[i++];
+      msg.textContent = '正在生成 ' + s.name + '（' + i + '/' + list.length + '）…';
+      cmAiOne(s, theme, tpl, wc).then(function (txt) {
+        cmUpsert(s.name, theme, txt, s.trait); ok++;
+        cmResultRender();
+        setTimeout(next, 200);
+      }).catch(function (e) {
+        fail.push(s.name);
+        msg.textContent = '❌ ' + s.name + ' 失败：' + e.message;
+        setTimeout(next, 400);
+      });
+    })();
+  };
+  window.cmRegenOne = function (name) {
+    var traits = cmTraitLoad();
+    var s = { name: name, trait: (traits[name] || '').trim() };
+    var old = cmRec(name);
+    var theme = document.getElementById('cmThemeSel').value || (old ? old.theme : '');
+    var cfg = cmAiCfg();
+    if (cfg.url && cfg.key && cfg.model) {
+      var tpl = theme ? (cmTplLoad().themes[theme] || []).slice(0, 5) : [];
+      toastMsg('正在为 ' + name + ' 重新生成…');
+      cmAiOne(s, theme, tpl, document.getElementById('cmLen').value).then(function (txt) {
+        cmUpsert(name, theme, txt, s.trait); cmResultRender(); ntChanged();
+        toastMsg('✅ ' + name + ' 的评语已重新生成');
+      }).catch(function (e) { toastMsg('❌ 生成失败：' + e.message) });
+    } else {
+      var tpl2 = theme ? (cmTplLoad().themes[theme] || []) : [];
+      if (!tpl2.length) { toastMsg('⚠️ 没有配置 AI，当前主题也没有模板'); return }
+      var txt = cmFillTpl(cmTplPick(tpl2, 1)[0], name, s.trait);
+      cmUpsert(name, theme, txt, s.trait); cmResultRender(); ntChanged();
+      toastMsg('🎲 已按模板重新生成 ' + name + ' 的评语');
+    }
+  };
+  /* ---------- 导出 ---------- */
+  window.cmExportExcel = function () {
+    var rows = ntRows('c-comment').filter(function (r) { return r && !r.deleted && r.text });
+    if (!rows.length) { toastMsg('⚠️ 还没有评语可导出'); return }
+    wbExportXlsx({
+      head: ['姓名', '主题', '特点', '评语'],
+      rows: rows.map(function (r) { return [r.name, r.theme || '', r.trait || '', r.text] }),
+      fileName: '学生评语_' + new Date().toISOString().slice(0, 10) + '.xlsx'
+    });
+  };
+  function cmPara(text, o) {
+    o = o || {};
+    var sz = o.sz || 24;
+    var rpr = '<w:rPr><w:rFonts w:hint="eastAsia" w:eastAsia="宋体"/><w:sz w:val="' + sz + '"/><w:szCs w:val="' + sz + '"/>' + (o.b ? '<w:b/>' : '') + '</w:rPr>';
+    var ppr = '<w:pPr><w:spacing w:before="' + (o.before || 0) + '" w:after="' + (o.after == null ? 60 : o.after) + '" w:line="360" w:lineRule="auto"/>' +
+      (o.center ? '<w:jc w:val="center"/>' : '') + (o.indent ? '<w:ind w:firstLineChars="200" w:firstLine="480"/>' : '') + '</w:pPr>';
+    return '<w:p>' + ppr + '<w:r>' + rpr + '<w:t xml:space="preserve">' + wbEscXml(text) + '</w:t></w:r></w:p>';
+  }
+  window.cmExportWord = function () {
+    var rows = cmByRoster(ntRows('c-comment').filter(function (r) { return r && !r.deleted && r.text }));
+    if (!rows.length) { toastMsg('⚠️ 还没有评语可导出'); return }
+    return wbLoadLib('jszip').then(function (JSZip) {
+      var zip = new JSZip();
+      zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+      zip.folder('_rels').file('.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+      var wd = zip.folder('word');
+      wd.folder('_rels').file('document.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>');
+      var parts = [cmPara('学生评语', { sz: 36, b: 1, center: 1, after: 120 })];
+      var d = new Date();
+      parts.push(cmPara(d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日', { sz: 21, center: 1, after: 240 }));
+      rows.forEach(function (r) {
+        parts.push(cmPara(r.name, { sz: 28, b: 1, before: 180, after: 60 }));
+        String(r.text).split(/\n+/).forEach(function (p) { if (p.trim()) parts.push(cmPara(p.trim(), { sz: 24, indent: 1 })) });
+      });
+      wd.file('document.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + parts.join('') + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1500" w:bottom="1440" w:left="1500" w:header="851" w:footer="992" w:gutter="0"/></w:sectPr></w:body></w:document>');
+      return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    }).then(function (blob) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '学生评语_' + new Date().toISOString().slice(0, 10) + '.docx';
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove() }, 800);
+    });
+  };
+  /* 同步后刷新：评语页正打开时不重建（避免打断勾选 / 输入），切走再刷新 */
+  window.cmAfterSync = function () {
+    var sec = document.getElementById('s-comment');
+    if (sec && sec.classList.contains('active')) return;
+    try { cmRosterRender() } catch (e) {}
+    try { cmResultRender() } catch (e) {}
+  };
   window.noticeRenderHistory = function () {
     var box = document.getElementById('noticeHistory'); if (!box) return;
     var a = ntRows('s-notice').slice().sort(function (x, y) { return (Number(y.ts) || 0) - (Number(x.ts) || 0) }).slice(0, 30);
@@ -29454,6 +29876,7 @@ function cwInit(){
     try { noticeRenderHistory() } catch (e) {}
     try { deskFillCfgForm() } catch (e) {}
     try { asRender() } catch (e) {}   /* vT13 布置作业列表刷新 */
+    try { cmAfterSync() } catch (e) {}   /* vT14 学生评语刷新 */
   }
   function ntInit() {
     try {
