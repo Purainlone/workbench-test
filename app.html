@@ -1574,8 +1574,8 @@ table.paper td.l{text-align:left;font-weight:600}
 
   <!-- ============ 作业登记 ============ -->
   <section class="section" id="s-hw">
-    <h2>作业登记</h2>
-    <div class="sub">先选等级优 / 良 / 差，再点格子给学生涂色 · 优 +2 分，良 0 分，差 −2 分 · 登记实时同步到资料库，积分自动累计到学生管理</div>
+    <h2>作业登记 <span style="font-size:13px;font-weight:400;color:#2d8f63;background:#e8f4ee;border-radius:8px;padding:2px 10px;vertical-align:middle">班主任兼语文</span></h2>
+    <div class="sub">本页登记、布置的作业<b>自动归入「语文」</b>（与科任端语文老师看到的是同一份数据） · 先选等级优 / 良 / 差，再点格子给学生涂色 · 优 +2 分，良 0 分，差 −2 分 · 登记实时同步到资料库，积分自动累计到学生管理</div>
     <div class="rcmode browse" id="hwMode">
       <span id="hwModeTxt">👀 浏览模式 · 格子只读，不会误改</span>
       <button class="btn2 sm primary" id="hwModeBtn" onclick="toggleHWMode()">✍️ 开始登记</button>
@@ -1588,16 +1588,16 @@ table.paper td.l{text-align:left;font-weight:600}
         <button data-lv="中" onclick="hwSetLv('中')">中 0</button>
         <button data-lv="差" onclick="hwSetLv('差')">差 −1</button>
       </div>
+      <span style="font-size:12px;font-weight:700;color:#2d5a45;background:#e8f4ee;border-radius:8px;padding:8px 12px;flex-shrink:0">语文</span>
       <input id="hwName" placeholder="作业名称，如：第一单元听写" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit;width:220px">
       <input id="hwDate" type="date" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
       <button class="btn2 primary" onclick="hwAddItem()">➕ 新建作业列</button>
       <span class="sctip" id="hwTip"></span>
     </div>
     <div class="chartbox" style="margin:12px 0">
-      <h3 style="font-size:14px">📢 布置作业（几秒内同步到教室大屏「今日作业」）</h3>
+      <h3 style="font-size:14px">📢 布置语文作业（几秒内同步到教室大屏「今日作业」）</h3>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <input id="asSubj" list="asSubjList" placeholder="科目" style="width:100px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
-        <datalist id="asSubjList"><option>语文</option><option>数学</option><option>英语</option><option>科学</option><option>道德与法治</option><option>音乐</option><option>美术</option></datalist>
+        <input id="asSubj" value="语文" readonly title="班主任兼语文：布置的作业固定归入语文" style="width:76px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit;background:#eef7f2;color:#2d5a45;font-weight:700;text-align:center">
         <input id="asDate" type="date" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
         <input id="asText" placeholder="今天要做的作业内容，如：练习册 P23；听写第三课词语" style="flex:1;min-width:240px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
         <button class="btn2 primary" onclick="asPush()">📢 布置到教室</button>
@@ -12496,7 +12496,7 @@ function hwAddItem(){
   var date=hwDateOnly(document.getElementById('hwDate').value)||ymd(new Date());
   var dup=HW_ITEMS.some(function(x){return x.name===name&&x.date===date});
   if(dup){toastMsg('这次作业已经建过了');return}
-  HW_ITEMS.push({name:name,date:date,pending:true});
+  HW_ITEMS.push({name:name,date:date,subject:'语文',pending:true});   /* 班主任兼语文：新建作业列自动归入语文 */
   document.getElementById('hwName').value='';
   renderHW();
   setTimeout(function(){try{renderHome()}catch(e){}},0);
@@ -29157,7 +29157,7 @@ function cwInit(){
   /* ===== vT13 布置作业（s-assign，随 nt 机制同步到教室桌面）===== */
   window.asPush = function () {
     var txt = (document.getElementById('asText').value || '').trim();
-    var sub = (document.getElementById('asSubj').value || '').trim();
+    var sub = '语文';   /* 班主任兼语文：布置作业固定归入语文 */
     if (!sub) { toastMsg('⚠️ 先填科目'); return }
     if (!txt) { toastMsg('⚠️ 先写作业内容'); return }
     var dEl = document.getElementById('asDate');
