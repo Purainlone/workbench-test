@@ -116,23 +116,7 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
         <button class="btn sec" onclick="pull(true);renderHome()">🔄 刷新</button>
         <span class="sub" id="homeDate"></span>
       </div>
-      <div id="homeWrap" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;align-items:start">
-        <div style="border:1px solid #e3efe7;border-radius:12px;padding:12px;background:#fafdfb">
-          <div style="font-weight:700;margin-bottom:8px;color:#1f6b4a">📋 未交作业名单</div>
-          <div id="homeHw"></div>
-        </div>
-        <div style="border:1px solid #f0d9cf;border-radius:12px;padding:12px;background:#fffaf7">
-          <h3 style="margin:0 0 8px;font-size:15px">⏰ 今日留堂 <span class="sub">默认勾选本科目今日作业未完成的学生 · 保存后同步教室大屏与家长端</span></h3>
-          <div id="dtGrid" style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0"></div>
-          <div class="row">
-            <button class="btn sec" onclick="dtPreselect()">📥 按本科目今日未完成预选</button>
-            <button class="btn sec" onclick="dtSelAll(true)">✅ 全选</button>
-            <button class="btn sec" onclick="dtSelAll(false)">🚫 清空</button>
-            <button class="btn" onclick="dtSave()">💾 保存今日留堂名单</button>
-            <span class="sub" id="dtMsg"></span>
-          </div>
-          <div class="sub" id="dtSaved" style="margin-top:8px"></div>
-        </div>
+      <div id="homeWrap" style="display:flex;flex-direction:column;gap:12px">
         <div style="border:1px solid #d9e3f0;border-radius:12px;padding:12px;background:#f8fafd">
           <h3 style="margin:0 0 8px;font-size:15px">📢 布置作业（几秒内同步到教室大屏「今日作业」）</h3>
           <div class="row">
@@ -142,6 +126,22 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
           </div>
           <div id="asList"></div>
           <div class="msg" id="asMsg"></div>
+        </div>
+        <div style="border:1px solid #e3efe7;border-radius:12px;padding:12px;background:#fafdfb">
+          <div style="font-weight:700;margin-bottom:8px;color:#1f6b4a">📋 未完成作业名单</div>
+          <div id="homeHw"></div>
+        </div>
+        <div style="border:1px solid #f0d9cf;border-radius:12px;padding:12px;background:#fffaf7">
+          <h3 style="margin:0 0 8px;font-size:15px">⏰ 今日留堂 <span class="sub">默认勾选本科目今日作业未完成的学生 · 保存后同步教室大屏与家长端</span></h3>
+          <div id="dtGrid" style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;max-height:260px;overflow:auto"></div>
+          <div class="row">
+            <button class="btn sec" onclick="dtPreselect()">📥 按本科目今日未完成预选</button>
+            <button class="btn sec" onclick="dtSelAll(true)">✅ 全选</button>
+            <button class="btn sec" onclick="dtSelAll(false)">🚫 清空</button>
+            <button class="btn" onclick="dtSave()">💾 保存今日留堂名单</button>
+            <span class="sub" id="dtMsg"></span>
+          </div>
+          <div class="sub" id="dtSaved" style="margin-top:8px"></div>
         </div>
       </div>
     </div>
