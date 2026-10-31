@@ -48,6 +48,7 @@ th { background:#eef6f0; color:#24503a; }
 .hwlv button.on.y { background:#d9a305; }
 .hwlv button.on.z { background:#2f6fd0; }
 .hwlv button.on.r { background:#dc2626; }
+.hwlv button.on.x { background:#dc2626; }   /* 超时未交 */
 .hwtable { margin-top:0; font-size:12.5px; border-collapse:separate; border-spacing:0; }
 .hwtable th, .hwtable td { border:none; border-right:1px solid #e8f1eb; border-bottom:1px solid #e8f1eb; padding:6px 9px; text-align:center; white-space:nowrap; }
 .hwtable thead th { background:#eef6f0; color:#24503a; cursor:pointer; user-select:none; position:sticky; top:0; z-index:2; font-weight:600; }
@@ -61,6 +62,7 @@ th { background:#eef6f0; color:#24503a; }
 .hwtable tbody td.y { background:#f0b429; color:#3a2c00; font-weight:600; }
 .hwtable tbody td.z { background:#cfe6fb; color:#1d5fbf; font-weight:600; }
 .hwtable tbody td.r { background:#dc2626; color:#fff; font-weight:600; }
+.hwtable tbody td.x { background:#dc2626; color:#fff; font-weight:700; }   /* 超时未交 = 红底白叉 */
 .hwtable tbody tr:hover td:not(.name) { filter:brightness(.96); }
 .hwtable thead th .delx { float:right; margin:-2px 0 0 8px; color:#c0392b; cursor:pointer; font-weight:700; opacity:.5; font-size:12px; }
 .hwtable thead th .delx:hover { opacity:1; }
@@ -81,6 +83,7 @@ th { background:#eef6f0; color:#24503a; }
 .hwc-stat .st-l { color:#d9a305; }
 .hwc-stat .st-z { color:#1f6feb; }
 .hwc-stat .st-c { color:#e5484d; }
+.hwc-stat .st-x { color:#dc2626; font-weight:600; }   /* 超时未交 */
 .hwc-und { font-size:11px; color:#9aa3b2; margin-top:3px; }
 .stat { margin-top:10px; font-size:13px; color:#555; }
 .msg { margin-top:10px; font-size:13px; color:#2d8f63; min-height:18px; }
@@ -190,6 +193,7 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
           <button data-lv="良" onclick="pickLv('良')">良 +1</button>
           <button data-lv="中" onclick="pickLv('中')">中 0</button>
           <button data-lv="差" onclick="pickLv('差')">差 −1</button>
+          <button data-lv="超时未交" onclick="pickLv('超时未交')">超时 −2</button>
         </span>
         <span class="sub" style="margin-left:8px" id="hwTip">浏览模式：点击表格不会改动。进入登记后：点格子＝记为选中等级，先换等级再点格子可修改。</span>
       </div>
@@ -203,6 +207,7 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
       <div class="row">
         <button class="btn" onclick="flushHw(true)">💾 保存登记</button>
         <button class="btn sec" onclick="sendSpeakFromHw()">🔊 播报未交名单（最新一列）</button>
+        <button class="btn sec" onclick="markAllOverdue()">⏰ 余下记超时未交（−2）</button>
       </div>
       <div class="msg" id="hwMsg"></div>
     </div>
@@ -335,7 +340,7 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
 
 var ME = null, DOC = null, SHA = '', BRANCH = '';
 var STU = [], HWI = [], HW = [], SC = [], SA = [];   /* SA = s-assign 布置作业 */
-var LV_SCORE = { '优': 2, '良': 1, '中': 0, '差': -1 };
+var LV_SCORE = { '优': 2, '良': 1, '中': 0, '差': -1, '超时未交': -2 };
 var dirtyHw = {}, flushTimer = null, curLv = '优';
 /* vT5 表格视图状态 */
 var editMode = false, sortKey = '', sortDir = 0, COLS = [];
@@ -604,8 +609,9 @@ function renderHwTable() {
     var cells = COLS.map(function (c) {
       var lv = maps[c.key][s.name] || '';
       if (lv) { var v = LV_SCORE[lv] || 0; sum += v; clsSum += v; }
-      var cellCls = lv ? ({'优':'g','良':'y','中':'z','差':'r'}[lv] || '') : 'empty';
-      return '<td class="' + cellCls + '" data-n="' + esc(s.name) + '" data-k="' + esc(c.key) + '" onclick="tapCell(this)">' + esc(lv || '·') + '</td>';
+      var cellCls = lv ? ({'优':'g','良':'y','中':'z','差':'r','超时未交':'x'}[lv] || '') : 'empty';
+      var mark = lv === '超时未交' ? '✕' : (lv || '·');
+      return '<td class="' + cellCls + '" data-n="' + esc(s.name) + '" data-k="' + esc(c.key) + '" onclick="tapCell(this)">' + esc(mark) + '</td>';
     }).join('');
     var sumTxt = sum > 0 ? '+' + sum : (sum < 0 ? String(sum) : '—');
     var sumCls = sum > 0 ? ' pos' : (sum < 0 ? ' neg' : '');
@@ -617,8 +623,10 @@ function renderHwTable() {
   var last = COLS[COLS.length - 1];
   var lm = maps[last.key];
   var doneN = STU.filter(function (s) { return lm[s.name] }).length;
+  var overN = STU.filter(function (s) { return lm[s.name] === '超时未交' }).length;
   var miss = STU.filter(function (s) { return !lm[s.name] }).map(function (s) { return s.name });
   $('hwStat').innerHTML = '最新列「' + esc(last.item) + '」已登记 <b>' + doneN + '</b> / ' + STU.length + ' 人' +
+    (overN ? ' · <span style="color:#dc2626">超时未交 ' + overN + ' 人</span>' : '') +
     (miss.length ? ' · 未交：<span style="color:#a04a32">' + esc(miss.join('、')) + '</span>' : ' · 全部交齐 🎉') +
     ' ｜ 全班作业积分合计 <b>' + (clsSum > 0 ? '+' + clsSum : clsSum) + '</b>';
 }
@@ -630,19 +638,20 @@ function renderHwCards() {
   var maps = {};
   COLS.forEach(function (c) { maps[c.key] = hwDoneMap(c.key); });
   box.innerHTML = COLS.map(function (c, i) {
-    var m = maps[c.key], you = 0, liang = 0, zhong = 0, cha = 0, done = 0;
+    var m = maps[c.key], you = 0, liang = 0, zhong = 0, cha = 0, over = 0, done = 0;
     STU.forEach(function (s) {
       var lv = m[s.name];
       if (!lv) return;
       done++;
-      if (lv === '优') you++; else if (lv === '良') liang++; else if (lv === '中') zhong++; else if (lv === '差') cha++;
+      if (lv === '优') you++; else if (lv === '良') liang++; else if (lv === '中') zhong++; else if (lv === '差') cha++; else if (lv === '超时未交') over++;
     });
     var und = STU.length - done;
     return '<div class="hwcard' + (i === COLS.length - 1 ? ' on' : '') + '">' +
       '<div class="hwc-name">' + esc(c.item) + '</div>' +
       '<div class="hwc-date">' + esc(String(c.date).slice(5)) + '</div>' +
       '<div class="hwc-stat"><span class="st-y">' + you + '优</span><span class="st-l">' + liang + '良</span>' +
-      '<span class="st-z">' + zhong + '中</span><span class="st-c">' + cha + '差</span></div>' +
+      '<span class="st-z">' + zhong + '中</span><span class="st-c">' + cha + '差</span>' +
+      (over ? '<span class="st-x">' + over + '超时</span>' : '') + '</div>' +
       '<div class="hwc-und">待登记 ' + und + '</div></div>';
   }).join('');
 }
@@ -670,11 +679,31 @@ function curItem() {
 }
 function pickLv(lv) {
   curLv = lv;
-  var map = { '优': 'g', '良': 'y', '中': 'z', '差': 'r' };
+  var map = { '优': 'g', '良': 'y', '中': 'z', '差': 'r', '超时未交': 'x' };
   document.querySelectorAll('#hwLvBar button').forEach(function (b) {
     var k = b.getAttribute('data-lv');
     b.className = (k === lv) ? ('on ' + map[lv]) : '';
   });
+}
+/* 写一条作业等级到本地 HW 数组（不触发保存，由调用方统一 flush） */
+function applyHw(name, item, date, lv) {
+  var hit = false;
+  HW.forEach(function (r) {
+    if (r && r.item === item && String(r.date).slice(0, 10) === date && r.name === name) {
+      hit = true;
+      r.level = lv; r.score = LV_SCORE[lv] || 0; r.by = ME.name; r.bycode = ME.code;
+      r.subject = r.subject || ME.subject; r.ts = Date.now();
+      return;
+    }
+  });
+  if (!hit) {
+    HW.push({
+      id: 'hw_' + name + '_' + String(date).replace(/-/g, '') + '_' + String(item),
+      date: date, item: item, name: name, level: lv, score: LV_SCORE[lv] || 0,
+      subject: ME.subject || '', by: ME.name, bycode: ME.code, note: '',
+      ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'subj-' + ME.name
+    });
+  }
 }
 function tapCell(el) {
   if (!editMode) { $('hwMsg').textContent = '🔒 浏览模式不会改动；点「✏️ 进入登记」后再点格子'; return; }
@@ -683,27 +712,29 @@ function tapCell(el) {
   var key = el.getAttribute('data-k');
   var p = key.split('|');
   var it = { item: p[0], date: p.slice(1).join('|') || today() };
-  var lv = curLv;
-  /* 本地立即生效 + 记入待写盘 */
-  HW.forEach(function (r) {
-    if (r && r.item === it.item && String(r.date).slice(0, 10) === it.date && r.name === name) {
-      if (r.level === lv) return;
-      r.level = lv; r.score = LV_SCORE[lv] || 0; r.by = ME.name; r.bycode = ME.code;
-      r.subject = r.subject || ME.subject; r.ts = Date.now();
-    }
-  });
-  var hit = HW.some(function (r) { return r && r.item === it.item && String(r.date).slice(0, 10) === it.date && r.name === name });
-  if (!hit) {
-    HW.push({
-      id: 'hw_' + name + '_' + String(it.date).replace(/-/g, '') + '_' + String(it.item),
-      date: it.date, item: it.item, name: name, level: lv, score: LV_SCORE[lv] || 0,
-      subject: ME.subject || '', by: ME.name, bycode: ME.code, note: '',
-      ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'subj-' + ME.name
-    });
-  }
-  dirtyHw[name + '|' + key] = { name: name, it: it, lv: lv };
+  applyHw(name, it.item, it.date, curLv);
+  dirtyHw[name + '|' + key] = { name: name, it: it, lv: curLv };
   renderHwTable();
-  $('hwMsg').textContent = '已点 ' + name + ' → ' + lv + '（自动保存中…）';
+  $('hwMsg').textContent = '已点 ' + name + ' → ' + curLv + '（自动保存中…）';
+  if (flushTimer) clearTimeout(flushTimer);
+  flushTimer = setTimeout(function () { flushHw(false) }, 2500);
+}
+/* 一键：把当前列还没登记的学生全部标记为「超时未交」（扣 2 分） */
+function markAllOverdue() {
+  if (!ME || !ME.perm || !ME.perm.hw) { $('hwMsg').textContent = '⚠️ 没有「登记作业」权限'; $('hwMsg').className = 'msg err'; return; }
+  if (!COLS.length) { $('hwMsg').textContent = '还没有作业列，先建一列'; return; }
+  var c = COLS[COLS.length - 1], key = c.key, p = key.split('|');
+  var it = { item: p[0], date: p.slice(1).join('|') || today() };
+  var m = hwDoneMap(key);
+  var remain = (STU || []).filter(function (s) { return !m[s.name]; });
+  if (!remain.length) { $('hwMsg').textContent = '这一列都已登记，没有可标记的'; return; }
+  if (!confirm('把剩下 ' + remain.length + ' 名未登记学生标记为「超时未交」（每人扣 2 分）？')) return;
+  remain.forEach(function (s) {
+    applyHw(s.name, it.item, it.date, '超时未交');
+    dirtyHw[s.name + '|' + key] = { name: s.name, it: it, lv: '超时未交' };
+  });
+  renderHwTable();
+  $('hwMsg').textContent = '⏰ 已标记 ' + remain.length + ' 人为超时未交（自动保存中…）';
   if (flushTimer) clearTimeout(flushTimer);
   flushTimer = setTimeout(function () { flushHw(false) }, 2500);
 }
