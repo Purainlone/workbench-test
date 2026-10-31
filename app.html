@@ -1987,6 +1987,7 @@ table.paper td.l{text-align:left;font-weight:600}
           <input type="text" id="cmAiModel" placeholder="模型名，如 gpt-4o-mini" style="width:170px">
           <button class="btn2" onclick="cmAiSave()">💾 保存</button>
           <button class="btn2 ghost" onclick="cmAiTest()">🔍 测试连通</button>
+          <button class="btn2 primary" onclick="cmAiImport()" title="粘贴 WorkBuddy 模型导入码或三行配置，一键填好保存">📥 导入 WorkBuddy 模型</button>
         </div>
         <div class="sub" id="cmAiMsg" style="margin-top:6px">提示：填 OpenAI 兼容接口（地址 + 密钥 + 模型名）。接口需允许浏览器跨域调用；生成失败时可用「模板拼装」兜底。</div>
       </details>
@@ -29817,6 +29818,46 @@ function cwInit(){
     if (!url || !key || !model) { toastMsg('⚠️ 接口地址、密钥、模型名都要填'); return }
     localStorage.setItem(CM_AI_KEY, JSON.stringify({ url: url, key: key, model: model }));
     toastMsg('💾 AI 接口设置已保存');
+  };
+  /* ===== 一键导入 WorkBuddy 模型：支持「导入码」（base64 JSON）或三行文本（地址/Key/模型名） ===== */
+  window.cmAiImport = function () {
+    var box = document.getElementById('cmAiImpBox');
+    if (!box) { box = document.createElement('div'); box.id = 'cmAiImpBox'; document.body.appendChild(box); }
+    box.innerHTML =
+      '<div style="position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)cmAiImpClose()">' +
+      '<div style="background:#fff;border-radius:14px;padding:20px;width:500px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.25)">' +
+      '<h3 style="margin:0 0 10px;font-size:16px">📥 导入 WorkBuddy 模型</h3>' +
+      '<div class="sub" style="margin-bottom:8px">粘贴<b>任意一种</b>即可：① 模型导入码（一串字符）；② 三行文本——第 1 行接口地址、第 2 行 API Key、第 3 行模型名。导入后自动填好并保存到本机。</div>' +
+      '<textarea id="cmAiImpTxt" rows="5" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:10px;font-size:13.5px;font-family:inherit" placeholder="https://api.xx.com/v1&#10;sk-xxxxxxxx&#10;gpt-4o-mini"></textarea>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">' +
+      '<button class="btn2" onclick="cmAiImpClose()">取消</button>' +
+      '<button class="btn2 primary" onclick="cmAiImpDo()">📥 导入并保存</button></div>' +
+      '</div></div>';
+  };
+  window.cmAiImpClose = function () { var b = document.getElementById('cmAiImpBox'); if (b) b.innerHTML = ''; };
+  window.cmAiImpDo = function () {
+    var raw = (document.getElementById('cmAiImpTxt').value || '').trim();
+    if (!raw) { toastMsg('⚠️ 先粘贴导入码或三行配置'); return }
+    var url = '', key = '', model = '';
+    /* ① 尝试按导入码解析：base64 → UTF-8 JSON {url,key,model} */
+    try {
+      var bin = atob(raw.replace(/[^A-Za-z0-9+/=]/g, ''));
+      var json = decodeURIComponent(bin.split('').map(function (c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2) }).join(''));
+      var o = JSON.parse(json);
+      if (o && o.url && o.model) { url = o.url; key = o.key || ''; model = o.model; }
+    } catch (_e) {}
+    /* ② 兜底：按三行文本解析 */
+    if (!url) {
+      var lines = raw.split('\n').map(function (x) { return x.trim() }).filter(Boolean);
+      if (lines.length >= 3) { url = lines[0]; key = lines[1]; model = lines[2]; }
+    }
+    if (!url || !model) { toastMsg('⚠️ 没认出配置：请粘贴导入码，或按「地址 / Key / 模型名」三行粘贴'); return }
+    document.getElementById('cmAiUrl').value = url;
+    document.getElementById('cmAiKey').value = key;
+    document.getElementById('cmAiModel').value = model;
+    localStorage.setItem(CM_AI_KEY, JSON.stringify({ url: url, key: key, model: model }));
+    cmAiImpClose();
+    toastMsg('✅ 已导入并保存「' + model + '」，可直接 AI 生成评语');
   };
   window.cmAiTest = function () {
     var cfg = cmAiCfg(), msg = document.getElementById('cmAiMsg');
