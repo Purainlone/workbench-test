@@ -2547,6 +2547,13 @@ table.paper td.l{text-align:left;font-weight:600}
     </style>
     <h2>🐾 班级宠物 <span style="font-size:12px;color:#76867e;font-weight:400;margin-left:8px" id="petSub">积分养宠物 · 喂养扣个人积分</span><span id="petStateTag" class="pet-state s-on">🟢 运行中</span></h2>
     <div class="sub">宠物消耗的积分 = 学生「个人累计积分」（作业+小组+奖惩汇总），喂养 / 抽奖 / 兑换会写一条「宠物喂养」奖惩记录，自动进入学生流水与积分榜。</div>
+    <div id="petOffBanner" style="display:none;margin:10px 0 14px;padding:12px 16px;border-radius:12px;background:#fff0f0;border:1px solid #ffd0d0;color:#b3261e;font-size:13.5px;line-height:1.7">
+      ⛔ 宠物模块已关停（数据保留）。点击下方按钮可重新启用；或改为「暂停」——保留入口、仅停止学生消耗，老师仍可管理。
+      <div style="margin-top:9px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn2 primary" onclick="ptSetEnabled('on')">▶ 重新启用（运行中）</button>
+        <button class="btn2" onclick="ptSetEnabled('paused')">⏸ 改为暂停（保留入口）</button>
+      </div>
+    </div>
     <div class="pet-tabs" id="petTabs">
       <button class="btn2 sm active" data-pt="inc" onclick="ptTab('inc')">🥚 孵化器</button>
       <button class="btn2 sm" data-pt="wall" onclick="ptTab('wall')">🐾 宠物墙</button>
@@ -33268,17 +33275,11 @@ function cwInit(){
     var st = ptEnabled();
     var b = document.getElementById('navPetBtn');
     var g = document.getElementById('navPetGrp');
-    var hide = (st === 'off');
-    if (b) b.style.display = hide ? 'none' : '';
-    if (g) g.style.display = hide ? 'none' : '';
-    if (hide) {
-      var sec = document.getElementById('s-pet');
-      if (sec && sec.classList.contains('active')) {
-        sec.classList.remove('active');
-        var btns = document.querySelectorAll('#nav button[data-s]');
-        for (var i = 0; i < btns.length; i++) { if (btns[i].dataset.s !== 'pet') { btns[i].click(); break; } }
-      }
-    }
+    /* vT37-fix：off 不再隐藏入口——只标「已关停」，老师随时能点进来重新启用，避免把自己关在门外 */
+    if (b) b.style.display = '';
+    if (g) g.style.display = '';
+    var banner = document.getElementById('petOffBanner');
+    if (banner) banner.style.display = (st === 'off') ? '' : 'none';
     var tag = document.getElementById('petStateTag');
     if (tag) {
       tag.textContent = ({ on: '🟢 运行中', paused: '⏸ 已暂停', off: '⛔ 已关停' })[st] || '🟢 运行中';
