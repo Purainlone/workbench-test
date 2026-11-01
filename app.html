@@ -12821,11 +12821,15 @@ function hwLoadLvSchema(onDone){
   });
 }
 /* 把「超时未交」选项补到飞书「等级」单选字段（幂等，失败不打断正常登记） */
+var HW_LV_TRIES=0;   /* vT24 修复：读不到字段结构时最多重试 3 次（间隔 3 秒）。
+   以前回调失败→立刻重试→再失败→再重试，零间隔无限循环把主线程打满，
+   页面直接「无响应」（2026-11-01 线上卡死事故根因） */
 function hwSyncLvCloud(){
   if(!dbReady||!db||!db.updateField)return;
   if(!HW_LV_FIELD_ID){
-    /* 没拿到字段 id 就先读结构，读一次后重试 */
-    hwLoadLvSchema(function(){hwSyncLvCloud()});
+    if(HW_LV_TRIES>=3){console.warn('[作业] 等级选项同步：3 次未拿到表结构，本次启动放弃（下次启动再试）');return}
+    HW_LV_TRIES++;
+    setTimeout(function(){hwLoadLvSchema(function(){hwSyncLvCloud()})},3000);   /* 带间隔的有限重试 */
     return;
   }
   if(HW_LV_SCHEMA.indexOf('超时未交')>=0)return;   /* 云端已存在，跳过 */
