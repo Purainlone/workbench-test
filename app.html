@@ -1482,6 +1482,19 @@ table.paper td.l{text-align:left;font-weight:600}
       .scsubj{display:inline-block;padding:6px 16px;border-radius:999px;background:#eef2f6;color:#3b4a5a;font-size:13px;cursor:pointer;border:1px solid transparent;user-select:none}
       .scsubj:hover{background:#e3e9ef}
       .scsubj.on{background:#1f6feb;color:#fff;border-color:#1f6feb}
+      .sct.mtx{width:auto;min-width:100%;border-collapse:collapse;font-size:13px;background:#fff}
+      .sct.mtx th,.sct.mtx td{border:1px solid #e3e9ef;padding:4px 8px;text-align:center;white-space:nowrap}
+      .sct.mtx thead th{background:#e8f0e8;position:sticky;top:0;z-index:2}
+      .sct.mtx th.nmh{position:sticky;left:0;top:0;z-index:3;background:#dce9dc;text-align:left;font-weight:700}
+      .sct.mtx td.nm{position:sticky;left:0;z-index:1;background:#f3f6f9;text-align:left;font-weight:600}
+      .sct.mtx th.exh .exn{font-weight:700}
+      .sct.mtx th.exh .exd{font-size:11px;color:#7a8a99;font-weight:400}
+      .sct.mtx td.tgt,.sct.mtx th.tgth{background:#fff7e6}
+      .sct.mtx .na{color:#c2ccd6}
+      .sct.mtx .tbadge{display:inline-block;min-width:28px;padding:1px 5px;border-radius:6px;font-size:12px;margin:1px;color:#33424f}
+      .sct.mtx .tbadge.off{background:#eee;color:#bbb}
+      .sct.mtx input{font-size:13px}
+      .legend{margin-top:10px;font-size:12.5px;color:#4a5a6a;background:#f5f8fb;border:1px solid #e3e9ef;border-radius:8px;padding:8px 12px;line-height:1.6}
     </style>
     <div class="scsubjbar" id="scSubjTabs"><span class="scsubj on" data-subj="" onclick="scPickSubj('')">全部</span></div>
 
@@ -1586,10 +1599,13 @@ table.paper td.l{text-align:left;font-weight:600}
 
     <div class="tabpane" id="scp-mg">
       <div class="paperrow">
-        <select id="scMgExam" onchange="scMgRender()"></select>
-        <button class="btn2 sm primary" onclick="scMgSave()">💾 保存修改</button>
+        <span class="sctip">删除场次：</span>
+        <select id="scMgExam"></select>
         <button class="btn2 sm ghost" style="color:#dc2626" onclick="scMgDelExam()">🗑 删除整场</button>
+        <button class="btn2 sm primary" onclick="scMgSave()">💾 保存修改</button>
         <button class="btn2 sm ghost" onclick="scDedupePanel()" title="同一场同一人只保留一条（保留字段最全、分数最新的）">🧹 查重去重</button>
+        <button class="btn2 sm ghost" onclick="scImportTargets()">📥 导入目标表</button>
+        <input type="file" id="scTargetFile" accept=".xlsx,.xls" style="display:none" onchange="scImportTargetsFile(event)">
         <span class="sctip" id="scMgTip"></span>
       </div>
       <div id="scMgBox"></div>
@@ -4796,6 +4812,7 @@ function loadScoresFromDB(){
     SC_ROWS=rows.map(function(r){r._id=recId(r);return r});
     SC_LOADED=true;
     scRefreshNames();
+    scLoadTargets();
     scFillFilters();
     scRenderList();
     scRenderAn();
@@ -4810,6 +4827,117 @@ function scRefreshNames(){
   Object.keys(set).sort(function(a,b){return a.localeCompare(b,'zh')}).forEach(function(n){out.push(n)});
   SC_NAMES=out;
 }
+
+/* ========== 2.6.x 学生目标（目标一/二/三）==========
+   来源：班主任上传「学生成绩目标表.xlsx」（列：学号,姓名,目标一,目标二,目标三）。
+   存 localStorage（sc_targets_v1），首次用内置种子填充；成绩管理矩阵据此给分数上色。 */
+var SC_TARGETS={};                 /* 姓名 → {t1,t2,t3,no} */
+var SC_TARGETS_KEY='sc_targets_v1';
+function scLoadTargets(){
+  try{var s=localStorage.getItem(SC_TARGETS_KEY);if(s){SC_TARGETS=JSON.parse(s)||{};return}}catch(e){}
+  SC_TARGETS=JSON.parse(JSON.stringify(SC_TARGETS_SEED||{}));scSaveTargets();
+}
+function scSaveTargets(){ try{localStorage.setItem(SC_TARGETS_KEY,JSON.stringify(SC_TARGETS))}catch(e){} }
+function scTargetOf(name){ return SC_TARGETS[String(name||'').trim()]||null; }
+/* 按达到的目标线上色：≥目标三 浅红 / ≥目标二 浅绿 / ≥目标一 浅蓝；未达不染色 */
+function scTargetColor(v,t){
+  if(v==null||!t)return '';
+  if(t.t3!=null&&v>=t.t3)return '#f7c7c7';
+  if(t.t2!=null&&v>=t.t2)return '#c7ecc9';
+  if(t.t1!=null&&v>=t.t1)return '#c7ddf7';
+  return '';
+}
+/* 导入目标表（Excel：学号,姓名,目标一,目标二,目标三） */
+function scImportTargets(){ var inp=document.getElementById('scTargetFile'); if(inp)inp.click(); }
+function scImportTargetsFile(ev){
+  var f=ev&&ev.target&&ev.target.files&&ev.target.files[0];
+  if(!f)return;
+  if(!wbLoadLib){toastMsg('⚠️ 组件未就绪');return}
+  wbLoadLib('xlsx').then(function(XLSX){
+    return new Promise(function(res,rej){
+      var fr=new FileReader();
+      fr.onload=function(){
+        try{
+          var wb=XLSX.read(new Uint8Array(fr.result),{type:'array'});
+          var ws=wb.Sheets[wb.SheetNames[0]];
+          var aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+          res(aoa);
+        }catch(e){rej(new Error('Excel 解析失败：'+e.message))}
+      };
+      fr.onerror=function(){rej(new Error('文件读取失败'))};
+      fr.readAsArrayBuffer(f);
+    });
+  }).then(function(aoa){
+    var map={},cnt=0;
+    aoa.forEach(function(row){
+      if(!row||!row.length)return;
+      var name=String(row[1]||'').trim();
+      if(!name)return;
+      if(/姓名/.test(name)&&/目标/.test(String(row[2]||'')))return; /* 跳过表头 */
+      function n(x){var v=String(x==null?'':x).trim();if(v===''||v==='—'||v==='-')return null;var p=parseFloat(v);return isNaN(p)?null:p}
+      var no=null; try{no=parseInt(String(row[0]||'').trim(),10)}catch(e){}
+      map[name]={t1:n(row[2]),t2:n(row[3]),t3:n(row[4]),no:isNaN(no)?null:no};
+      cnt++;
+    });
+    if(!cnt){toastMsg('⚠️ 没读到目标数据，请检查表头（学号/姓名/目标一/目标二/目标三）');return}
+    SC_TARGETS=map;scSaveTargets();
+    toastMsg('✅ 已导入 '+cnt+' 名学生的目标');
+    scMgRender();
+  }).catch(function(e){console.error(e);toastMsg('⚠️ 导入失败：'+(e.message||e))});
+}
+var SC_TARGETS_SEED={
+  "蔡卓铖":{t1:90.0,t2:93.0,t3:96.0,no:1},
+  "陈安然":{t1:90.0,t2:93.0,t3:96.0,no:2},
+  "陈发霖":{t1:93.0,t2:96.0,t3:98.0,no:3},
+  "陈峻德":{t1:78.0,t2:86.0,t3:90.0,no:4},
+  "陈思睿":{t1:93.0,t2:96.0,t3:98.0,no:5},
+  "陈嬿如":{t1:88.0,t2:92.0,t3:95.0,no:6},
+  "陈钰康":{t1:90.0,t2:93.0,t3:96.0,no:7},
+  "陈孜铧":{t1:86.0,t2:90.0,t3:93.0,no:8},
+  "邓睿瑾":{t1:93.0,t2:96.0,t3:98.0,no:9},
+  "邓睿瑜":{t1:93.0,t2:96.0,t3:98.0,no:10},
+  "方浩轩":{t1:null,t2:null,t3:null,no:11},
+  "管萱萱":{t1:75.0,t2:80.0,t3:85.0,no:12},
+  "胡婉芸":{t1:93.0,t2:96.0,t3:98.0,no:13},
+  "黄铎鸿":{t1:88.0,t2:90.0,t3:93.0,no:14},
+  "黄思茹":{t1:93.0,t2:96.0,t3:98.0,no:15},
+  "黄梓轩":{t1:90.0,t2:92.0,t3:95.0,no:16},
+  "黄紫琦":{t1:88.0,t2:90.0,t3:93.0,no:17},
+  "蒋子霆":{t1:80.0,t2:85.0,t3:90.0,no:18},
+  "柯骏豪":{t1:null,t2:null,t3:null,no:19},
+  "廖海雯":{t1:88.0,t2:90.0,t3:93.0,no:20},
+  "廖峻乐":{t1:80.0,t2:85.0,t3:90.0,no:21},
+  "林可欣":{t1:93.0,t2:96.0,t3:98.0,no:22},
+  "林南臻":{t1:88.0,t2:90.0,t3:93.0,no:23},
+  "刘霖霖":{t1:93.0,t2:96.0,t3:98.0,no:24},
+  "刘睿萱":{t1:90.0,t2:92.0,t3:95.0,no:25},
+  "刘润":{t1:70.0,t2:75.0,t3:80.0,no:26},
+  "刘熙瞳":{t1:93.0,t2:96.0,t3:98.0,no:27},
+  "吕沛岑":{t1:90.0,t2:92.0,t3:95.0,no:28},
+  "倪车晓宇":{t1:80.0,t2:85.0,t3:90.0,no:29},
+  "牛子悦":{t1:93.0,t2:96.0,t3:98.0,no:30},
+  "沈妙珂":{t1:93.0,t2:96.0,t3:98.0,no:31},
+  "汤静琪":{t1:85.0,t2:88.0,t3:90.0,no:32},
+  "王程纬":{t1:90.0,t2:95.0,t3:98.0,no:33},
+  "王铎玮":{t1:88.0,t2:91.0,t3:94.0,no:34},
+  "巫钦文":{t1:55.0,t2:60.0,t3:70.0,no:35},
+  "吴熙然":{t1:93.0,t2:96.0,t3:98.0,no:36},
+  "吴泽锴":{t1:93.0,t2:96.0,t3:98.0,no:37},
+  "谢瑾汐":{t1:90.0,t2:93.0,t3:96.0,no:38},
+  "谢思羽":{t1:90.0,t2:93.0,t3:96.0,no:39},
+  "徐曼桦":{t1:50.0,t2:60.0,t3:65.0,no:40},
+  "严一马":{t1:88.0,t2:90.0,t3:93.0,no:41},
+  "杨佑之":{t1:93.0,t2:96.0,t3:98.0,no:42},
+  "阴宇航":{t1:90.0,t2:93.0,t3:96.0,no:43},
+  "张芷铭":{t1:90.0,t2:93.0,t3:96.0,no:44},
+  "甄俊泓":{t1:93.0,t2:96.0,t3:98.0,no:45},
+  "郑竣玮":{t1:88.0,t2:90.0,t3:93.0,no:46},
+  "郑思彤":{t1:85.0,t2:90.0,t3:93.0,no:47},
+  "周子源":{t1:85.0,t2:88.0,t3:90.0,no:48},
+  "朱妍菲":{t1:93.0,t2:96.0,t3:98.0,no:49},
+  "卓雨菲":{t1:93.0,t2:96.0,t3:98.0,no:50},
+  "曾琬茵":{t1:93.0,t2:96.0,t3:98.0,no:51}
+};
 
 /* ---------- 科目下拉（含自定义） ---------- */
 function scFillSubjects(){
@@ -7498,46 +7626,100 @@ function scMgRefresh(){
 
 function scMgRender(){
   var box=document.getElementById('scMgBox');
-  var sel=document.getElementById('scMgExam');
   var tip=document.getElementById('scMgTip');
-  var k=sel.value;
   fill(box);
-  if(!k||k.indexOf('｜')<0){
-    if(tip)tip.textContent='';
-    fill(box,el('div','empty','还没有可管理的成绩。到「成绩录入」登记一场，或导入历史成绩。'));
+  var subj=SC_CUR_SUBJ||'';
+  /* 收集该科目（或全部）的考试，按日期升序 */
+  var exams=[],seen={},meta={};
+  SC_ROWS.forEach(function(r){
+    var s=fval(r,'科目'),e=fval(r,'考试名称');
+    if(!e)return;
+    if(subj&&s!==subj)return;
+    var k=s+'｜'+e;
+    if(!seen[k]){seen[k]=1;exams.push({subj:s,exam:e});if(!meta[k])meta[k]={date:fval(r,'考试日期')||'',type:fval(r,'考试类型')||'',term:fval(r,'学期')||''}}
+  });
+  exams.sort(function(a,b){
+    var da=meta[a.subj+'｜'+a.exam].date, db=meta[b.subj+'｜'+b.exam].date;
+    if(da&&db&&da!==db)return da<db?-1:1;
+    return a.exam<b.exam?-1:1;
+  });
+  if(tip)tip.textContent=(subj?('「'+subj+'」'):'全部科目')+' · '+exams.length+' 场 · '+(SC_NAMES.length)+' 人'+(subj?'（点上方科目可切换）':'');
+  if(!exams.length){
+    box.appendChild(el('div','empty','这个科目还没有成绩记录。到「成绩录入」登记一场，或导入历史成绩。'));
     return;
   }
-  var pi=k.indexOf('｜');
-  var sub=k.slice(0,pi),exam=k.slice(pi+1);
-  var rows=SC_ROWS.filter(function(r){return fval(r,'科目')===sub&&fval(r,'考试名称')===exam});
-  if(tip)tip.textContent=sub+' · '+exam+' · '+rows.length+' 条';
-  var tb=el('table','sct');
+  /* 学生顺序：按学号（目标表里有），无学号排后面 */
+  var students=SC_NAMES.slice().sort(function(a,b){
+    var na=(SC_TARGETS[a]&&SC_TARGETS[a].no)||9999, nb=(SC_TARGETS[b]&&SC_TARGETS[b].no)||9999;
+    if(na!==nb)return na-nb; return a.localeCompare(b,'zh');
+  });
+  if(!students.length){
+    box.appendChild(el('div','note','还没有学生名单，请先在「学生管理」里录入。'));
+    return;
+  }
+  /* 查找表：科目|考试|姓名 → 记录 */
+  var map={};
+  SC_ROWS.forEach(function(r){
+    var s=fval(r,'科目'),e=fval(r,'考试名称'),n=fval(r,'学生姓名');
+    if(subj&&s!==subj)return; if(!n||!e)return;
+    map[s+'｜'+e+'｜'+n]=r;
+  });
+  var tb=el('table','sct mtx');
   var th=el('thead'),trh=el('tr');
-  ['姓名','分数','考试类型','学期','考试日期','操作'].forEach(function(h){trh.appendChild(el('th',null,h))});
+  trh.appendChild(el('th','nmh','姓名'));
+  exams.forEach(function(x){
+    var k=x.subj+'｜'+x.exam;
+    var thc=el('th','exh');
+    thc.appendChild(el('div','exn', subj?x.exam:(x.subj+'｜'+x.exam)));
+    if(meta[k].date)thc.appendChild(el('div','exd',meta[k].date));
+    trh.appendChild(thc);
+  });
+  trh.appendChild(el('th','tgth','学生目标'));
   th.appendChild(trh);tb.appendChild(th);
   var tbody=el('tbody');
-  rows.forEach(function(r){
+  students.forEach(function(nm){
     var tr=el('tr');
-    tr.appendChild(el('td','nm',fval(r,'学生姓名')));
-    var tdS=el('td');
-    var inp=el('input');
-    inp.type='number';inp.step='0.5';
-    inp.style.width='80px';inp.style.textAlign='center';
-    inp.value=fnum(r,'分数')!=null?fnum(r,'分数'):'';
-    inp.dataset.id=r._id;inp.dataset.orig=fnum(r,'分数')!=null?fnum(r,'分数'):'';
-    tdS.appendChild(inp);tr.appendChild(tdS);
-    tr.appendChild(el('td',null,fval(r,'考试类型')||'—'));
-    tr.appendChild(el('td',null,fval(r,'学期')||'—'));
-    tr.appendChild(el('td',null,fval(r,'考试日期')||fval(r,'日期')||'—'));
-    var tdD=el('td');
-    var del=el('button','btn2 xs','删除');
-    del.style.color='#dc2626';
-    del.onclick=function(){scMgDel(r._id,sub,exam)};
-    tdD.appendChild(del);tr.appendChild(tdD);
+    tr.appendChild(el('td','nm',nm));
+    var tgt=scTargetOf(nm);
+    exams.forEach(function(x){
+      var k=x.subj+'｜'+x.exam+'｜'+nm;
+      var r=map[k];
+      var td=el('td','sc');
+      if(r){
+        var v=fnum(r,'分数');
+        var inp=el('input');inp.type='number';inp.step='0.5';inp.style.width='54px';inp.style.textAlign='center';
+        inp.value=v!=null?v:'';
+        inp.dataset.id=r._id;inp.dataset.orig=v!=null?v:'';
+        var bg=scTargetColor(v,tgt);
+        if(bg)inp.style.background=bg;
+        td.appendChild(inp);
+      }else{
+        td.appendChild(el('span','na','—'));
+      }
+      tr.appendChild(td);
+    });
+    /* 目标列 */
+    var tdt=el('td','tgt');
+    var hasAny=tgt&&(tgt.t1!=null||tgt.t2!=null||tgt.t3!=null);
+    if(tgt&&hasAny){
+      [['一',tgt.t1],['二',tgt.t2],['三',tgt.t3]].forEach(function(p){
+        var txt=p[0]+(p[1]!=null?p[1]:'—');
+        var b=el('span','tbadge'+(p[1]!=null?'':' off'),txt);
+        if(p[1]!=null){ if(p[0]==='一')b.style.background='#c7ddf7'; else if(p[0]==='二')b.style.background='#c7ecc9'; else b.style.background='#f7c7c7'; }
+        tdt.appendChild(b);
+      });
+    }else{ tdt.appendChild(el('span','na','—')); }
+    tr.appendChild(tdt);
     tbody.appendChild(tr);
   });
-  tb.appendChild(tbody);box.appendChild(tb);
-  box.appendChild(el('div','note','改完分数点「保存修改」，会写回资料库并同步到云端；删除单条或整场操作不可恢复，请确认后再点。'));
+  tb.appendChild(tbody);
+  var wrap=el('div');
+  wrap.style.overflow='auto';wrap.style.maxHeight='540px';wrap.style.border='1px solid #e3e9ef';wrap.style.borderRadius='8px';wrap.style.marginTop='8px';
+  wrap.appendChild(tb);
+  box.appendChild(wrap);
+  var lg=el('div','legend');
+  lg.innerHTML='<b>底色含义</b>：分数 ≥ 目标三 浅红，≥ 目标二 浅绿，≥ 目标一 浅蓝；未达目标一不染色。最右列「学生目标」为该生三条目标线（一/二/三）。改分后点「保存修改」写回资料库并同步云端。';
+  box.appendChild(lg);
 }
 
 function scMgSave(){
