@@ -1207,7 +1207,7 @@ table.paper td.l{text-align:left;font-weight:600}
 <body data-page-node-id="VWm2YCKhwxOUBWSlexIaam">
 <aside data-page-node-id="uyTdXvcdMMBT8HJ1ZWRO9X">
   <div data-page-node-id="YkELpTUKfJkpu7qzDPa66K" class="logo"><!--pnid:7ytoUsgxIUXQsQNXnaE57T-->教师工作台</div>
-  <div class="verline" id="appVer">✨ 优化版 vT26 · 11-01 · 2.6.70</div>
+  <div class="verline" id="appVer">✨ 优化版 vT27 · 11-01 · 2.6.71</div>
   <nav data-page-node-id="ljZdrlGNjxdpectAoWjkyv" id="nav">
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS" class="active" data-s="home">🏠 <span class="lbl">今日首页</span></button>
 
@@ -12909,25 +12909,49 @@ function hwAddItem(){
 }
 /* 删除一整列作业（含该列所有学生的登记记录）。仅删本机数据表记录，
    其它端会在下一轮同步按墓碑清掉；科目映射里这一列也一并移除。 */
+/* vT27 整列删除墓碑：不写墓碑的话，Gitee 云端 doc 里上一轮快照仍留着这一列，
+   下一轮同步 giteeMergeIntoCloud 会把云端旧记录当成"本机缺失"又并回飞书/本机，
+   表现就是"删完又从云端恢复"。列级键 |col|作业名|日期 与小程序 2.6.40 对齐；
+   记录级键 姓名|作业名|日期 与两端业务键（recBizKey / 小程序 _hwKey）对齐。 */
+function hwTomAddKey(k){
+  try{
+    var a=(typeof tomLoad==='function')?tomLoad():[];
+    for(var i=0;i<a.length;i++){if(a[i].t==='hw'&&a[i].k===k){a[i].at=Date.now();if(typeof tomSave==='function')tomSave(a);return}}
+    a.push({t:'hw',k:k,at:Date.now()});
+    if(typeof tomSave==='function')tomSave(a);
+  }catch(e){}
+}
 function hwDeleteColumn(name,date){
   if(!name)return;
   var dk=hwSubjKey(name,date);
   if(!confirm('确定删除作业「'+name+'」？\n\n该列所有学生的登记记录都会一并删除，且无法撤销。\n（仅删除作业登记，不影响成绩/诵读等其它数据）'))return;
   var ymdD=hwDateOnly(date);
+  var _nm=String(name).replace(/\s+/g,'');
   var ids=HW_ROWS.filter(function(r){return fval(r,'作业名称')===name&&hwDateOnly(fval(r,'日期'))===ymdD}).map(function(r){return recId(r)}).filter(Boolean);
+  /* 先写墓碑再动手删：即使飞书删除失败/断网，墓碑也能保证下一轮同步
+     把云端残留清掉，列不会复活 */
+  hwTomAddKey('|col|'+_nm+'|'+ymdD);
+  HW_ROWS.forEach(function(r){
+    if(fval(r,'作业名称')!==name||hwDateOnly(fval(r,'日期'))!==ymdD)return;
+    var sn=String(fval(r,'学生姓名')||'').replace(/\s+/g,'');
+    if(sn)hwTomAddKey(sn+'|'+_nm+'|'+ymdD);
+  });
+  var fail=0;
   function finish(){
     HW_ROWS=HW_ROWS.filter(function(r){return !(fval(r,'作业名称')===name&&hwDateOnly(fval(r,'日期'))===ymdD)});
     HW_ITEMS=HW_ITEMS.filter(function(it){return !(it.name===name&&hwDateOnly(it.date)===ymdD)});
     try{delete HW_SUBJECT_MAP[dk];localStorage.setItem('wb_hw_subj',JSON.stringify(HW_SUBJECT_MAP))}catch(e){}
     try{if(typeof hwBuildItems==='function')hwBuildItems()}catch(e){}
     renderHW();renderStu();setTimeout(function(){try{renderHome()}catch(e){}},0);
-    toastMsg('🗑 已删除「'+name+'」');
+    if(fail>0){toastMsg('🗑 已删除「'+name+'」，'+fail+' 条云端记录这次没删掉，同步会自动清掉')}
+    else{toastMsg('🗑 已删除「'+name+'」，正在同步到各端')}
+    try{if(typeof syncScheduleSoon==='function')syncScheduleSoon()}catch(e){}
   }
   if(!ids.length||!dbReady){finish();return}
   var i=0;
   (function step(){
     if(i>=ids.length){finish();return}
-    db.deleteRecord({databaseId:HW_DB,recordId:ids[i]}).then(function(){i++;step()},function(){i++;step()});
+    db.deleteRecord({databaseId:HW_DB,recordId:ids[i]}).then(function(){i++;step()},function(){fail++;i++;step()});
   })();
 }
 function hwToggleCell(td,name,item){
@@ -16675,8 +16699,8 @@ function giteeCfg() {
    发现自己不是最新版 → 弹提示并自动刷新页面，本轮绝不写回。
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
-var WB_MY_VER = '优化版 vT26';
-var WB_BUILD_DATE = '11-01', WB_BUILD_NO = '2.6.70';
+var WB_MY_VER = '优化版 vT27';
+var WB_BUILD_DATE = '11-01', WB_BUILD_NO = '2.6.71';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -16910,6 +16934,19 @@ function giteeMergeIntoCloud(pack) {
           if (row && (row.record_id || row.id)) hwDels.push(row.record_id || row.id);
         });
       }
+      /* vT27 整列删除墓碑：整列被任意端删除 → 飞书里该列的残留记录全部清掉。
+         以前只认记录级键，小程序删整列时（键 |col|作业名|日期）在这里完全不生效，
+         飞书记录留着 → 网页每轮又把它整列写回云端 → 手机上"删完又恢复"。 */
+      if (window.__WB_HW_COL_TOMBS__) {
+        Object.keys(byBiz).forEach(function (bk) {
+          if (bk.indexOf('hw|') !== 0) return;
+          var pp = bk.split('|');   /* hw|姓名|作业名|日期 */
+          if (pp.length >= 4 && window.__WB_HW_COL_TOMBS__[pp[2] + '|' + pp[3]]) {
+            var row = byBiz[bk];
+            if (row && (row.record_id || row.id)) hwDels.push(row.record_id || row.id);
+          }
+        });
+      }
       var add = [], upd = [];
       incoming.forEach(function (r) {
         if (!r) return;
@@ -16918,6 +16955,11 @@ function giteeMergeIntoCloud(pack) {
         var bk2 = recBizKey(tid, r);
         /* 2.6.31 作业墓碑：被移列/删除的登记不再并回云端数据表（防复活） */
         if (bk2 && window.__WB_HW_TOMBS__ && window.__WB_HW_TOMBS__[bk2]) return;
+        /* vT27 整列删除墓碑：属于被删列的登记不再并回云端数据表（防整列复活） */
+        if (bk2 && window.__WB_HW_COL_TOMBS__) {
+          var _ip = bk2.split('|');
+          if (_ip.length >= 4 && _ip[0] === 'hw' && window.__WB_HW_COL_TOMBS__[_ip[2] + '|' + _ip[3]]) return;
+        }
         /* 2.5.8 最后写入胜出：同键记录已存在时，比时间——
            别端的时间更新 → 用别端的覆盖云端这条（含改分、改正姓名等）；
            别端不比我们新 → 保留云端。老的"存在就跳过"会让手机端的修改永远同步不上来。 */
@@ -17226,9 +17268,15 @@ function syncCycleCore(manual) {
          以前只有成绩/备忘有墓碑，作业没有 —— 正文本 12 条移列后，
          旧版设备回写直接把它们复活回生字本11课，墓碑还被旧版回写抹掉。 */
       window.__WB_HW_TOMBS__ = {};
+      window.__WB_HW_COL_TOMBS__ = {};   /* vT27 整列删除墓碑：键 = 作业名(去空格)|日期，来自任意端（小程序 2.6.40 格式对齐） */
       (doc.deletes || []).forEach(function (x) {
         if (x && x.t === 'hw' && x.k) {
           var kk = String(x.k);
+          if (kk.indexOf('|col|') === 0) {
+            var _cp = kk.slice(5).split('|');
+            if (_cp.length >= 2 && _cp[0]) window.__WB_HW_COL_TOMBS__[_cp[0] + '|' + _cp[1]] = 1;
+            return;
+          }
           if (kk.indexOf('hw|') === 0) kk = kk.slice(3);
           window.__WB_HW_TOMBS__['hw|' + kk] = 1;
         }
@@ -17852,6 +17900,18 @@ function mpFromDesk() {
 }
 /* 把一张「记录数组」转成小程序 tables（纯函数，数据源由调用方决定） */
 function mpFromDeskBuild(o) {
+  /* vT27 整列删除墓碑：回写打包前先剔掉被标记的列（作业记录 + 推导出的作业列）。
+     这是最后一道保险 —— 万一飞书删除失败或合并时序竞争，被删的列也绝不再写回 Gitee，
+     否则其它端（小程序/科任/桌面）又会把它拉回来。 */
+  var _ct = {};
+  try {
+    (typeof tomLoad === 'function' ? tomLoad() : []).forEach(function (x) {
+      if (x && x.t === 'hw' && x.k && x.k.indexOf('|col|') === 0) {
+        var p = x.k.slice(5).split('|');
+        if (p.length >= 2 && p[0]) _ct[p[0] + '|' + p[1]] = 1;
+      }
+    });
+  } catch (_cte) {}
   /* ---------- 2.6.15 出口按键去重（治本之一）----------
      反复写脏数据的源头：云端数据表（Bitable）里堆着历史重复记录
      （学生 67 条实际 51 人、作业/诵读同理）。以前这里原样读出，
@@ -17871,7 +17931,10 @@ function mpFromDeskBuild(o) {
       } else if (String(tid) === String(MP_SYNC.hw.table)) {
         var hi = String(dv(p, '作业名称') || '').replace(/\s+/g, '');
         if (!nm || !hi) return true;
-        k = 'hw|' + nm + '|' + hi + '|' + String(dv(p, '日期') || '').slice(0, 10);
+        var _hd = String(dv(p, '日期') || '').slice(0, 10);
+        /* vT27 整列删除墓碑：被删列的登记绝不回写 */
+        if (_ct[hi + '|' + _hd]) return false;
+        k = 'hw|' + nm + '|' + hi + '|' + _hd;
       } else if (String(tid) === String(MP_SYNC.rc.table)) {
         var rt = String(dv(p, '篇目') || '').replace(/\s+/g, '');
         if (!nm || !rt) return true;
