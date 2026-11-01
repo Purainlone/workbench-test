@@ -2382,7 +2382,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <input id="gPath" placeholder="文件前缀（默认 wb_sync_）" style="width:150px;height:34px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:13px">
       </div>
       <div class="syncbtnrow" style="gap:14px;flex-wrap:wrap;margin-top:8px;align-items:center">
-        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" id="gAuto" checked> 自动同步（启动 + 每 10 分钟 + 本机改动后自动「拉取→合并→写回」）</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" id="gAuto" checked onchange="gAutoChanged()"> 自动同步（启动 + 每 10 分钟 + 本机改动后自动「拉取→合并→写回」）</label>
         <button class="btn2 primary" onclick="syncCycle(1)">⟳ 立即同步</button>
         <button class="btn2" onclick="mpSyncPull()">⬇︎ 仅拉取</button>
         <button class="btn2" onclick="mpSyncPush()">⬆︎ 仅推送</button>
@@ -16547,6 +16547,14 @@ function mpSyncSave() {
   toastMsg('云同步设置已保存');
 }
 function mpSyncStatusEl() { return document.getElementById('mpSyncStatus') }
+/* vT26 修复：勾选「自动同步」立即持久化并生效，不再依赖点「保存设置」。
+   以前勾了不保存 → 本地仍是 '0' → 面板一刷新勾就被打回 → 自动同步一直不跑 */
+function gAutoChanged() {
+  var on = !!(document.getElementById('gAuto') && document.getElementById('gAuto').checked);
+  try { localStorage.setItem('wb_g_auto', on ? '1' : '0') } catch (e) {}
+  try { syncScheduleSoon() } catch (e) {}
+  toastMsg(on ? '✅ 自动同步已开启，10 秒内开始首轮同步' : '已关闭自动同步');
+}
 function setst2(el, t) { if (el) el.textContent = t }
 function mpSyncFill() {
   var s = mpSyncSettings();
@@ -16618,6 +16626,8 @@ function giteeCodeImport() {
     localStorage.setItem('wb_g_path', o.path || 'wb_test_');
     localStorage.setItem('wb_sync_class', o.classId || 'c1');
     localStorage.setItem('wb_sync_mode', 'gitee');
+    localStorage.setItem('wb_g_auto', '1');   /* vT26：导入设置码即开启自动同步（以前若本地存过 '0'，提示"即将开始"实际永远不开始） */
+    var _ga = document.getElementById('gAuto'); if (_ga) _ga.checked = true;
     mpSyncFill();
     toastMsg('✅ 已导入设置码，自动同步即将开始');
     syncScheduleSoon();
