@@ -7705,13 +7705,14 @@ function scMgRender(){
       }
       tr.appendChild(td);
     });
-    /* 目标列：一/二/三 可直接在框里手动调整 */
+    /* 目标列：一/二/三 可直接在框里手动调整，底色沿用（一蓝/二绿/三红）便于辨认 */
     var tdt=el('td','tgt');
     tdt.style.whiteSpace='nowrap';
-    [['一','t1',tgt&&tgt.t1],['二','t2',tgt&&tgt.t2],['三','t3',tgt&&tgt.t3]].forEach(function(p){
+    [['一','t1',tgt&&tgt.t1,'#c7ddf7'],['二','t2',tgt&&tgt.t2,'#c7ecc9'],['三','t3',tgt&&tgt.t3,'#f7c7c7']].forEach(function(p){
       var inp=el('input');
       inp.type='number';inp.step='0.5';inp.min='0';inp.max='150';
       inp.style.width='44px';inp.style.textAlign='center';inp.style.margin='1px 1px';inp.style.fontSize='12px';inp.style.padding='2px';
+      inp.style.background=p[3];inp.style.border='1px solid rgba(0,0,0,.12)';
       inp.value=(p[2]!=null?p[2]:'');
       inp.placeholder='—';
       inp.dataset.tname=nm;inp.dataset.tfield=p[1];inp.dataset.orig=(p[2]!=null?p[2]:'');
