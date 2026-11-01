@@ -2396,6 +2396,11 @@ table.paper td.l{text-align:left;font-weight:600}
         <input id="giteeCodeOut" placeholder="设置码在这生成 / 把小程序的码粘到这" style="flex:1;min-width:240px;height:34px;border:1px dashed #b9c6da;border-radius:8px;padding:0 10px;font-size:12px">
       </div>
       <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
+        <button class="btn2 primary" onclick="wbOwnerPinSetFlow()" title="设置只有您知道的退出口令">🔐 班主任口令：<span id="wbOwnerPinState">未设置</span></button>
+        <button class="btn2" onclick="wbOwnerPinCopyCode()" title="复制登记码，粘到手机小程序即可登记口令">📋 复制口令登记码</button>
+        <span style="font-size:12px;color:#76867e">设了之后，把设备交给科任老师时，他点「退出科任模式」必须输入这个口令才能退回班主任视图（口令明文任何设备都不保存，只留加盐哈希）</span>
+      </div>
+      <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
         <button class="btn2 primary" onclick="cloudBackupLocal()" title="把云端数据 + 座位表 / 通讯录 / 教研库 / 专著库 打包下载到本地，并在浏览器内保留最近 5 份">💾 一键备份到本地</button>
         <button class="btn2" onclick="cloudBakRestore()" title="从浏览器内保留的最近 5 份备份里挑一份恢复">↩︎ 从本地备份恢复</button>
         <span style="font-size:12px;color:#76867e">2.6.56 起：座位表 / 通讯录 / 教研库 / 专著库 已并入云端同步，不再只存本机</span>
@@ -16784,6 +16789,245 @@ function giteeCfg() {
   return { owner: s.gOwner, repo: s.gRepo, token: s.gToken, auto: s.gAuto,
            path: (s.gPath || 'wb_test_') + (s.classId || 'c1') + '.json' };
 }
+/* ================= vT30 班主任口令（共享设备信任边界）=================
+   要解决的问题：同一台共享手机上，科任老师点一下「退出科任模式」就能
+   回到班主任完整视图（学生名单 / 云同步设置 / Gitee 令牌全在里面）。
+
+   为什么不能只「校验云端配置」：
+     科任老师的手机本来就必须持有 Gitee 配置（不配就取不到学生名单、
+     也写不回云端），那套配置就躺在共享设备的本地存储里 ——
+     拿"本机有配置"当校验是假校验，挡不住任何人。
+
+   真正的信任根 = 班主任口令（明文只在班主任手里，任何端都不存）：
+     · 本机（这台电脑）localStorage  wb_owner_pin_v1 = {v,salt,pepper,hash,at}
+     · 云端                        doc.ownerAuth      = {v,salt,hash,at,by}
+   哈希 = sha256(salt|pepper|明文)。
+
+   ★ pepper 是关键 ★
+     pepper 只存在本机与「口令登记码」里，绝不写进云端。
+     科任老师手里有 Gitee token，能读写云端文件 —— 如果云端那份哈希
+     不含 pepper，他就能自己造一份"hash = sha256(他的盐 + 他的口令)"
+     写进云端，然后在小程序输入他自己的口令混过去。
+     带上 pepper 后，云端那份缺了 pepper 就算不出任何口令的哈希，
+     他改云端只会让自己被拒（fail-closed），永远造不出能通过校验的记录。
+
+   网页端还负责"口令登记码"的源头：登记码里带着 pepper，
+   是把 pepper 送到另一台设备的唯一途径（云端不带 pepper）。
+   别的端拿 token 硬改云端，下一轮网页端同步就按 LWW 纠正回来。
+
+   哈希算法：纯 JS SHA-256，与小程序端 utils/sha256.js 完全一致。 */
+var WB_OWNER_PIN_KEY = 'wb_owner_pin_v1';
+function wbOwnerPinGet() {
+  try {
+    var p = JSON.parse(localStorage.getItem(WB_OWNER_PIN_KEY) || 'null');
+    if (p && p.salt && p.hash) return p;
+  } catch (e) {}
+  return null;
+}
+function wbOwnerPinSet(salt, pepper, hash, at) {
+  var p = { v: 1, salt: String(salt), pepper: String(pepper || ''), hash: String(hash), at: at || Date.now() };
+  try { localStorage.setItem(WB_OWNER_PIN_KEY, JSON.stringify(p)) } catch (e) {}
+  return p;
+}
+function wbOwnerPinClear() { try { localStorage.removeItem(WB_OWNER_PIN_KEY) } catch (e) {} }
+/* 口令哈希：sha256(salt|明文) —— 与小程序 wbpin.pinHash 完全一致。
+   ⚠ 这里不用 ntSha256Hex：它在 crypto.subtle 不可用时（file:// 本地打开
+   等非安全上下文）会退化成 djb2，与小程序端的真 SHA-256 对不上，
+   导致口令永远校验不过。所以自己实现一份纯 JS SHA-256，行为确定。 */
+function wbSha256Hex(str) {
+  function utf8b(s) {
+    var out = [], i, c, c2, cp;
+    s = String(s == null ? '' : s);
+    for (i = 0; i < s.length; i++) {
+      c = s.charCodeAt(i);
+      if (c < 0x80) { out.push(c); continue }
+      if (c < 0x800) { out.push(0xc0 | (c >> 6), 0x80 | (c & 63)); continue }
+      if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length) {
+        c2 = s.charCodeAt(i + 1);
+        cp = 0x10000 + ((c & 0x3ff) << 10) + (c2 & 0x3ff);
+        i++;
+        out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 63), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
+        continue
+      }
+      out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    return out;
+  }
+  function rotr(x, n) { return ((x >>> n) | (x << (32 - n))) | 0 }
+  var K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  var bytes = utf8b(str), bitLen = bytes.length * 8;
+  bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  bytes.push(0, 0, 0, 0);
+  bytes.push((bitLen >>> 24) & 255, (bitLen >>> 16) & 255, (bitLen >>> 8) & 255, bitLen & 255);
+  var h = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  var w = new Array(64), i, j;
+  for (i = 0; i < bytes.length; i += 64) {
+    for (j = 0; j < 16; j++) {
+      w[j] = (bytes[i+j*4] << 24) | (bytes[i+j*4+1] << 16) | (bytes[i+j*4+2] << 8) | bytes[i+j*4+3];
+    }
+    for (j = 16; j < 64; j++) {
+      var x = w[j-15], y = w[j-2];
+      var s0 = rotr(x, 7) ^ rotr(x, 18) ^ (x >>> 3);
+      var s1 = rotr(y, 17) ^ rotr(y, 19) ^ (y >>> 10);
+      w[j] = (w[j-16] + s0 + w[j-7] + s1) | 0;
+    }
+    var a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+    for (j = 0; j < 64; j++) {
+      var S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      var ch = (e & f) ^ ((~e) & g);
+      var t1 = (hh + S1 + ch + K[j] + w[j]) | 0;
+      var S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      var maj = (a & b) ^ (a & c) ^ (b & c);
+      var t2 = (S0 + maj) | 0;
+      hh = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    h[0]=(h[0]+a)|0; h[1]=(h[1]+b)|0; h[2]=(h[2]+c)|0; h[3]=(h[3]+d)|0;
+    h[4]=(h[4]+e)|0; h[5]=(h[5]+f)|0; h[6]=(h[6]+g)|0; h[7]=(h[7]+hh)|0;
+  }
+  var out = '';
+  for (var k = 0; k < 8; k++) out += ('00000000' + (h[k] >>> 0).toString(16)).slice(-8);
+  return out;
+}
+function wbOwnerPinHash(salt, pepper, pin) {
+  if (pin === undefined) {
+    throw new Error('wbOwnerPinHash 需要三个参数：wbOwnerPinHash(salt, pepper, pin)');
+  }
+  return Promise.resolve(wbSha256Hex(String(salt) + '|' + String(pepper || '') + '|' + String(pin)));
+}
+/* 云端那份读出来（兼容老版本写成字符串的情况）
+   ⚠ 云端那份不含 pepper —— 这是安全设计的核心，别加上去 */
+function wbOwnerAuthRead(doc) {
+  if (!doc) return null;
+  var a = doc.ownerAuth;
+  if (!a) return null;
+  if (typeof a === 'string') { try { a = JSON.parse(a) } catch (e) { return null } }
+  if (typeof a !== 'object' || !a.salt || !a.hash) return null;
+  return { v: a.v || 1, salt: String(a.salt), hash: String(a.hash), at: Number(a.at) || 0, by: a.by || '' };
+}
+/* 写回云端时合并 ownerAuth：本机副本 vs 云端副本，按 at 取新的。
+   网页端是权威端 —— 本机有副本时，本机那份优先（云端被改过也纠正回来）。
+   ⚠ 写进云端的只有 {salt, hash, at, by}，绝不带 pepper。 */
+function wbOwnerAuthMerge(doc, by) {
+  if (!doc) return doc;
+  var mine = wbOwnerPinGet();
+  var cloud = wbOwnerAuthRead(doc);
+  var pick = null;
+  if (mine && cloud) {
+    /* 网页端是权威仲裁者：只要本机有副本，就以本机为准
+       （云端被别的端拿 token 改过时，这里会纠正回来） */
+    pick = mine;
+  } else {
+    pick = mine || cloud;
+  }
+  if (!pick) return doc;
+  doc.ownerAuth = { v: 1, salt: pick.salt, hash: pick.hash, at: Number(pick.at) || 0, by: pick.by || by || 'web' };
+  return doc;
+}
+/* 生成随机盐 / pepper（各 16 字节 hex）
+   pepper 是"只有班主任那台设备才知道"的佐料 —— 它绝不上云，
+   只随「口令登记码」一起传给别的设备。 */
+function wbOwnerPinSalt() {
+  var b = new Uint8Array(16);
+  try { crypto.getRandomValues(b); } catch (e) {
+    for (var i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+  }
+  var s = '';
+  for (var j = 0; j < b.length; j++) s += ('0' + b[j].toString(16)).slice(-2);
+  return s;
+}
+/* 口令登记码：把 pepper 从这台设备送到另一台设备的唯一途径
+   格式 base64(JSON {t:'WBPIN1', salt, pepper, hash, at}) —— 与小程序 wbpin.js 同款 */
+function wbOwnerPinMakeCode(rec) {
+  var r = rec || wbOwnerPinGet();
+  if (!r) return '';
+  try {
+    return b64eUtf(JSON.stringify({ t: 'WBPIN1', salt: r.salt, pepper: r.pepper || '', hash: r.hash, at: r.at || Date.now() }));
+  } catch (e) { return '' }
+}
+function wbOwnerPinCopyCode() {
+  var code = wbOwnerPinMakeCode();
+  if (!code) { alert('还没有设置班主任口令。'); return; }
+  var el = document.getElementById('giteeCodeOut');
+  if (el) { el.value = code; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(code).then(function () {
+      alert('已复制口令登记码。\n\n把它粘到手机小程序的「我的 → 班主任口令 → 粘贴口令登记码」，\n那台设备就登记好了（退出科任模式时需要口令）。\n\n注意：登记码含只有班主任才有的校验料，别转发给科任老师。');
+    }, function () {
+      alert('登记码已生成在下面的输入框里，请手动复制。');
+    });
+  } else {
+    alert('登记码已生成在下面的输入框里，请手动复制。');
+  }
+}
+/* 设置 / 修改口令：写本机 + 立刻写云端 */
+function wbOwnerPinSetFlow(oldPin) {
+  var cur = wbOwnerPinGet();
+  function askOld(cb) {
+    if (!cur) return cb(true);
+    var o = prompt('修改口令需要先输入原口令（留空取消）：');
+    if (o === null) return false;
+    wbOwnerPinHash(cur.salt, cur.pepper || '', o).then(function (h) {
+      if (h !== cur.hash) { alert('原口令不对。'); return }
+      cb(true);
+    });
+    return true;
+  }
+  askOld(function (ok) {
+    if (!ok) return;
+    var np = prompt('设置班主任口令（至少 4 位，只有您自己知道；任何设备都不保存明文）：');
+    if (np === null) return;
+    np = String(np).trim();
+    if (np.length < 4) { alert('口令至少 4 位。'); return; }
+    var np2 = prompt('再输一次确认：');
+    if (np2 === null) return;
+    if (String(np2).trim() !== np) { alert('两次输入不一致。'); return; }
+    var salt = wbOwnerPinSalt(), pepper = wbOwnerPinSalt();
+    wbOwnerPinHash(salt, pepper, np).then(function (hash) {
+      var p = wbOwnerPinSet(salt, pepper, hash, Date.now());
+      /* 立刻写回云端（不等自动同步）
+         ⚠ 云端那份只带 {salt, hash, at, by}，不带 pepper —— 这是安全设计的核心 */
+      giteeGet().then(function (res) {
+        var doc = res.empty ? { rev: 0, syncVersion: SYNC_PROTO, tables: {}, deletes: [] } : res.doc;
+        if (!doc.tables) doc.tables = {};
+        doc.ownerAuth = { v: 1, salt: p.salt, hash: p.hash, at: p.at, by: 'web' };
+        return giteePut(doc, res.empty ? '' : res.sha);
+      }).then(function () {
+        alert('✅ 班主任口令已设置，并已写入云端。\n\n' +
+              '以后把这台设备（或同步过同一数据中心的手机）交给科任老师时，\n' +
+              '他点「退出科任模式」必须输入这个口令才能退回班主任视图。\n\n' +
+              '提示：手机要登记口令，请点旁边的「复制口令登记码」，\n把那串码粘到手机的「我的 → 班主任口令 → 粘贴口令登记码」。');
+        try { wbOwnerPinPaint(); } catch (e) {}
+      }, function (e) {
+        alert('口令已存在本机，但写回云端失败：' + ((e && e.message) || '写入失败') +
+              '\n\n稍后点「立即同步」即可补上（在此之前，手机端会因云端口令不一致而拒绝退出科任模式）。');
+        try { wbOwnerPinPaint(); } catch (e) {}
+      });
+    });
+  });
+}
+/* 顶部状态显示 */
+function wbOwnerPinPaint() {
+  var el = document.getElementById('wbOwnerPinState');
+  if (!el) return;
+  var p = wbOwnerPinGet();
+  el.textContent = p ? ('已设置 · ' + new Date(p.at || Date.now()).toLocaleDateString()) : '未设置';
+}
+/* 页面加载后刷新一次状态（否则按钮上永远显示"未设置"） */
+try {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { try { wbOwnerPinPaint(); } catch (e) {} });
+  } else {
+    wbOwnerPinPaint();
+  }
+} catch (e) {}
 /* ---------- 2.6.15 版本自检（根治「旧标签页反复写脏数据」）----------
    网页版是常驻标签页，开了几天不刷新，里面跑的永远是旧版 JS；旧版没有
    "并集去重"，每 10 分钟自动同步一次，就把云端数据表里的历史重复记录
@@ -16792,8 +17036,8 @@ function giteeCfg() {
    发现自己不是最新版 → 弹提示并自动刷新页面，本轮绝不写回。
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
-var WB_MY_VER = '优化版 vT29';
-var WB_BUILD_DATE = '11-01', WB_BUILD_NO = '2.6.73';
+var WB_MY_VER = '优化版 vT30';
+var WB_BUILD_DATE = '11-01', WB_BUILD_NO = '2.6.74';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -17440,6 +17684,11 @@ function syncCycleCore(manual) {
                     releaseVer: WB_MY_VER,           /* 2.6.15 发布标记：随同步文件走，旧标签页据此自检 */
                     tables: {},
                     deletes: (doc.deletes || []).slice() };   /* 2.6.31 透传墓碑：以前桌面回写把 deletes 整个丢掉，手机端的作业墓碑一轮就被抹掉 */
+        /* vT30 透传班主任口令记录（ownerAuth）：与 releaseVer 同款保护。
+           网页端是这台数据中心的权威仲裁者 —— 它本地存着口令权威副本，
+           写回时按 at 取较新的一份；科任老师拿 token 硬改云端，
+           下一轮网页端同步就会把正确的那份纠正回来。 */
+        try { wbOwnerAuthMerge(out, 'web') } catch (_wae) {}
         Object.keys(mine).forEach(function (k) { out.tables[k] = mine[k] });
         /* vT28 本机墓碑必须一起上传：以前这里只带远端 doc.deletes，
            本机刚写的删除墓碑（刚删掉的那一列）根本没进云端 →
@@ -17653,7 +17902,9 @@ function wbSnapSave(doc) {
   try {
     localStorage.setItem(WB_SNAP_KEY, JSON.stringify({
       rev: Number(doc && doc.rev) || 0, syncVersion: SYNC_PROTO,
-      tables: (doc && doc.tables) || {}, deletes: (doc && doc.deletes) || [], at: Date.now()
+      tables: (doc && doc.tables) || {}, deletes: (doc && doc.deletes) || [], at: Date.now(),
+      /* vT30 快照里也要存口令记录：自愈写回时若不带，doc.ownerAuth 就被抹掉了 */
+      ownerAuth: wbOwnerAuthRead(doc) || null
     }));
   } catch (e) {}
 }
@@ -17676,6 +17927,9 @@ function wbRepairIfStale(res) {
     updatedAt: Date.now(), updatedBy: 'desk-repair',
     tables: snap.tables, deletes: snap.deletes || []
   };
+  /* vT30 自愈写回也必须带上口令记录：这一步会用快照整份覆盖云端，
+     若不带 ownerAuth，共享设备上的口令闸门就被顺手抹掉了。 */
+  try { wbOwnerAuthMerge(fixed, 'web-repair') } catch (_wae) {}
   return giteePut(fixed, res.sha).then(function () {
     try { console.warn('[gitee-sync] 检测到旧版写入，已用干净快照修复') } catch (e) {}
     wbSetRev(fixed.rev);
