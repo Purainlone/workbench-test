@@ -30,7 +30,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-he
   <div class="tip" id="ldt">正在加载工作台，请稍候…<br>首次加载约 3MB，之后浏览器会缓存、秒开，之后会快很多</div>
   <button id="ldr" onclick="location.reload()">🔄 重新加载</button>
   <div id="lde"></div>
-  <div class="ver">🧪 测试版 vT14 · 2.6.70</div>
+  <div class="ver">🧪 测试版 vT24 · 2.6.70</div>
 </div>
 <script>
 /* 2.6.61 启动器：单文件应用 3.3MB，在慢速/不稳定链路上直接打开可能被截断，
@@ -43,7 +43,9 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-he
   function fail(s) { e.innerHTML = s; b.style.display = 'inline-block' }
   function go(tries) {
     var u = 'app.html';
-    u += (location.search ? location.search : '?v=t1');
+    /* vT24 缓存修复：部署脚本每次会把 1793491669716 替换成部署时间戳，
+       缓存键每次部署都变 —— 用户不再需要清缓存/强刷才能拿到新版 */
+    u += (location.search ? location.search : '?v=1793491669716');
     say('正在加载工作台' + (tries ? '（第 ' + (tries + 1) + ' 次尝试）' : '') + '…');
     fetch(u).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
