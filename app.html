@@ -32737,9 +32737,23 @@ function cwInit(){
   }
   function ptApproveSub(id) {
     var s = ptGet(); var x = s.petSubmissions.filter(function (y) { return y.id === id; })[0]; if (!x) return;
-    var def = PetCore.buildPetDef(Object.assign({}, x.def, { origin: 'student', approved: true }));
-    def.id = 'sp_' + PetCore.hashStr((x.def && x.def.name || 's') + Date.now());
-    def.authorStudentId = x.studentId;
+    var def;
+    if (x.def && x.def.customSvg && x.def.customSvg.length) {
+      /* 自由涂鸦：必须保留 customSvg —— buildPetDef 会清空 customSvg 并强制 uniform，绝不能走那条路 */
+      def = {
+        id: 'sp_' + PetCore.hashStr((x.def.name || 's') + Date.now()),
+        name: x.def.name || '学生涂鸦', series: x.def.series || '同学共创', archetype: 'freehand',
+        style: x.def.style || '中性', rarity: x.def.rarity || '普通',
+        skin: x.def.skin || '#3f7be0', hair: x.def.hair || '#7a4a2a', acc: x.def.acc || '#ffd23f',
+        ears: 'none', horn: '', hat: '', prop: [], tail: '', emoji: x.def.emoji || '✏️',
+        customSvg: x.def.customSvg, ink: x.def.ink || '#2b2b33',
+        origin: 'student', authorStudentId: x.studentId, approved: true, createdAt: Date.now()
+      };
+    } else {
+      def = PetCore.buildPetDef(Object.assign({}, x.def, { origin: 'student', approved: true }));
+      def.id = 'sp_' + PetCore.hashStr((x.def && x.def.name || 's') + Date.now());
+      def.authorStudentId = x.studentId;
+    }
     s.petPool.push(def);
     x.status = 'approved';
     ptSave(s); PET_DB = s; toastMsg('✅ 已入池（同学共创）'); ptRenderSub(); ptRenderIncubator();
