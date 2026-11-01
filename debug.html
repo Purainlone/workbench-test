@@ -14574,22 +14574,23 @@ window.onerror=function(m,s,l,c,e){try{console.log("[dbg] UNCAUGHT:",String(m).s
     return;
   }
   dbReady=true;
-  loadSeatsFromDB();
-  loadContactsFromDB();
-  loadDutyFromDB();
-  rmLoadAlerted();loadMemosFromDB();
-  ebLoadBlocks();ebLoadAll();
+  loadSeatsFromDB();try{console.log("[dbg] after loadSeatsFromDB")}catch(e){}
+  loadContactsFromDB();try{console.log("[dbg] after loadContactsFromDB")}catch(e){}
+  loadDutyFromDB();try{console.log("[dbg] after loadDutyFromDB")}catch(e){}
+  rmLoadAlerted();loadMemosFromDB();try{console.log("[dbg] after loadMemos")}catch(e){}
+  ebLoadBlocks();ebLoadAll();try{console.log("[dbg] after ebLoadAll")}catch(e){}
   setTimeout(function(){try{renderHome()}catch(e){console.error('[首页] 首屏渲染失败',e)}},0)
-  loadReciteFromDB();
-  scFillSubjects();
-  loadScoresFromDB();
-  hwToday();
-  Promise.all([loadHW(),loadGA(),loadST()]).then(function(){
+  loadReciteFromDB();try{console.log("[dbg] after loadReciteFromDB")}catch(e){}
+  scFillSubjects();try{console.log("[dbg] after scFillSubjects")}catch(e){}
+  loadScoresFromDB();try{console.log("[dbg] after loadScoresFromDB")}catch(e){}
+  hwToday();try{console.log("[dbg] after hwToday")}catch(e){}
+  Promise.all([loadHW(),loadGA(),loadST()]).then(function(){try{console.log("[dbg] enter PromiseAllHW-cb")}catch(e){}
     gpPaintEdit();renderHW();renderGroup();renderStu();
     setTimeout(function(){try{renderHome()}catch(e){console.error('[首页] 作业加载后刷新失败',e)}},0);
     hwSyncLvCloud();   /* 确保飞书「等级」字段含「超时未交」选项，跨端同步才存得进 */
     try{console.log("[dbg] after hwSyncLvCloud")}catch(e){}
     try{ hwBackfillSubjects(); }catch(e){}   /* 若本会话已拿到 Gitee 科目，先补一次；否则等同步周期补 */
+    try{console.log("[dbg] after hwBackfillSubjects")}catch(e){}
   });
   /* 别处（手机/电脑/表格界面）改了数据，这里自动刷新 */
   if(typeof db.onUpdated==='function'){
@@ -14750,7 +14751,6 @@ function hwBackfillSubjects(){try{console.log("[dbg] enter hwBackfillSubjects")}
       else HW_SUBJECT_MAP[k]='语文';           /* Gitee 里没有、或科目为空 → 班主任建的列，自动归「语文」（vT24 科目全程自动，不手选） */
     });
     try{localStorage.setItem('wb_hw_subj',JSON.stringify(HW_SUBJECT_MAP))}catch(e){}
-  try{console.log("[dbg] hwBackfillSubjects EXIT")}catch(e){}
   }catch(e){}
 }
 /* 本周一 00:00（以周一为一周起点） */
