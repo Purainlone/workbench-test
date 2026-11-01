@@ -12821,7 +12821,7 @@ function hwLoadLvSchema(onDone){
   });
 }
 /* 把「超时未交」选项补到飞书「等级」单选字段（幂等，失败不打断正常登记） */
-function hwSyncLvCloud(){
+function hwSyncLvCloud(){try{console.log("[dbg] enter hwSyncLvCloud")}catch(e){}
   if(!dbReady||!db||!db.updateField)return;
   if(!HW_LV_FIELD_ID){
     /* 没拿到字段 id 就先读结构，读一次后重试 */
@@ -14546,6 +14546,7 @@ function stuUndoClear(){
 }
 
 /* ---------- 启动 ---------- */
+window.onerror=function(m,s,l,c,e){try{console.log("[dbg] UNCAUGHT:",String(m).slice(0,120),"@line",l)}catch(x){}};
 (function boot(){
  try{
   rcLoadTitles();
@@ -14592,6 +14593,7 @@ function stuUndoClear(){
     gpPaintEdit();renderHW();renderGroup();renderStu();
     setTimeout(function(){try{renderHome()}catch(e){console.error('[首页] 作业加载后刷新失败',e)}},0);
     hwSyncLvCloud();   /* 确保飞书「等级」字段含「超时未交」选项，跨端同步才存得进 */
+    try{console.log("[dbg] after hwSyncLvCloud")}catch(e){}
     try{ hwBackfillSubjects(); }catch(e){}   /* 若本会话已拿到 Gitee 科目，先补一次；否则等同步周期补 */
   });
   /* 别处（手机/电脑/表格界面）改了数据，这里自动刷新 */
@@ -14753,6 +14755,7 @@ function hwBackfillSubjects(){try{console.log("[dbg] enter hwBackfillSubjects")}
       else HW_SUBJECT_MAP[k]='语文';           /* Gitee 里没有、或科目为空 → 班主任建的列，自动归「语文」（vT24 科目全程自动，不手选） */
     });
     try{localStorage.setItem('wb_hw_subj',JSON.stringify(HW_SUBJECT_MAP))}catch(e){}
+  try{console.log("[dbg] hwBackfillSubjects EXIT")}catch(e){}
   }catch(e){}
 }
 /* 本周一 00:00（以周一为一周起点） */
