@@ -1207,7 +1207,7 @@ table.paper td.l{text-align:left;font-weight:600}
 <body data-page-node-id="VWm2YCKhwxOUBWSlexIaam">
 <aside data-page-node-id="uyTdXvcdMMBT8HJ1ZWRO9X">
   <div data-page-node-id="YkELpTUKfJkpu7qzDPa66K" class="logo"><!--pnid:7ytoUsgxIUXQsQNXnaE57T-->教师工作台</div>
-  <div class="verline" id="appVer">✨ 优化版 vT28 · 11-01 · 2.6.72</div>
+  <div class="verline" id="appVer">✨ 优化版 vT33 · 宠物 · 2.6.76</div>
   <nav data-page-node-id="ljZdrlGNjxdpectAoWjkyv" id="nav">
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS" class="active" data-s="home">🏠 <span class="lbl">今日首页</span></button>
 
@@ -1227,6 +1227,8 @@ table.paper td.l{text-align:left;font-weight:600}
     <button data-page-node-id="VgwUZ3tLyOZ5F9hNTwxvzn" data-s="recite">📖 <span class="lbl">诵读管理</span></button>
     <button data-page-node-id="Sc1Kp8mNvQ2xRy7bTz4WdE" data-s="score">📊 <span class="lbl">成绩管理</span></button>
     <button data-page-node-id="Gp1" data-s="group">👥 <span class="lbl">小组活动</span></button>
+    <div class="navgrp">宠物</div>
+    <button data-s="pet">🐾 <span class="lbl">班级宠物</span></button>
 
     <div class="navgrp">教研</div>
     <button data-page-node-id="Eb1" data-s="eb">📚 <span class="lbl">专著库</span></button>
@@ -2495,6 +2497,43 @@ table.paper td.l{text-align:left;font-weight:600}
     <h2 data-page-node-id="CuQqkPKvt7XnVSxBcwbuxR"><!--pnid:1SebspV4dwKXBAFsZB9oB0-->假期倒计时</h2><div data-page-node-id="uu2JHw7uge0tFrqA3P0EmK" class="sub"><!--pnid:imUqCj200tGA8MHQsWsdpp-->距离下一个假期还有</div>
     <div data-page-node-id="6lnURb73Se5WoNDR5lTiDk" class="hdays" id="holBox"></div>
   </section>
+  <section class="section" id="s-pet">
+    <style>
+      #s-pet .pet-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+      #s-pet .pet-panel{margin-top:8px}
+      #s-pet .pet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:10px}
+      #s-pet .pet-card{background:#fff;border:1px solid var(--line,#e3e8ee);border-radius:14px;padding:10px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+      #s-pet .pet-card svg{width:100%;height:120px;display:block}
+      #s-pet .pet-nm{font-weight:600;margin-top:4px;font-size:13px}
+      #s-pet .pet-own{font-size:11px;color:#76867e;margin:2px 0}
+      #s-pet .pet-lv{font-size:11px;color:#456;margin:2px 0 6px}
+      #s-pet .pet-acts{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}
+      #s-pet .pet-rare{font-size:10px;padding:1px 6px;border-radius:8px;color:#fff}
+      #s-pet .r-n{background:#9aa}#s-pet .r-r{background:#3b9}#s-pet .r-h{background:#a6c}#s-pet .r-m{background:#e0a000}
+      #s-pet .pet-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line,#e3e8ee);border-radius:10px;margin:6px 0;background:#fff}
+      #s-pet .pet-empty{color:#76867e;padding:20px;text-align:center}
+      #s-pet .pet-badge{background:#ff5b5b;color:#fff;border-radius:10px;font-size:10px;padding:0 6px;margin-left:4px}
+      #s-pet .pet-grad{font-size:11px;color:#0a8;margin-top:4px;display:block}
+      #s-pet .pet-stu{font-size:10px;color:#0a8}
+    </style>
+    <h2>🐾 班级宠物 <span style="font-size:12px;color:#76867e;font-weight:400;margin-left:8px" id="petSub">积分养宠物 · 喂养扣个人积分</span></h2>
+    <div class="sub">宠物消耗的积分 = 学生「个人累计积分」（作业+小组+奖惩汇总），喂养 / 抽奖 / 兑换会写一条「宠物喂养」奖惩记录，自动进入学生流水与积分榜。</div>
+    <div class="pet-tabs" id="petTabs">
+      <button class="btn2 sm active" data-pt="inc" onclick="ptTab('inc')">🥚 孵化器</button>
+      <button class="btn2 sm" data-pt="wall" onclick="ptTab('wall')">🐾 宠物墙</button>
+      <button class="btn2 sm" data-pt="parent" onclick="ptTab('parent')">👪 家长队列<span id="petPQn" class="pet-badge"></span></button>
+      <button class="btn2 sm" data-pt="sub" onclick="ptTab('sub')">🎨 学生投稿<span id="petSUBn" class="pet-badge"></span></button>
+      <button class="btn2 sm" data-pt="grad" onclick="ptTab('grad')">🎓 毕业审批</button>
+      <button class="btn2 sm" data-pt="io" onclick="ptTab('io')">📦 导入导出</button>
+    </div>
+    <div id="petPanel-inc" class="pet-panel"></div>
+    <div id="petPanel-wall" class="pet-panel" style="display:none"></div>
+    <div id="petPanel-parent" class="pet-panel" style="display:none"></div>
+    <div id="petPanel-sub" class="pet-panel" style="display:none"></div>
+    <div id="petPanel-grad" class="pet-panel" style="display:none"></div>
+    <div id="petPanel-io" class="pet-panel" style="display:none"></div>
+  </section>
+
 </main>
 <script>
 /* ===== 自动更新：检测 Pages 上文件变化，自动刷新到新版本（发布后不用手动 Ctrl+F5） ===== */
@@ -17082,7 +17121,7 @@ try {
    发现自己不是最新版 → 弹提示并自动刷新页面，本轮绝不写回。
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
-var WB_MY_VER = '优化版 vT31';
+var WB_MY_VER = '优化版 vT33 · 宠物';
 var WB_BUILD_DATE = '11-01', WB_BUILD_NO = '2.6.75';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
@@ -17487,7 +17526,7 @@ function giteeMergeIntoLocal(mpTables) {
     return giteeMergeIntoCloud(pack);
   }
   var local = mergeReadLocal(), plan = [], totalNew = 0;
-  Object.keys(pack.tables).forEach(function (id) {
+  Object.keys(pack.tables).forEach(function (id) { if (id === 'pets' || id === 'parentQueue' || id === 'petPool' || id === 'petSubmissions') return;
     var incoming = pack.tables[id];
     if (!Array.isArray(incoming)) return;
     var mine = Array.isArray(local[id]) ? local[id] : [];
@@ -17710,6 +17749,7 @@ function syncCycleCore(manual) {
       var pAdd = res.empty ? Promise.resolve(0) : Promise.resolve(giteeMergeIntoLocal(tables));
       return pAdd.then(function (nAdd) {
         added = nAdd;
+        try { if (typeof wbPetMergeRemote === 'function') wbPetMergeRemote(tables); } catch (_ppe) {}
         /* 作业科目隔离：同步拿到 Gitee 科目后，把本机语文本列补回、科任各科目隔离 */
         try { hwBackfillSubjects(); setTimeout(function(){try{renderHome()}catch(e){}},0); } catch (_hb) {}
         /* vT2 教室端新表（s-rota/s-safety/s-speech/s-notice/s-msg/s-desktop）：
@@ -17736,6 +17776,7 @@ function syncCycleCore(manual) {
            下一轮网页端同步就会把正确的那份纠正回来。 */
         try { wbOwnerAuthMerge(out, 'web') } catch (_wae) {}
         Object.keys(mine).forEach(function (k) { out.tables[k] = mine[k] });
+        try { if (typeof wbPetAttach === 'function') wbPetAttach(out, tables); } catch (_pae) {}
         /* vT28 本机墓碑必须一起上传：以前这里只带远端 doc.deletes，
            本机刚写的删除墓碑（刚删掉的那一列）根本没进云端 →
            下一轮拉取时云端没有墓碑 → 别的端/旧数据又被同步回来，删了复活。
@@ -19074,6 +19115,7 @@ document.getElementById('nav').addEventListener('click',e=>{
   if(b.dataset.s==='home'){try{renderHome()}catch(e){console.error(e)}}
   if(b.dataset.s==='scan'){try{scnInit()}catch(e){console.error('[扫描] 初始化失败',e)}}
   if(b.dataset.s==='sync'){try{syncInit()}catch(e){console.error('[同步] 初始化失败',e)}}
+  if(b.dataset.s==='pet'){try{wbPetRender()}catch(e){}}
   if(b.dataset.s==='comment'){try{cmThemeRender()}catch(e){}try{cmRosterRender()}catch(e){}try{cmResultRender()}catch(e){}}   /* vT14 学生评语 */
   /* 2.0.6：每次进诵读页都重新拉一次。以前只在页面加载时拉一次，
      导入互传包 / 换了数据源之后切回来还是老画面（"导入了没变化"）。 */
@@ -32007,6 +32049,784 @@ function cwInit(){
   window.tcRows = tcRows;
   window.tcUpsert = tcUpsert;
 })();
+</script>
+<script id="petcore">
+/* ============================================================================
+ * petcore.js —— 积分养宠物 · 共享内核（主副本）
+ * 职责：宠物 SVG 渲染（四杠杆）+ 装配器(buildPetDef) + 自由涂鸦(freehandPetDef)
+ * 使用：小程序 require；网页/桌面内联此文件后调用 window.PetCore；Node 可 import 测试。
+ * 坐标系：所有绘制基于 viewBox 0 0 100 100。自由涂鸦 path 数据也请归一化到 0..100。
+ * ==========================================================================*/
+(function (global) {
+  'use strict';
+
+  /* ----------------------------- 颜色工具 ----------------------------- */
+  function oshade(hex, amt) {
+    const n = parseInt(hex.slice(1), 16);
+    let r = (n >> 16) + amt, g = ((n >> 8) & 255) + amt, b = (n & 255) + amt;
+    r = Math.max(0, Math.min(255, r)); g = Math.max(0, Math.min(255, g)); b = Math.max(0, Math.min(255, b));
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  }
+  function hslToHex(h, s, l) {
+    h = (h % 360 + 360) % 360;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => {
+      const k = (n + h / 30) % 12;
+      const c = l - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)));
+      return Math.round(255 * c);
+    };
+    return '#' + ((1 << 24) + (f(0) << 16) + (f(8) << 8) + f(4)).toString(16).slice(1);
+  }
+  function hexToHsl(hex) {
+    let n = parseInt(hex.slice(1), 16);
+    let r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    if (max === min) { h = s = 0; }
+    else {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        default: h = (r - g) / d + 4;
+      }
+      h *= 60;
+    }
+    return [h, s * 100, l * 100];
+  }
+  function shiftHue(hex, deg) { const [h, s, l] = hexToHsl(hex); return hslToHex(h + deg, s, l); }
+  function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+
+  /* ----------------------------- 脸部/配件（承接样稿） ----------------------------- */
+  function drawFace(style, seed) {
+    const blink = seed % 5 === 0;
+    if (style === '可爱') {
+      const eyes = blink
+        ? `<path d="M37.5,41 q4.5,-5 9,0" stroke="#2b2b33" stroke-width="2.1" fill="none" stroke-linecap="round"/><path d="M53.5,41 q4.5,-5 9,0" stroke="#2b2b33" stroke-width="2.1" fill="none" stroke-linecap="round"/>`
+        : `<ellipse cx="42" cy="40" rx="4.6" ry="5.6" fill="#2b2b33"/><ellipse cx="58" cy="40" rx="4.6" ry="5.6" fill="#2b2b33"/><circle cx="43.7" cy="37.9" r="1.7" fill="#fff"/><circle cx="59.7" cy="37.9" r="1.7" fill="#fff"/><circle cx="40.5" cy="42.6" r=".9" fill="#fff" opacity=".85"/><circle cx="56.5" cy="42.6" r=".9" fill="#fff" opacity=".85"/>`;
+      return eyes + `<path d="M46.5,48.5 q3.5,3.4 7,0" stroke="#2b2b33" stroke-width="1.6" fill="none" stroke-linecap="round"/><ellipse cx="33.5" cy="45.8" rx="3.8" ry="2.2" fill="#ff9eb5" opacity=".6"/><ellipse cx="66.5" cy="45.8" rx="3.8" ry="2.2" fill="#ff9eb5" opacity=".6"/>`;
+    }
+    if (style === '炫酷') {
+      return `<path d="M36.5,36.6 l9.5,2.8" stroke="#2b2b33" stroke-width="1.9" stroke-linecap="round"/><path d="M63.5,36.6 l-9.5,2.8" stroke="#2b2b33" stroke-width="1.9" stroke-linecap="round"/><ellipse cx="42.5" cy="42.5" rx="3.9" ry="4.3" fill="#2b2b33"/><ellipse cx="57.5" cy="42.5" rx="3.9" ry="4.3" fill="#2b2b33"/><circle cx="43.9" cy="41" r="1.3" fill="#fff"/><circle cx="58.9" cy="41" r="1.3" fill="#fff"/><path d="M45.5,49.5 q4.5,1.8 8.5,-1.6" stroke="#2b2b33" stroke-width="1.6" fill="none" stroke-linecap="round"/><ellipse cx="33.5" cy="46.5" rx="3" ry="1.7" fill="#ff9eb5" opacity=".45"/><ellipse cx="66.5" cy="46.5" rx="3" ry="1.7" fill="#ff9eb5" opacity=".45"/>`;
+    }
+    return `<ellipse cx="42" cy="41" rx="4" ry="4.6" fill="#2b2b33"/><ellipse cx="58" cy="41" rx="4" ry="4.6" fill="#2b2b33"/><circle cx="43.4" cy="39.4" r="1.4" fill="#fff"/><circle cx="59.4" cy="39.4" r="1.4" fill="#fff"/><ellipse cx="50" cy="49" rx="2.2" ry="2.8" fill="#2b2b33" opacity=".85"/><ellipse cx="34" cy="46" rx="3.2" ry="1.8" fill="#ff9eb5" opacity=".5"/><ellipse cx="66" cy="46" rx="3.2" ry="1.8" fill="#ff9eb5" opacity=".5"/>`;
+  }
+  function drawEar(k, skin, hair) {
+    const st = 'stroke="#00000022" stroke-width="1"';
+    if (k === 'cat') return `<polygon points="27,32 20,10 42,26" fill="${skin}" ${st}/><polygon points="28,27 24,16 36,24" fill="${hair}" opacity=".5"/><polygon points="73,32 80,10 58,26" fill="${skin}" ${st}/><polygon points="72,27 76,16 64,24" fill="${hair}" opacity=".5"/>`;
+    if (k === 'round') return `<circle cx="24" cy="20" r="11" fill="${skin}" ${st}/><circle cx="76" cy="20" r="11" fill="${skin}" ${st}/><circle cx="24" cy="20" r="5" fill="${hair}" opacity=".35"/><circle cx="76" cy="20" r="5" fill="${hair}" opacity=".35"/>`;
+    if (k === 'bunny') return `<ellipse cx="32" cy="15" rx="6.5" ry="14.5" fill="${skin}" ${st}/><ellipse cx="32" cy="16" rx="3" ry="9.5" fill="#ffb6c1" opacity=".55"/><ellipse cx="68" cy="15" rx="6.5" ry="14.5" fill="${skin}" ${st}/><ellipse cx="68" cy="16" rx="3" ry="9.5" fill="#ffb6c1" opacity=".55"/>`;
+    if (k === 'fox') return `<polygon points="25,32 16,8 43,25" fill="${skin}" ${st}/><polygon points="26,26 22,14 36,23" fill="${hair}" opacity=".6"/><polygon points="75,32 84,8 57,25" fill="${skin}" ${st}/><polygon points="74,26 78,14 64,23" fill="${hair}" opacity=".6"/>`;
+    return '';
+  }
+  function drawHorn(k, acc) {
+    if (k === 'one') return `<polygon points="50,20 41,0 59,0" fill="${acc}" stroke="#00000022"/><polygon points="50,18 45,4 50,8 55,4" fill="#ffffff" opacity=".35"/>`;
+    if (k === 'two') return `<polygon points="33,22 27,2 43,20" fill="${acc}" stroke="#00000022"/><polygon points="67,22 73,2 57,20" fill="${acc}" stroke="#00000022"/>`;
+    if (k === 'bull') return `<path d="M30,22 Q16,14 22,2" stroke="${acc}" stroke-width="4.5" fill="none" stroke-linecap="round"/><path d="M70,22 Q84,14 78,2" stroke="${acc}" stroke-width="4.5" fill="none" stroke-linecap="round"/>`;
+    return '';
+  }
+  function drawHat(k, hair, acc) {
+    if (k === 'headband') return `<rect x="27" y="20" width="46" height="5.5" rx="2.5" fill="${hair}"/><circle cx="73.5" cy="23" r="3.2" fill="${hair}"/><circle cx="73.5" cy="23" r="1.4" fill="#ffffff" opacity=".5"/>`;
+    if (k === 'wizard') return `<polygon points="50,0 32,24 68,24" fill="${hair}" stroke="#00000022"/><text x="50" y="17" font-size="10" text-anchor="middle" fill="${acc}">★</text>`;
+    if (k === 'helmet') return `<path d="M29,26 A21,21 0 0 1 71,26 L71,30 L29,30 Z" fill="${hair}" opacity=".94"/><rect x="46" y="28" width="8" height="12" rx="2" fill="#ffffff" opacity=".55"/>`;
+    if (k === 'top') return `<rect x="30" y="8" width="40" height="15" rx="2" fill="${hair}"/><rect x="30" y="19" width="40" height="4" fill="${acc}" opacity=".85"/><rect x="23" y="22" width="54" height="4.5" rx="2" fill="${hair}"/>`;
+    if (k === 'straw') return `<ellipse cx="50" cy="22" rx="31" ry="7.5" fill="${hair}"/><path d="M37,22 Q50,5 63,22 Z" fill="${oshade(hair, 22)}"/>`;
+    if (k === 'crown') return `<polygon points="28,22 32,5 41,16 50,2 59,16 68,5 72,22" fill="${acc}" stroke="#00000018"/><circle cx="50" cy="12" r="2" fill="#ff5b9e"/><circle cx="36" cy="14" r="1.6" fill="#5b8cff"/><circle cx="64" cy="14" r="1.6" fill="#5b8cff"/>`;
+    return '';
+  }
+
+  /* ----------------------------- 程序化差异 ----------------------------- */
+  function petSkin(seed) {
+    const h = (typeof seed === 'string') ? hashStr(seed) : (seed >>> 0);
+    const pats = ['none', 'spot', 'stripe', 'patch'];
+    return {
+      hue: ((h % 36) - 18),
+      pattern: pats[h % 4],
+      eyeVar: (h >> 3) % 3,
+      tilt: ((h >> 5) % 2) ? 2.5 : -2.5,
+      freckle: (h % 3 === 0),
+      spotSeed: h
+    };
+  }
+
+  /* ----------------------------- 物种体型原型 ----------------------------- */
+  // 返回 { body, head:{cx,cy,r}, extra }
+  function archBody(arch, c) {
+    const { skin, line, limb, belly, acc, hair } = c;
+    const sh = (hex, amt) => oshade(hex, amt);
+    if (arch === 'uniform') {
+      return {
+        body: `<ellipse cx="41" cy="90" rx="7.5" ry="4.4" fill="${limb}" stroke="${line}" stroke-width="1.4"/><ellipse cx="59" cy="90" rx="7.5" ry="4.4" fill="${limb}" stroke="${line}" stroke-width="1.4"/>
+      <path d="M50,43 C67,43 72,56 72,68 C72,82 63,89 50,89 C37,89 28,82 28,68 C28,56 33,43 50,43 Z" fill="${skin}" stroke="${line}" stroke-width="2.2"/>
+      <ellipse cx="50" cy="74" rx="12" ry="11" fill="${belly}" opacity=".9"/><ellipse cx="26.5" cy="67" rx="5.8" ry="10.5" fill="${skin}" stroke="${line}" stroke-width="1.7" transform="rotate(16 26.5 67)"/><ellipse cx="73.5" cy="67" rx="5.8" ry="10.5" fill="${skin}" stroke="${line}" stroke-width="1.7" transform="rotate(-16 73.5 67)"/>`,
+        head: { cx: 50, cy: 38, r: 24 }, extra: ''
+      };
+    }
+    if (arch === 'monkey') {
+      return {
+        body: `<ellipse cx="50" cy="93.5" rx="22" ry="4" fill="#00000014"/>
+      <path d="M50,48 C71,48 75,64 72,77 C69,89 60,91 50,91 C40,91 31,89 28,77 C25,64 29,48 50,48 Z" fill="${skin}" stroke="${line}" stroke-width="2.2"/>
+      <ellipse cx="50" cy="75" rx="13" ry="14" fill="${belly}" opacity=".9"/>
+      <ellipse cx="23" cy="70" rx="7" ry="13" fill="${skin}" stroke="${line}" stroke-width="1.6" transform="rotate(30 23 70)"/>
+      <path d="M77,66 Q92,58 86,42" stroke="${skin}" stroke-width="9" fill="none" stroke-linecap="round"/>
+      <path d="M70,86 q24,6 19,-19 q-3,13 -17,11" fill="none" stroke="${skin}" stroke-width="7" stroke-linecap="round"/>`,
+        head: { cx: 50, cy: 38, r: 20 },
+        extra: `<ellipse cx="50" cy="45" rx="11" ry="8" fill="${belly}"/><circle cx="45" cy="45" r="1.4" fill="${line}"/><circle cx="55" cy="45" r="1.4" fill="${line}"/>`
+      };
+    }
+    if (arch === 'rodent') {
+      return {
+        body: `<ellipse cx="50" cy="93.5" rx="22" ry="4" fill="#00000014"/>
+      <circle cx="50" cy="62" r="30" fill="${skin}" stroke="${line}" stroke-width="2.2"/>
+      <ellipse cx="50" cy="66" rx="15" ry="16" fill="${belly}" opacity=".85"/>
+      <ellipse cx="22" cy="66" rx="5" ry="8" fill="${skin}" stroke="${line}" stroke-width="1.4"/>
+      <ellipse cx="78" cy="66" rx="5" ry="8" fill="${skin}" stroke="${line}" stroke-width="1.4"/>
+      <path d="M78,86 l9,-9 l-6,3 l11,-13" stroke="${sh(skin, -30)}" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
+        head: { cx: 50, cy: 40, r: 19 },
+        extra: `<circle cx="32" cy="64" r="11" fill="${acc}" opacity=".85"/><circle cx="68" cy="64" r="11" fill="${acc}" opacity=".85"/>`
+      };
+    }
+    if (arch === 'fuzzy') {
+      return {
+        body: `<ellipse cx="50" cy="93.5" rx="22" ry="4" fill="#00000014"/>
+      <ellipse cx="50" cy="60" rx="23" ry="33" fill="${skin}" stroke="${line}" stroke-width="2.2"/>
+      <ellipse cx="50" cy="66" rx="14" ry="18" fill="${belly}" opacity=".9"/>
+      <path d="M30,30 Q20,2 41,20 Z" fill="${skin}" stroke="${line}" stroke-width="1.6"/>
+      <path d="M70,30 Q80,2 59,20 Z" fill="${skin}" stroke="${line}" stroke-width="1.6"/>
+      <ellipse cx="39" cy="90" rx="7" ry="4" fill="${limb}"/><ellipse cx="61" cy="90" rx="7" ry="4" fill="${limb}"/>`,
+        head: { cx: 50, cy: 34, r: 16 },
+        extra: `<path d="M50,18 q-11,-13 0,-17 q11,4 0,17 Z" fill="#6ab04c" stroke="#3a7a2a" stroke-width="1"/><path d="M50,16 q-3,-7 0,-12" stroke="#3a7a2a" stroke-width="1.4" fill="none"/>`
+      };
+    }
+    if (arch === 'merfolk') {
+      return {
+        body: `<ellipse cx="50" cy="93.5" rx="20" ry="4" fill="#00000014"/>
+      <path d="M40,46 Q34,64 40,80 L60,80 Q66,64 60,46 Z" fill="${skin}" stroke="${line}" stroke-width="2.2"/>
+      <ellipse cx="50" cy="64" rx="8" ry="9" fill="${belly}" opacity=".85"/>
+      <ellipse cx="29" cy="56" rx="4.5" ry="11" fill="${skin}" stroke="${line}" stroke-width="1.5" transform="rotate(14 29 56)"/>
+      <ellipse cx="71" cy="56" rx="4.5" ry="11" fill="${skin}" stroke="${line}" stroke-width="1.5" transform="rotate(-14 71 56)"/>
+      <path d="M40,80 q-13,9 -19,-2 q9,-9 19,-4 Z" fill="${acc}" stroke="${line}" stroke-width="1.3"/>
+      <path d="M60,80 q13,9 19,-2 q-9,-9 -19,-4 Z" fill="${sh(acc, -18)}" stroke="${line}" stroke-width="1.3"/>`,
+        head: { cx: 50, cy: 30, r: 16 },
+        extra: `<path d="M34,28 q-11,30 7,54" stroke="${hair}" stroke-width="5" fill="none" opacity=".85"/><path d="M66,28 q11,30 -7,54" stroke="${hair}" stroke-width="5" fill="none" opacity=".85"/>`
+      };
+    }
+    if (arch === 'serpent') {
+      return {
+        body: `<ellipse cx="50" cy="93.5" rx="18" ry="3.5" fill="#00000012"/>
+      <path d="M22,86 Q12,58 38,52 Q70,44 80,26 Q84,15 73,16" fill="none" stroke="${skin}" stroke-width="15" stroke-linecap="round"/>
+      <path d="M22,86 Q12,58 38,52 Q70,44 80,26 Q84,15 73,16" fill="none" stroke="${line}" stroke-width="1" opacity=".4"/>
+      <path d="M30,72 q6,-3 12,0 M40,64 q6,-3 12,0 M52,54 q6,-3 12,0" stroke="${sh(skin, -22)}" stroke-width="1.4" fill="none" opacity=".6"/>`,
+        head: { cx: 66, cy: 28, r: 14 },
+        extra: `<polygon points="62,18 55,1 67,15" fill="${acc}" stroke="${line}" stroke-width="1"/><polygon points="74,18 81,1 69,15" fill="${acc}" stroke="${line}" stroke-width="1"/>
+        <path d="M60,31 q-15,3 -22,-5" stroke="${acc}" stroke-width="1.6" fill="none"/><path d="M72,31 q15,3 22,-5" stroke="${acc}" stroke-width="1.6" fill="none"/>`
+      };
+    }
+    if (arch === 'mech') {
+      return {
+        body: `<ellipse cx="50" cy="93.5" rx="20" ry="4" fill="#00000014"/>
+      <polygon points="33,54 67,54 71,84 29,84" fill="${skin}" stroke="${line}" stroke-width="2.2"/>
+      <rect x="22" y="56" width="13" height="15" rx="3" fill="${sh(skin, -10)}" stroke="${line}" stroke-width="1.4"/>
+      <rect x="65" y="56" width="13" height="15" rx="3" fill="${sh(skin, -10)}" stroke="${line}" stroke-width="1.4"/>
+      <rect x="40" y="86" width="9" height="6" rx="2" fill="${limb}"/><rect x="51" y="86" width="9" height="6" rx="2" fill="${limb}"/>`,
+        head: { cx: 50, cy: 30, r: 17 },
+        extra: `<polygon points="50,11 45,29 55,29" fill="${acc}"/><circle cx="50" cy="68" r="6" fill="${acc}" stroke="${line}" stroke-width="1.5"/><circle cx="50" cy="68" r="2.5" fill="#fff" opacity=".8"/>`
+      };
+    }
+    if (arch === 'bird') {
+      return {
+        body: `<ellipse cx="50" cy="93.5" rx="18" ry="3.5" fill="#00000014"/>
+      <ellipse cx="50" cy="64" rx="22" ry="24" fill="${skin}" stroke="${line}" stroke-width="2.2"/>
+      <ellipse cx="50" cy="70" rx="11" ry="12" fill="${belly}" opacity=".85"/>
+      <path d="M28,66 Q12,58 22,46 Q33,55 33,64 Z" fill="${sh(skin, -12)}" stroke="${line}" stroke-width="1.4"/>
+      <line x1="42" y1="88" x2="42" y2="95" stroke="${acc}" stroke-width="2.6"/><line x1="58" y1="88" x2="58" y2="95" stroke="${acc}" stroke-width="2.6"/>`,
+        head: { cx: 50, cy: 38, r: 16 },
+        extra: `<polygon points="50,44 40,52 60,52" fill="${acc}" stroke="${line}" stroke-width="1"/>`
+      };
+    }
+    if (arch === 'object') {
+      const star = [];
+      for (let i = 0; i < 10; i++) { const ang = -Math.PI / 2 + i * Math.PI / 5; const rad = (i % 2) ? 14 : 30; star.push((50 + Math.cos(ang) * rad).toFixed(1) + ',' + (54 + Math.sin(ang) * rad).toFixed(1)); }
+      return {
+        body: `<ellipse cx="50" cy="93.5" rx="16" ry="3" fill="#00000010"/>
+      <polygon points="${star.join(' ')}" fill="${skin}" stroke="${line}" stroke-width="2.2"/>
+      <circle cx="50" cy="58" r="11" fill="${belly}" opacity=".7"/>`,
+        head: { cx: 50, cy: 46, r: 16 },
+        extra: `<path d="M50,30 l3,7 7,0 -5,5 2,7 -7,-4 -7,4 2,-7 -5,-5 7,0 Z" fill="${acc}" opacity=".9"/>`
+      };
+    }
+    if (arch === 'spirit') {
+      return {
+        body: `<ellipse cx="50" cy="93.5" rx="18" ry="3.5" fill="#00000010"/>
+      <path d="M28,40 Q28,18 50,18 Q72,18 72,40 L72,74 Q66,82 60,76 Q54,84 48,76 Q42,84 36,76 Q30,82 28,74 Z" fill="${skin}" stroke="${line}" stroke-width="2.2" opacity=".82"/>`,
+        head: { cx: 50, cy: 42, r: 22 }, extra: ''
+      };
+    }
+    if (arch === 'tree') {
+      return {
+        body: `<ellipse cx="50" cy="93.5" rx="18" ry="3.5" fill="#00000012"/>
+      <rect x="46" y="56" width="8" height="34" fill="#8a5a3a" stroke="${line}" stroke-width="1.4"/>
+      <circle cx="50" cy="42" r="22" fill="${skin}" stroke="${line}" stroke-width="2.2"/>
+      <circle cx="36" cy="50" r="12" fill="${skin}" stroke="${line}" stroke-width="1.6"/><circle cx="64" cy="50" r="12" fill="${skin}" stroke="${line}" stroke-width="1.6"/>`,
+        head: { cx: 50, cy: 38, r: 18 }, extra: ''
+      };
+    }
+    return archBody('uniform', c);
+  }
+
+  /* ----------------------------- 花纹 / 稀有度 / 背景 ----------------------------- */
+  function patternOverlay(pat, head, c, seed) {
+    if (pat === 'spot') {
+      let s = '';
+      for (let i = 0; i < 7; i++) { const a = (seed + i * 53) % 360, rad = 13 + ((seed >> i) & 7); const x = 50 + Math.cos(a * Math.PI / 180) * rad, y = 64 + Math.sin(a * Math.PI / 180) * rad * 0.8; s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.4" fill="${oshade(c.skin, -22)}" opacity=".5"/>`; }
+      return s;
+    }
+    if (pat === 'stripe') { let s = ''; for (let i = 0; i < 4; i++) { const y = 54 + i * 9; s += `<path d="M34,${y} q16,5 32,0" stroke="${oshade(c.skin, -22)}" stroke-width="3" fill="none" opacity=".4"/>`; } return s; }
+    if (pat === 'patch') return `<path d="M30,60 Q40,52 50,62 Q60,52 70,60 L70,82 Q50,90 30,82 Z" fill="${oshade(c.skin, 18)}" opacity=".55"/>`;
+    return '';
+  }
+  function rarityLayer(rar, acc) {
+    if (rar === '普通') return '';
+    if (rar === '稀有') return `<circle cx="50" cy="50" r="46" fill="none" stroke="${acc}" stroke-width="2" opacity=".5"/><text class="spark" x="20" y="22" font-size="11" fill="${acc}">✦</text><text class="spark" x="80" y="80" font-size="10" fill="${acc}">✦</text>`;
+    if (rar === '隐藏') return `<circle class="aura" cx="50" cy="50" r="47" fill="${acc}" opacity=".25"/><circle cx="50" cy="50" r="46" fill="none" stroke="${acc}" stroke-width="2" opacity=".6"/><text class="spark" x="18" y="26" font-size="12" fill="#fff">✦</text><text class="spark" x="82" y="30" font-size="10" fill="#fff">✦</text><text class="spark" x="78" y="78" font-size="11" fill="#fff">✧</text><text class="spark" x="22" y="74" font-size="9" fill="#fff">✧</text>`;
+    return `<circle cx="50" cy="50" r="47" fill="none" stroke="url(#gold)" stroke-width="3"/><g class="sweep"><path d="M50,50 L50,6 A44,44 0 0 1 88,28 Z" fill="#fff" opacity=".12"/></g><text x="50" y="14" font-size="16" text-anchor="middle">👑</text><text class="spark" x="80" y="22" font-size="11" fill="#ffd23f">✦</text>`;
+  }
+  function bgLayer(bg) {
+    if (bg === 'grad') return `<defs><radialGradient id="bgG" cx="50%" cy="42%"><stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#dfe9ff"/></radialGradient></defs><rect x="0" y="0" width="100" height="100" fill="url(#bgG)"/>`;
+    if (bg === 'stage') return `<defs><radialGradient id="bgS" cx="50%" cy="38%"><stop offset="0%" stop-color="#fff7e6"/><stop offset="60%" stop-color="#ffd98a" stop-opacity=".5"/><stop offset="100%" stop-color="#c98a2a" stop-opacity=".2"/></radialGradient></radialGradient></defs><rect x="0" y="0" width="100" height="100" fill="url(#bgS)"/><path d="M10,98 Q50,82 90,98 Z" fill="#a86a1a" opacity=".25"/>`;
+    return '';
+  }
+
+  /* ----------------------------- 主渲染 ----------------------------- */
+  function renderPet(def, opt) {
+    const o = opt || {};
+    const arch = (o.arch === 'auto' || o.arch == null) ? (def.archetype || 'uniform') : (o.arch || 'uniform');
+    if (o.useArch === false) return renderPet(Object.assign({}, def, { archetype: 'uniform' }), Object.assign({}, o, { useArch: true }));
+
+    // 自由涂鸦：customSvg 优先
+    if (def.customSvg && def.customSvg.length) return renderFreehand(def, o);
+
+    const proc = o.proc !== false ? petSkin(o.seed != null ? o.seed : (def.id || def.name || 'x')) : { hue: 0, pattern: 'none', eyeVar: 0, tilt: 0, freckle: false, spotSeed: 1 };
+    let skin = o.bodyCol || def.skin || '#ffd1b3';
+    let acc = o.accCol || def.acc || '#ffd23f';
+    let hair = def.hair || '#7a4a2a';
+    skin = shiftHue(skin, proc.hue); hair = shiftHue(hair, proc.hue * 0.6);
+    const line = oshade(skin, -55), limb = oshade(skin, -12), belly = oshade(skin, 26);
+    const c = { skin, acc, hair, line, limb, belly };
+    const A = archBody(arch, c); const head = A.head;
+    const sg = 'n' + Math.abs(hashStr((def.id || '') + arch + (o.seed || 0)));
+    const dy = head.cy - 38, dx = head.cx - 50;
+    const earSvg = (def.ears && def.ears !== 'none') ? drawEar(def.ears, skin, hair) : '';
+    const hornSvg = def.horn ? drawHorn(def.horn, acc) : '';
+    const hatSvg = (def.hat && def.hat !== 'cape') ? drawHat(def.hat, hair, acc) : '';
+    const rar = o.rar || def.rarity || '普通';
+    const tilt = `rotate(${proc.tilt} 50 50)`;
+    const expr = (o.expr && o.expr !== 'auto') ? o.expr : null;
+    return `<svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><radialGradient id="${sg}" cx="36%" cy="30%"><stop offset="0%" stop-color="${oshade(skin, 16)}"/><stop offset="100%" stop-color="${oshade(skin, -26)}"/></radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffe9a8"/><stop offset="50%" stop-color="#d4af37"/><stop offset="100%" stop-color="#fff3c4"/></linearGradient></defs>
+    ${bgLayer(o.bg)}
+    <g transform="${tilt}">
+      ${rarityLayer(rar, acc)}
+      ${A.body}
+      ${patternOverlay(proc.pattern, head, c, proc.spotSeed)}
+      <g transform="translate(${dx},${dy})">${earSvg}${hornSvg}</g>
+      <circle cx="${head.cx}" cy="${head.cy}" r="${head.r}" fill="url(#${sg})" stroke="${line}" stroke-width="2.2"/>
+      ${A.extra}
+      <g transform="translate(${dx},${dy})">${hatSvg}</g>
+      <g transform="translate(${dx},${dy})">${drawFace(def.style || '中性', hashStr((def.id || 'x')) + (proc.eyeVar * 7))}</g>
+      ${proc.freckle ? `<circle cx="38" cy="44" r="1" fill="#c8825a" opacity=".5"/><circle cx="45" cy="47" r="1" fill="#c8825a" opacity=".5"/><circle cx="62" cy="44" r="1" fill="#c8825a" opacity=".5"/>` : ''}
+      <text x="88" y="15" font-size="12" text-anchor="middle" opacity=".95">${def.emoji || ''}</text>
+    </g>
+  </svg>`;
+  }
+  function renderFreehand(def, o) {
+    const rar = o.rar || def.rarity || '普通';
+    const acc = o.accCol || def.acc || '#ffd23f';
+    const skin = o.bodyCol || def.skin || '#3f7be0';
+    const stroke = def.ink || '#2b2b33';
+    const tilt = (o.proc !== false) ? (petSkin(o.seed != null ? o.seed : (def.id || 'x')).tilt || 0) : 0;
+    const paths = (def.customSvg || []).map(d => `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
+    return `<svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffe9a8"/><stop offset="50%" stop-color="#d4af37"/><stop offset="100%" stop-color="#fff3c4"/></linearGradient></defs>
+    ${bgLayer(o.bg)}
+    <g transform="rotate(${tilt} 50 50)">
+      ${rarityLayer(rar, acc)}
+      <rect x="8" y="8" width="84" height="84" rx="14" fill="${oshade(skin, 24)}" opacity=".35" stroke="${oshade(skin, -20)}" stroke-width="1.5"/>
+      ${paths}
+      <text x="88" y="15" font-size="12" text-anchor="middle" opacity=".95">${def.emoji || '✏️'}</text>
+    </g>
+  </svg>`;
+  }
+
+  /* ----------------------------- 装配器 API（学生创造） ----------------------------- */
+  const ARCHETYPES = ['monkey', 'rodent', 'fuzzy', 'merfolk', 'serpent', 'mech', 'bird', 'object', 'spirit', 'tree', 'uniform'];
+  const EARS_OPTS = ['none', 'cat', 'round', 'bunny', 'fox'];
+  const HORN_OPTS = ['', 'one', 'two', 'bull'];
+  const HAT_OPTS = ['', 'headband', 'wizard', 'helmet', 'top', 'straw', 'crown'];
+  const TAIL_OPTS = ['', 'long', 'dragon', 'fox', 'fish'];
+  const PROP_OPTS = ['', 'staff', 'ribbon', 'wheel', 'fire', 'ice', 'fan', 'tower', 'mask', 'peach', 'star', 'flower', 'lamp', 'map', 'planet', 'tree', 'bomb', 'watch', 'hookah', 'key', 'block', 'cape', 'sword', 'leaf', 'spider', 'bow'];
+
+  function buildPetDef(o) {
+    o = o || {};
+    return {
+      id: o.id || ('u' + hashStr((o.name || 'pet') + Date.now())),
+      name: o.name || '我的宠物',
+      series: o.series || '同学共创',
+      archetype: ARCHETYPES.indexOf(o.archetype) >= 0 ? o.archetype : 'uniform',
+      style: o.style || '可爱',
+      rarity: o.rarity || '普通',
+      skin: o.skin || '#ffd1b3',
+      hair: o.hair || '#7a4a2a',
+      acc: o.acc || '#ffd23f',
+      ears: EARS_OPTS.indexOf(o.ears) >= 0 ? o.ears : 'none',
+      horn: HORN_OPTS.indexOf(o.horn) >= 0 ? o.horn : '',
+      hat: HAT_OPTS.indexOf(o.hat) >= 0 ? o.hat : '',
+      prop: Array.isArray(o.prop) ? o.prop.filter(p => PROP_OPTS.indexOf(p) >= 0) : [],
+      tail: TAIL_OPTS.indexOf(o.tail) >= 0 ? o.tail : '',
+      emoji: o.emoji || '🐾',
+      customSvg: null,
+      origin: o.origin || 'student',
+      authorStudentId: o.authorStudentId || null,
+      createdAt: o.createdAt || Date.now()
+    };
+  }
+  // 自由涂鸦：paths 为归一化到 0..100 的 SVG path 'd' 字符串数组
+  function freehandPetDef(paths, o) {
+    o = o || {};
+    const def = buildPetDef(o);
+    def.archetype = 'freehand';
+    def.customSvg = Array.isArray(paths) ? paths.filter(p => typeof p === 'string' && p.length) : [];
+    def.ink = o.ink || '#2b2b33';
+    return def;
+  }
+
+  /* ----------------------------- 导出 ----------------------------- */
+  const API = {
+    oshade, shiftHue, hashStr, hexToHsl, hslToHex, petSkin,
+    drawFace, drawEar, drawHorn, drawHat, archBody,
+    patternOverlay, rarityLayer, bgLayer, renderPet,
+    buildPetDef, freehandPetDef,
+    ARCHETYPES, EARS_OPTS, HORN_OPTS, HAT_OPTS, TAIL_OPTS, PROP_OPTS
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = API;
+  if (typeof window !== 'undefined') window.PetCore = API;
+  if (typeof global !== 'undefined') global.PetCore = API;
+  return API;
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+
+</script>
+<script id="petapp">
+/* ============================================================================
+ * 积分养宠物 · Web 老师端逻辑（内联进 app.html 的 <script id="petapp"> 块）
+ * 依赖：window.PetCore（petcore.js 已先加载）；复用现有 加减分 写路径（db.addRecord）。
+ * 数据：本地库 wb_pet_db_v1 存四张表 pets/parentQueue/petPool/petSubmissions；
+ *       同步时由 wbPetMergeRemote 并入远端、写回时由 wbPetAttach 挂到 out.tables。
+ * ==========================================================================*/
+(function () {
+  'use strict';
+
+  var PET_KEY = 'wb_pet_db_v1';
+  var PET_TABLES = ['pets', 'parentQueue', 'petPool', 'petSubmissions'];
+  var GRAD_LEVEL = 10;            // 毕业等级阈值
+  var COST_FEED = 5, COST_DRAW = 20, COST_REDEEM = 15;
+
+  var PT_ARC_NAME = { monkey: '灵猴', rodent: '萌鼠', fuzzy: '绒球', merfolk: '人鱼', serpent: '灵蛇', mech: '机甲', bird: '飞鸟', object: '星物', spirit: '精灵', tree: '树苗', uniform: '豆苗', freehand: '涂鸦' };
+  var PT_ARC_EMOJI = { monkey: '🐵', rodent: '🐭', fuzzy: '🐻', merfolk: '🧜', serpent: '🐉', mech: '🤖', bird: '🐤', object: '⭐', spirit: '✨', tree: '🌱', uniform: '🌟', freehand: '✏️' };
+
+  /* ---------------- 存储 ---------------- */
+  function ptRead() {
+    try { var s = JSON.parse(localStorage.getItem(PET_KEY) || 'null'); if (s && typeof s === 'object') return s; } catch (e) {}
+    return null;
+  }
+  function ptGet() {
+    var s = ptRead();
+    if (!s) s = {};
+    PET_TABLES.forEach(function (k) { if (!Array.isArray(s[k])) s[k] = []; });
+    return s;
+  }
+  function ptSave(s) { try { localStorage.setItem(PET_KEY, JSON.stringify(s)); } catch (e) { console.error('[pet] 存盘失败', e); } }
+  var PET_DB = ptGet();
+
+  /* 同步：远端宠物四表按 id 合并进本地（远端较新者优先） */
+  function wbPetMergeRemote(remoteTables) {
+    if (!remoteTables || typeof remoteTables !== 'object') return;
+    var changed = false;
+    PET_TABLES.forEach(function (k) {
+      var rmt = remoteTables[k];
+      if (!Array.isArray(rmt) || !rmt.length) return;
+      var local = PET_DB[k] || [];
+      var byId = {};
+      local.forEach(function (r) { if (r && r.id) byId[r.id] = r; });
+      rmt.forEach(function (r) {
+        if (!r || !r.id) return;
+        var ex = byId[r.id];
+        if (!ex) { local.push(r); byId[r.id] = r; changed = true; }
+        else {
+          var ru = r.updatedAt || 0, eu = ex.updatedAt || 0;
+          if (ru >= eu) { for (var f in r) { if (r.hasOwnProperty(f)) ex[f] = r[f]; } changed = true; }
+        }
+      });
+      PET_DB[k] = local;
+    });
+    if (changed) { ptSave(PET_DB); ptBadges(); }
+  }
+  /* 写回：把本地宠物四表挂到 out.tables（本地优先；本地空且远端有则透传避免清空） */
+  function wbPetAttach(out, remoteTables) {
+    out.tables = out.tables || {};
+    PET_TABLES.forEach(function (k) {
+      var mine = PET_DB[k] || [];
+      var rmt = (remoteTables && remoteTables[k]) || [];
+      if (mine.length) out.tables[k] = mine;
+      else if (rmt.length) out.tables[k] = rmt;
+    });
+  }
+
+  /* ---------------- 工具 ---------------- */
+  function ptYmd(d) { d = d || new Date(); function p(n) { return ('0' + n).slice(-2); } return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
+  function ptEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function ptRarClass(r) { return ({ '普通': 'n', '稀有': 'r', '隐藏': 'h', '传说': 'm' })[r] || 'n'; }
+  function ptLevelExp(lv) { return 100 + (lv - 1) * 60; }
+  function ptLevelUp(pet) { while ((pet.exp || 0) >= ptLevelExp(pet.level || 1)) { pet.exp -= ptLevelExp(pet.level || 1); pet.level = (pet.level || 1) + 1; } }
+  function ptPetDefOf(pet) {
+    return {
+      id: pet.id, name: pet.name, archetype: pet.archetype, style: pet.style, rarity: pet.rarity,
+      skin: pet.skin, hair: pet.hair, acc: pet.acc, ears: pet.ears, horn: pet.horn, hat: pet.hat,
+      prop: pet.prop || [], tail: pet.tail || '', emoji: pet.emoji, customSvg: pet.customSvg || null
+    };
+  }
+  function ptMkPet(studentName, sp) {
+    var stu = (typeof stuRoster === 'function') ? (stuRoster().filter(function (x) { return x.姓名 === studentName; })[0] || {}) : {};
+    return {
+      id: 'p_' + PetCore.hashStr(studentName + (sp.id || '') + Date.now()),
+      studentId: stu.学号 || studentName, studentName: studentName,
+      defId: sp.id, name: sp.name, archetype: sp.archetype, style: sp.style, rarity: sp.rarity,
+      skin: sp.skin, hair: sp.hair, acc: sp.acc, ears: sp.ears, horn: sp.horn, hat: sp.hat, prop: sp.prop || [], tail: sp.tail || '',
+      emoji: sp.emoji, customSvg: sp.customSvg || null,
+      level: 1, exp: 0, hunger: 80, mood: 90, ownedItems: [], equipped: {},
+      feedCntToday: 0, drawCntToday: 0, redeemCntToday: 0, lastFedDate: '', hatchedAt: ptYmd(new Date()), graduated: false
+    };
+  }
+  /* 复用现有加减分写路径：追加一条「宠物喂养」奖惩记录（扣个人累计积分） */
+  function ptAddManual(name, title, val) {
+    if (typeof dbReady === 'undefined' || !dbReady) { if (typeof toastMsg === 'function') toastMsg('⚠️ 未连接数据表'); return Promise.reject('nodb'); }
+    var stu = (typeof stuRoster === 'function') ? (stuRoster().filter(function (x) { return x.姓名 === name; })[0] || { 学号: '', 组别: '', 职务: '' }) : { 学号: '', 组别: '', 职务: '' };
+    return db.addRecord({ databaseId: '2mthbbHsJeABzmnerNt6sK', properties: {
+      '学号': { text: stu.学号 || '' }, '姓名': { text: name }, '组别': { text: stu.组别 || '' },
+      '职务': { text: stu.职务 || '' }, '奖惩事项': { text: title }, '奖惩分值': { number: val },
+      '日期': { date: ptYmd(new Date()) }, '备注': { text: '宠物' }
+    } }).then(function (r) {
+      if (!(r && r.id)) throw new Error('no id');
+      if (typeof loadST === 'function') return loadST();
+    }).then(function () {
+      if (typeof renderStu === 'function') renderStu();
+      return true;
+    }).catch(function (err) {
+      console.error('[pet] 积分写入失败', err); if (typeof toastMsg === 'function') toastMsg('⚠️ 积分没保存成功'); throw err;
+    });
+  }
+  function ptStuPoints(name) {
+    if (typeof stuPoints !== 'function' || typeof stuTotal !== 'function') return 0;
+    var p = stuPoints(); return stuTotal(p, name);
+  }
+
+  /* ---------------- 种子池（origin:'seed'，约 74 只） ---------------- */
+  function ptBuildSeed() {
+    var arcs = ['monkey', 'rodent', 'fuzzy', 'merfolk', 'serpent', 'mech', 'bird', 'object', 'spirit', 'tree', 'uniform'];
+    var series = ['西游', '哪吒', '小王子', '爱丽丝', '游戏手办', '动画经典', '动漫战斗', '奇幻萌宠'];
+    var styles = ['可爱', '炫酷', '中性'];
+    var rar = ['普通', '稀有', '隐藏', '传说'];
+    var skins = ['#ffd1b3', '#ffc1cc', '#cdeffd', '#d7ffd1', '#ffe9b0', '#e3d1ff', '#bfe9e0', '#ffd6a5'];
+    var accs = ['#ffd23f', '#5b8cff', '#ff5b9e', '#6ab04c', '#ff7b3d', '#9b5bff'];
+    var ears = ['none', 'cat', 'round', 'bunny', 'fox'], horns = ['', 'one', 'two', 'bull'], hats = ['', 'headband', 'wizard', 'helmet', 'top', 'straw', 'crown'];
+    var list = [], gans = '甲乙丙丁戊己庚辛壬癸';
+    arcs.forEach(function (a, ai) {
+      var cnt = (a === 'uniform') ? 4 : 7;
+      for (var i = 0; i < cnt; i++) {
+        var s = series[(ai + i) % series.length];
+        var nm = PT_ARC_NAME[a] + (cnt > 1 ? ('·' + gans.charAt(i)) : '');
+        list.push(PetCore.buildPetDef({
+          name: s + '·' + nm, series: s, archetype: a, style: styles[i % styles.length],
+          rarity: rar[(ai + i) % rar.length], skin: skins[(ai * 3 + i) % skins.length],
+          acc: accs[(ai + i * 2) % accs.length], ears: ears[(ai + i) % ears.length],
+          horn: horns[(ai + i) % horns.length], hat: hats[(ai + i * 3) % hats.length],
+          emoji: PT_ARC_EMOJI[a], origin: 'seed'
+        }));
+      }
+    });
+    return list;
+  }
+  function wbPetSeed() {
+    var s = ptGet();
+    if (s.petPool && s.petPool.length) return;
+    s.petPool = ptBuildSeed();
+    ptSave(s); PET_DB = s;
+  }
+
+  /* ---------------- 渲染 ---------------- */
+  function ptCard(pet) {
+    var def = ptPetDefOf(pet);
+    var svg = PetCore.renderPet(def, { seed: pet.id });
+    var grad = pet.graduated ? '<span class="pet-grad">🎓 已毕业 · ' + ptEsc(pet.gradCode || '') + '</span>' : '';
+    return '<div class="pet-card">' + svg +
+      '<div class="pet-nm">' + ptEsc(pet.name) + ' <span class="pet-rare r-' + ptRarClass(pet.rarity) + '">' + ptEsc(pet.rarity) + '</span></div>' +
+      '<div class="pet-own">主人：' + ptEsc(pet.studentName) + '</div>' +
+      '<div class="pet-lv">Lv.' + (pet.level || 1) + ' · EXP ' + (pet.exp || 0) + '/' + ptLevelExp(pet.level || 1) + ' · 😊' + (pet.mood || 0) + ' · 🍖' + (pet.hunger || 0) + '</div>' +
+      '<div class="pet-acts">' +
+      '<button class="btn2 sm" onclick="ptFeed(\'' + pet.id + '\')">🍖 喂食(-' + COST_FEED + ')</button>' +
+      '<button class="btn2 sm" onclick="ptDraw(\'' + pet.id + '\')">🎲 抽奖(-' + COST_DRAW + ')</button>' +
+      '<button class="btn2 sm" onclick="ptRedeem(\'' + pet.id + '\')">🎁 兑换(-' + COST_REDEEM + ')</button>' +
+      (pet.graduated ? '' : '<button class="btn2 sm" onclick="ptGradReq(\'' + pet.id + '\')">🎓 申请毕业</button>') +
+      '</div>' + grad + '</div>';
+  }
+  function ptRenderWall() {
+    var box = document.getElementById('petPanel-wall'); if (!box) return;
+    var s = ptGet();
+    var html = s.pets.length ? s.pets.map(ptCard).join('') : '<div class="pet-empty">还没有宠物，去「🥚 孵化器」给同学发一只吧～</div>';
+    box.innerHTML = '<div class="pet-grid">' + html + '</div>';
+  }
+  function ptRenderIncubator() {
+    var box = document.getElementById('petPanel-inc'); if (!box) return;
+    var s = ptGet();
+    var stus = (typeof stuRoster === 'function') ? stuRoster() : [];
+    var opts = stus.map(function (x) { return '<option value="' + ptEsc(x.姓名) + '">' + ptEsc(x.姓名) + (x.学号 ? (' (' + x.学号 + ')') : '') + '</option>'; }).join('');
+    var pool = s.petPool.map(function (sp) {
+      var svg = PetCore.renderPet(sp, { seed: sp.id });
+      var kind = (sp.origin === 'student') ? ' <span class="pet-stu">同学共创</span>' : '';
+      return '<div class="pet-card" style="cursor:pointer" onclick="ptHatchFromSel(\'' + sp.id + '\')">' + svg +
+        '<div class="pet-nm">' + ptEsc(sp.name) + ' <span class="pet-rare r-' + ptRarClass(sp.rarity) + '">' + ptEsc(sp.rarity) + '</span>' + kind + '</div>' +
+        '<div class="pet-own">' + ptEsc(sp.series || '') + ' · ' + (PT_ARC_NAME[sp.archetype] || sp.archetype) + '</div>' +
+        '<div class="pet-lv">点击发放给上方所选学生</div></div>';
+    }).join('');
+    box.innerHTML = '<div class="gpset"><span class="lbl">发放给：</span><select id="petStuSel" class="search">' + opts + '</select>' +
+      '<button class="btn2 primary" onclick="ptHatchSel()">🥚 整批孵化（随机一只给所选学生）</button>' +
+      '<span class="sctip" id="petIncTip"></span></div>' +
+      '<div class="pet-grid">' + pool + '</div>';
+  }
+  function ptRenderParent() {
+    var box = document.getElementById('petPanel-parent'); if (!box) return;
+    var s = ptGet();
+    var q = s.parentQueue.filter(function (x) { return (x.status || 'pending') === 'pending'; });
+    var html = q.length ? q.map(function (x) {
+      var act = (x.action === 'feed') ? '喂食' : (x.action === 'draw') ? '抽奖' : (x.action === 'redeem') ? '兑换' : x.action;
+      return '<div class="pet-row"><span>👪 ' + ptEsc(x.studentId || x.studentName || '') + ' · ' + act + (x.item ? (' · ' + ptEsc(x.item)) : '') + '</span>' +
+        '<span class="pet-acts"><button class="btn2 sm primary" onclick="ptApproveParent(\'' + x.id + '\')">✅ 批准</button>' +
+        '<button class="btn2 sm" onclick="ptRejectParent(\'' + x.id + '\')">❌ 驳回</button></span></div>';
+    }).join('') : '<div class="pet-empty">暂无待处理的家长喂养提案</div>';
+    box.innerHTML = '<div class="sub">家长在小程序端提交的喂养 / 抽奖 / 兑换提案，老师批准后才真正入账（扣学生积分 + 改宠物状态）。</div>' + html;
+    ptBadges();
+  }
+  function ptRenderSub() {
+    var box = document.getElementById('petPanel-sub'); if (!box) return;
+    var s = ptGet();
+    var q = s.petSubmissions.filter(function (x) { return (x.status || 'pending') === 'pending'; });
+    var html = q.length ? q.map(function (x) {
+      var svg = PetCore.renderPet(x.def, { seed: x.id });
+      var kind = (x.kind === 'freehand') ? '自由涂鸦' : '装配器';
+      return '<div class="pet-card">' + svg +
+        '<div class="pet-nm">' + ptEsc((x.def && x.def.name) || '未命名') + '</div>' +
+        '<div class="pet-own">作者：' + ptEsc(x.studentId || '') + ' · ' + kind + '</div>' +
+        '<div class="pet-acts"><button class="btn2 sm primary" onclick="ptApproveSub(\'' + x.id + '\')">✅ 入池</button>' +
+        '<button class="btn2 sm" onclick="ptRejectSub(\'' + x.id + '\')">❌ 驳回</button></div></div>';
+    }).join('') : '<div class="pet-empty">暂无学生投稿</div>';
+    box.innerHTML = '<div class="sub">学生用「装配器 / 自由涂鸦」造出的宠物，老师批准后进入宠物池（标注同学共创），全班可抽可领。</div><div class="pet-grid">' + html + '</div>';
+    ptBadges();
+  }
+  function ptRenderGrad() {
+    var box = document.getElementById('petPanel-grad'); if (!box) return;
+    var s = ptGet();
+    var q = s.pets.filter(function (p) { return !p.graduated && (p.level || 1) >= GRAD_LEVEL; });
+    var html = q.length ? q.map(function (p) {
+      return '<div class="pet-row"><span>🎓 ' + ptEsc(p.name) + ' · 主人 ' + ptEsc(p.studentName) + ' · Lv.' + (p.level || 1) + '</span>' +
+        '<span class="pet-acts"><button class="btn2 sm primary" onclick="ptGradApprove(\'' + p.id + '\')">🎓 批准毕业</button></span></div>';
+    }).join('') : '<div class="pet-empty">暂无达到毕业等级（Lv.' + GRAD_LEVEL + '）的宠物</div>';
+    box.innerHTML = '<div class="sub">宠物达到 Lv.' + GRAD_LEVEL + ' 可申请毕业，老师批准后生成毕业纪念卡号。</div>' + html;
+  }
+  function ptRenderIO() {
+    var box = document.getElementById('petPanel-io'); if (!box) return;
+    box.innerHTML = '<div class="gpset">' +
+      '<button class="btn2" onclick="ptExport()">📦 导出宠物数据(JSON)</button>' +
+      '<button class="btn2" onclick="ptImport()">📥 导入JSON</button>' +
+      '<input type="file" id="petFile" style="display:none" onchange="ptImportFile(event)">' +
+      '<button class="btn2" onclick="ptResetPool()">🌱 重置宠物池为种子</button></div>' +
+      '<div class="sub">导出含 宠物 / 家长队列 / 宠物池 / 投稿 四张表，可备份或迁移。</div>';
+  }
+  function ptBadges() {
+    var s = ptGet();
+    var n1 = s.parentQueue.filter(function (x) { return (x.status || 'pending') === 'pending'; }).length;
+    var n2 = s.petSubmissions.filter(function (x) { return (x.status || 'pending') === 'pending'; }).length;
+    var a = document.getElementById('petPQn'); if (a) a.textContent = n1 ? (' ' + n1) : '';
+    var b = document.getElementById('petSUBn'); if (b) b.textContent = n2 ? (' ' + n2) : '';
+  }
+  function ptRenderAll() { ptRenderIncubator(); ptRenderWall(); ptRenderParent(); ptRenderSub(); ptRenderGrad(); }
+
+  /* ---------------- 行为 ---------------- */
+  function ptHatch(studentName, poolId) {
+    var s = ptGet();
+    var sp = s.petPool.filter(function (x) { return x.id === poolId; })[0];
+    if (!sp) return;
+    if (!studentName) return toastMsg('⚠️ 请先选择学生');
+    s.pets.push(ptMkPet(studentName, sp));
+    ptSave(s); PET_DB = s;
+    toastMsg('🐾 已发放「' + sp.name + '」给 ' + studentName);
+    ptRenderWall(); ptRenderIncubator();
+  }
+  function ptHatchFromSel(poolId) { var sel = document.getElementById('petStuSel'); if (!sel || !sel.value) return toastMsg('请先选择学生'); ptHatch(sel.value, poolId); }
+  function ptHatchSel() {
+    var sel = document.getElementById('petStuSel'); if (!sel || !sel.value) return toastMsg('请先选择学生');
+    var s = ptGet(); if (!s.petPool.length) return toastMsg('宠物池为空');
+    var sp = s.petPool[Math.floor(Math.random() * s.petPool.length)];
+    ptHatch(sel.value, sp.id);
+  }
+  function ptFeed(petId) {
+    var s = ptGet(); var pet = s.pets.filter(function (p) { return p.id === petId; })[0]; if (!pet) return;
+    if (ptStuPoints(pet.studentName) < COST_FEED) return toastMsg('⚠️ ' + pet.studentName + ' 积分不足（需 ' + COST_FEED + '）');
+    ptAddManual(pet.studentName, '宠物喂养 · 喂食', -COST_FEED).then(function () {
+      pet.exp = (pet.exp || 0) + 10; pet.hunger = Math.min(100, (pet.hunger || 0) + 20); pet.mood = Math.min(100, (pet.mood || 0) + 5);
+      pet.lastFedDate = ptYmd(new Date()); pet.feedCntToday = (pet.feedCntToday || 0) + 1; ptLevelUp(pet);
+      ptSave(s); PET_DB = s; ptRenderWall();
+    }).catch(function () {});
+  }
+  function ptDraw(petId) {
+    var s = ptGet(); var pet = s.pets.filter(function (p) { return p.id === petId; })[0]; if (!pet) return;
+    if (ptStuPoints(pet.studentName) < COST_DRAW) return toastMsg('⚠️ ' + pet.studentName + ' 积分不足（需 ' + COST_DRAW + '）');
+    ptAddManual(pet.studentName, '宠物喂养 · 抽奖', -COST_DRAW).then(function () {
+      if (!s.petPool.length) return toastMsg('宠物池为空');
+      var sp = s.petPool[Math.floor(Math.random() * s.petPool.length)];
+      var np = ptMkPet(pet.studentName, sp); s.pets.push(np); pet.drawCntToday = (pet.drawCntToday || 0) + 1;
+      ptSave(s); PET_DB = s; toastMsg('🎲 抽到了「' + sp.name + '」！'); ptRenderWall();
+    }).catch(function () {});
+  }
+  function ptRedeem(petId) {
+    var s = ptGet(); var pet = s.pets.filter(function (p) { return p.id === petId; })[0]; if (!pet) return;
+    if (ptStuPoints(pet.studentName) < COST_REDEEM) return toastMsg('⚠️ ' + pet.studentName + ' 积分不足（需 ' + COST_REDEEM + '）');
+    var items = ['皇冠', '墨镜', '围巾', '蝴蝶结', '彩虹光圈', '圣诞帽'];
+    var it = items[Math.floor(Math.random() * items.length)];
+    ptAddManual(pet.studentName, '宠物喂养 · 兑换配饰', -COST_REDEEM).then(function () {
+      pet.ownedItems = (pet.ownedItems || []).concat([it]); pet.redeemCntToday = (pet.redeemCntToday || 0) + 1;
+      ptSave(s); PET_DB = s; toastMsg('🎁 兑换到配饰：' + it); ptRenderWall();
+    }).catch(function () {});
+  }
+  function ptGradReq(petId) { toastMsg('已记录毕业申请，等待老师审批'); }
+  function ptGradApprove(id) {
+    var s = ptGet(); var p = s.pets.filter(function (x) { return x.id === id; })[0]; if (!p) return;
+    p.graduated = true; p.gradCode = 'GR' + PetCore.hashStr(p.id + p.studentName).toString(36).slice(0, 8).toUpperCase();
+    ptSave(s); PET_DB = s; toastMsg('🎓 毕业卡号：' + p.gradCode); ptRenderGrad(); ptRenderWall();
+  }
+  function ptApproveParent(id) {
+    var s = ptGet(); var it = s.parentQueue.filter(function (x) { return x.id === id; })[0]; if (!it) return;
+    var who = it.studentName || it.studentId;
+    var pet = s.pets.filter(function (p) { return (p.studentId || p.studentName) === who; })[0];
+    var cost = (it.action === 'draw') ? COST_DRAW : (it.action === 'redeem') ? COST_REDEEM : COST_FEED;
+    var actName = (it.action === 'feed') ? '喂食' : (it.action === 'draw') ? '抽奖' : (it.action === 'redeem') ? '兑换' : '喂养';
+    ptAddManual(who, '宠物喂养 · 家长' + actName, -cost).then(function () {
+      if (pet) {
+        if (it.action === 'feed') { pet.exp = (pet.exp || 0) + 10; pet.hunger = Math.min(100, (pet.hunger || 0) + 20); }
+        else if (it.action === 'draw') { if (s.petPool.length) { var sp = s.petPool[Math.floor(Math.random() * s.petPool.length)]; s.pets.push(ptMkPet(who, sp)); } }
+        else if (it.action === 'redeem') { pet.ownedItems = (pet.ownedItems || []).concat([it.item || '配饰']); }
+        ptLevelUp(pet);
+      }
+      it.status = 'done';
+      ptSave(s); PET_DB = s; toastMsg('✅ 已批准家长提案'); ptRenderParent(); ptRenderWall();
+    }).catch(function () {});
+  }
+  function ptRejectParent(id) {
+    var s = ptGet(); var it = s.parentQueue.filter(function (x) { return x.id === id; })[0]; if (!it) return;
+    it.status = 'rejected'; ptSave(s); PET_DB = s; toastMsg('❌ 已驳回'); ptRenderParent();
+  }
+  function ptApproveSub(id) {
+    var s = ptGet(); var x = s.petSubmissions.filter(function (y) { return y.id === id; })[0]; if (!x) return;
+    var def = PetCore.buildPetDef(Object.assign({}, x.def, { origin: 'student', approved: true }));
+    def.id = 'sp_' + PetCore.hashStr((x.def && x.def.name || 's') + Date.now());
+    def.authorStudentId = x.studentId;
+    s.petPool.push(def);
+    x.status = 'approved';
+    ptSave(s); PET_DB = s; toastMsg('✅ 已入池（同学共创）'); ptRenderSub(); ptRenderIncubator();
+  }
+  function ptRejectSub(id) {
+    var s = ptGet(); var x = s.petSubmissions.filter(function (y) { return y.id === id; })[0]; if (!x) return;
+    x.status = 'rejected'; ptSave(s); PET_DB = s; toastMsg('❌ 已驳回'); ptRenderSub();
+  }
+  function ptExport() {
+    var s = ptGet();
+    var blob = JSON.stringify({ kind: 'wbpets', ver: 1, exportedAt: new Date().toISOString(), data: s }, null, 2);
+    var a = document.createElement('a'); a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(blob); a.download = '班级宠物数据.json'; a.click();
+    toastMsg('已导出');
+  }
+  function ptImport() { var f = document.getElementById('petFile'); if (f) f.click(); }
+  function ptImportFile(e) {
+    var f = e.target.files[0]; if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function () {
+      try {
+        var o = JSON.parse(rd.result);
+        if (o && o.data) {
+          var s = ptGet();
+          PET_TABLES.forEach(function (k) { if (Array.isArray(o.data[k])) s[k] = o.data[k]; });
+          ptSave(s); PET_DB = s; toastMsg('✅ 已导入'); ptRenderAll();
+        } else toastMsg('⚠️ 文件格式不对');
+      } catch (err) { toastMsg('⚠️ 解析失败'); }
+    };
+    rd.readAsText(f);
+  }
+  function ptResetPool() {
+    if (!confirm('重置宠物池为初始种子（约 74 只）？已有的同学共创投稿会保留。')) return;
+    var s = ptGet(); s.petPool = ptBuildSeed(); ptSave(s); PET_DB = s; toastMsg('🌱 已重置宠物池'); ptRenderIncubator();
+  }
+  function ptTab(name) {
+    ['inc', 'wall', 'parent', 'sub', 'grad', 'io'].forEach(function (t) {
+      var b = document.querySelector('#petTabs [data-pt="' + t + '"]'); if (b) b.classList.toggle('active', t === name);
+      var p = document.getElementById('petPanel-' + t); if (p) p.style.display = (t === name) ? 'block' : 'none';
+    });
+    if (name === 'inc') ptRenderIncubator();
+    else if (name === 'wall') ptRenderWall();
+    else if (name === 'parent') ptRenderParent();
+    else if (name === 'sub') ptRenderSub();
+    else if (name === 'grad') ptRenderGrad();
+    else if (name === 'io') ptRenderIO();
+  }
+
+  /* 入口：导航点击 / 初始化 */
+  function wbPetRender() { wbPetInit(); ptRenderAll(); }
+  function wbPetInit() {
+    wbPetSeed();
+    ptBadges();
+    if (typeof document !== 'undefined') { var active = document.querySelector('section.section.active'); if (active && active.id === 's-pet') ptRenderAll(); }
+  }
+
+  /* 暴露给全局（main 脚本块与 HTML onclick 需要） */
+  window.wbPetMergeRemote = wbPetMergeRemote;
+  window.wbPetAttach = wbPetAttach;
+  window.wbPetRender = wbPetRender;
+  window.wbPetInit = wbPetInit;
+  window.ptTab = ptTab;
+  window.ptHatch = ptHatch;
+  window.ptHatchFromSel = ptHatchFromSel;
+  window.ptHatchSel = ptHatchSel;
+  window.ptFeed = ptFeed;
+  window.ptDraw = ptDraw;
+  window.ptRedeem = ptRedeem;
+  window.ptGradReq = ptGradReq;
+  window.ptGradApprove = ptGradApprove;
+  window.ptApproveParent = ptApproveParent;
+  window.ptRejectParent = ptRejectParent;
+  window.ptApproveSub = ptApproveSub;
+  window.ptRejectSub = ptRejectSub;
+  window.ptExport = ptExport;
+  window.ptImport = ptImport;
+  window.ptImportFile = ptImportFile;
+  window.ptResetPool = ptResetPool;
+  window.ptRenderWall = ptRenderWall;
+  window.ptRenderIncubator = ptRenderIncubator;
+  window.ptRenderParent = ptRenderParent;
+  window.ptRenderSub = ptRenderSub;
+  window.ptRenderGrad = ptRenderGrad;
+
+  /* 页面加载即初始化（种子池 + 徽标），不依赖打开标签页 */
+  try { if (typeof document !== 'undefined') { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wbPetInit); else wbPetInit(); } } catch (e) {}
+})();
+
 </script>
 </body>
 </html>
