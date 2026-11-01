@@ -7681,7 +7681,7 @@ function scMgRender(){
     if(meta[k].date)thc.appendChild(el('div','exd',meta[k].date));
     trh.appendChild(thc);
   });
-  trh.appendChild(el('th','tgth','学生目标'));
+  var tht=el('th','tgth','学生目标');tht.style.minWidth='150px';trh.appendChild(tht);
   th.appendChild(trh);tb.appendChild(th);
   var tbody=el('tbody');
   students.forEach(function(nm){
@@ -7705,17 +7705,19 @@ function scMgRender(){
       }
       tr.appendChild(td);
     });
-    /* 目标列 */
+    /* 目标列：一/二/三 可直接在框里手动调整 */
     var tdt=el('td','tgt');
-    var hasAny=tgt&&(tgt.t1!=null||tgt.t2!=null||tgt.t3!=null);
-    if(tgt&&hasAny){
-      [['一',tgt.t1],['二',tgt.t2],['三',tgt.t3]].forEach(function(p){
-        var txt=p[0]+(p[1]!=null?p[1]:'—');
-        var b=el('span','tbadge'+(p[1]!=null?'':' off'),txt);
-        if(p[1]!=null){ if(p[0]==='一')b.style.background='#c7ddf7'; else if(p[0]==='二')b.style.background='#c7ecc9'; else b.style.background='#f7c7c7'; }
-        tdt.appendChild(b);
-      });
-    }else{ tdt.appendChild(el('span','na','—')); }
+    tdt.style.whiteSpace='nowrap';
+    [['一','t1',tgt&&tgt.t1],['二','t2',tgt&&tgt.t2],['三','t3',tgt&&tgt.t3]].forEach(function(p){
+      var inp=el('input');
+      inp.type='number';inp.step='0.5';inp.min='0';inp.max='150';
+      inp.style.width='44px';inp.style.textAlign='center';inp.style.margin='1px 1px';inp.style.fontSize='12px';inp.style.padding='2px';
+      inp.value=(p[2]!=null?p[2]:'');
+      inp.placeholder='—';
+      inp.dataset.tname=nm;inp.dataset.tfield=p[1];inp.dataset.orig=(p[2]!=null?p[2]:'');
+      inp.title='学生目标'+p[0]+'（点框可改，保存后即时上色）';
+      tdt.appendChild(inp);
+    });
     tr.appendChild(tdt);
     tbody.appendChild(tr);
   });
@@ -7725,24 +7727,44 @@ function scMgRender(){
   wrap.appendChild(tb);
   box.appendChild(wrap);
   var lg=el('div','legend');
-  lg.innerHTML='<b>底色含义</b>：分数 ≥ 目标三 浅红，≥ 目标二 浅绿，≥ 目标一 浅蓝；未达目标一不染色。最右列「学生目标」为该生三条目标线（一/二/三）。改分后点「保存修改」写回资料库并同步云端。';
+  lg.innerHTML='<b>底色含义</b>：分数 ≥ 目标三 浅红，≥ 目标二 浅绿，≥ 目标一 浅蓝；未达目标一不染色。最右列「学生目标」一/二/三三个框<b>可直接手动修改</b>，改完点「保存修改」即写回（成绩同步云端资料库，目标存于本机）。保存后底色会按新目标重新计算。';
   box.appendChild(lg);
 }
 
 function scMgSave(){
   if(!wbEnsureDB()){toastMsg('⚠️ 数据接口不可用');return}
-  var changed=[].slice.call(document.querySelectorAll('#scMgBox input[data-id]')).filter(function(i){
+  var scoreInputs=[].slice.call(document.querySelectorAll('#scMgBox input[data-id]')).filter(function(i){
     return String(i.value).trim()!==String(i.dataset.orig);
   });
-  if(!changed.length){toastMsg('没有改动');return}
-  eachSeries(changed,function(i){
-    return db.updateRecord({databaseId:DATABASE_ID,recordId:i.dataset.id,properties:{'分数':{number:parseFloat(i.value)}}});
-  }).then(function(){
-    toastMsg('✅ 已保存 '+changed.length+' 条');
-    return loadScoresFromDB();
-  }).then(function(){scMgRender()}).catch(function(e){
-    console.error(e);toastMsg('⚠️ 保存失败：'+(e.message||e));
+  var tgtInputs=[].slice.call(document.querySelectorAll('#scMgBox input[data-tname]')).filter(function(i){
+    return String(i.value).trim()!==String(i.dataset.orig);
   });
+  if(!scoreInputs.length && !tgtInputs.length){toastMsg('没有改动');return}
+  /* 先写回目标（本地 localStorage，与成绩分属两个存储） */
+  var tgtSaved=0;
+  tgtInputs.forEach(function(i){
+    var nm=i.dataset.tname, fld=i.dataset.tfield;
+    var cur=SC_TARGETS[nm]||{};
+    var v=String(i.value).trim();
+    if(v===''){ delete cur[fld]; } else { var p=parseFloat(v); if(!isNaN(p))cur[fld]=p; }
+    if(cur.t1==null&&cur.t2==null&&cur.t3==null&&cur.no==null){ delete SC_TARGETS[nm]; }
+    else SC_TARGETS[nm]=cur;
+    tgtSaved++;
+  });
+  if(tgtSaved)scSaveTargets();
+  if(scoreInputs.length){
+    eachSeries(scoreInputs,function(i){
+      return db.updateRecord({databaseId:DATABASE_ID,recordId:i.dataset.id,properties:{'分数':{number:parseFloat(i.value)}}});
+    }).then(function(){
+      toastMsg('✅ 已保存 '+(tgtSaved?('目标 '+tgtSaved+' 人 + '):'')+scoreInputs.length+' 条成绩');
+      return loadScoresFromDB();
+    }).then(function(){scMgRender()}).catch(function(e){
+      console.error(e);toastMsg('⚠️ 保存失败：'+(e.message||e));
+    });
+  }else{
+    toastMsg('✅ 已保存 '+tgtSaved+' 名学生的目标');
+    scMgRender();
+  }
 }
 
 function scMgDel(id,sub,exam){
