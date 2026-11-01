@@ -2524,6 +2524,7 @@ table.paper td.l{text-align:left;font-weight:600}
       #s-pet .pet-state.s-on{background:#e6f7ee;color:#0a8}
       #s-pet .pet-state.s-paused{background:#fff4e0;color:#b06a00}
       #s-pet .pet-state.s-off{background:#fdeaea;color:#c33}
+      #s-pet .pet-photo{width:100%;height:120px;object-fit:contain;border-radius:10px;background:#f6f8fa}
     </style>
     <h2>🐾 班级宠物 <span style="font-size:12px;color:#76867e;font-weight:400;margin-left:8px" id="petSub">积分养宠物 · 喂养扣个人积分</span><span id="petStateTag" class="pet-state s-on">🟢 运行中</span></h2>
     <div class="sub">宠物消耗的积分 = 学生「个人累计积分」（作业+小组+奖惩汇总），喂养 / 抽奖 / 兑换会写一条「宠物喂养」奖惩记录，自动进入学生流水与积分榜。</div>
@@ -32988,7 +32989,8 @@ function cwInit(){
     return {
       id: pet.id, name: pet.name, archetype: pet.archetype, style: pet.style, rarity: pet.rarity,
       skin: pet.skin, hair: pet.hair, acc: pet.acc, ears: pet.ears, horn: pet.horn, hat: pet.hat,
-      prop: pet.prop || [], tail: pet.tail || '', emoji: pet.emoji, customSvg: pet.customSvg || null
+      prop: pet.prop || [], tail: pet.tail || '', emoji: pet.emoji, customSvg: pet.customSvg || null,
+      species: pet.species || null, breed: pet.breed || null, img: pet.img || null
     };
   }
   function ptMkPet(studentName, sp) {
@@ -33084,15 +33086,20 @@ function cwInit(){
   }
 
   /* ---------------- 渲染 ---------------- */
+  function ptBreedDisp(sp) {
+    try { var sb = PetCore.resolveBreed(sp); return (sb && sb.breed && sb.breed.n) || ''; } catch (e) { return ''; }
+  }
   function ptCard(pet) {
     var def = ptPetDefOf(pet);
-    var svg = PetCore.renderPet(def, { seed: pet.id });
+    var isPhoto = PetCore.isPhotoDef(pet);
+    var svg = isPhoto ? (ptPetPhotoHtml(pet, 'pet-photo') || '<div class="pet-photo" style="display:flex;align-items:center;justify-content:center">🖼️</div>')
+                      : PetCore.renderPet(def, { seed: pet.id });
     var grad = pet.graduated ? '<span class="pet-grad">🎓 已毕业 · ' + ptEsc(pet.gradCode || '') + '</span>' : '';
     var f = ptCost('feed'), d = ptCost('draw'), r = ptCost('redeem');
     var dis = ptPlayable() ? '' : ' disabled title="模块已暂停/关停"';
     return '<div class="pet-card">' + svg +
       '<div class="pet-nm">' + ptEsc(pet.name) + ' <span class="pet-rare r-' + ptRarClass(pet.rarity) + '">' + ptEsc(pet.rarity) + '</span></div>' +
-      '<div class="pet-own">主人：' + ptEsc(pet.studentName) + '</div>' +
+      '<div class="pet-own">主人：' + ptEsc(pet.studentName) + (isPhoto ? ' <span class="pet-stu">手绘</span>' : '') + '</div>' +
       '<div class="pet-lv">Lv.' + (pet.level || 1) + ' · EXP ' + (pet.exp || 0) + '/' + ptLevelExp(pet.level || 1) + ' · 😊' + (pet.mood || 0) + ' · 🍖' + (pet.hunger || 0) + '</div>' +
       '<div class="pet-acts">' +
       '<button class="btn2 sm" onclick="ptFeed(\'' + pet.id + '\')"' + dis + '>🍖 喂食(-' + f + ')</button>' +
@@ -33112,11 +33119,12 @@ function cwInit(){
     var s = ptGet();
     var opts = ptNames().map(function (n) { return '<option value="' + ptEsc(n) + '">' + ptEsc(n) + '</option>'; }).join('');
     var pool = s.petPool.map(function (sp) {
-      var svg = PetCore.renderPet(sp, { seed: sp.id });
+      var isPhoto = PetCore.isPhotoDef(sp);
+      var pic = isPhoto ? ptPetPhotoHtml(sp, 'pet-photo') : PetCore.renderPet(sp, { seed: sp.id });
       var kind = (sp.origin === 'student') ? ' <span class="pet-stu">同学共创</span>' : '';
-      return '<div class="pet-card" style="cursor:pointer" onclick="ptHatchFromSel(\'' + sp.id + '\')">' + svg +
+      return '<div class="pet-card" style="cursor:pointer" onclick="ptHatchFromSel(\'' + sp.id + '\')">' + pic +
         '<div class="pet-nm">' + ptEsc(sp.name) + ' <span class="pet-rare r-' + ptRarClass(sp.rarity) + '">' + ptEsc(sp.rarity) + '</span>' + kind + '</div>' +
-        '<div class="pet-own">' + ptEsc(sp.series || '') + ' · ' + (PT_ARC_NAME[sp.archetype] || sp.archetype) + '</div>' +
+        '<div class="pet-own">' + ptEsc(sp.series || '') + ' · ' + (isPhoto ? '手绘作品' : (PT_ARC_NAME[sp.archetype] || ptBreedDisp(sp) || sp.archetype)) + '</div>' +
         '<div class="pet-lv">' + (ptPlayable() ? '点击发放给上方所选学生' : '⏸ 模块已暂停，暂不可发放') + '</div></div>';
     }).join('');
     box.innerHTML = '<div class="gpset"><span class="lbl">发放给：</span><select id="petStuSel" class="search">' + opts + '</select>' +
@@ -33138,20 +33146,66 @@ function cwInit(){
       (ptPlayable() ? '' : ' <b style="color:#c33">⏸ 模块暂停中，批准后也不会消耗积分，建议先驳回或启用模块。</b>') + '</div>' + html;
     ptBadges();
   }
+  /* 手绘作品的网页端取图：本地缓存优先，没有就异步经 contents API 拉一次 */
+  var PT_IMG_MEM = {};   /* relPath -> dataURI（本次会话内存缓存） */
+  function wbPetFetchImg(rel) {
+    return new Promise(function (res, rej) {
+      try {
+        var c = (typeof giteeCfg === 'function') ? giteeCfg() : {};
+        if (!c || !c.owner || !c.repo || !c.token) { rej(new Error('未配置云端')); return; }
+        var url = 'https://gitee.com/api/v5/repos/' + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo) +
+          '/contents/' + rel.split('/').map(encodeURIComponent).join('/') + '?access_token=' + encodeURIComponent(c.token);
+        fetch(url).then(function (r) { return r.json(); }).then(function (j) {
+          if (!j || !j.content) { rej(new Error('取图失败')); return; }
+          var b64 = String(j.content).replace(/\s/g, '');
+          var isPng = b64.slice(0, 6) === 'iVBORw';
+          res('data:image/' + (isPng ? 'png' : 'jpeg') + ';base64,' + b64);
+        }).catch(rej);
+      } catch (e) { rej(e); }
+    });
+  }
+  window.wbPetFetchImg = wbPetFetchImg;
+  /* 宠物（已入池/墙上）取手绘照片，取到后原位补渲染 */
+  function ptPetPhotoHtml(p, cls) {
+    var rel = p.img || (p.def && p.def.img) || '';
+    if (!rel) return '';
+    if (PT_IMG_MEM[rel]) return '<img class="' + cls + '" src="' + PT_IMG_MEM[rel] + '" alt="手绘宠物">';
+    wbPetFetchImg(rel).then(function (uri) {
+      PT_IMG_MEM[rel] = uri;
+      document.querySelectorAll('img[data-pimg="' + rel + '"]').forEach(function (im) { im.src = uri; });
+    }).catch(function () {});
+    return '<img class="' + cls + '" data-pimg="' + rel + '" src="" alt="手绘宠物加载中">';
+  }
+  function ptSubPhotoHtml(x, cls) {
+    var rel = x.img || (x.def && x.def.img) || '';
+    if (!rel) return '';
+    var cached = PT_IMG_MEM[rel];
+    if (cached) return '<img class="' + cls + '" src="' + cached + '" alt="手绘作品">';
+    try {
+      if (typeof wbPetFetchImg !== 'function') return '<div class="' + cls + '" style="display:flex;align-items:center;justify-content:center">🖼️</div>';
+      wbPetFetchImg(rel).then(function (uri) {
+        if (!uri) return;
+        PT_IMG_MEM[rel] = uri;
+        document.querySelectorAll('img[data-pimg="' + rel + '"]').forEach(function (im) { im.src = uri; });
+      }).catch(function () {});
+    } catch (e) {}
+    return '<img class="' + cls + '" data-pimg="' + rel + '" src="" alt="手绘作品加载中">';
+  }
   function ptRenderSub() {
     var box = document.getElementById('petPanel-sub'); if (!box) return;
     var s = ptGet();
     var q = s.petSubmissions.filter(function (x) { return (x.status || 'pending') === 'pending'; });
     var html = q.length ? q.map(function (x) {
-      var svg = PetCore.renderPet(x.def, { seed: x.id });
-      var kind = (x.kind === 'freehand') ? '自由涂鸦' : '装配器';
-      return '<div class="pet-card">' + svg +
+      var isPhoto = PetCore.isPhotoDef(x.def) || x.kind === 'photo' || !!x.img;
+      var kind = (x.kind === 'photo') ? '手绘作品' : (x.kind === 'freehand') ? '自由涂鸦' : '装配器';
+      var pic = isPhoto ? ptSubPhotoHtml(x, 'pet-photo') : PetCore.renderPet(x.def, { seed: x.id });
+      return '<div class="pet-card">' + pic +
         '<div class="pet-nm">' + ptEsc((x.def && x.def.name) || '未命名') + '</div>' +
         '<div class="pet-own">作者：' + ptEsc(x.studentId || '') + ' · ' + kind + '</div>' +
         '<div class="pet-acts"><button class="btn2 sm primary" onclick="ptApproveSub(\'' + x.id + '\')">✅ 入池</button>' +
         '<button class="btn2 sm" onclick="ptRejectSub(\'' + x.id + '\')">❌ 驳回</button></div></div>';
     }).join('') : '<div class="pet-empty">暂无学生投稿</div>';
-    box.innerHTML = '<div class="sub">学生用「装配器 / 自由涂鸦」造出的宠物，老师批准后进入宠物池（标注同学共创），全班可抽可领。</div><div class="pet-grid">' + html + '</div>';
+    box.innerHTML = '<div class="sub">学生用「装配器 / 手绘作品」造出的宠物，老师批准后进入宠物池（标注同学共创），全班可抽可领。</div><div class="pet-grid">' + html + '</div>';
     ptBadges();
   }
   function ptRenderGrad() {
@@ -33539,7 +33593,14 @@ function cwInit(){
   function ptApproveSub(id) {
     var s = ptGet(); var x = s.petSubmissions.filter(function (y) { return y.id === id; })[0]; if (!x) return;
     var def;
-    if (x.def && x.def.customSvg && x.def.customSvg.length) {
+    var imgRel = x.img || (x.def && x.def.img) || '';
+    if (imgRel) {
+      /* 手绘作品：img 路径是作品的唯一形象，走 buildPetDef 但 img 必须带上 */
+      def = PetCore.buildPetDef(Object.assign({}, x.def, { origin: 'student', approved: true, img: imgRel }));
+      def.id = 'sp_' + PetCore.hashStr((x.def && x.def.name || 's') + Date.now());
+      def.authorStudentId = x.studentId;
+      def.emoji = '🖼️';
+    } else if (x.def && x.def.customSvg && x.def.customSvg.length) {
       /* 自由涂鸦：必须保留 customSvg —— buildPetDef 会清空 customSvg 并强制 uniform，绝不能走那条路 */
       def = {
         id: 'sp_' + PetCore.hashStr((x.def.name || 's') + Date.now()),
