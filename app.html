@@ -32309,11 +32309,22 @@ function cwInit(){
     return '';
   }
 
+  /* ----------------------------- 外观版本开关 -----------------------------
+     vT35：默认回到「原始统一造型」（v1）—— 所有宠物共用同一副身形，
+     只靠配色 / 花纹 / 稀有度光环 / 耳朵帽子配饰来区分。
+     v2 的「夸张物种体型」（猴/龙/机甲/人鱼…）代码完整保留，
+     调用 setStyleV1(false) 即可整体切回去，不必重画。 */
+  const STYLE = { v1: true };
+  function setStyleV1(on) { STYLE.v1 = !!on; return STYLE.v1; }
+  function styleV1() { return STYLE.v1; }
+
   /* ----------------------------- 主渲染 ----------------------------- */
   function renderPet(def, opt) {
     const o = opt || {};
-    const arch = (o.arch === 'auto' || o.arch == null) ? (def.archetype || 'uniform') : (o.arch || 'uniform');
+    let arch = (o.arch === 'auto' || o.arch == null) ? (def.archetype || 'uniform') : (o.arch || 'uniform');
     if (o.useArch === false) return renderPet(Object.assign({}, def, { archetype: 'uniform' }), Object.assign({}, o, { useArch: true }));
+    /* 原始造型模式：除自由涂鸦外一律收回到 uniform 身形（useArch:true 可强制走 v2） */
+    if (STYLE.v1 && o.useArch !== true && arch !== 'freehand') arch = 'uniform';
 
     // 自由涂鸦：customSvg 优先
     if (def.customSvg && def.customSvg.length) return renderFreehand(def, o);
@@ -32419,6 +32430,7 @@ function cwInit(){
     drawFace, drawEar, drawHorn, drawHat, archBody,
     patternOverlay, rarityLayer, bgLayer, renderPet,
     buildPetDef, freehandPetDef,
+    setStyleV1, styleV1,
     ARCHETYPES, EARS_OPTS, HORN_OPTS, HAT_OPTS, TAIL_OPTS, PROP_OPTS
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
