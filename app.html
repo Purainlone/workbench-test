@@ -3657,7 +3657,30 @@ function rotateOnce(cur,monthTurn){
      DATA.seats   当前周（已确认）的真实座次，编辑/轮转都改它
      runSeats     从当前周往后推演出来的逐周座次（只读预览），改它不影响当前周 */
 /* 学期起点提前声明：周次推算依赖它，必须在本行之前就可用 */
-var SEMESTER_START='2026-08-31';
+/* vT31：学期起点改为「云端配置里的开学日期」为唯一真相源，教室桌面读的是同一份。
+   此前两端各算各的：网页端硬编码 '2026-08-31'，教室桌面读 s-desktop 配置的
+   「学期开始日期」—— 老师改了设置两端就对不上（曾出现桌面显示第 8 周、
+   工作台显示第 9 周）。现在两端同源同算法：
+     · 起点取开学日期所在那一周的周一（mondayOf 已做归一化）
+     · 周次 = floor((本周周一 − 起点周一) / 7) + 1
+   本地缓存 wb_nt_v1 里就有 s-desktop（ntLoad 就是读它），页面解析时可直接取，
+   不依赖后面 IIFE 里的 ntGet（那时还没执行到）。取不到就回退默认起点。 */
+function wbCfgTermStart() {
+  try {
+    var db = JSON.parse(localStorage.getItem('wb_nt_v1') || '{}');
+    var a = (db && db['s-desktop']) || [];
+    if (!Array.isArray(a)) return '';
+    for (var i = 0; i < a.length; i++) {
+      var r = a[i];
+      if (r && r.id === 'client_cfg') {
+        var v = String(r['学期开始日期'] || '').trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+      }
+    }
+  } catch (e) {}
+  return '';
+}
+var SEMESTER_START = wbCfgTermStart() || '2026-08-31';
 /* 2.6.57 修正：周次一律以真实日历（SEMESTER_START）推算为准。
    旧 bug 是 loadWeek() 读 seat_week（座位表周次，默认 7）把真实周次拖成第 7 周，
    导致首页/桌面标签显示 7 而实际已到第 9 周。手动设定需显式写 wb_week_manual=1 才生效。 */
@@ -3669,12 +3692,35 @@ var WK_MIN=1,WK_MAX=40;               // 最多往后推开 40 周
 
 /* 学期起点：第 1 周的周一。改这里即可整体校准周次。
    推算依据：今天 2026-10-26(周一)=第 9 周 → 第 1 周周一 = 10-26 往前 8 周 = 2026-08-31（周一）。
-   周次 = floor((本周周一 − 学期起点周一) / 7) + 1，永远以真实日历为准，不再依赖会漂移的计数器。 */
+   周次 = floor((本周周一 − 学期起点周一) / 7) + 1，永远以真实日历为准，不再依赖会漂移的计数器。
+   vT31：起点不再是写死的常量，而是「云端配置里的开学日期」（与教室桌面同源）。
+   起点先归一化到所在那一周的周一（mondayOf 已做），所以开学日填周二/周三也算第 1 周。 */
 /* NOTE: SEMESTER_START 已在上方（NOW_WEEK 声明之前）提前定义，此处不再重复 */
 function schoolWeekOf(d){
   const a=mondayOf(new Date(SEMESTER_START+'T00:00:00'));
   const b=mondayOf(d);
   return Math.round((b-a)/(7*864e5))+1;
+}
+/* vT31：应用新的学期起点（老师改了「开学日期」时调用）。
+   手动锁定过周次（wb_week_manual=1）时不覆盖 —— 那是老师显式指定的。
+   reload=true 时由调用方决定是否重载页面（座位表/推演结果依赖周次，重载最稳妥）。 */
+function wbApplyTermStart(term, reload){
+  var t = String(term || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return false;
+  if (t === SEMESTER_START) return false;
+  SEMESTER_START = t;
+  try {
+    if (localStorage.getItem('wb_week_manual') !== '1') {
+      var w = schoolWeekOf(new Date());
+      if (w >= 1 && w <= 60) {
+        NOW_WEEK = w;
+        viewWeek = w;              /* 视图回到当前周，避免停在旧起点的未来周上 */
+        try { setWeekLabel(); } catch (e) {}
+        try { renderSeats(); } catch (e) {}
+      }
+    }
+  } catch (e) {}
+  return true;
 }
 /* 解析"当前第几周"：手动设定（wb_week_manual=1）优先，否则按真实日历推算 */
 function resolveNowWeek(){
@@ -17036,8 +17082,8 @@ try {
    发现自己不是最新版 → 弹提示并自动刷新页面，本轮绝不写回。
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
-var WB_MY_VER = '优化版 vT30';
-var WB_BUILD_DATE = '11-01', WB_BUILD_NO = '2.6.74';
+var WB_MY_VER = '优化版 vT31';
+var WB_BUILD_DATE = '11-01', WB_BUILD_NO = '2.6.75';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -31188,6 +31234,19 @@ function cwInit(){
       '更新时间': nowStr(),
       ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher'
     });
+    /* vT31：开学日期是「网页端 + 教室桌面」两端共用的唯一真相源。
+       改了就地刷新本端的周次推算，并重载页面让座位表/桌面标签全部按新起点重算，
+       避免网页端显示第 N 周、教室桌面显示第 N±1 周的分叉。 */
+    var termChanged = String(term) !== String(old['学期开始日期'] || '');
+    if (termChanged) {
+      try {
+        if (typeof wbApplyTermStart === 'function') wbApplyTermStart(term, true);
+      } catch (e) {}
+      document.getElementById('deskCfgMsg').textContent = '✅ 已保存，教室端下次同步生效；本页正在按新开学日期重算周次…';
+      ntChanged();
+      setTimeout(function () { location.reload(); }, 900);
+      return;
+    }
     document.getElementById('deskCfgMsg').textContent = '✅ 已保存，教室端下次同步生效';
     setTimeout(function () { var m = document.getElementById('deskCfgMsg'); if (m) m.textContent = '' }, 3000);
     ntChanged();
@@ -31308,6 +31367,15 @@ function cwInit(){
     try { dtDetainRender() } catch (e) {}   /* vT16 留堂名单刷新 */
     try { renderTrain() } catch (e) {}   /* vT16 展示训练营刷新 */
     try { renderStu() } catch (e) {}   /* vT17 科任端作业积分(s-hwadj)并入作业积分后刷新学生表 */
+    /* vT31：云端「开学日期」变了（可能是在另一台设备改的）→ 重算本端周次，
+       与教室桌面保持同一口径（否则网页端第 N 周、桌面第 N±1 周）。 */
+    try {
+      var t2 = wbCfgTermStart();
+      if (t2 && t2 !== SEMESTER_START) {
+        wbApplyTermStart(t2, false);
+        try { toastMsg('ℹ️ 开学日期已更新为 ' + t2 + '，周次已重算为第 ' + NOW_WEEK + ' 周'); } catch (e2) {}
+      }
+    } catch (e) {}
   }
   function ntInit() {
     try {
