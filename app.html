@@ -1678,10 +1678,10 @@ table.paper td.l{text-align:left;font-weight:600}
     <div class="sub">勾选今天需要留堂的学生（打开本页默认按<b>今日作业未完成</b>预选，可手动增减）· 保存后约 3~20 秒同步到教室大屏，<b>每天 16:05 大屏放大提醒并语音播报</b>，同时推送到家长端。</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0">
       <input id="dtDate" type="date" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
-      <button class="btn2 sm primary" onclick="dtPreselect()">📥 按今日作业未完成预选</button>
-      <button class="btn2 sm" onclick="dtSelAll(true)">✅ 全选</button>
-      <button class="btn2 sm ghost" onclick="dtSelAll(false)">🚫 清空</button>
-      <button class="btn2 primary" onclick="dtSave()">💾 保存今日留堂名单</button>
+      <button class="btn2 sm primary" onclick="dtDetainPreselect()">📥 按今日作业未完成预选</button>
+      <button class="btn2 sm" onclick="dtDetainSelAll(true)">✅ 全选</button>
+      <button class="btn2 sm ghost" onclick="dtDetainSelAll(false)">🚫 清空</button>
+      <button class="btn2 primary" onclick="dtDetainSave()">💾 保存今日留堂名单</button>
     </div>
     <div class="chartbox"><div id="dtGrid" style="display:flex;gap:6px;flex-wrap:wrap"></div></div>
     <div class="chartbox sub" id="dtSaved" style="margin-top:10px"></div>
@@ -16792,8 +16792,8 @@ function giteeCfg() {
    发现自己不是最新版 → 弹提示并自动刷新页面，本轮绝不写回。
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
-var WB_MY_VER = '优化版 vT28';
-var WB_BUILD_DATE = '11-01', WB_BUILD_NO = '2.6.72';
+var WB_MY_VER = '优化版 vT29';
+var WB_BUILD_DATE = '11-01', WB_BUILD_NO = '2.6.73';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -17207,9 +17207,34 @@ function giteeMergeIntoLocal(mpTables) {
       byFp[recFingerprint(r)] = 1;
       var bk = recBizKey(id, r); if (bk) byBiz[bk] = 1;
     });
+    /* vT29 墓碑过滤（与 giteeMergeIntoCloud 完全对称）：
+       以前本机模式分支漏了这道闸，两边不对称才暴露成用户看到的现象 ——
+       一轮同步里 tomApplyLocal 先把墓碑命中的记录从本机库删掉（145→97），
+       紧接着 giteeMergeIntoLocal 又把这批云端记录当成「本机没有」并回来（97→145），
+       下一轮再删 —— 「删掉 → 再并入」死循环，每轮都弹「自动同步并入 48 条」。
+       云端分支（giteeMergeIntoCloud）一直有这道闸，本机分支一直没有。 */
+    var _scoreTid = String((window.MP_SYNC && MP_SYNC.score && MP_SYNC.score.table) || 'SI9EURtanpWC0y4lVipmQQ');
+    var _hwTid = String((window.MP_SYNC && MP_SYNC.hw && MP_SYNC.hw.table) || 'fCfl0cuMIVzFDi0iDuAEv2');
+    var _colT = (typeof hwColTombSet === 'function') ? hwColTombSet() : {};
+    var _recT = (typeof hwRecTombSet === 'function') ? hwRecTombSet() : {};
     var add = [];
     incoming.forEach(function (r) {
       if (!r || typeof r !== 'object') return;
+      /* ① 成绩墓碑：键 = 科目|考试名称|姓名|日期，命中即不再并入（防删除复活） */
+      if (String(id) === _scoreTid) {
+        var _sp = (r && r.properties) || {};
+        function _sv(k) { var x = _sp[k]; if (x && typeof x === 'object') return String(x.text != null ? x.text : (x.number != null ? x.number : '')); return String(x == null ? '' : x); }
+        if (tomHasScore(tomKey(_sv('科目'), _sv('考试名称'), _sv('学生姓名'), _sv('考试日期')))) return;
+      }
+      /* ② 作业墓碑：整列删除(|col|作业名|日期) / 记录级删除(姓名|作业名|日期) 命中即不再并入。
+         判据与 giteeMergeIntoCloud 一致：既看业务键，也直接看记录属性（不依赖表 ID 是否匹配）。 */
+      if (String(id) === _hwTid) {
+        var _bk0 = recBizKey(id, r);
+        if (_bk0 && window.__WB_HW_TOMBS__ && window.__WB_HW_TOMBS__[_bk0]) return;
+        var _hk = (typeof hwRecKeys === 'function') ? hwRecKeys(r) : { col: '', rec: '' };
+        if (_hk.col && _colT[_hk.col]) return;
+        if (_hk.rec && _recT[_hk.rec]) return;
+      }
       if (r.id && byId[String(r.id)]) return;
       var fp = recFingerprint(r);
       if (byFp[fp]) return;
@@ -30133,20 +30158,20 @@ function cwInit(){
     toastMsg('✅ 已加入内容库，可在列表里编辑或「设为今天」');
   }
   /* ================= vT16 今日留堂（s-detain，同步教室大屏 + 16:05 提醒 + 家长端） ================= */
-  var dtSel = {}, dtAuto = false;
-  function dtToday() { var d = document.getElementById('dtDate'); return (d && d.value) || new Date().toISOString().slice(0, 10); }
-  function dtRender() {
+  var dtDetainSel = {}, dtDetainAuto = false;
+  function dtDetainToday() { var d = document.getElementById('dtDate'); return (d && d.value) || new Date().toISOString().slice(0, 10); }
+  function dtDetainRender() {
     var grid = document.getElementById('dtGrid'); if (!grid) return;
     var dEl = document.getElementById('dtDate');
     if (dEl && !dEl.value) dEl.value = new Date().toISOString().slice(0, 10);
-    if (!dtAuto) { dtAuto = true; try { dtPreselect(true); } catch (e) {} }   /* 首次打开按作业未完成自动预选 */
+    if (!dtDetainAuto) { dtDetainAuto = true; try { dtDetainPreselect(true); } catch (e) {} }   /* 首次打开按作业未完成自动预选 */
     var roster = stuRoster();
     grid.innerHTML = roster.length ? roster.map(function (s) {
-      var on = !!dtSel[s.姓名];
+      var on = !!dtDetainSel[s.姓名];
       return '<label style="border:1px solid ' + (on ? '#7fc7a4' : 'var(--line)') + ';background:' + (on ? '#e8f4ee' : '#fff') + ';border-radius:9px;padding:5px 10px;font-size:13px;cursor:pointer;user-select:none">' +
-        '<input type="checkbox" data-nm="' + esc(s.姓名) + '"' + (on ? ' checked' : '') + ' onchange="dtToggle(this)"> ' + esc(s.姓名) + '</label>';
+        '<input type="checkbox" data-nm="' + esc(s.姓名) + '"' + (on ? ' checked' : '') + ' onchange="dtDetainToggle(this)"> ' + esc(s.姓名) + '</label>';
     }).join('') : '<span class="sub">还没有学生名单</span>';
-    var d = dtToday();
+    var d = dtDetainToday();
     var names = [];
     ntRows('s-detain').forEach(function (r) {
       if (r && !r.deleted && String(r.date || '').slice(0, 10) === d && r.name && names.indexOf(r.name) < 0) names.push(r.name);
@@ -30156,31 +30181,31 @@ function cwInit(){
       ? ('📋 已保存 ' + d + ' 留堂名单（' + names.length + ' 人）：' + esc(names.join('、')) + '　—— 同步教室大屏与家长端，16:05 大屏提醒')
       : ('📋 ' + d + ' 还没有保存留堂名单');
   }
-  window.dtToggle = function (cb) { dtSel[cb.getAttribute('data-nm')] = cb.checked; };
-  window.dtSelAll = function (on) {
-    stuRoster().forEach(function (s) { dtSel[s.姓名] = !!on; });
-    dtRender(); toastMsg(on ? '✅ 已全选' : '已清空勾选');
+  window.dtDetainToggle = function (cb) { dtDetainSel[cb.getAttribute('data-nm')] = cb.checked; };
+  window.dtDetainSelAll = function (on) {
+    stuRoster().forEach(function (s) { dtDetainSel[s.姓名] = !!on; });
+    dtDetainRender(); toastMsg(on ? '✅ 已全选' : '已清空勾选');
   };
-  window.dtPreselect = function (silent) {
-    var d = dtToday();
+  window.dtDetainPreselect = function (silent) {
+    var d = dtDetainToday();
     var items = HW_ITEMS.filter(function (it) { return hwDateOnly(it.date) === d; });
-    if (!items.length) { if (!silent) toastMsg('今天还没有作业列，无法按作业预选，请手动勾选'); dtRender(); return }
+    if (!items.length) { if (!silent) toastMsg('今天还没有作业列，无法按作业预选，请手动勾选'); dtDetainRender(); return }
     var m = hwMapRows();
     stuRoster().forEach(function (s) {
       var undone = items.some(function (it) { return !m[hwKey(s.姓名, it.name)]; });
-      if (undone) dtSel[s.姓名] = true;
+      if (undone) dtDetainSel[s.姓名] = true;
     });
-    dtRender();
+    dtDetainRender();
     if (!silent) {
-      var n = stuRoster().filter(function (s) { return dtSel[s.姓名]; }).length;
+      var n = stuRoster().filter(function (s) { return dtDetainSel[s.姓名]; }).length;
       toastMsg('📥 已按今日 ' + items.length + ' 项作业预选 ' + n + ' 名未完成学生，可手动增减');
     }
   };
-  window.dtSave = function () {
-    var d = dtToday(); if (!d) { toastMsg('⚠️ 先选日期'); return }
+  window.dtDetainSave = function () {
+    var d = dtDetainToday(); if (!d) { toastMsg('⚠️ 先选日期'); return }
     var d8 = d.replace(/-/g, ''), n = 0;
     stuRoster().forEach(function (s) {
-      var want = !!dtSel[s.姓名], hit = null;
+      var want = !!dtDetainSel[s.姓名], hit = null;
       ntRows('s-detain').forEach(function (r) { if (r && !r.deleted && String(r.date || '').slice(0, 10) === d && r.name === s.姓名) hit = r; });
       if (want && !hit) {
         ntUpsert('s-detain', { id: 'dt_' + d8 + '_' + s.姓名, date: d, name: s.姓名, by: '班主任', subject: '语文', deleted: false, ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher' });
@@ -30190,7 +30215,7 @@ function cwInit(){
         ntUpsert('s-detain', hit); n++;
       }
     });
-    ntChanged(); dtRender();
+    ntChanged(); dtDetainRender();
     toastMsg(n ? '💾 已保存，教室大屏与家长端约 3~20 秒同步' : '名单没有变化');
   };
   function clRender() {
@@ -30336,7 +30361,7 @@ function cwInit(){
   window.clTab = clTab; window.clRender = clRender; window.clAdd = clAdd; window.clEdit = clEdit;
   window.clDel = clDel; window.clSetToday = clSetToday; window.clCloseForm = clCloseForm; window.clSaveForm = clSaveForm;
   window.csSave = csSave; window.csDel = csDel;
-  try { clRender(); csRender(); dtRender(); renderTrain(); } catch (e) {}
+  try { clRender(); csRender(); dtDetainRender(); renderTrain(); } catch (e) {}
 
   /* ================= vT14 学生评语 ================= */
   var CM_TPL_KEY = 'wb_cm_tpl_v1', CM_TRAIT_KEY = 'wb_cm_trait_v1', CM_AI_KEY = 'wb_cm_ai_v1';
@@ -31025,8 +31050,8 @@ function cwInit(){
     try { deskFillCfgForm() } catch (e) {}
     try { asRender() } catch (e) {}   /* vT13 布置作业列表刷新 */
     try { cmAfterSync() } catch (e) {}   /* vT14 学生评语刷新 */
-    try { clRender(); csRender(); dtRender(); renderTrain(); } catch (e) {}   /* vT15 经典内容管理刷新 */
-    try { dtRender() } catch (e) {}   /* vT16 留堂名单刷新 */
+    try { clRender(); csRender(); dtDetainRender(); renderTrain(); } catch (e) {}   /* vT15 经典内容管理刷新 */
+    try { dtDetainRender() } catch (e) {}   /* vT16 留堂名单刷新 */
     try { renderTrain() } catch (e) {}   /* vT16 展示训练营刷新 */
     try { renderStu() } catch (e) {}   /* vT17 科任端作业积分(s-hwadj)并入作业积分后刷新学生表 */
   }
