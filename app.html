@@ -4035,6 +4035,24 @@ function saveSeats(){
   }
   catch(e){toastMsg('⚠️ 保存失败：浏览器存储空间不足或被禁用');return false}
 }
+/* vT39 周次印章自愈：DATA.seats 定义上就是「当前周已确认座次」，其生效周次必须与 NOW_WEEK 一致。
+   老师手动锁定/解除周次（首页「第 N 周」胶囊）、或跨周进入新一周后，标签可能与 NOW_WEEK 对不上，
+   而 saveSeats 只在编辑座次时触发 —— 单纯刷新页面不会重新盖章，云端就一直留着旧周次，
+   桌面端周次自检会一直报「座次=第X周、当前应为第Y周」。这里在座次装载后一次性纠正并落盘。 */
+function seatStampSelfHeal(){
+  try{
+    if(!Array.isArray(DATA.seats)||!DATA.seats.length) return false;
+    if(!(typeof NOW_WEEK==='number'&&NOW_WEEK>0)) return false;
+    var wk='第'+NOW_WEEK+'周', need=false;
+    DATA.seats.forEach(function(s){ if(s&&typeof s==='object'&&String(s.生效周次||'')!==wk){ s.生效周次=wk; need=true; } });
+    if(need){
+      try{saveSeats()}catch(e){}
+      try{if(typeof syncScheduleSoon==='function')syncScheduleSoon()}catch(e){}
+      try{console.info('[seat] 周次印章自愈：已刷新为 '+wk)}catch(e){}
+    }
+    return need;
+  }catch(e){ return false }
+}
 function loadSeats(){
   try{
     const raw=localStorage.getItem('seat_data_v1');
@@ -8339,6 +8357,7 @@ function loadSeatsFromDB(){
       return;
     }
     DATA.seats=list.slice(0,60);viewList=DATA.seats;
+    try{seatStampSelfHeal()}catch(_eSH){}      /* vT39：装载后纠正生效周次印章与 NOW_WEEK 对齐 */
     try{clsSyncFromData()}catch(e){}
     healFixed();                            // 2.6.17：云端座次覆盖后固位关系可能变化，重新自愈
     renderSeats();setWeekLabel();
