@@ -277,6 +277,7 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
       <div class="sub" style="margin-top:-4px">删除是两段确认：点一下按钮进入待确认（5 秒内再点一次才真删）。删错可点提示里的「⟲ 撤回恢复」，成绩原样回来。</div>
       <div id="anSingle"></div>
 
+      <div id="anSel"></div>
       <h3 style="margin-top:16px">📊 多次成绩跟踪</h3>
       <div id="anTrack"></div>
 
@@ -1704,16 +1705,24 @@ function expDocx() {
 
 /* ===== 成绩分析（vT8）：单次分析 + 多次跟踪 + 导入以往成绩 ===== */
 var anCurExam = '';
+var AN_SEL = null;        /* 科任成绩分析·自由选场：null=全选，否则 {考试名:true} */
+var AN_FROM = '', AN_TO = '';
 
+function anNormDate(s) {
+  s = String(s == null ? '' : s).trim();
+  var m = s.match(/(\d{4})[^\d]?(\d{1,2})[^\d]?(\d{1,2})/);
+  if (m) { var y = m[1], mo = ('0' + m[2]).slice(-2), d = ('0' + m[3]).slice(-2); return y + '-' + mo + '-' + d; }
+  return s;   /* 认不出则原样返回，localeCompare 仍能排序 */
+}
 function anExams() {
-  /* 本科目全部考试，按日期倒序（新的在前） */
+  /* 本科目全部考试，按日期倒序（新的在前）；日期归一化成 YYYY-MM-DD，区间比较才稳 */
   var seen = {}, out = [];
   (SC || []).forEach(function (r) {
     if (!r || r.subject !== ME.subject || !r.exam) return;
-    var k = r.exam;
-    if (seen[k]) { if (String(r.date) > out[seen[k] - 1].date) out[seen[k] - 1].date = String(r.date || ''); return; }
+    var k = r.exam, nd = anNormDate(r.date);
+    if (seen[k]) { if (nd > out[seen[k] - 1].date) out[seen[k] - 1].date = nd; return; }
     seen[k] = out.length + 1;
-    out.push({ exam: r.exam, date: String(r.date || ''), full: Number(r.full) || 100 });
+    out.push({ exam: r.exam, date: nd, full: Number(r.full) || 100 });
   });
   out.sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
   return out;
@@ -1750,7 +1759,13 @@ function switchTabAn() {
 function renderAn() {
   var box = $('anSingle'), tr = $('anTrack');
   var exams = anExams();
-  if (!exams.length) { box.innerHTML = '<div class="sub">还没有成绩。先在「📊 成绩登记」录分或导入。</div>'; tr.innerHTML = ''; return; }
+  renderAnSel(exams);
+  var useExams = (AN_SEL === null) ? exams : exams.filter(function (e) { return AN_SEL[e.exam]; });
+  if (!useExams.length) useExams = exams.slice();   /* 一场都不勾回退全选 */
+  if (!exams.length) {
+    var _sb = $('anSel'); if (_sb) _sb.innerHTML = '';
+    box.innerHTML = '<div class="sub">还没有成绩。先在「📊 成绩登记」录分或导入。</div>'; tr.innerHTML = ''; return;
+  }
   var exam = $('anExam').value || exams[0].exam;
   anCurExam = exam;
   var rows = anRows(exam);
@@ -1791,21 +1806,21 @@ function renderAn() {
     '<div style="max-height:260px;overflow:auto;border:1px solid #e3efe8;border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:13px;text-align:center"><thead><tr><th style="padding:6px;background:#eef6f0;position:sticky;top:0">名次</th><th style="padding:6px;background:#eef6f0;position:sticky;top:0">姓名</th><th style="padding:6px;background:#eef6f0;position:sticky;top:0">分数</th><th style="padding:6px;background:#eef6f0;position:sticky;top:0">与平均</th></tr></thead><tbody>' + rankRows + '</tbody></table></div>';
 
   /* ---- 多次跟踪 ---- */
-  if (exams.length < 2) {
+  if (useExams.length < 2) {
     tr.innerHTML = '<div class="sub">再考一场后，这里会自动出现每人的进退步对比和历次趋势。</div>';
     return;
   }
   var byName = {};
   (STU || []).forEach(function (s) { byName[s.name] = []; });
   rows.concat([]);  /* 当前考试已含 */
-  exams.forEach(function (e) {
+  useExams.forEach(function (e) {
     anRows(e.exam).forEach(function (r) {
       if (!byName[r.name]) byName[r.name] = [];
       byName[r.name].push({ exam: e.exam, score: Number(r.score), date: e.date, full: Number(r.full) || 100 });
     });
   });
   /* 班级平均分折线（SVG，按时间正序） */
-  var chrono = exams.slice().reverse();
+  var chrono = useExams.slice().reverse();
   var pts = chrono.map(function (e) { return anStat(anRows(e.exam), full).avg; });
   var W = 640, H = 130, pad = 28;
   var mn = Math.min.apply(null, pts.concat([100])), mx = Math.max.apply(null, pts.concat([0]));
@@ -1847,6 +1862,83 @@ function renderAn() {
   tr.innerHTML = svg +
     '<div class="sub" style="margin:12px 0 2px">每位学生（按最近一次分数排序；点「看哪场考试」可切换单场）</div>' +
     '<div style="max-height:300px;overflow:auto;border:1px solid #e3efe8;border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:13px;text-align:center"><thead><tr><th style="padding:6px;background:#eef6f0;position:sticky;top:0">姓名</th><th style="padding:6px;background:#eef6f0;position:sticky;top:0">最近</th><th style="padding:6px;background:#eef6f0;position:sticky;top:0">较上次</th><th style="padding:6px;background:#eef6f0;position:sticky;top:0">个人平均</th><th style="padding:6px;background:#eef6f0;position:sticky;top:0">趋势</th></tr></thead><tbody>' + trackRows + '</tbody></table></div>';
+}
+
+/* 科任成绩分析·自由选场：可勾选任意几场纳入「多次跟踪」，支持全选/反选/按日期区间选 */
+function renderAnSel(exams) {
+  var box = $('anSel'); if (!box) return;
+  box.innerHTML = '';
+  if (exams.length < 1) return;
+  function curOn() { return (AN_SEL === null) ? exams.length : exams.filter(function (e) { return AN_SEL[e.exam]; }).length; }
+  var onN = curOn(); if (onN === 0) onN = exams.length;
+  /* 第一行：标题 + 全选 + 反选 + 计数 */
+  var row1 = document.createElement('div');
+  row1.style.cssText = 'margin:4px 0;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;';
+  var tip = document.createElement('span'); tip.className = 'sub'; tip.style.margin = '0';
+  tip.textContent = '多次跟踪纳入的考试（' + exams.length + ' 场，默认全选）：';
+  row1.appendChild(tip);
+  var chks = [];
+  var allWrap = document.createElement('label'); allWrap.style.cssText = 'cursor:pointer;user-select:none;font-weight:600;';
+  var allChk = document.createElement('input'); allChk.type = 'checkbox'; allChk.checked = (onN === exams.length);
+  allChk.onchange = function () { AN_SEL = allChk.checked ? null : {}; renderAn(); };
+  allWrap.appendChild(allChk); allWrap.appendChild(document.createTextNode('全选'));
+  row1.appendChild(allWrap);
+  var invBtn = document.createElement('button'); invBtn.className = 'btn sec'; invBtn.style.fontSize = '12px'; invBtn.textContent = '⇄ 反选';
+  invBtn.onclick = function () { anInvertSel(exams, chks); };
+  row1.appendChild(invBtn);
+  var cnt = document.createElement('span'); cnt.className = 'sub'; cnt.style.margin = '0 0 0 4px';
+  cnt.textContent = '已选 ' + onN + ' / ' + exams.length + ' 场' + (onN === exams.length ? '（全部）' : '');
+  row1.appendChild(cnt);
+  box.appendChild(row1);
+  /* 第二行：每场复选框（带日期） */
+  var row2 = document.createElement('div');
+  row2.style.cssText = 'margin:2px 0;display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;';
+  exams.forEach(function (e) {
+    var lab = document.createElement('label'); lab.style.cssText = 'cursor:pointer;user-select:none;white-space:nowrap;';
+    var c = document.createElement('input'); c.type = 'checkbox';
+    c.checked = (AN_SEL === null || AN_SEL[e.exam] === true);
+    c.onchange = function () { anApplySel(exams, chks); };
+    lab.appendChild(c); lab.appendChild(document.createTextNode(' ' + e.exam + (e.date ? ' · ' + e.date : '')));
+    row2.appendChild(lab);
+    chks.push({ e: e.exam, el: c });
+  });
+  box.appendChild(row2);
+  /* 第三行：日期区间 */
+  var row3 = document.createElement('div');
+  row3.style.cssText = 'margin:4px 0 2px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;';
+  var dFrom = document.createElement('input'); dFrom.type = 'date'; dFrom.id = 'anFrom'; dFrom.style.cssText = 'font-size:12px;padding:2px 4px;'; dFrom.value = AN_FROM;
+  var dTo = document.createElement('input'); dTo.type = 'date'; dTo.id = 'anTo'; dTo.style.cssText = 'font-size:12px;padding:2px 4px;'; dTo.value = AN_TO;
+  var rngBtn = document.createElement('button'); rngBtn.className = 'btn sec'; rngBtn.style.fontSize = '12px'; rngBtn.textContent = '📅 按区间选';
+  rngBtn.onclick = function () { anRangeSel(exams); };
+  row3.appendChild(document.createTextNode('日期区间：'));
+  row3.appendChild(dFrom); row3.appendChild(document.createTextNode(' 至 ')); row3.appendChild(dTo); row3.appendChild(rngBtn);
+  box.appendChild(row3);
+}
+function anApplySel(exams, chks) {
+  var set = {}, on = 0;
+  chks.forEach(function (o) { if (o.el.checked) { set[o.e] = true; on++; } });
+  AN_SEL = (on === exams.length) ? null : set;
+  renderAn();
+}
+function anInvertSel(exams, chks) {
+  chks.forEach(function (o) { o.el.checked = !o.el.checked; });
+  anApplySel(exams, chks);
+}
+function anRangeSel(exams) {
+  var f = ($('anFrom') || {}).value || '';
+  var t = ($('anTo') || {}).value || '';
+  AN_FROM = f; AN_TO = t;
+  if (!f && !t) return;
+  var set = {};
+  exams.forEach(function (e) {
+    var d = e.date || '';
+    if (!d) return;
+    if (f && d < f) return;
+    if (t && d > t) return;
+    set[e.exam] = true;
+  });
+  AN_SEL = (Object.keys(set).length === exams.length) ? null : set;
+  renderAn();
 }
 
 /* 导入以往多次成绩：第一列姓名，其余每列一场考试（表头=考试名） */
