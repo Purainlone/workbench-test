@@ -43,9 +43,9 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-he
   function fail(s) { e.innerHTML = s; b.style.display = 'inline-block' }
   function go(tries) {
     var u = 'app.html';
-    /* vT24 缓存修复：部署脚本每次会把 1793618619427 替换成部署时间戳，
+    /* vT24 缓存修复：部署脚本每次会把 1793619428965 替换成部署时间戳，
        缓存键每次部署都变 —— 用户不再需要清缓存/强刷才能拿到新版 */
-    u += (location.search ? location.search : '?v=1793618619427');
+    u += (location.search ? location.search : '?v=1793619428965');
     say('正在加载工作台' + (tries ? '（第 ' + (tries + 1) + ' 次尝试）' : '') + '…');
     /* vT24 弱网补强：fetch 加 20 秒超时。弱网下 fetch 可能永远挂起，
        页面一直停在"正在加载…"看起来就像无响应 —— 超时后自动重试/给出直连入口 */
