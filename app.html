@@ -18214,6 +18214,14 @@ function syncCycleCore(manual) {
          后续合并与回写都会按墓碑跳过，删除不再复活 */
       tomPrune();
       tomMerge(doc.deletes);
+      /* 一次性墓碑清零开关：云端 doc.tombstoneReset 置位时，清掉本机误删墓碑缓存，
+         让被 stale 墓碑挡住的成绩能重新导入/同步（仅执行一次，不影响正常删除逻辑）。 */
+      try {
+        if (doc && doc.tombstoneReset && !localStorage.getItem('wb_tomb_reset_done_v1')) {
+          localStorage.removeItem('wb_mp_tombstones');
+          localStorage.setItem('wb_tomb_reset_done_v1', '1');
+        }
+      } catch (_tr) {}
       var isCloud = !(window.__WB_LOCAL__ === true) && window.__SMART_PAGE__ && db;
       /* 2.6.0 自愈优先：远端若被旧版写脏，先用干净快照覆盖再继续 */
       var pRepair = wbRepairIfStale(res);
