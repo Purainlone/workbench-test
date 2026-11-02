@@ -1594,6 +1594,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <span class="sctip" id="scAnTip"></span>
         <button class="btn2 sm" onclick="scWordPanel()">📄 导出成绩表</button>
       </div>
+      <div id="scAnExams"></div>
       <div id="scWordBox"></div>
       <div id="scAnBox"></div>
     </div>
@@ -6488,6 +6489,49 @@ function scOneExam(rows,exam,avg){
   return box;
 }
 
+/* 成绩分析「自由选场」复选框面板：把 exams（已按考试日期升序）画成可勾选标签 */
+function renderExamPicker(exams){
+  var box=document.getElementById('scAnExams');
+  if(!box)return;
+  fill(box);
+  if(exams.length<1){ box.appendChild(el('div','sctip','这个科目还没有考试，选不了场次。')); return; }
+  var wrap=el('div','');
+  wrap.style.cssText='margin:6px 0 2px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;';
+  var tip=el('span','sctip');
+  tip.textContent='纳入分析的考试（'+exams.length+' 场，默认全选）：';
+  wrap.appendChild(tip);
+  /* 全选 / 取消全选 便捷开关 */
+  var allWrap=el('label'); allWrap.style.cssText='cursor:pointer;user-select:none;font-weight:600;';
+  var allChk=el('input'); allChk.type='checkbox';
+  var onN=(SC_AN_SEL===null)?exams.length:exams.filter(function(e){return SC_AN_SEL[e]}).length;
+  if(onN===0) onN=exams.length;            /* 空集回退全选，计数口径与图表一致 */
+  allChk.checked=(onN===exams.length);
+  allChk.onchange=function(){ SC_AN_SEL = allChk.checked?null:{}; scRenderAn(); };
+  allWrap.appendChild(allChk); allWrap.appendChild(document.createTextNode('全选'));
+  wrap.appendChild(allWrap);
+  /* 每场考试一个复选框 */
+  var chks=[];
+  exams.forEach(function(e){
+    var lab=el('label'); lab.style.cssText='cursor:pointer;user-select:none;white-space:nowrap;';
+    var c=el('input'); c.type='checkbox';
+    c.checked=(SC_AN_SEL===null||SC_AN_SEL[e]===true);
+    c.onchange=function(){ applyExamSel(exams, chks); };
+    lab.appendChild(c); lab.appendChild(document.createTextNode(' '+e));
+    wrap.appendChild(lab);
+    chks.push({e:e,el:c});
+  });
+  box.appendChild(wrap);
+  var cnt=el('div','sctip'); cnt.style.marginTop='2px';
+  cnt.textContent='已选 '+onN+' / '+exams.length+' 场'+(onN===exams.length?'（全部）':'');
+  box.appendChild(cnt);
+}
+function applyExamSel(exams, chks){
+  var set={}, on=0;
+  chks.forEach(function(o){ if(o.el.checked){ set[o.e]=true; on++; } });
+  SC_AN_SEL = (on===exams.length)?null:set;   /* 全勾回退成 null，省内存也省判断 */
+  scRenderAn();
+}
+
 function scRenderAn(){
   var box=document.getElementById('scAnBox');
   if(!box)return;
@@ -6500,6 +6544,19 @@ function scRenderAn(){
     return;
   }
   var exams=scExamOrder(rows);
+  /* 自由选场（Task 2）：在按科目/范围筛出的考试里，再让用户勾选要纳入分析的场次。
+     科目或范围一变（scAnSub / scAnRange）就自动清空勾选，否则沿用上次的选择。 */
+  var scAnSubV=(document.getElementById('scAnSub').value||'语文');
+  var scAnRangeV=(document.getElementById('scAnRange').value||'all');
+  var scAnKey=scAnSubV+'|'+scAnRangeV;
+  if(SC_AN_SEL_KEY!==scAnKey){ SC_AN_SEL=null; SC_AN_SEL_KEY=scAnKey; }
+  renderExamPicker(exams);                                  /* 把考试清单画成可勾选的复选框 */
+  var scUse=(SC_AN_SEL===null)?exams.slice()
+           :exams.filter(function(e){return SC_AN_SEL[e];});
+  if(!scUse.length) scUse=exams.slice();                    /* 一场都不勾时回退全选，避免空白 */
+  var scUseSet={}; scUse.forEach(function(e){ scUseSet[e]=1; });
+  rows=rows.filter(function(r){ return scUseSet[fval(r,'考试名称')]; });  /* 行也按选中场次收窄 */
+  exams=scUse;                                             /* 后续所有图表都基于「选中的场次」 */
   /* 每场考试的均分 */
   var byExam={};
   rows.forEach(function(r){
@@ -6865,6 +6922,12 @@ function scDistCard(rows, exams) {
 
 /* ---------- 多科综合分析：自选科目组合（vT12） ---------- */
 var SC_MULTI_SEL = null;   /* null=全部科目参与；否则 {科目:true} 只算勾选的 */
+
+/* 成绩分析「自由选场」(Task 2)：让用户勾选纳入分析的考试。
+   SC_AN_SEL = null 表示全选；否则是 {考试名称:true} 只算勾选的。
+   SC_AN_SEL_KEY 记录当前选项对应的「科目|范围」，科目或范围一变就自动清空选择。 */
+var SC_AN_SEL = null;
+var SC_AN_SEL_KEY = '';
 function scMultiAllSubs() {
   var seen = {};
   SC_ROWS.forEach(function (r) {
