@@ -6405,6 +6405,7 @@ function scExamOrder(rows){
     if(!da&&db) return 1;
     return a<b?-1:(a>b?1:0);                 /* 同日或无日期：按名称稳定排序 */
   });
+  SC_EXAM_META = meta;
   return list;
 }
 
@@ -6489,46 +6490,83 @@ function scOneExam(rows,exam,avg){
   return box;
 }
 
-/* 成绩分析「自由选场」复选框面板：把 exams（已按考试日期升序）画成可勾选标签 */
-function renderExamPicker(exams){
+/* 成绩分析「自由选场」面板：可勾选任意几场，并支持「反选」「按日期区间选」 */
+function renderExamPicker(exams, meta){
   var box=document.getElementById('scAnExams');
   if(!box)return;
   fill(box);
   if(exams.length<1){ box.appendChild(el('div','sctip','这个科目还没有考试，选不了场次。')); return; }
-  var wrap=el('div','');
-  wrap.style.cssText='margin:6px 0 2px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;';
-  var tip=el('span','sctip');
-  tip.textContent='纳入分析的考试（'+exams.length+' 场，默认全选）：';
-  wrap.appendChild(tip);
-  /* 全选 / 取消全选 便捷开关 */
+  meta = meta || {};
+  function curOn(){ return (SC_AN_SEL===null)?exams.length:exams.filter(function(e){return SC_AN_SEL[e]}).length; }
+  var onN=curOn(); if(onN===0) onN=exams.length;   /* 空集回退全选，计数口径与图表一致 */
+  /* 第一行：标题 + 全选 + 反选 + 已选计数 */
+  var row1=el('div','');
+  row1.style.cssText='margin:6px 0 4px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;';
+  var tip=el('span','sctip'); tip.textContent='纳入分析的考试（'+exams.length+' 场，默认全选）：';
+  row1.appendChild(tip);
   var allWrap=el('label'); allWrap.style.cssText='cursor:pointer;user-select:none;font-weight:600;';
-  var allChk=el('input'); allChk.type='checkbox';
-  var onN=(SC_AN_SEL===null)?exams.length:exams.filter(function(e){return SC_AN_SEL[e]}).length;
-  if(onN===0) onN=exams.length;            /* 空集回退全选，计数口径与图表一致 */
-  allChk.checked=(onN===exams.length);
+  var allChk=el('input'); allChk.type='checkbox'; allChk.checked=(onN===exams.length);
   allChk.onchange=function(){ SC_AN_SEL = allChk.checked?null:{}; scRenderAn(); };
   allWrap.appendChild(allChk); allWrap.appendChild(document.createTextNode('全选'));
-  wrap.appendChild(allWrap);
-  /* 每场考试一个复选框 */
+  row1.appendChild(allWrap);
+  var invBtn=el('button','btn2 sm'); invBtn.textContent='⇄ 反选';
+  invBtn.onclick=function(){ anInvertSel(exams, chks); };
+  row1.appendChild(invBtn);
+  var cnt=el('span','sctip'); cnt.style.marginLeft='4px';
+  cnt.textContent='已选 '+onN+' / '+exams.length+' 场'+(onN===exams.length?'（全部）':'');
+  row1.appendChild(cnt);
+  box.appendChild(row1);
+  /* 第二行：每场考试一个复选框（带代表日期） */
+  var row2=el('div','');
+  row2.style.cssText='margin:2px 0;display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;';
   var chks=[];
   exams.forEach(function(e){
+    var d=meta[e]?meta[e].date:'';
     var lab=el('label'); lab.style.cssText='cursor:pointer;user-select:none;white-space:nowrap;';
     var c=el('input'); c.type='checkbox';
     c.checked=(SC_AN_SEL===null||SC_AN_SEL[e]===true);
     c.onchange=function(){ applyExamSel(exams, chks); };
-    lab.appendChild(c); lab.appendChild(document.createTextNode(' '+e));
-    wrap.appendChild(lab);
+    lab.appendChild(c); lab.appendChild(document.createTextNode(' '+e+(d?' · '+d:'')));
+    row2.appendChild(lab);
     chks.push({e:e,el:c});
   });
-  box.appendChild(wrap);
-  var cnt=el('div','sctip'); cnt.style.marginTop='2px';
-  cnt.textContent='已选 '+onN+' / '+exams.length+' 场'+(onN===exams.length?'（全部）':'');
-  box.appendChild(cnt);
+  box.appendChild(row2);
+  /* 第三行：按日期区间选 */
+  var row3=el('div','');
+  row3.style.cssText='margin:4px 0 2px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;';
+  var dFrom=el('input'); dFrom.type='date'; dFrom.id='anFrom'; dFrom.value=AN_FROM; dFrom.style.cssText='font-size:12px;padding:2px 4px;';
+  var dTo=el('input'); dTo.type='date'; dTo.id='anTo'; dTo.value=AN_TO; dTo.style.cssText='font-size:12px;padding:2px 4px;';
+  var rngBtn=el('button','btn2 sm'); rngBtn.textContent='📅 按区间选';
+  rngBtn.onclick=function(){ anRangeSel(exams, meta); };
+  row3.appendChild(el('span','sctip','日期区间：'));
+  row3.appendChild(dFrom); row3.appendChild(document.createTextNode(' 至 ')); row3.appendChild(dTo); row3.appendChild(rngBtn);
+  box.appendChild(row3);
 }
 function applyExamSel(exams, chks){
   var set={}, on=0;
   chks.forEach(function(o){ if(o.el.checked){ set[o.e]=true; on++; } });
   SC_AN_SEL = (on===exams.length)?null:set;   /* 全勾回退成 null，省内存也省判断 */
+  scRenderAn();
+}
+function anInvertSel(exams, chks){
+  chks.forEach(function(o){ o.el.checked = !o.el.checked; });   /* 直接翻转每个复选框，再按新状态重建集合 */
+  applyExamSel(exams, chks);
+}
+function anRangeSel(exams, meta){
+  meta = meta || {};
+  var f=document.getElementById('anFrom'); f=f?f.value:'';
+  var t=document.getElementById('anTo'); t=t?t.value:'';
+  AN_FROM=f; AN_TO=t;
+  if(!f&&!t) return;                            /* 区间为空：不动选择 */
+  var set={};
+  exams.forEach(function(e){
+    var d=meta[e]?meta[e].date:'';
+    if(!d) return;                              /* 没日期的考试不在区间内 */
+    if(f&&d<f) return;
+    if(t&&d>t) return;
+    set[e]=true;
+  });
+  SC_AN_SEL = (Object.keys(set).length===exams.length)?null:set;
   scRenderAn();
 }
 
@@ -6550,7 +6588,7 @@ function scRenderAn(){
   var scAnRangeV=(document.getElementById('scAnRange').value||'all');
   var scAnKey=scAnSubV+'|'+scAnRangeV;
   if(SC_AN_SEL_KEY!==scAnKey){ SC_AN_SEL=null; SC_AN_SEL_KEY=scAnKey; }
-  renderExamPicker(exams);                                  /* 把考试清单画成可勾选的复选框 */
+  renderExamPicker(exams, SC_EXAM_META);                   /* 把考试清单画成可勾选的复选框（含日期区间/反选） */
   var scUse=(SC_AN_SEL===null)?exams.slice()
            :exams.filter(function(e){return SC_AN_SEL[e];});
   if(!scUse.length) scUse=exams.slice();                    /* 一场都不勾时回退全选，避免空白 */
@@ -6928,6 +6966,8 @@ var SC_MULTI_SEL = null;   /* null=全部科目参与；否则 {科目:true} 只
    SC_AN_SEL_KEY 记录当前选项对应的「科目|范围」，科目或范围一变就自动清空选择。 */
 var SC_AN_SEL = null;
 var SC_AN_SEL_KEY = '';
+var SC_EXAM_META = {};   /* scExamOrder 回填：考试名 -> {dates,date(代表日期)}，供选场面板做日期区间过滤 */
+var AN_FROM = '', AN_TO = '';  /* 选场面板的日期区间输入，跨重渲染保留 */
 function scMultiAllSubs() {
   var seen = {};
   SC_ROWS.forEach(function (r) {
