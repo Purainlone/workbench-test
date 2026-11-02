@@ -4026,7 +4026,13 @@ function saveWeek(n){try{localStorage.setItem('seat_week',String(n));localStorag
 /* ---------- 座次持久化 ---------- */
 /* 把当前 DATA.seats 存进浏览器本地，下次打开自动恢复 */
 function saveSeats(){
-  try{localStorage.setItem('seat_data_v1',JSON.stringify(DATA.seats));return true}
+  try{
+    /* vT39 周次印章：落盘当前周座次时刷新生效周次为「第N周」（N=NOW_WEEK）。
+       此前座次只从飞书只读带入生效周次、本地轮转/调整后不刷新，导致推到云端的座次仍带旧周次，
+       桌面端周次自检就会误报「桌面=第9周、应为第10周」且永远对不上。 */
+    try{ if(typeof NOW_WEEK==='number'&&NOW_WEEK>0&&Array.isArray(DATA.seats)){ var _wk='第'+NOW_WEEK+'周'; DATA.seats.forEach(function(s){ if(s&&typeof s==='object') s.生效周次=_wk; }); } }catch(_e){}
+    localStorage.setItem('seat_data_v1',JSON.stringify(DATA.seats));return true
+  }
   catch(e){toastMsg('⚠️ 保存失败：浏览器存储空间不足或被禁用');return false}
 }
 function loadSeats(){
@@ -16180,6 +16186,25 @@ function cloudLocalsAt(v){
     return Number(localStorage.getItem(CLOUD_LOCALS_AT) || 0) || 0;
   }catch(e){ return 0 }
 }
+/* vT39 座次键有效性 / 择优：云端与本机座次（seat_data_v1 等）谁更完整用谁，
+   避免任一侧空/残缺把另一侧已保存的座次整份冲掉（此前 seat_data_v1 不在保护之列，
+   一旦某端 localStorage 恰好为空就回写空值把云端的第N周座次抹掉，桌面永久退回陈旧缓存）。 */
+function seatKeyValidN(v, key){
+  try{
+    if(v == null || v === '') return 0;
+    if(key === 'seat_base_week' || key === 'seat_week' || key === 'wb_now_week') return (typeof v === 'string' && v.trim()) ? 1 : 0;
+    var o = JSON.parse(v);
+    if(Array.isArray(o)) return o.length >= 10 ? o.length : 0;
+    if(o && typeof o === 'object'){ if(o.members) return Object.keys(o.members).length; return Object.keys(o).length; }
+    return 0;
+  }catch(e){ return 0; }
+}
+function seatBest(localV, remoteV, key){
+  var ln = seatKeyValidN(localV, key), rn = seatKeyValidN(remoteV, key);
+  if(ln > 0 && ln >= rn) return localV;
+  if(rn > 0) return remoteV;
+  return localV;
+}
 /* 收集本机电脑侧数据 */
 function cloudCollectLocals(){
   var o = { __ver: CLOUD_LOCALS_VER, __at: Date.now(), kv: {} }, i;
@@ -16221,14 +16246,12 @@ function cloudApplyLocals(o){
     if(!Object.prototype.hasOwnProperty.call(kv, k)) continue;
     /* 2.6.61 座位键保护：云端的空/更少座次数据不得覆盖本机已保存的座次，
        否则「打开座位表空白」——云端曾存过空座次，每次同步靠整包 __at 时间戳 LWW 把本机座次冲掉 */
-    if(k === 'seat_order_v1' || k === 'seat_act_v1'){
+    /* vT39 座次键保护（seat_data_v1 / seat_base_v1 / seat_base_week / seat_order_v1 / seat_act_v1）：
+       云端空或比本机更残缺时，不覆盖本机已保存的座次，否则「打开座位表空白 / 座次被冲掉」。 */
+    if(k === 'seat_data_v1' || k === 'seat_base_v1' || k === 'seat_base_week' || k === 'seat_order_v1' || k === 'seat_act_v1'){
       try{
-        var _inc = kv[k], _loc = localStorage.getItem(k);
-        var _incN = 0, _locN = 0;
-        try{ var _io = JSON.parse(_inc); _incN = (_io && _io.members) ? Object.keys(_io.members).length : -1; }catch(_e){ _incN = -1; } /* 坏数据也不覆盖本机 */
-        try{ var _lo = _loc ? JSON.parse(_loc) : null; _locN = (_lo && _lo.members) ? Object.keys(_lo.members).length : 0; }catch(_e){ _locN = 0; }
-        if(_incN <= 0 && _locN > 0){ seatTouched = true; continue; }                 /* 云端空、本机有 → 保本机 */
-        if(_incN > 0 && _locN > 0 && _incN < _locN){ seatTouched = true; continue; } /* 云端更少 → 保本机 */
+        var _best = seatBest(kv[k], localStorage.getItem(k), k);
+        if(_best !== kv[k]){ seatTouched = true; continue; } /* 本机更完整 → 跳过云端这份 */
       }catch(_e){ seatTouched = true; continue; }
     }
     try{ localStorage.setItem(k, kv[k]); n++ }catch(e){}
@@ -16271,23 +16294,25 @@ function cloudMergeLocals(remote){
   var mine = cloudCollectLocals();
   var rAt = Number(remote && remote.__at) || 0;
   var mAt = cloudLocalsAt();
+  /* vT39 座次键择优：把更完整一侧的座次带入目标副本，任何一侧空/残缺都不冲掉另一侧的好数据 */
+  function seatKeysBest(target, src){
+    ['seat_data_v1','seat_base_v1','seat_base_week','seat_order_v1','seat_act_v1'].forEach(function(sk){
+      if(!src || !src.kv || src.kv[sk] == null) return;
+      if(!target.kv) target.kv = {};
+      target.kv[sk] = seatBest(target.kv[sk], src.kv[sk], sk);
+    });
+  }
   if(remote && rAt > mAt){
     try{ cloudApplyLocals(remote); cloudLocalsAt(rAt) }catch(e){}
-    /* 2.6.61 自愈：若本机座次被保护未覆盖（比云端更完整），把本机座次带回云端，
-       避免云端空座次反复把本机冲掉 */
+    /* 2.6.61 + vT39：本机座次比云端更完整 → 带回云端（含 seat_data_v1 等） */
     try{
-      ['seat_order_v1','seat_act_v1'].forEach(function(sk){
-        var _l = localStorage.getItem(sk);
-        if(_l == null) return;
-        var _lo=null; try{_lo=JSON.parse(_l)}catch(_e){}
-        var _locN = (_lo && _lo.members) ? Object.keys(_lo.members).length : 0;
-        var _r = remote.kv ? remote.kv[sk] : null, _rn = 0;
-        try{ var _ro = _r ? JSON.parse(_r) : null; _rn = (_ro && _ro.members) ? Object.keys(_ro.members).length : 0; }catch(_e){}
-        if(_locN > 0 && _locN >= _rn){ if(!remote.kv) remote.kv = {}; remote.kv[sk] = _l; }
-      });
+      var _locMap = {};
+      ['seat_data_v1','seat_base_v1','seat_base_week','seat_order_v1','seat_act_v1'].forEach(function(sk){ var v=localStorage.getItem(sk); if(v!=null) _locMap[sk]=v; });
+      seatKeysBest(remote, { kv: _locMap });
     }catch(_e){}
     return remote;
   }
+  seatKeysBest(mine, remote); /* 本机较新：用云端更完整的座次补全本机副本，避免回写时把云端第N周座次冲掉 */
   cloudLocalsAt(mine.__at);
   return mine;
 }
