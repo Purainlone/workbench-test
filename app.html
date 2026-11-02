@@ -6370,13 +6370,39 @@ function scAnRows(){
     return true;
   });
 }
-/* 按考试名称聚合，得到时间顺序（按导入顺序 + 名称里的中文数字排） */
+/* 按考试名称聚合后，按「考试日期」升序排 x 轴 —— 而不是按导入顺序。
+   这样折线图 / 跟踪分析的走势才符合真实考试时间线（先考的排在左边）。
+   一场考试在各学生记录里的日期应当一致；若个别记录日期缺失或手误，
+   取出现最多的那个日期作代表，避免整场被排错；都没日期的排到最后。 */
 function scExamOrder(rows){
-  var idx={},list=[];
+  function dateOf(r){
+    var v=fval(r,'考试日期');
+    if(v) return v;                        /* 文本型日期（最常见） */
+    var o=r&&r['考试日期'];
+    if(o&&typeof o==='object'&&o.date) return String(o.date);  /* 日期型字段兜底 */
+    return '';
+  }
+  var seen={}, list=[], meta={};
   rows.forEach(function(r){
-    var e=fval(r,'考试名称');
+    var e=fval(r,'考试名称'), d=syncDateOnly(dateOf(r))||'';
     if(!e)return;
-    if(idx[e]==null){idx[e]=list.length;list.push(e)}
+    if(!seen[e]){ seen[e]=1; list.push(e); meta[e]={ dates:[], date:'' }; }
+    if(d) meta[e].dates.push(d);
+  });
+  list.forEach(function(e){
+    var ds=meta[e].dates, best='';
+    if(ds.length){
+      var cnt={}, mx=-1;
+      ds.forEach(function(x){ cnt[x]=(cnt[x]||0)+1; if(cnt[x]>mx){ mx=cnt[x]; best=x; } });
+      meta[e].date=best;
+    }
+  });
+  list.sort(function(a,b){
+    var da=meta[a].date, db=meta[b].date;
+    if(da&&db&&da!==db) return da<db?-1:1;   /* 都带日期：按日期升序 */
+    if(da&&!db) return -1;                   /* 有日期的排在无日期之前 */
+    if(!da&&db) return 1;
+    return a<b?-1:(a>b?1:0);                 /* 同日或无日期：按名称稳定排序 */
   });
   return list;
 }
