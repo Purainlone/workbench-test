@@ -7991,12 +7991,12 @@ function scMgSave(){
     }).then(function(){
       toastMsg('✅ 已保存 '+(tgtSaved?('目标 '+tgtSaved+' 人 + '):'')+scoreInputs.length+' 条成绩');
       return loadScoresFromDB();
-    }).then(function(){scMgRender()}).catch(function(e){
+    }).then(function(){scMgRender();if(typeof ptwSchedule==='function')ptwSchedule();}).catch(function(e){
       console.error(e);toastMsg('⚠️ 保存失败：'+(e.message||e));
     });
   }else{
     toastMsg('✅ 已保存 '+tgtSaved+' 名学生的目标');
-    scMgRender();
+    scMgRender();if(typeof ptwSchedule==='function')ptwSchedule();
   }
 }
 
@@ -9629,6 +9629,7 @@ function actAddPts(nm,gno,delta){
     if(ACT_MENU_KIND==='stu'){actMenu(ACT_MENU_NM,ACT_MENU_GNO,ACT_MENU_ANCHOR);}
     else if(ACT_MENU_KIND==='grp'){actGroupMenu(gno,ACT_MENU_ANCHOR);}
     else{actRender();}
+    if(typeof ptwSchedule==='function')ptwSchedule();
     toastMsg('✅ '+nm+' '+(v>0?'+':'')+v+' 分');
   }).catch(function(err){console.error('[act] 个人加减分失败:',err);toastMsg('⚠️ 没保存成功，请重试')});
 }
@@ -13995,7 +13996,7 @@ function scnWriteOne(name,item,lv){
     var rid=recId(had);
     return db.updateRecord({databaseId:HW_DB,recordId:rid,
       properties:{'等级':{select:lv},'分值':{number:HW_SCORE[lv]},'备注':{text:'扫码登记'}}})
-      .then(function(){HW_ROWS.forEach(function(x){if(recId(x)===rid){x['等级']=lv;x['分值']=HW_SCORE[lv]}})});
+      .then(function(){HW_ROWS.forEach(function(x){if(recId(x)===rid){x['等级']=lv;x['分值']=HW_SCORE[lv]}});if(typeof ptwSchedule==='function')ptwSchedule();});
   }
   return db.addRecord({databaseId:HW_DB,properties:{
     '日期':{date:hwDateOnly(item.date)||ymd(new Date())},
@@ -14008,6 +14009,7 @@ function scnWriteOne(name,item,lv){
     if(!(r&&r.id))throw new Error('addRecord 未返回 id');
     HW_ROWS.push({id:r.id,'日期':item.date,'作业名称':item.name,'学生姓名':name,'等级':lv,'分值':HW_SCORE[lv],'备注':'扫码登记'});
     hwSubjSet(item.name,item.date,item.subject||'语文');   /* 记住本列科目，工作台主页据此过滤 */
+    if(typeof ptwSchedule==='function')ptwSchedule();
   });
 }
 /* 手机没有摄像头权限时，还能手动输学号补录 */
@@ -30515,7 +30517,7 @@ function cwInit(){
   function pad2(n) { return (n < 10 ? '0' : '') + n }
   function dstr(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) }
   function nowStr() { var d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) }
-  function ntChanged() { try { syncScheduleSoon() } catch (e) {} try { mqttPublishSignal() } catch (e) {} }
+  function ntChanged() { try { syncScheduleSoon() } catch (e) {} try { mqttPublishSignal() } catch (e) {} try { if (typeof ptwSchedule === 'function') ptwSchedule(); } catch (e) {} }
   function ntSha256Hex(s) {
     function sha1free(str) { /* crypto.subtle 不可用时的兜底（非加密级，仅用于口令哈希防窥视） */
       var h = 5381, i = str.length;
@@ -34354,6 +34356,227 @@ function cwInit(){
   try { if (typeof document !== 'undefined') { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wbPetInit); else wbPetInit(); } } catch (e) {}
 })();
 
+</script>
+
+<!-- vT40 家长端实时：网页端自动发布家长快照（与小程序端同源加密，老师改完网页数据家长端 30 秒内可见） -->
+<script>
+(function () {
+  'use strict';
+
+  /* ===== 与小程序 utils/ptcloud.js 逐字一致的加密（务必同源，否则家长端解不开密文） ===== */
+  function utf8Encode(str) {
+    var out = [], i, c;
+    for (i = 0; i < str.length; i++) {
+      c = str.codePointAt(i);
+      if (c > 0xffff) i++;
+      if (c < 0x80) out.push(c);
+      else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 63));
+      else if (c < 0x10000) out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+      else out.push(0xf0 | (c >> 18), 0x80 | ((c >> 12) & 63), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    return out;
+  }
+  function utf8Decode(bytes) {
+    var out = '', i = 0;
+    while (i < bytes.length) {
+      var c = bytes[i];
+      if (c < 0x80) { out += String.fromCharCode(c); i += 1; }
+      else if (c < 0xe0) { out += String.fromCharCode(((c & 31) << 6) | (bytes[i + 1] & 63)); i += 2; }
+      else if (c < 0xf0) { out += String.fromCharCode(((c & 15) << 12) | ((bytes[i + 1] & 63) << 6) | (bytes[i + 2] & 63)); i += 3; }
+      else { var cp = ((c & 7) << 18) | ((bytes[i + 1] & 63) << 12) | ((bytes[i + 2] & 63) << 6) | (bytes[i + 3] & 63); out += String.fromCodePoint(cp); i += 4; }
+    }
+    return out;
+  }
+  /* 注意：此自定义字母表与小程序端必须完全一致（包括数字段顺序），改一处两端都改 */
+  var B64T = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  function b64en(bytes) {
+    var r = '', i;
+    for (i = 0; i < bytes.length; i += 3) {
+      var b0 = bytes[i], b1 = bytes[i + 1], b2 = bytes[i + 2];
+      r += B64T[b0 >> 2];
+      r += B64T[((b0 & 3) << 4) | ((b1 == null ? 0 : b1) >> 4)];
+      r += b1 == null ? '=' : B64T[((b1 & 15) << 2) | ((b2 == null ? 0 : b2) >> 6)];
+      r += b2 == null ? '=' : B64T[b2 & 63];
+    }
+    return r;
+  }
+  function b64de(str) {
+    var out = [], i, v = 0, n = 0;
+    str = String(str).replace(/[^A-Za-z0-9+/]/g, '');
+    for (i = 0; i < str.length; i++) {
+      v = (v << 6) | B64T.indexOf(str.charAt(i));
+      n += 6;
+      if (n >= 8) { n -= 8; out.push((v >> n) & 255); }
+    }
+    return out;
+  }
+  function xorBytes(bytes, code) {
+    var kb = utf8Encode('wb_pt_v3::' + String(code).toUpperCase()), i, k = [];
+    for (i = 0; i < 24; i++) kb.push((i * 131 + kb.length * 7 + i * i) & 255);
+    for (i = 0; i < bytes.length; i++) k.push(bytes[i] ^ kb[i % kb.length]);
+    return k;
+  }
+  function seal(obj, code) { return b64en(xorBytes(utf8Encode(JSON.stringify(obj)), code)); }
+
+  /* ===== 构建快照（复用网页已有数据，字段与小程序 publishSnapshot 同源） ===== */
+  function ptwPad2(n) { return (n < 10 ? '0' : '') + n }
+  function ptwDstr(d) { return d.getFullYear() + '-' + ptwPad2(d.getMonth() + 1) + '-' + ptwPad2(d.getDate()) }
+  function ptwBuildSnap() {
+    if (typeof stuRoster !== 'function' || typeof syncCollectLocal !== 'function' || typeof bindCodeOf !== 'function') return null;
+    var roster = stuRoster();
+    if (!roster || !roster.length) return null;
+    var stus = roster.map(function (s) {
+      return { no: (s.学号 == null ? '' : String(s.学号)), name: s.姓名, group: s.组别 || '', code: bindCodeOf(s.学号, s.姓名) };
+    });
+    var local = syncCollectLocal();
+    var now = new Date();
+    var lim30 = ptwDstr(new Date(now.getTime() - 30 * 86400000));
+    var lim60ts = Date.now() - 60 * 86400000;
+    var lim120 = ptwDstr(new Date(now.getTime() - 120 * 86400000));
+    var today = ptwDstr(now);
+
+    /* 作业列（最近 30 天） */
+    var items = [];
+    if (Array.isArray(HW_ITEMS)) {
+      HW_ITEMS.forEach(function (it) {
+        var d = it.date ? String(it.date).slice(0, 10) : '';
+        if (d < lim30) return;
+        items.push({ date: d, item: it.name || '', subject: it.subject || '' });
+      });
+    }
+    if (!items.length) {
+      var seen = {};
+      (local.hw || []).forEach(function (r) {
+        var k = r.date + '|' + r.item; if (seen[k]) return; seen[k] = 1;
+        if ((r.date || '') < lim30) return;
+        items.push({ date: r.date, item: r.item, subject: '' });
+      });
+    }
+
+    var hwRows = (local.hw || []).filter(function (r) { return (r.date || '') >= lim30; })
+      .map(function (r) { return { date: r.date, item: r.item, name: r.name, level: r.level }; });
+    var rcRows = (local.rc || []).map(function (r) { return { date: r.date, name: r.name, title: r.title }; });
+
+    /* 积分汇总（作业分 + 手动奖惩分） */
+    var pmap = {};
+    stus.forEach(function (s) { pmap[s.name] = { hw: 0, manual: 0, total: 0, no: s.no, group: s.group }; });
+    (local.hw || []).forEach(function (r) { if (pmap[r.name]) pmap[r.name].hw += Number(r.score) || 0; });
+    (local.manual || []).forEach(function (r) { if (pmap[r.name]) pmap[r.name].manual += Number(r.score) || 0; });
+    for (var n in pmap) pmap[n].total = pmap[n].hw + pmap[n].manual;
+    var points = stus.map(function (s) { var p = pmap[s.name] || { hw: 0, manual: 0, total: 0 }; return { name: s.name, hw: p.hw, manual: p.manual, total: p.total }; });
+
+    /* 教师点评（c-comment，最近 60 天） */
+    var comments = [];
+    try {
+      var cm = (typeof ntRows === 'function') ? ntRows('c-comment') : [];
+      cm.forEach(function (r) {
+        if (!r || r.deleted || !r.name || !r.text) return;
+        var ts = Number(r.ts) || 0; if (ts < lim60ts) return;
+        comments.push({ name: r.name, theme: r.theme || '', text: String(r.text).slice(0, 500), ts: ts });
+      });
+    } catch (e) {}
+
+    /* 成绩（最近 120 天） */
+    var grades = [];
+    try {
+      (window.SC_ROWS || []).forEach(function (r) {
+        var nm = fval(r, '学生姓名'); if (!nm) return;
+        var dt = String(fval(r, '考试日期') || '').slice(0, 10);
+        if (dt < lim120) return;
+        var sc = fval(r, '分数'); var full = fval(r, '满分');
+        grades.push({ date: dt, exam: fval(r, '考试名称') || '', subject: fval(r, '科目') || '', name: nm, score: sc, full: (full === '' || full == null ? 100 : full) });
+      });
+    } catch (e) {}
+
+    /* 今日留堂（s-detain） */
+    var detain = [];
+    try {
+      var dt2 = (typeof ntRows === 'function') ? ntRows('s-detain') : [];
+      dt2.forEach(function (r) {
+        if (!r || r.deleted || !r.name) return;
+        var d = String(r.date || '').slice(0, 10);
+        if (d && d !== today) return;
+        detain.push({ name: r.name, by: r.by || '', subject: r.subject || '' });
+      });
+    } catch (e) {}
+
+    var s2 = (typeof mpSyncSettings === 'function') ? mpSyncSettings() : {};
+    return {
+      app: '李老师工作台·家长端', ver: 3, ts: Date.now(),
+      classId: (s2 && s2.classId) || '', className: '',
+      exportedAt: new Date().toISOString(),
+      students: stus, hwItems: items, hw: hwRows, rc: rcRows,
+      points: points, comments: comments, grades: grades, detain: detain
+    };
+  }
+
+  /* ===== 发布到 Gitee 公开仓库 {repo}-pt ===== */
+  function ptwGiteeWrite(api, token, doc, sha) {
+    var body = { access_token: token, content: b64en(utf8Encode(JSON.stringify(doc))), message: '家长端快照 ' + new Date().toLocaleString() };
+    if (sha) body.sha = sha;
+    return fetch(api, { method: sha ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (r) {
+      if (r.status >= 200 && r.status < 300) return r;
+      return r.text().then(function (t) { var j = null; try { j = JSON.parse(t) } catch (_e) {} throw new Error('Gitee 写入失败 ' + r.status + '：' + ((j && (j.message || j.error)) || '未知')); });
+    });
+  }
+  function ptwEnsureRepo(pr) {
+    return new Promise(function (resolve) {
+      fetch(GITEE_API + '/user/repos?access_token=' + encodeURIComponent(pr.token), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: pr.repo, private: false, auto_init: true, description: '家长端数据仓库（自动创建）' })
+      }).then(function () { resolve(); }).catch(function () { resolve(); });
+    });
+  }
+  function ptwPublishSnapToGitee(snap) {
+    if (!snap || !snap.students || !snap.students.length) return Promise.resolve();
+    if (typeof mpSyncSettings !== 'function') return Promise.resolve();
+    var s = mpSyncSettings();
+    if (!s || !s.gOwner || !s.gRepo || !s.gToken) return Promise.resolve();
+    var pr = { owner: s.gOwner, repo: String(s.gRepo) + '-pt', token: s.gToken };
+    var api = GITEE_API + '/repos/' + encodeURIComponent(pr.owner) + '/' + encodeURIComponent(pr.repo) + '/contents/wb_parent_snap.json';
+    var blocks = {};
+    snap.students.forEach(function (st) {
+      var per = {
+        no: st.no, group: st.group || '',
+        hwItems: snap.hwItems || [],
+        hw: (snap.hw || []).filter(function (r) { return r.name === st.name; }),
+        rc: (snap.rc || []).filter(function (r) { return r.name === st.name; }),
+        points: (snap.points || []).filter(function (r) { return r.name === st.name; })[0] || { hw: 0, manual: 0, total: 0 },
+        comments: (snap.comments || []).filter(function (r) { return r.name === st.name; }),
+        grades: (snap.grades || []).filter(function (r) { return r.name === st.name; }),
+        detain: (snap.detain || []).filter(function (r) { return r.name === st.name; })
+      };
+      blocks[st.name] = { code: String(st.code || '').toUpperCase(), data: seal(per, st.code || st.name) };
+    });
+    var doc = { app: '李老师工作台·家长端', ver: 3, ts: Date.now(), classId: snap.classId || '', className: snap.className || '', exportedAt: new Date().toISOString(), blocks: blocks };
+    return ptwEnsureRepo(pr).then(function () {
+      return fetch(api + '?access_token=' + encodeURIComponent(pr.token)).then(function (r) {
+        return r.text().then(function (txt) {
+          var j = null; try { j = JSON.parse(txt) } catch (_e) {}
+          var sha = (r.status === 200 && j && j.sha) ? j.sha : '';
+          return ptwGiteeWrite(api, pr.token, doc, sha);
+        });
+      });
+    });
+  }
+  function ptwPublish() {
+    try {
+      var snap = ptwBuildSnap();
+      if (!snap) return;
+      ptwPublishSnapToGitee(snap).catch(function (e) { console.error('[家长快照] 发布失败', e); });
+    } catch (e) { console.error('[家长快照] 构建/发布异常', e); }
+  }
+  /* 12 秒防抖：与小程序端 store.scheduleParentPublish 同源节奏 */
+  var _ptwTimer = null;
+  function ptwSchedule() {
+    try { if (typeof mpSyncSettings === 'function') { var s = mpSyncSettings(); if (!s || !s.gOwner) return; } } catch (e) { return; }
+    if (_ptwTimer) clearTimeout(_ptwTimer);
+    _ptwTimer = setTimeout(function () { _ptwTimer = null; ptwPublish(); }, 12000);
+  }
+  /* 暴露给本页其它脚本的编辑钩子调用 */
+  window.ptwSchedule = ptwSchedule;
+  window.ptwPublish = ptwPublish;
+})();
 </script>
 </body>
 </html>
