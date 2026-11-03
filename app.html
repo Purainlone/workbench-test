@@ -11984,6 +11984,20 @@ function hwAutoSplit(){
   return {vis:vis,hid:hid};
 }
 window.hwToggleAuto=function(){HW_SHOW_AUTO=!HW_SHOW_AUTO;renderHW()};
+/* vT43 作业列周次小字：按该列登记日期推算「第N周·周X」，方便快速了解每列作业的登记时间。
+   本周内的列直接用 NOW_WEEK（与座位表/手动锁定周次一致），历史列用日历推算。 */
+function hwColWeek(ds){
+  try{
+    if(!ds)return '';
+    var d=new Date(String(ds).slice(0,10)+'T00:00:00');
+    if(isNaN(d.getTime()))return '';
+    var m=mondayOf(d),mn=mondayOf(new Date());
+    var w=(m.getTime()===mn.getTime()&&typeof NOW_WEEK==='number'&&NOW_WEEK>0)?NOW_WEEK
+          :(typeof schoolWeekOf==='function'?schoolWeekOf(d):0);
+    var cn=['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];
+    return (w?('第'+w+'周·'):'')+cn;
+  }catch(e){return ''}
+}
 function renderHW(){
   if(!HW_MODE_READY){HW_MODE_READY=true;hwLoadMode()}
   /* vT42 首行小字：第 N 周 · 周X（周次与教室桌面/小程序同源同算法） */
@@ -12014,8 +12028,15 @@ function renderHW(){
   var thead=document.createElement('thead');var hr=document.createElement('tr');
   hr.appendChild(el('th','corner','学生 \\ 作业'));
   items.forEach(function(it){
-    var th=el('th','itemcol',it.name);
-    th.title=it.name+'　'+(it.date||'');
+    var th=el('th','itemcol');
+    th.appendChild(document.createTextNode(it.name));
+    var _wl=hwColWeek(it.date);                       /* vT43 列首行周次小字 */
+    if(_wl){
+      var _wkEl=el('div',null,_wl);
+      _wkEl.style.cssText='font-size:10.5px;font-weight:400;color:#7c8894;margin-top:2px;letter-spacing:.3px;line-height:1.15';
+      th.appendChild(_wkEl);
+    }
+    th.title=it.name+'　'+(it.date||'')+(_wl?('（'+_wl+'）'):'');
     (function(name,date){
       var del=el('button','hwcoldel','✕');
       del.type='button';
@@ -12087,6 +12108,12 @@ function hwRenderStat(stu,m,items){
     var card=el('div','pill b');
     card.style.fontWeight='400';
     card.appendChild(document.createTextNode(it.name+'　'));
+    var _pw=hwColWeek(it.date);                       /* vT43 pill 里也带周次 */
+    if(_pw){
+      var _pwEl=el('span',null,_pw+'　');
+      _pwEl.style.cssText='font-size:11px;color:#7c8894;font-weight:400';
+      card.appendChild(_pwEl);
+    }
     card.appendChild(el('b',null,c['优']));card.appendChild(document.createTextNode(' 优 · '));
     card.appendChild(el('b',null,c['良']));card.appendChild(document.createTextNode(' 良 · '));
     card.appendChild(el('b',null,c['中']));card.appendChild(document.createTextNode(' 中 · '));
@@ -16017,7 +16044,7 @@ try {
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
 var WB_MY_VER = '优化版 vT39 · 班级守护';
-var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.84';
+var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.85';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
