@@ -12067,6 +12067,15 @@ function hwBuildItemsOnRender(){
 function hwRenderStat(stu,m,items){
   var host=document.getElementById('hwStat');if(!host)return;
   fill(host);
+  /* vT42 统计行最前加「第 N 周 · 周X」小标签，一进作业登记就能看到 */
+  try{
+    var _d=new Date(),_cn=['周日','周一','周二','周三','周四','周五','周六'][_d.getDay()];
+    var _w=(typeof NOW_WEEK==='number'&&NOW_WEEK>0)?NOW_WEEK:(typeof schoolWeekOf==='function'?schoolWeekOf(_d):0);
+    var _wk=el('div','pill');
+    _wk.style.cssText='background:#e8f4ee;color:#2d5a45;font-weight:700;flex-shrink:0';
+    _wk.textContent='📅 '+(_w?('第'+_w+'周 · '):'')+_cn;
+    host.appendChild(_wk);
+  }catch(_we){}
   (items||HW_ITEMS).forEach(function(it){
     var c={'优':0,'良':0,'中':0,'差':0,'超时未交':0};
     stu.forEach(function(s){
@@ -16008,7 +16017,7 @@ try {
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
 var WB_MY_VER = '优化版 vT39 · 班级守护';
-var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.83';
+var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.84';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
