@@ -15990,7 +15990,7 @@ try {
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
 var WB_MY_VER = '优化版 vT39 · 班级守护';
-var WB_BUILD_DATE = '11-02', WB_BUILD_NO = '2.6.80';
+var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.81';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -16088,6 +16088,30 @@ function giteeSeedReadme() {
   return fetch(GITEE_API + '/repos/' + encodeURIComponent(cfg.owner) + '/' + encodeURIComponent(cfg.repo) +
     '/contents/README.md', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(function (r) { return r.text().then(function (t) { return { ok: r.ok, status: r.status, txt: t } }) });
+}
+
+/* ===== 时间戳归一化（2.6.81）=====
+   各端写 updatedAt 的格式不统一：网页端早先写 ISO 字符串（new Date().toISOString()）、
+   桌面写毫秒数字、手机端写毫秒数字。而合并逻辑原来一律 Number(updatedAt)，遇到 ISO 会得
+   NaN → 0，被当成"最旧"：别端的修改覆盖不了云端、创建时间还会显示成当前时间。
+   统一用 wbRecTs() 取时间：ISO / 毫秒 / 秒 / 数字字符串都能正确解析，解析不出来再退回 ts。 */
+function wbTsOf(v) {
+  if (v == null) return 0;
+  if (typeof v === 'number') return isFinite(v) && v > 0 ? (v < 1e11 ? Math.round(v * 1000) : v) : 0;
+  var s = String(v).trim();
+  if (!s) return 0;
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    var n = Number(s);
+    if (!isFinite(n) || n <= 0) return 0;
+    return n < 1e11 ? Math.round(n * 1000) : n;   /* 10 位当秒、13 位当毫秒 */
+  }
+  var t = Date.parse(s);
+  if (isNaN(t)) t = Date.parse(s.replace(/-/g, '/').replace('T', ' '));
+  return isNaN(t) ? 0 : t;
+}
+function wbRecTs(r) {
+  if (!r) return 0;
+  return wbTsOf(r.updatedAt) || wbTsOf(r.ts) || wbTsOf(r['更新时间']);
 }
 
 function giteePut(doc, sha, _retried) {
@@ -16256,7 +16280,7 @@ function giteeMergeIntoCloud(pack) {
            别端的时间更新 → 用别端的覆盖云端这条（含改分、改正姓名等）；
            别端不比我们新 → 保留云端。老的"存在就跳过"会让手机端的修改永远同步不上来。 */
         if (bk2 && byBiz[bk2]) {
-          var inTs = Number(r && (r.updatedAt != null ? r.updatedAt : r.ts)) || 0;
+          var inTs = wbRecTs(r);
           if (inTs > mtGet(bk2)) {
             upd.push({ row: byBiz[bk2], incoming: r, key: bk2, ts: inTs });
           }
@@ -16686,7 +16710,7 @@ function syncCycleCore(manual) {
            标题是两端都必填且业务上唯一的键，与 recBizKey 的 memo 业务键一致。 */
         (function () {
           var keyOf = function (m) { return String((m && m.text) || '').replace(/\s+/g, '') };
-          var tsOf = function (m) { return Number(m && (m.updatedAt != null ? m.updatedAt : m.ts)) || 0 };
+          var tsOf = function (m) { return wbRecTs(m) };
           var remoteMemos = Array.isArray(tables.memos) ? tables.memos : [];
           var mineMemos = Array.isArray(out.tables.memos) ? out.tables.memos : [];
           if (!remoteMemos.length && !mineMemos.length) { delete out.tables.memos; return }
@@ -17175,7 +17199,7 @@ function mpToDesk(tables) {
     };
     var nd = String((a && a.nextDate) || '').slice(0, 10);
     if (nd) p['跟进日期'] = { date: nd };
-    var _ats = Number(a && (a.updatedAt != null ? a.updatedAt : a.ts)) || 0;
+    var _ats = wbRecTs(a);
     p['创建时间'] = { date: _ats > 0 ? new Date(_ats).toISOString() : new Date().toISOString() };
     affRowsOut.push({ id: 'MPA_' + mpStableKey(MP_SYNC.aff.table, p), properties: p });
   });
