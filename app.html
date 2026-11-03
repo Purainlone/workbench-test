@@ -14941,9 +14941,10 @@ function recBizKey(tid, rec) {
     return 'memo|' + mt;
   }
   /* 2.6.2 班务记录：日期+类型+标题+学生姓名（与小程序 affairs 业务键对齐，
-     防止小程序录的要务提醒每同步一轮就在云端表里多一份） */
-  var _affTid = String((window.MP_SYNC && MP_SYNC.aff && MP_SYNC.aff.table) || 'Emt8ekQUQfd1sTdtsmCHg7');
-  if (String(tid) === _affTid) {
+     防止小程序录的要务提醒每同步一轮就在云端表里多一份）
+     2.6.82 表 id 改回真表 Vb7kQm2xR9dLp5nTz3Hw4s（旧 id 一并认，兼容历史文档） */
+  var _affTid = String((window.MP_SYNC && MP_SYNC.aff && MP_SYNC.aff.table) || 'Vb7kQm2xR9dLp5nTz3Hw4s');
+  if (String(tid) === _affTid || String(tid) === 'Emt8ekQUQfd1sTdtsmCHg7') {
     var an = v('标题').replace(/\s+/g, '');
     if (!an) return '';
     return 'aff|' + String(v('日期')).slice(0, 10) + '|' + v('类型') + '|' + an + '|' + v('学生姓名').replace(/\s+/g, '');
@@ -15556,12 +15557,20 @@ function mergePick(ev) {
    与小程序云函数 sync 同一个云端库（wb_sync，一班一文档 + rev 乐观锁）。
    拉取：把云端的小程序数据转换成工作台记录，走互传包合并流程（预览→确认→合并）。
    推送：把本机的学生/作业/诵读/成绩转换成小程序格式推上云端。 */
+/* 2.6.82 班务表 id 纠错（丢记录的真凶）：
+   2.6.2 起这里写的是 'Emt8ekQUQfd1sTdtsmCHg7' —— 那是个不存在的表 id。
+   真实的「班务记录」表是 Vb7kQm2xR9dLp5nTz3Hw4s（= 班务页面自己的 CW_DB、互传包里也是这个 id）。
+   后果链条：mpFromDesk 按错 id 拉表 → 读到空 → affairs 恒为空 → 写回 Gitee 时
+   tables.affairs 永远是 []（mpDropEmpty 直接丢掉）→ 云端 doc.affairs 恒 0 条
+   → 小程序/教室端都看不到网页里录的班务，看起来就是「班务记录没同步」。
+   现在主 id 用真表；旧 id 只作为读兼容（老文档若真用过那张表，仍能读出来）。 */
+var AFF_LEGACY_TID = 'Emt8ekQUQfd1sTdtsmCHg7';
 var MP_SYNC = {
   stu:   { table: '2mthbbHsJeABzmnerNt6sK' },
   hw:    { table: 'fCfl0cuMIVzFDi0iDuAEv2' },
   rc:    { table: 'oVnl3FwN3QWFXeWcAwzaAt' },
   score: { table: 'SI9EURtanpWC0y4lVipmQQ' },
-  aff:   { table: 'Emt8ekQUQfd1sTdtsmCHg7' }   /* 2.6.2 班务记录：小程序要务提醒 ⇄ 网页班务记录 */
+  aff:   { table: 'Vb7kQm2xR9dLp5nTz3Hw4s' }   /* 2.6.82 班务记录：小程序要务提醒 ⇄ 网页班务记录（CW_DB 同一张表） */
 };
 function mpTxt(v) { return { text: String(v == null ? '' : v) } }
 function mpNum(v) { var n = Number(v); return { number: isNaN(n) ? null : n } }
@@ -15990,7 +15999,7 @@ try {
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
 var WB_MY_VER = '优化版 vT39 · 班级守护';
-var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.81';
+var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.82';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -16731,7 +16740,11 @@ function syncCycleCore(manual) {
           });
           out.tables.memos = merged;
         })();
-        ['duty', 'affairs', 'manual'].forEach(function (k) {
+        /* 2.6.82 affairs 从「远端无条件透传」改成并集（见下面的 union 列表）：
+           透传等于网页里新录的班务永远推不上 Gitee —— 远端那份（哪怕是旧的中文
+           结构）每轮都把本机刚录的盖掉，再叠上表 id 写错，班务就成了「只在本地」。
+           现在只透传 duty / manual（这两张确实是桌面端不生产的）；affairs 走并集。 */
+        ['duty', 'manual'].forEach(function (k) {
           var rv = tables[k];
           if (!rv) return;
           if (Array.isArray(rv) && !rv.length) return;
@@ -16785,7 +16798,7 @@ function syncCycleCore(manual) {
         /* 2.6.12 并集回写：先把远端的记录并进来（同键取本机），再判断有没有真异常。
            顺序很重要 —— 先并集，条数就不会因为"本机少"而误判成残缺。 */
         var unionLog = [];
-        ['students', 'hw', 'hwItems', 'scores', 'rc', 'duty'].forEach(function (k) {
+        ['students', 'hw', 'hwItems', 'scores', 'rc', 'duty', 'affairs'].forEach(function (k) {
           var mineN = (out.tables[k] || []).length;
           var remoteM = Array.isArray(tables[k]) ? tables[k].length : 0;
           if (!remoteM) return;
@@ -17236,6 +17249,8 @@ function mpBizKey(k, r) {
   if (k === 'rc') return (nm && s(r.title)) ? 'rc|' + nm + '|' + s(r.title) + '|' + s(r.date).slice(0, 10) : '';
   if (k === 'scores') return nm ? 'sc|' + s(r.subject) + '|' + s(r.exam) + '|' + nm + '|' + s(r.date).slice(0, 10) : '';
   if (k === 'duty') return s(r.date) ? 'duty|' + s(r.date).slice(0, 10) + '|' + s(r.slot) : '';
+  /* 2.6.82 班务记录：日期+类型+标题+学生姓名（与 recBizKey 的 aff| 键同构） */
+  if (k === 'affairs') return (s(r.title) || s(r.body)) ? ('aff|' + s(r.date).slice(0, 10) + '|' + s(r.type) + '|' + s(r.title) + '|' + s(r.stu)) : '';
   if (k === 'hwItems') return s(r.item) ? 'hwi|' + s(r.item) + '|' + s(r.date).slice(0, 10) : '';
   return '';
 }
@@ -17273,7 +17288,8 @@ function mpFromDesk() {
     var tids = [MP_SYNC.stu.table, MP_SYNC.hw.table, MP_SYNC.rc.table, MP_SYNC.score.table,
                 'qd0ZfL69wR0A4jjn3NbIUO',     /* 工作台备忘录 */
                 'Q5nj0cY3EvMN4vjJwwClwu',     /* 午托值班 */
-                MP_SYNC.aff.table];           /* 班务记录 */
+                MP_SYNC.aff.table,            /* 班务记录（2.6.82 起 = 真表 Vb7kQ…） */
+                AFF_LEGACY_TID];              /* 2.6.82 旧班务表 id 只读兼容（表不存在时返回空数组，无副作用） */
     return Promise.all(tids.map(function (t) { return dbPullRows(t) })).then(function (arrs) {
       var o = {};
       tids.forEach(function (t, i) {
@@ -17489,7 +17505,13 @@ function mpFromDeskBuild(o) {
      manual 维持恒空：奖惩是小程序独占的表，网页端不生产。 */
   var affairsOut = [];
   try {
-    var _affRaw = Array.isArray(o[MP_SYNC.aff.table]) ? o[MP_SYNC.aff.table] : [];
+    /* 2.6.82 双 id 读取：主表（真表）优先，为空再看旧 id，避免历史文档里那张表被漏掉 */
+    var _affRaw = [];
+    var _affTry = [MP_SYNC.aff.table, (typeof AFF_LEGACY_TID !== 'undefined' ? AFF_LEGACY_TID : 'Emt8ekQUQfd1sTdtsmCHg7')];
+    for (var _ai = 0; _ai < _affTry.length; _ai++) {
+      var _ar = o[_affTry[_ai]];
+      if (Array.isArray(_ar) && _ar.length) { _affRaw = _ar; break }
+    }
     affairsOut = _affRaw.map(function (r) {
       var p = (r && r.properties) || r || {};
       var ti = String(dv(p, '标题') || '').trim();
