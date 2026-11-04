@@ -1228,7 +1228,7 @@ table.paper td.l{text-align:left;font-weight:600}
 <body data-page-node-id="VWm2YCKhwxOUBWSlexIaam">
 <aside data-page-node-id="uyTdXvcdMMBT8HJ1ZWRO9X">
   <div data-page-node-id="YkELpTUKfJkpu7qzDPa66K" class="logo"><!--pnid:7ytoUsgxIUXQsQNXnaE57T-->教师工作台</div>
-  <div class="verline" id="appVer">✨ 作业登记 v2.6.89 · 隐藏不交作业同学</div>
+  <div class="verline" id="appVer">✨ 成绩管理 v2.6.90 · 点考试名即可改名</div>
   <nav data-page-node-id="ljZdrlGNjxdpectAoWjkyv" id="nav">
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS" class="active" data-s="home">🏠 <span class="lbl">今日首页</span></button>
 
@@ -1511,6 +1511,11 @@ table.paper td.l{text-align:left;font-weight:600}
       .sct.mtx td.nm{position:sticky;left:0;z-index:1;background:#f3f6f9;text-align:left;font-weight:600}
       .sct.mtx th.exh .exn{font-weight:700}
       .sct.mtx th.exh .exd{font-size:11px;color:#7a8a99;font-weight:400}
+      /* vT49 考试名称可点击改名：虚线下划线 + 手型光标，一眼看出能点 */
+      .sct.mtx th.exh .exn .exsb{font-weight:400;color:#5b6b7a}
+      .sct.mtx th.exh .exn .exnm.editable{cursor:pointer;border-bottom:1px dashed #8aa4bd;color:#1f5fa8;padding:0 2px}
+      .sct.mtx th.exh .exn .exnm.editable:hover{background:#eaf2fb;color:#14477f;border-bottom-style:solid}
+      .sct.mtx th.exh .exn .exnm.editable::after{content:"✎";font-size:10px;margin-left:3px;opacity:.45;vertical-align:super;font-weight:400}
       .sct.mtx td.tgt,.sct.mtx th.tgth{background:#fff7e6}
       .sct.mtx .na{color:#c2ccd6}
       .sct.mtx .tbadge{display:inline-block;min-width:28px;padding:1px 5px;border-radius:6px;font-size:12px;margin:1px;color:#33424f}
@@ -8085,7 +8090,15 @@ function scMgRender(){
   exams.forEach(function(x){
     var k=x.subj+'｜'+x.exam;
     var thc=el('th','exh');
-    thc.appendChild(el('div','exn', subj?x.exam:(x.subj+'｜'+x.exam)));
+    /* vT49 考试名称可点击改名：只让「考试名」那一段可点，
+       科目段保持原样（不然点一下不知道改的是科目的还是考试的）。 */
+    var exn=el('div','exn');
+    if(!subj) exn.appendChild(el('span','exsb', x.subj+'｜'));
+    var en=el('span','exnm editable', x.exam);
+    en.title='点击修改这场考试的名称';
+    en.onclick=function(ev){ ev.stopPropagation(); scRenameExamAsk(x.subj, x.exam); };
+    exn.appendChild(en);
+    thc.appendChild(exn);
     if(meta[k].date)thc.appendChild(el('div','exd',meta[k].date));
     trh.appendChild(thc);
   });
@@ -8138,6 +8151,71 @@ function scMgRender(){
   var lg=el('div','legend');
   lg.innerHTML='<b>底色含义</b>：分数 ≥ 目标三 浅红，≥ 目标二 浅绿，≥ 目标一 浅蓝；未达目标一不染色。最右列「学生目标」一/二/三三个框<b>可直接手动修改</b>，改完点「保存修改」即写回（成绩同步云端资料库，目标存于本机）。保存后底色会按新目标重新计算。';
   box.appendChild(lg);
+}
+
+/* ========== vT49 成绩管理：点击考试名称即可改名 ==========
+   一场考试 = 科目 + 考试名称。改名要整场一起改（同科目下所有该场记录）。
+   ⚠️ 关键：考试名称是成绩记录的业务键之一（科目|考试名|姓名|日期），
+   改名 = 业务键变了。按项目既有铁律（备忘改标题 / 作业列改名）：
+   **旧键必须写墓碑**，否则别的端（手机/科任端）那份「旧名」记录
+   会被当成「本机缺失」又拽回来，同一场变成两场 —— 用户看到的是重复数据。
+   墓碑键 = tomKey(科目, 旧考试名, 姓名, 日期)，与手机端 tomK 完全一致。 */
+function scRenameExamAsk(subj, exam){
+  if(!wbEnsureDB()){toastMsg('⚠️ 数据接口不可用');return}
+  var rows=SC_ROWS.filter(function(r){return fval(r,'科目')===subj&&fval(r,'考试名称')===exam});
+  if(!rows.length){toastMsg('没找到「'+exam+'」的成绩记录');return}
+  var nn=prompt('把这场考试的名称改成：\n\n科目：'+subj+'\n原名称：'+exam+'\n共 '+rows.length+' 条成绩会一起改名。\n\n（留空取消）', exam);
+  if(nn===null)return;
+  nn=String(nn).trim();
+  if(!nn){toastMsg('考试名称不能为空');return}
+  if(nn===exam){toastMsg('名称没变');return}
+  /* 重名拦截：同科目下已有同名考试 → 合并会把两场搅在一起，必须拒绝 */
+  var dup=SC_ROWS.filter(function(r){return fval(r,'科目')===subj&&fval(r,'考试名称')===nn});
+  if(dup.length){
+    toastMsg('⚠️ 本科目下已经有一场「'+nn+'」（'+dup.length+' 条）。换个名字，或先删掉那一场。');
+    return;
+  }
+  scRenameExamRun(subj,exam,nn,rows);
+}
+
+/* 真正执行改名：逐条改「考试名称」，并为旧业务键写墓碑 */
+function scRenameExamRun(subj,oldName,newName,rows){
+  var done=0,fail=0;
+  eachSeries(rows||[],function(r){
+    var props={};
+    /* 保留这条记录原有的全部字段，只换「考试名称」 */
+    ['学生姓名','学号','科目','考试类型','考试日期','学期','备注'].forEach(function(k){
+      var v=fval(r,k);
+      if(v!==''&&v!=null)props[k]={text:String(v)};
+    });
+    props['考试名称']={text:newName};
+    var sc=fnum(r,'分数'); if(sc!=null)props['分数']={number:sc};
+    var fu=fnum(r,'满分'); if(fu!=null)props['满分']={number:fu};
+    return db.updateRecord({databaseId:DATABASE_ID,recordId:r._id,properties:props})
+      .then(function(){done++},function(e){fail++;console.error(e)});
+  }).then(function(){
+    /* 旧名进墓碑：别的端那份「旧名」记录靠这个墓碑被清掉，不会变成两场。
+       ⚠️ 同时撤掉【新名】的旧墓碑：A→B→A 改回来时，A 的墓碑还挂着，
+          而记录的新名就是 A，会被当成「已删除」直接抹掉（数据静默丢失）。 */
+    rows.forEach(function(r){
+      tomDropScore(subj, newName, fval(r,'学生姓名'), fval(r,'考试日期'));
+      tomAddScore(subj, oldName, fval(r,'学生姓名'), fval(r,'考试日期'));
+    });
+    if(fail){
+      toastMsg('⚠️ 改名未完成：成功 '+done+' 条，失败 '+fail+' 条（名称可能不一致，可刷新后再试）');
+    }else{
+      toastMsg('✅ 已把「'+oldName+'」改名为「'+newName+'」（'+done+' 条成绩）');
+    }
+    return loadScoresFromDB();
+  }).then(function(){
+    scMgRefresh();
+    scFillFilters();
+    scRenderAn();
+    if(typeof ptwSchedule==='function')ptwSchedule();
+  }).catch(function(e){
+    console.error(e);
+    toastMsg('⚠️ 改名失败：'+(e.message||e));
+  });
 }
 
 function scMgSave(){
@@ -15179,6 +15257,19 @@ function tomAddScore(sub, exam, name, date) {
   var k = tomKey(sub, exam, name, date), a = tomLoad();
   for (var i = 0; i < a.length; i++) if (a[i].t === 'score' && a[i].k === k) { a[i].at = Date.now(); tomSave(a); return }
   a.push({ t: 'score', k: k, at: Date.now() }); tomSave(a);
+}
+/* vT49 撤销一条成绩墓碑：改名用。
+   场景：A 改成 B（给 A 留墓碑），过一阵又改回 A —— 此时 A 的墓碑还在，
+   而记录的新名字恰好就是 A，会被墓碑判定成「已删除」而被抹掉（数据静默丢失）。
+   所以改名时要把【新名】的旧墓碑一并撤掉：新名既然又活回来了，墓碑就不该再指向它。 */
+function tomDropScore(sub, exam, name, date) {
+  var k = tomKey(sub, exam, name, date), a = tomLoad(), out = [], hit = 0;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i].t === 'score' && a[i].k === k) { hit++; continue }
+    out.push(a[i]);
+  }
+  if (hit) tomSave(out);
+  return hit;
 }
 function tomPrune() {
   var lim = Date.now() - 90 * 86400000, a = tomLoad();
