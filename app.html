@@ -122,14 +122,21 @@ body.essay-full #s-essay{padding:8px 14px}
 body.essay-full #s-essay .sub{display:none}
 body.essay-full #essayDrafts{max-height:126px}
 body.essay-full #s-essay .chartbox{padding:8px 10px;margin-bottom:0}
-#essayFrame{height:calc(100vh - 318px)!important}   /* 2.6.91 侧栏回归后按实际占位贴到窗口底部 */
-body.essay-full #essayFrame{height:calc(100vh - 226px)!important}
+/* vT46 批改工作台 iframe 撑满「作文平台」剩余高度：改用 flex 自适应，不再写死偏移，
+   左右两栏不再被截断、整页也不再出现多余滚动条 */
+#s-essay.active{display:flex;flex-direction:column;height:calc(100vh - 48px);overflow:hidden}
+#s-essay.active .chartbox{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+#s-essay.active #essayFrame{flex:1 1 auto;min-height:0;height:auto!important}
 /* 2.6.90 皮皮改作文外接视图：与自有批改台二选一显示 */
 #s-essay #ppWrap{display:none}
 #s-essay.pp-on #ppWrap{display:block}
 #s-essay.pp-on #essayFrame{display:none!important}
 #ppFrame{height:calc(100vh - 348px)!important}
 body.essay-full #ppFrame{height:calc(100vh - 274px)!important}
+/* vT46 皮皮批视图（pp-on）同样撑满；全屏模式（⤢）压缩顶栏留白也撑满窗口 */
+#s-essay.pp-on #ppWrap{flex:1 1 auto;min-height:0;display:flex!important;flex-direction:column}
+#s-essay.pp-on #ppFrame{flex:1 1 auto;min-height:0;height:auto!important}
+body.essay-full #s-essay.active{height:calc(100vh - 64px)}
 
 /* 课程表 */
 table.tt{width:100%;border-collapse:collapse;font-size:13px}
