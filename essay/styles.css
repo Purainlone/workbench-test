@@ -388,6 +388,76 @@ body.embed .content { padding: 10px 12px; overflow-y: auto; }
 .result-guide b { color:var(--brand-d); }
 body.embed .grade-wrap { gap: 12px; }
 
+/* ---------- vT50 批改工作台「撑满窗口」 ----------
+   之前的问题：批改工作台这一页是「自然高度 + 整体滚动」。
+   窗口矮的时候，底部永远看不见（开始 AI 初批 / 保存归档被推到屏幕外），
+   老师反馈「窗口高度还是不够」。
+   改法（只在「批改工作台」这一页生效，其他视图原样不动）：
+     ① 内容区自己撑满窗口高度，左右两栏等高拉满
+     ② 作文原文框吃满剩余高度（不再固定 11 行）
+     ③ 高度不够时改为「栏内滚动」，而不是整页滚动
+   这样窗口每多高一分，原文框就多长一分，不会再有「多出来的白」被浪费。
+   嵌入模式（宿主工作台 iframe 内）额外再压缩一档，见后半段。 */
+/* 独立打开：.main 本身已是 height:100vh；嵌入模式：.main 由 flex 分剩余高度。
+   两种形态下 .content 都能拿到一个确定高度，所以下面这组撑满规则通用。 */
+body.gview-grade .content {
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+  overflow: hidden; padding: 8px 10px;
+}
+body.gview-grade .step-flow { flex: 0 0 auto; margin-bottom: 8px; }
+body.gview-grade .step-flow .sp { padding: 4px 6px; }
+body.gview-grade .grade-wrap {
+  flex: 1 1 auto; min-height: 0; align-items: stretch; gap: 10px;
+}
+body.gview-grade .panel {
+  display: flex; flex-direction: column; min-height: 0; overflow-y: auto;
+}
+body.gview-grade .section-title { margin-bottom: 8px; }
+body.gview-grade .toolbar { margin-bottom: 10px; }
+body.gview-grade #essayText {
+  flex: 1 1 auto; min-height: 120px; height: auto; resize: none;
+}
+body.gview-grade .capture-zone { padding: 12px 14px; margin-bottom: 10px; }
+body.gview-grade .capture-zone .big { font-size: 24px; }
+body.gview-grade .guide-card { padding: 7px 11px; margin-bottom: 8px; line-height: 1.6; }
+body.gview-grade .ocr-bar { margin: 8px 0 6px; padding: 7px 10px; }
+body.gview-grade .row-actions { margin-top: 8px; }
+/* 右栏：结果区吃满剩余高度，长报告在栏内滚动，不再顶出整页滚动条 */
+body.gview-grade #resultPanel .empty { flex: 1 1 auto; padding: 16px 8px; }
+body.gview-grade #reportArea { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+body.gview-grade #resultPanel .empty .result-guide { padding: 12px 14px; line-height: 1.75; }
+/* 嵌入模式再压一档：宿主窗口通常比整页浏览器小，留白更值钱。
+   实测（iframe 560px 高）左栏固定内容原本 602px 塞不下、按钮被顶出屏幕，
+   这里把拍照区/识别条/取景规范压扁，把省下的高度全给「作文原文」框。 */
+body.embed.gview-grade .step-flow .sp { padding: 3px 5px; font-size: 11px; }
+/* 拍照区：大虚线框改成一行（图标 + 说明 + 按钮），省 ~65px */
+body.embed.gview-grade .capture-zone {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 12px; margin-bottom: 8px; text-align: left;
+}
+body.embed.gview-grade .capture-zone .big { font-size: 20px; line-height: 1; }
+body.embed.gview-grade .capture-zone > div:not(.big):not(.row-actions):not(#imgPrev) {
+  flex: 1 1 220px; min-width: 0; font-size: 12px; line-height: 1.5;
+}
+body.embed.gview-grade .capture-zone .row-actions {
+  margin-top: 0 !important; justify-content: flex-start !important; flex: 0 0 auto;
+}
+body.embed.gview-grade .capture-zone #imgPrev { flex: 1 1 100%; }
+/* 按钮压扁：拍照区那一排按钮就不至于换行，能省下一整行高度 */
+body.embed.gview-grade .btn { padding: 6px 12px; font-size: 12.5px; }
+body.embed.gview-grade .btn.sm { padding: 4px 9px; font-size: 11.5px; }
+/* 识别状态条 / 取景规范 / 标题行：贴紧一点 */
+body.embed.gview-grade .ocr-bar { margin: 0 0 5px; padding: 4px 9px; font-size: 12px; }
+body.embed.gview-grade .ocr-bar .btn.sm { padding: 3px 8px; }
+body.embed.gview-grade .guide-card { padding: 4px 9px; margin-bottom: 4px; font-size: 11.5px; line-height: 1.5; }
+body.embed.gview-grade .section-title { margin-bottom: 4px; }
+body.embed.gview-grade .toolbar { margin-bottom: 6px; }
+body.embed.gview-grade .row-actions { margin-top: 4px; }
+body.embed.gview-grade label.field { margin-bottom: 4px; }
+body.embed.gview-grade .capture-zone { margin-bottom: 6px; }
+/* 窗口很矮时，原文框下限放宽一点，保证底部按钮还能露出来 */
+body.embed.gview-grade #essayText { min-height: 76px; }
+
 @media (max-width: 900px) {
   .grade-wrap, .cols-4, .cols-3, .cols-2, .insight-grid { grid-template-columns: 1fr; }
   .sidebar { display: none; }
