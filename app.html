@@ -18368,6 +18368,27 @@ window.addEventListener('message', function (ev) {
     try { essayApplyGraded(d.payload || {}) } catch (e) {}
   }
 });
+/* vT47 暴露宿主「自定义模型」给内嵌批改模块：批改台「一键配置 WorkBuddy 自定义模型」
+   会来检索，这里把 WorkBuddy 已载入的自定义模型（评语 AI 接口 wb_cm_ai_v1 + 通用清单 wb_custom_models）回传。 */
+function wbCustomModels() {
+  var list = [];
+  try {
+    var c = JSON.parse(localStorage.getItem('wb_cm_ai_v1') || '{}');
+    if (c && c.url && c.model) list.push({ name: (c.name || c.model), baseUrl: c.url, apiKey: c.key || '', model: c.model, note: '评语 AI 接口' });
+  } catch (e) {}
+  try {
+    var arr = JSON.parse(localStorage.getItem('wb_custom_models') || '[]');
+    if (Array.isArray(arr)) arr.forEach(function (m) { if (m && m.url && m.model) list.push({ name: (m.name || m.model), baseUrl: m.url, apiKey: m.apiKey || '', model: m.model, note: (m.note || '自定义模型') }); });
+  } catch (e) {}
+  return list;
+}
+window.WB_CUSTOM_MODELS = wbCustomModels;
+window.addEventListener('message', function (ev) {
+  var d = ev.data || {};
+  if (d && d.type === 'WB_REQ_MODELS') {
+    try { if (ev.source && ev.source.postMessage) ev.source.postMessage({ type: 'WB_MODELS', models: wbCustomModels() }, '*'); } catch (e) {}
+  }
+});
 function essayApplyGraded(p) {
   if (!p || !p.studentName) return;
   var list = essayAll(), hit = null;
