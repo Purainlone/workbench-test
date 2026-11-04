@@ -79,7 +79,21 @@ let mpTabName = 'collect';
 /* 2.6.92 作文自动识别配置（可插拔）：
    mode: 'vision' 走 OpenAI 兼容多模态模型 / 'off' 关闭自动识别（手动录入）
    vision 与批改用的 model 分开配置：识别要「看得见图」，批改只要文本。
-   老数据没有该字段时在此补齐默认值，不覆盖已有设置。 */
+   老数据没有该字段时在此补齐默认值，不覆盖已有设置。
+   2.6.93 实测跨域（OPTIONS 带 Origin）：
+     ✅ api.siliconflow.cn  → Access-Control-Allow-Origin: *，浏览器可直连
+     ❌ open.bigmodel.cn / dashscope.aliyuncs.com → 无跨域头，网页直连必报 CORS
+   故推荐硅基流动；智谱免费视觉模型需经自建代理转发才能用。 */
+const VISION_PRESETS = [
+  { key: 'sf-qwen3vl8b', label: '硅基流动 · Qwen3-VL-8B（推荐，便宜、支持直连）',
+    baseUrl: 'https://api.siliconflow.cn/v1', model: 'Qwen/Qwen3-VL-8B-Instruct' },
+  { key: 'sf-qwen3vl32b', label: '硅基流动 · Qwen3-VL-32B（手写更准，略贵）',
+    baseUrl: 'https://api.siliconflow.cn/v1', model: 'Qwen/Qwen3-VL-32B-Instruct' },
+  { key: 'sf-ocr', label: '硅基流动 · DeepSeek-OCR（专做文字转录，限免时可用）',
+    baseUrl: 'https://api.siliconflow.cn/v1', model: 'deepseek-ai/DeepSeek-OCR' },
+  { key: 'custom', label: '自定义端点 / 自建代理（如代理智谱 glm-4v-flash）',
+    baseUrl: '', model: '' },
+];
 function defaultVision() {
   return { mode: 'off', baseUrl: '', apiKey: '', model: '', enabled: false };
 }
@@ -491,7 +505,12 @@ async function runRecognition(images, opts) {
     if (opts.toast !== false) toast('作文原文已自动识别，请核对');
     return true;
   } catch (e) {
-    ocrNote('err', '识别失败：' + (e && e.message ? e.message : '未知错误') + '。可点「重新识别」重试，或手动录入。', !visionReady());
+    const raw = String((e && e.message) || '未知错误');
+    /* 浏览器 CORS 失败通常表现为 Failed to fetch / NetworkError，给可操作指引 */
+    const cors = /failed to fetch|networkerror|load failed|network request failed/i.test(raw);
+    ocrNote('err', cors
+      ? '识别请求被浏览器拦截（多半是端点不支持跨域 CORS）。请改用「识别设置」里的推荐端点（硅基流动），或把请求经自建代理转发；也可以先手动录入。'
+      : '识别失败：' + raw + '。可点「重新识别」重试，或手动录入。', !visionReady());
     return false;
   }
 }
@@ -1203,6 +1222,20 @@ function saveVisionConfig() {
   }
   save(); toast('识别配置已保存' + (visionReady() ? '（自动识别已启用）' : '（未启用）'));
 }
+/* 2.6.93 一键填入已验证可直连的推荐配置，用户只需再粘一个 API Key */
+function applyVisionPreset() {
+  const sel = $('#vPreset');
+  const key = sel ? sel.value : 'sf-qwen3vl8b';
+  const p = VISION_PRESETS.find(x => x.key === key) || VISION_PRESETS[0];
+  const set = (id, v) => { const el = $('#' + id); if (el) el.value = v; };
+  set('vBase', p.baseUrl); set('vModel', p.model);
+  const mode = $('#vMode'); if (mode) mode.value = 'vision';
+  const en = $('#vEnabled'); if (en) en.checked = true;
+  const k = $('#vKey'); if (k && !k.value.trim()) k.focus();
+  toast(p.key === 'custom'
+    ? '已切到自定义端点，请填写 Base URL / Key / 模型名'
+    : '已填入推荐配置，粘贴 API Key 后点「保存配置」→「测试识别」');
+}
 /* 沿用批改模型的端点与密钥（同一厂商的多模态模型时最省事） */
 function copyModelToVision() {
   const m = DATA.settings.model || {};
@@ -1235,6 +1268,11 @@ function renderSettings() {
   view().innerHTML = `
     <div class="card mb"><div class="section-title">📷 作文自动识别（2.6.92 · 皮皮式流程）</div>
       <div class="muted text-sm mb">启用后：小程序收稿或这里拍照 → <b>自动识别手写原文</b> → 老师核对 → 一键 AI 初批。需要一个支持<b>图片输入</b>的 OpenAI 兼容多模态模型（/chat/completions）。不启用则可手动输入/粘贴，功能不受影响。</div>
+      <div class="ocr-note" style="margin:0 0 10px;background:#e8f7ee;color:#157f4a">✅ <b>已实测可浏览器直连：硅基流动</b>（api.siliconflow.cn，返回 Access-Control-Allow-Origin: *）。智谱、阿里百炼的 API 不带跨域头，网页里直连会报 CORS，需要经代理转发。点下面「一键填入推荐配置」后，<b>只需粘贴一个 API Key</b> 即可。</div>
+      <div class="test-row" style="margin-bottom:10px">
+        <select id="vPreset" style="min-width:280px;max-width:100%">${VISION_PRESETS.map(p => `<option value="${p.key}">${escapeHtml(p.label)}</option>`).join('')}</select>
+        <button class="btn primary sm" onclick="applyVisionPreset()">⚡ 一键填入推荐配置</button>
+      </div>
       <div class="model-form">
         <label>识别模式</label><select id="vMode">
           <option value="vision" ${v.mode === 'vision' ? 'selected' : ''}>多模态模型自动识别</option>
@@ -1251,6 +1289,7 @@ function renderSettings() {
         <button class="btn sm ghost" onclick="copyModelToVision()">沿用批改模型端点</button>
       </div>
       <div id="visionTest" class="model-test" style="display:none"></div>
+      <div class="ocr-note" style="margin-top:10px;background:#f4f7f5;color:#4b5b64">📌 <b>拿 Key 三步</b>：① 打开 cloud.siliconflow.cn 用手机号注册 → ② 在「账户管理 / API Key」新建并复制密钥 → ③ 回到这里点「一键填入推荐配置」、粘贴 Key、点「保存配置」再点「测试识别」。看到「✓ 识别通道已连通」即可去收稿箱点「去批改」验收。</div>
       <div class="ocr-note mt">⚠️ 风险与部署建议：① 密钥保存在本浏览器 localStorage，公用电脑请勿保存；② 作文照片会外发到该模型服务，涉及未成年人作品，建议选用可信服务或私有化部署；③ 浏览器直连可能受 CORS 限制，若测试报 CORS，请换支持跨域的端点，或在教室桌面端/自建代理转发；④ 识别结果务必由老师核对后再批改，手写体难免有误差。</div>
     </div>
     <div class="card mb"><div class="section-title">🔒 设置 / 隐私合规</div>
@@ -1456,6 +1495,7 @@ window.gotoGradeWithStudent = gotoGradeWithStudent;
 window.saveVisionConfig = saveVisionConfig; window.testVision = testVision;
 window.copyModelToVision = copyModelToVision; window.rerunRecognition = rerunRecognition;
 window.runRecognition = runRecognition; window.visionReady = visionReady;
+window.applyVisionPreset = applyVisionPreset;
 
 /* =====================================================================
    集成 API（供宿主工作台 / 小程序 web-view 调用）
