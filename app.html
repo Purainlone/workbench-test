@@ -2306,6 +2306,7 @@ table.paper td.l{text-align:left;font-weight:600}
       </span></h2>
     <div class="sub">手机小程序「作文上传」拍照/扫码录入 → 这里收稿、批改、分析。批改保存后自动写回云端，多端可见 · 模块数据保存在本浏览器</div>
     <div id="essayDrafts" style="max-height:172px;overflow:auto;padding-right:4px"></div>
+    <div class="sctip" style="margin:8px 0 0">💡 批改三步：点「✍️ 去批改」自动带入学生和作文照片 → 对照照片把文字录入左栏输入框 → 点「🤖 开始 AI 初批」，核对分数和评语后「保存归档」，结果自动回传云端（小程序可见）。</div>
     <div class="chartbox" style="margin:12px 0 0">
       <iframe id="essayFrame" title="作文批改工作台" style="width:100%;height:calc(100vh - 300px);border:0;background:#fff;display:block" src="about:blank"></iframe>
     </div>
@@ -16069,7 +16070,7 @@ try {
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
 var WB_MY_VER = '优化版 vT39 · 班级守护';
-var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.88';
+var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.89';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -18193,7 +18194,7 @@ function essayRenderDrafts() {
       '<b style="font-size:13.5px">' + essEsc(r.name) + '</b>' +
       '<span style="font-size:12.5px;color:#5a6b7a">《' + essEsc(r.title || '未命名') + '》· ' + essEsc(r.date || '') + '</span>' + st +
       '<span style="flex:1"></span>' +
-      '<button class="btn2 sm primary" onclick="essayOpenGrade(\'' + essEsc(r.name) + '\',' + sid + ')">✍️ 去批改</button>' +
+      '<button class="btn2 sm primary" onclick="essayOpenGrade(\'' + essEsc(r.name) + '\',' + sid + ',\'' + essEsc(r.id) + '\')">✍️ 去批改</button>' +
       '<button class="btn2 sm danger" onclick="essayDelAsk(\'' + essEsc(r.id) + '\')">🗑</button>' +
       '</div>';
   }).join('');
@@ -18229,18 +18230,35 @@ function essayViewImg(rel) {
   });
 }
 
-function essayOpenGrade(name, no) {
+function essayOpenGrade(name, no, rid) {
   var f = document.getElementById('essayFrame');
   if (!f) return;
-  if (!f.src || f.src === 'about:blank') essayInit();
-  var tryPost = function (n) {
-    var w = f.contentWindow;
-    if (w && w.EssayGrader) {
-      /* 花名册 id = 学号（注入时定的），模块 findStudent 学号/姓名都认 */
-      w.postMessage({ type: 'SCAN_STUDENT', studentId: no ? String(no) : name, studentName: name, mode: 'grade' }, '*');
-    } else if (n < 20) { setTimeout(function () { tryPost(n + 1) }, 300) }
-  };
-  tryPost(0);
+  if (!f.src || f.src === 'about:blank' || f.getAttribute('src') === 'about:blank') essayInit();
+  /* 2.6.89 找回收稿记录：把标题 + 原文照片一起带进批改工作台 */
+  var rec = null;
+  (essayAll() || []).forEach(function (r) { if (String(r.id) === String(rid)) rec = r; });
+  var title = (rec && rec.title) || '';
+  var imgs = (rec && Array.isArray(rec.images)) ? rec.images.slice(0, 3) : [];
+  var loaded = [], pending = imgs.length, done = false;
+  function go() {
+    if (done) return; done = true;
+    var n = 0;
+    var tryPost = function () {
+      var w = f.contentWindow;
+      if (w && w.EssayGrader) {
+        w.postMessage({ type: 'PREFILL_GRADE', studentId: no ? String(no) : name, studentName: name,
+                        title: title, images: loaded }, '*');
+      } else if (n++ < 20) { setTimeout(tryPost, 300) }
+    };
+    tryPost();
+  }
+  if (!pending) { go(); return; }
+  imgs.forEach(function (rel) {
+    var settled = false;
+    function fin(u) { if (settled) return; settled = true; if (u) loaded.push(u); if (--pending === 0) go(); }
+    try { essayImgFetch(rel, fin); } catch (e) { fin(null) }
+    setTimeout(function () { fin(null) }, 4000);   /* 取图失败/超时也照常带入 */
+  });
 }
 
 /* 批改模块保存作文后回传 → 记到收稿记录上，云端守望自动同步到小程序/桌面 */
