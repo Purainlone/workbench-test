@@ -286,6 +286,15 @@ table.tbl tr:hover td { background: #f4f9f6; }
 .model-form { display: grid; grid-template-columns: 110px 1fr; gap: 12px 14px; align-items: center; margin: 4px 0 14px; }
 .model-form label { font-size: 13px; color: var(--muted); font-weight: 600; }
 .model-form input, .model-form select { width: 100%; }
+/* vT47 一键配置：宿主已载入的自定义模型列表 */
+.divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; margin: 14px 0 10px }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--line) }
+.wb-models-box { margin: 2px 0 4px }
+.wb-model-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; background: #fafdfb }
+.wb-model-item .wb-model-info { flex: 1; min-width: 0 }
+.wb-model-item .wb-model-info b { font-size: 14px }
+.wb-model-note { font-size: 11px; padding: 1px 7px; border-radius: 6px; background: #e8f4ee; color: #2d5a45; margin-left: 6px }
+.wb-model-url { font-size: 11.5px; color: var(--muted); margin-top: 2px; word-break: break-all }
 .model-test { font-size: 12px; padding: 8px 12px; border-radius: 8px; margin-top: 6px; }
 .model-test.ok { background: var(--green-bg); color: var(--green); }
 .model-test.err { background: var(--red-bg); color: var(--red); }
