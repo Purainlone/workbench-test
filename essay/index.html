@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>作文批改工作台 · 小学语文教师版</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">✍️</div>
+        <div>
+          <div class="name">作文批改台</div>
+          <div class="sub">小学语文 · 教师工作台</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-view="dashboard" onclick="navTo('dashboard')"><span class="ico">🏠</span>工作台</button>
+        <button class="nav-item" data-view="grade" onclick="navTo('grade')"><span class="ico">🤖</span>批改工作台</button>
+        <button class="nav-item" data-view="classes" onclick="navTo('classes')"><span class="ico">📚</span>班级管理</button>
+        <button class="nav-item" data-view="students" onclick="navTo('students')"><span class="ico">🎯</span>学生分析</button>
+        <button class="nav-item" data-view="insight" onclick="navTo('insight')"><span class="ico">📈</span>班级学情</button>
+        <button class="nav-item" data-view="standards" onclick="navTo('standards')"><span class="ico">⚙️</span>评分标准</button>
+        <button class="nav-item" data-view="vocab" onclick="navTo('vocab')"><span class="ico">💡</span>好词好句本</button>
+        <button class="nav-item" data-view="templates" onclick="navTo('templates')"><span class="ico">📝</span>评语模板</button>
+        <button class="nav-item" data-view="models" onclick="navTo('models')"><span class="ico">🏆</span>范文库</button>
+        <button class="nav-item" data-view="materials" onclick="navTo('materials')"><span class="ico">📦</span>素材集</button>
+        <button class="nav-item" data-view="miniapp" onclick="navTo('miniapp')"><span class="ico">📱</span>小程序版</button>
+        <button class="nav-item" data-view="settings" onclick="navTo('settings')"><span class="ico">🔒</span>设置</button>
+      </nav>
+    </aside>
+    <div class="main">
+      <header class="topbar">
+        <div>
+          <h1 id="pageTitle">工作台</h1>
+          <div class="crumb" id="crumb">小学语文 · 作文批改工作台</div>
+        </div>
+        <div class="user"><span>李老师</span><div class="avatar">李</div></div>
+      </header>
+      <main class="content" id="view"></main>
+    </div>
+  </div>
+  <div id="modalRoot"></div>
+  <script src="app.js"></script>
+  <script src="integrator.js"></script>
+</body>
+</html>
