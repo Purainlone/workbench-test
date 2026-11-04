@@ -1243,7 +1243,7 @@ table.paper td.l{text-align:left;font-weight:600}
 <body data-page-node-id="VWm2YCKhwxOUBWSlexIaam">
 <aside data-page-node-id="uyTdXvcdMMBT8HJ1ZWRO9X">
   <div data-page-node-id="YkELpTUKfJkpu7qzDPa66K" class="logo"><!--pnid:7ytoUsgxIUXQsQNXnaE57T-->教师工作台</div>
-  <div class="verline" id="appVer">✨ 成绩管理 v2.6.90 · 批改台高度自适应</div>
+  <div class="verline" id="appVer">✨ 教室桌面 v2.6.91 · 便签显示在线 + 远程控制</div>
   <nav data-page-node-id="ljZdrlGNjxdpectAoWjkyv" id="nav">
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS" class="active" data-s="home">🏠 <span class="lbl">今日首页</span></button>
 
@@ -2121,6 +2121,22 @@ table.paper td.l{text-align:left;font-weight:600}
     <div class="card">
       <h3>🖥️ 教室端状态</h3>
       <div id="deskStatus" class="sub">检测中…</div>
+    </div>
+    <div class="card">
+      <h3>🎛️ 远程控制教室电脑</h3>
+      <div class="sub">在教室里也能远程操控这台教室电脑。指令经 <b>MQTT 实时通道</b>下发（秒级到达），MQTT 不通时自动改走 <b>Gitee 同步</b>（约 15 秒到达），两条通道都带签名，外人伪造的指令会被教室端丢弃。</div>
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn2 primary" onclick="rcSend('show')">📺 显示桌面</button>
+        <button class="btn2" onclick="rcSend('refresh')">🔄 立即同步数据</button>
+        <button class="btn2" onclick="rcSend('tts')">🔊 语音播报</button>
+        <button class="btn2" onclick="rcSend('lock')">🔒 锁定桌面</button>
+        <button class="btn2" onclick="rcSend('restart')">♻️ 重启教室桌面</button>
+        <button class="btn2" onclick="rcSend('boot')">💡 恢复开机画面</button>
+      </div>
+      <div class="sub" style="margin-top:8px">💡 教室电脑本身已设置<b>开机自启</b>（开机就自动运行教室桌面，无需远程干预）。「♻️ 重启教室桌面」用于软件卡死时救场。</div>
+      <div class="sub" style="margin-top:6px">🖥️ 若要<b>远程开机</b>（电脑完全关机状态），需要教室电脑在 BIOS/网卡里开启「网络唤醒(Wake on LAN)」并在路由器上做端口转发 —— 这是网络层的能力，工作台本身做不到；但只要电脑是开机状态，上面这些按钮立刻可用。</div>
+      <div id="rcMsg" class="sub" style="margin-top:6px"></div>
+      <div style="margin-top:12px"><b style="font-size:13px">指令执行记录</b><div id="rcLog" class="sub" style="margin-top:4px"></div></div>
     </div>
     <div class="card">
       <h3>🖼️ 教室桌面壁纸</h3>
@@ -14359,7 +14375,7 @@ function hmTodayMyClasses(now){
    开关与显示项存在 localStorage：wb_desktag（on / date / alert / tt / hw / 位置）。 */
 var DT_WIN=null;
 function dtCfg(){
-  var d={on:1,date:1,alert:1,tt:1,hw:1,w:340,h:640,x:null,y:null};
+  var d={on:1,date:1,alert:1,tt:1,hw:1,desk:1,w:340,h:640,x:null,y:null};
   try{var s=JSON.parse(localStorage.getItem('wb_desktag')||'{}');for(var k in s)if(k in d)d[k]=s[k]}catch(e){}
   return d;
 }
@@ -14436,7 +14452,23 @@ function dtData(){
   }catch(e){}
   return {date:(now.getMonth()+1)+'月'+now.getDate()+'日',wd:hmWDName(now),week:NOW_WEEK,
           duty:dtDuty(now),memos:dtMemos(now),now:tt.now,next:tt.next,my:tt.my,
-          hw:hw,cfg:dtCfg(),ts:now.getTime()};
+          hw:hw,cfg:dtCfg(),ts:now.getTime(),
+          /* vT51 教室桌面在线状态：桌面标签小窗要显示「教室端在线/离线」。
+             来源 = 主窗口的 window.__deskPresence（MQTT presence 通道收到的心跳）。
+             小窗是通过 op.dtData() 从主窗口取数的（同源直读），所以这里直接读主窗口的全局即可。 */
+          desk:dtDeskPresence()};
+}
+/* vT51 教室端在线状态（桌面标签 + 教室桌面模块共用一份口径）
+   ⚠️ 在线判定不能只看 state：presence 是 60 秒一次心跳，若中途断网，
+      最后一条 'online' 会一直留在内存里，看起来永远在线。
+      所以必须再卡一道时间闸：超过 200 秒没有新心跳 → 判离线。 */
+function dtDeskPresence(){
+  var p = null;
+  try { p = window.__deskPresence } catch (e) {}
+  if (!p || !p.at) return {state:'none', id:'', at:0, ago:-1};
+  var ago = Date.now() - p.at;
+  var online = (p.state === 'online' && ago < 200000);
+  return {state: online ? 'online' : 'offline', id: String(p.id||''), at:p.at, ago:ago};
 }
 function dtRenderHTML(d){
   var c=d.cfg||{},h='',mins=dtMins();
@@ -14504,6 +14536,22 @@ function dtRenderHTML(d){
     }
     h+=sec('📝 未交作业',b3);
   }
+  /* vT51 教室桌面在线状态：桌面标签上也能一眼看到教室电脑在不在 */
+  if(c.desk){
+    var dk=d.desk||{state:'none',id:'',at:0,ago:-1};
+    var b4='';
+    if(dk.state==='online'){
+      b4+='<div class="dt-row dt-desk"><span class="dt-dot on"></span>教室端在线 · 设备 '+dtEsc(dk.id)+' · 最后心跳 '+
+         dtEsc(new Date(dk.at).toLocaleTimeString('zh-CN'))+'</div>';
+    }else if(dk.state==='offline'){
+      b4+='<div class="dt-row dt-desk"><span class="dt-dot off"></span>教室端离线 · 最后心跳 '+
+         dtEsc(dk.at?new Date(dk.at).toLocaleString('zh-CN'):'无')+'</div>';
+    }else{
+      b4+='<div class="dt-row dt-desk"><span class="dt-dot none"></span>教室端未连接实时通道</div>';
+    }
+    b4+='<div class="dt-sub">教室电脑状态 · 数据仍按 10~20 秒轮询同步</div>';
+    h+=sec('📱 教室桌面',b4);
+  }
   if(!h)h='<div class="dt-empty">四个板块都被隐藏了，点右上角 ⚙ 打开</div>';
   return h;
 }
@@ -14536,13 +14584,19 @@ function dtShellHTML(){
    +'.dt-names span{background:#fff3e8;color:#a8601a;border-radius:5px;padding:2px 6px;font-size:12px}'
    +'.dt-names span.dt-ov{background:#fde8e8;color:#dc2626;font-weight:600}'
    +'.dt-empty{color:#98a2b0;font-size:13px;padding:6px 0}'
+   /* vT51 教室桌面在线状态：小圆点 + 一行文字，样式对齐「教室桌面」模块 */
+   +'.dt-desk{display:flex;align-items:flex-start;gap:6px;font-size:13px;line-height:1.5}'
+   +'.dt-dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px;margin-top:4px;background:#c8ced6}'
+   +'.dt-dot.on{background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.15)}'
+   +'.dt-dot.off{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.13)}'
+   +'.dt-dot.none{background:#c8ced6}'
    +'.dt-stale{background:#fff6e5;color:#8a5a12;border-radius:8px;padding:8px 10px;font-size:12.5px;margin-bottom:8px}'
    +'.dt-foot{color:#98a2b0;font-size:11.5px;text-align:center;padding:6px 0 12px}'
    +'</style></head><body>'
    +'<div class="dt-top"><span class="dt-title">📌 桌面标签</span><span class="dt-btns">'
    +'<button id="dtSet" title="显示哪些板块">⚙</button><button id="dtRef" title="立即刷新">↻</button><button id="dtHide" title="收起标签">×</button>'
    +'</span></div>'
-   +'<div class="dt-cfg" id="dtCfg" style="display:none">'+ck('date','日期周次')+ck('alert','提醒')+ck('tt','课程')+ck('hw','未交作业')+'</div>'
+   +'<div class="dt-cfg" id="dtCfg" style="display:none">'+ck('date','日期周次')+ck('alert','提醒')+ck('tt','课程')+ck('hw','未交作业')+ck('desk','教室桌面')+'</div>'
    +'<div id="dt"></div><div class="dt-foot" id="dtFoot"></div>'
    +'<scr'+'ipt>(function(){'
    +'var box=document.getElementById("dt"),foot=document.getElementById("dtFoot"),op=null;'
@@ -29564,7 +29618,7 @@ function cwInit(){
   if (window.__WB_NT_LOADED__) return; window.__WB_NT_LOADED__ = true;
 
   /* ---------- 数据层 ---------- */
-  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain', 's-train', 's-hwadj'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 / s-train 展示训练营；vT17 + s-hwadj 科任端作业积分加减（并入作业积分汇总） */
+  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain', 's-train', 's-hwadj', 's-rcmd'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 / s-train 展示训练营；vT17 + s-hwadj 科任端作业积分加减（并入作业积分汇总）；vT51 + s-rcmd 远程指令回执（桌面写、教师读） */
   var NT_STORE_KEY = 'wb_nt_v1';
   function ntLoad() {
     try { var o = JSON.parse(localStorage.getItem(NT_STORE_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} }
@@ -30941,6 +30995,123 @@ function cwInit(){
       elp.innerHTML = '🔴 教室端离线 · 最后心跳 ' + (p.at ? new Date(p.at).toLocaleString('zh-CN') : '无');
     }
   };
+
+  /* ================= vT51 远程控制教室电脑 =================
+     ⚠️ 安全前提：MQTT 用的是公共 broker（broker.emqx.io），**任何人都能往
+        wb/<classId>/cmd 这个 topic 发消息**。所以下行指令必须带签名，
+        否则第三方可以随便让教室电脑执行动作（重启、锁屏、播报…）。
+        签名密钥 = 教室端接入令牌（教师端与教室端持有同一个 Gitee token），
+        用 HMAC-SHA256(token, 指令体) 计算。教室端验签不过就丢弃。
+
+     双通道下发（保证「MQTT 断了也能到」）：
+       ① MQTT  wb/<classId>/cmd      → 即时（秒级）
+       ② Gitee s-desktop 表 rc 记录   → 教室端 15 秒轮询兜底
+     两条通道用同一个签名，教室端按「指令 id」去重，重复收到只执行一次。 */
+
+  /* 远程控制密钥：优先用「教室端专用令牌」，没有就用教师令牌。 */
+  function rcSecret() {
+    var s = mpSyncSettings();
+    var t = '';
+    try { t = (localStorage.getItem('wb_desk_token') || '').trim() } catch (e) {}
+    return String(t || s.gToken || '');
+  }
+  /* UTF-8 字节（与 wbSha256Hex 内部同一套编码，保证字节流一致） */
+  function rcUtf8b(s) {
+    s = String(s == null ? '' : s);
+    var out = [], i, c, c2, cp;
+    for (i = 0; i < s.length; i++) {
+      c = s.charCodeAt(i);
+      if (c < 0x80) { out.push(c); continue }
+      if (c < 0x800) { out.push(0xc0 | (c >> 6), 0x80 | (c & 63)); continue }
+      if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length) {
+        c2 = s.charCodeAt(i + 1); cp = 0x10000 + ((c & 0x3ff) << 10) + (c2 & 0x3ff); i++;
+        out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 63), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
+        continue
+      }
+      out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    return out;
+  }
+  function rcHex2b(h) { var o = []; for (var i = 0; i + 1 < h.length; i += 2) o.push(parseInt(h.substr(i, 2), 16)); return o }
+  function rcB2hex(b) { var o = ''; for (var i = 0; i < b.length; i++) o += ('0' + (b[i] & 255).toString(16)).slice(-2); return o }
+  /* HMAC-SHA256(key, msg) = H((K^opad) || H((K^ipad) || msg))
+     纯 JS 实现（浏览器与 Node 结果一致），用于给远程指令签名。 */
+  function rcHmacHex(key, msg) {
+    var K = rcUtf8b(key);
+    if (K.length > 64) K = rcUtf8b(wbSha256Hex(key));   /* 超长密钥先哈希 */
+    while (K.length < 64) K.push(0);
+    var ipad = [], opad = [], i;
+    for (i = 0; i < 64; i++) { ipad.push(K[i] ^ 0x36); opad.push(K[i] ^ 0x5c) }
+    var inner = rcHex2b(wbSha256Hex(rcB2hex(ipad) + rcB2hex(rcUtf8b(msg))));
+    return wbSha256Hex(rcB2hex(opad) + rcB2hex(inner));
+  }
+  /* 统一签名口径：cmd + '|' + JSON(参数) + '|' + ts + '|' + nonce */
+  function rcSign(cmd, arg, ts, nonce) {
+    var key = rcSecret();
+    if (!key) return '';
+    return rcHmacHex(key, cmd + '|' + JSON.stringify(arg || {}) + '|' + ts + '|' + nonce);
+  }
+  /* 下发一条远程指令（双通道） */
+  window.rcSend = function (cmd, arg, opts) {
+    opts = opts || {};
+    var secret = rcSecret();
+    if (!secret) { toastMsg('⚠️ 没有 Gitee 令牌，无法给教室端下令（先填好同步设置并保存）'); return false }
+    var ts = Date.now(), nonce = Math.random().toString(16).slice(2, 10);
+    var payload = { id: 'rc_' + ts + '_' + nonce, cmd: cmd, arg: arg || {}, ts: ts, nonce: nonce };
+    payload.sig = rcSign(cmd, payload.arg, ts, nonce);
+    /* ① MQTT（即时） */
+    var sent = false;
+    try {
+      if (mqttState.ready && mqttState.client) {
+        mqttState.client.publish(mqttTopic('cmd'), JSON.stringify(payload), { qos: 0 });
+        sent = true;
+      }
+    } catch (e) {}
+    /* ② Gitee s-desktop（兜底，教室端 15 秒轮询能取到） */
+    var g = false;
+    try {
+      ntUpsert('s-desktop', {
+        id: payload.id, '指令': cmd, '参数': payload.arg,
+        '时间戳': ts, '随机数': nonce, '签名': payload.sig,
+        '更新时间': nowStr(), ts: ts, updatedAt: new Date().toISOString(), updatedBy: 'teacher'
+      });
+      ntChanged();
+      g = true;
+    } catch (e) { g = false }
+    if (!sent && !g) { toastMsg('⚠️ 指令下发失败（MQTT 未连上，Gitee 也没写成功）'); return false }
+    try { rcRenderLog() } catch (e) {}
+    if (opts.quiet) return true;
+    toastMsg(sent ? '✅ 已下发：' + cmd + (g ? '（MQTT 即时 + Gitee 兜底）' : '（MQTT 即时）')
+                   : '✅ 已下发：' + cmd + '（MQTT 未连上，走 Gitee 兜底，约 15 秒内到达）');
+    return true;
+  };
+  /* 远程指令执行记录：把「我下发了什么」与「教室端回了什么」按 id 对起来。
+     s-desktop = 教师端下发的指令；s-rcmd = 教室端写的回执（独立表，互不覆盖）。 */
+  window.rcLog = function () {
+    try {
+      var sent = (ntRows('s-desktop') || []).filter(function (r) { return r && r.id && String(r.id).indexOf('rc_') === 0; });
+      var acks = {};
+      (ntRows('s-rcmd') || []).forEach(function (r) { if (r && r.id) acks[r.id] = r; });
+      return sent.map(function (r) {
+        var a = acks[r.id] || null;
+        return {
+          id: r.id, cmd: r['指令'], at: Number(r['时间戳']) || 0,
+          ok: a ? ((a['结果'] === '已执行') ? (a['说明'] || '已执行') : ('❌ ' + (a['说明'] || '执行失败'))) : ''
+        };
+      }).sort(function (x, y) { return y.at - x.at }).slice(0, 12);
+    } catch (e) { return [] }
+  };
+  window.rcRenderLog = function () {
+    var el = document.getElementById('rcLog'); if (!el) return;
+    var rows = rcLog();
+    if (!rows.length) { el.innerHTML = '<div class="sub">还没有下发过指令</div>'; return }
+    el.innerHTML = '<table class="rc" style="width:100%"><thead><tr><th>时间</th><th>指令</th><th>执行结果</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        var t = r.at ? new Date(r.at).toLocaleTimeString('zh-CN') : '';
+        var ok = r.ok ? '✅ ' + esc(r.ok) : '<span class="sub">等待回执…</span>';
+        return '<tr><td>' + esc(t) + '</td><td>' + esc(r.cmd || '') + '</td><td>' + ok + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  };
   window.giteeCodeExportDesk = function () {
     var s = mpSyncSettings();
     if (!s.gOwner || !s.gRepo || !s.gToken) { toastMsg('⚠️ 请先填好 Gitee 三项设置并保存'); return }
@@ -31011,6 +31182,8 @@ function cwInit(){
           if (m === 'online' || m === 'offline') {
             window.__deskPresence = { id: devId, state: m, at: Date.now() };
             deskRenderStatus();
+            /* vT51 桌面标签小窗也要立刻反映在线状态（否则要等它自己的 30 秒轮询才变） */
+            try { dtPush() } catch (e) {}
           }
         } catch (e) {}
       });
@@ -31032,6 +31205,8 @@ function cwInit(){
     try { noticeRenderInbox() } catch (e) {}
     try { noticeRenderHistory() } catch (e) {}
     try { deskFillCfgForm() } catch (e) {}
+    /* vT51 远程指令回执到了 → 刷新执行记录表 */
+    try { rcRenderLog() } catch (e) {}
     try { asRender() } catch (e) {}   /* vT13 布置作业列表刷新 */
     try { cmAfterSync() } catch (e) {}   /* vT14 学生评语刷新 */
     try { clRender(); csRender(); dtDetainRender(); renderTrain(); } catch (e) {}   /* vT15 经典内容管理刷新 */
@@ -31063,7 +31238,7 @@ function cwInit(){
         var id = active && active.id;
         if (id === 's-rota') { try { rotaRender() } catch (e) {} }
         else if (id === 's-notice') { try { noticeRenderInbox() } catch (e) {} try { noticeRenderHistory() } catch (e) {} }
-        else if (id === 's-desk') { try { deskRenderStatus() } catch (e) {} }
+        else if (id === 's-desk') { try { deskRenderStatus() } catch (e) {} try { rcRenderLog() } catch (e) {} }
       }, 5000);
     }
   }
