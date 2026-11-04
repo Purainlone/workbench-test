@@ -2291,9 +2291,9 @@ table.paper td.l{text-align:left;font-weight:600}
   <section class="section" id="s-essay">
     <h2>作文平台 <span id="essayDraftTip" style="font-size:12px;font-weight:400;color:#8a5a2d;background:#fdf3e4;border-radius:8px;padding:2px 10px;vertical-align:middle"></span></h2>
     <div class="sub">手机小程序「作文上传」拍照/扫码录入 → 这里收稿、批改、分析。批改保存后自动写回云端，多端可见 · 模块数据保存在本浏览器</div>
-    <div id="essayDrafts"></div>
+    <div id="essayDrafts" style="max-height:172px;overflow:auto;padding-right:4px"></div>
     <div class="chartbox" style="margin:12px 0 0">
-      <iframe id="essayFrame" title="作文批改工作台" style="width:100%;height:calc(100vh - 240px);border:0;background:#fff;display:block" src="about:blank"></iframe>
+      <iframe id="essayFrame" title="作文批改工作台" style="width:100%;height:calc(100vh - 290px);border:0;background:#fff;display:block" src="about:blank"></iframe>
     </div>
   </section>
 
@@ -16055,7 +16055,7 @@ try {
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
 var WB_MY_VER = '优化版 vT39 · 班级守护';
-var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.86';
+var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.87';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
