@@ -38,6 +38,10 @@
           if (window.EssayGrader._notify) window.EssayGrader._notify('scan', { studentId: d.studentId, studentName: d.studentName });
         }
       }
+      /* 2.6.88 宿主收稿箱「去批改」：学生+标题+原文照片一次性带入批改工作台 */
+      if (d.type === 'PREFILL_GRADE' && window.EssayGrader && window.EssayGrader.prefillGrade) {
+        try { window.EssayGrader.prefillGrade(d) } catch (e) {}
+      }
     });
   }
 
