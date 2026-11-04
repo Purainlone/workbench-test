@@ -1,12 +1,14 @@
 /* =====================================================================
-   作文批改工作台 · 原型逻辑（班级平台增强版）
+   作文批改工作台 · 2.6.92（模拟皮皮改作文流程）
    面向：小学语文老师 | 形态：Web 主工作台 + 微信小程序端
-   能力：手机拍照/连拍OCR录入、可配置评语模板、升格文、旁批、
+   流程：选学生/题目 → 拍照或小程序收稿 → 自动识别手写原文 → 老师校对
+        → 一键 AI 初批(总评/亮点/旁批/升格文) → 保存归档回写云端
+   能力：作文自动识别(可插拔多模态模型)、可配置评语模板、升格文、旁批、
         分段点评、学生画像、姓名脱敏、五维评分、好词本、班级管理、
-        ★ 自定义模型一键配置(WorkBuddy)、★ 网页/小程序双端、
-        ★ 全班学情分析、★ 范文库、★ 素材集。
-   说明：批改/识别为前端可演示规则；gradeOCR() 接手写识别 API、
-        grade() 可接自定义大模型（启用后由模型生成文本类批语）。
+        自定义模型、网页/小程序双端、全班学情分析、范文库、素材集。
+   说明：识别走 OpenAI 兼容多模态 /chat/completions（在「设置」中启用）；
+        批改为规则引擎兜底，启用自定义模型后可生成文本类批语。
+        未配置识别模型时保留手动录入，绝不用示例文本冒充识别结果。
    ===================================================================== */
 'use strict';
 
@@ -70,8 +72,26 @@ const SAMPLE_ESSAY_2 = `春暖花开的季节到了。校园里生机勃勃，�
 /* ---------------- 数据 ---------------- */
 const STORE_KEY = 'cw_data_v2';
 let DATA = null;
-let state = { view: 'dashboard', lastReport: null, matCat: '全部', stuId: null, pendingStu: null };
+let state = { view: 'dashboard', lastReport: null, matCat: '全部', stuId: null, pendingStu: null,
+  essayImages: [], ocrDone: false, ocrText: '', ocrMsg: null };
 let mpTabName = 'collect';
+
+/* 2.6.92 作文自动识别配置（可插拔）：
+   mode: 'vision' 走 OpenAI 兼容多模态模型 / 'off' 关闭自动识别（手动录入）
+   vision 与批改用的 model 分开配置：识别要「看得见图」，批改只要文本。
+   老数据没有该字段时在此补齐默认值，不覆盖已有设置。 */
+function defaultVision() {
+  return { mode: 'off', baseUrl: '', apiKey: '', model: '', enabled: false };
+}
+function visionCfg() {
+  if (!DATA.settings) DATA.settings = {};
+  if (!DATA.settings.vision) DATA.settings.vision = defaultVision();
+  return DATA.settings.vision;
+}
+function visionReady() {
+  const v = visionCfg();
+  return v.mode === 'vision' && v.enabled && !!(v.baseUrl && v.apiKey && v.model);
+}
 
 function save() { localStorage.setItem(STORE_KEY, JSON.stringify(DATA)); }
 function load() {
@@ -83,6 +103,7 @@ function load() {
       if (!DATA.materials) DATA.materials = [];
       if (!DATA.settings) DATA.settings = {};
       if (!DATA.settings.model) DATA.settings.model = { provider: 'workbuddy', baseUrl: '', apiKey: '', model: '', enabled: false };
+      if (!DATA.settings.vision) DATA.settings.vision = defaultVision();
       if (!DATA.vocab) DATA.vocab = [];
       return;
     } catch (e) {}
@@ -118,7 +139,7 @@ function seed() {
   });
   return {
     teacher: '李老师',
-    settings: { desensitize: true, guides: true, model: { provider: 'workbuddy', baseUrl: '', apiKey: '', model: '', enabled: false } },
+    settings: { desensitize: true, guides: true, model: { provider: 'workbuddy', baseUrl: '', apiKey: '', model: '', enabled: false }, vision: defaultVision() },
     standards: DEFAULT_STANDARDS,
     templates: JSON.parse(JSON.stringify(DEFAULT_TEMPLATES)),
     classes: [cls], vocab: [], models: [], materials: [],
@@ -349,23 +370,156 @@ function displayName(stu) {
 }
 
 /* =====================================================================
-   模拟 OCR（手机拍照 / 连拍多页 -> 文本）
+   2.6.92 作文自动识别（模拟皮皮流程：拍照 → 识别 → 回填原文 → 老师校对）
+   识别通道：OpenAI 兼容「多模态」模型 /chat/completions，图片以
+   image_url(dataURL) 随消息发送。手写中文识别只有视觉模型可用，
+   本地 Tesseract 对手写体不可用，故做成可插拔适配器：
+     - visionCfg().mode = 'vision' → 自动识别（推荐）
+     - 'off'                      → 关闭，保留手动粘贴/录入兜底
+   未配置或调用失败时，绝不塞示例文本冒充识别结果（旧版正是这个问题）。
    ===================================================================== */
+const OCR_SYS = '你是一名严谨的中小学语文老师助手，专门把手写作文照片转录成文字。'
+  + '要求：1) 逐字转录正文，保留原有分段，段间用空行分隔；'
+  + '2) 不要改写、不要纠错、不要润色、不要总结、不要添加标题或任何说明；'
+  + '3) 忽略页眉页码、姓名学号、老师红笔批注与打分、涂改液划掉的字；'
+  + '4) 若某处实在辨认不清，用「□」代替，不要编造内容；'
+  + '5) 有多张图时按图片顺序连成一篇，不要重复、不要分段标记页码；'
+  + '6) 只输出作文正文，不要任何前后缀。';
+
+/* 识别状态条：wait / ok / err */
+function ocrNote(kind, msg, canConfig) {
+  state.ocrMsg = { kind: kind || 'wait', msg: String(msg || ''), canConfig: !!canConfig };
+  const note = $('#ocrNote');
+  if (!note) return;
+  note.classList.remove('hidden');
+  note.innerHTML = '<span class="st ' + (kind || 'wait') + '">'
+    + (kind === 'wait' ? '<span class="ocr-spin"></span>' : '')
+    + escapeHtml(msg) + '</span>'
+    + (canConfig ? ' <button class="btn ghost sm" style="margin-left:8px" onclick="navTo(\'settings\')">⚙️ 去配置识别</button>' : '');
+}
+
+/* 本地图片压缩：手机原图动辄数 MB，直接 base64 发给模型会超限。
+   压到最长边 1600px、JPEG 0.86，通常 200~400KB。jsdom/无 canvas 时回退原图。 */
+function fileToDataUrl(file, maxW) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      const raw = String(fr.result || '');
+      try {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const scale = Math.min(1, (maxW || 1600) / Math.max(img.width, img.height));
+            const c = document.createElement('canvas');
+            c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+            resolve(c.toDataURL('image/jpeg', 0.86));
+          } catch (e) { resolve(raw) }
+        };
+        img.onerror = () => resolve(raw);
+        img.src = raw;
+      } catch (e) { resolve(raw) }
+    };
+    fr.onerror = () => reject(new Error('读取照片失败'));
+    fr.readAsDataURL(file);
+  });
+}
+
+/* 调用一次多模态模型，返回转录文本 */
+async function callVision(images, hint) {
+  const v = visionCfg();
+  const base = (v.baseUrl || '').replace(/\/+$/, '');
+  if (!base || !v.apiKey || !v.model) throw new Error('识别模型未配置完整');
+  const content = [{ type: 'text', text: '请转录这张/这些手写作文照片的正文。' + (hint || '') }];
+  images.forEach(u => content.push({ type: 'image_url', image_url: { url: u } }));
+  const res = await fetch(base + '/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + v.apiKey },
+    body: JSON.stringify({
+      model: v.model, messages: [{ role: 'system', content: OCR_SYS }, { role: 'user', content }],
+      temperature: 0.1, max_tokens: 4096,
+    }),
+  });
+  if (!res.ok) throw new Error('识别接口 HTTP ' + res.status);
+  const j = await res.json();
+  const out = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+  if (!out.trim()) throw new Error('识别模型返回空内容');
+  return cleanOcr(out);
+}
+/* 去掉模型可能带的代码围栏/说明前缀 */
+function cleanOcr(s) {
+  let t = String(s || '').trim();
+  t = t.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
+  t = t.replace(/^(作文正文|转录结果|识别结果|正文)\s*[:：]\s*/i, '').trim();
+  return t;
+}
+
+/* 自动识别主流程：先整批发送，失败再逐页重试；结果回填 #essayText */
+async function runRecognition(images, opts) {
+  opts = opts || {};
+  const list = (images || []).filter(Boolean);
+  if (!list.length) { ocrNote('err', '没有可识别的作文照片，请先在小程序拍照上传或在此选择图片。', true); return false }
+  if (!visionReady()) {
+    ocrNote('err', '尚未启用「作文自动识别」。启用后拍照即自动转录原文；现在也可以对照照片手动输入/粘贴。', true);
+    return false;
+  }
+  state.essayImages = list.slice();
+  ocrNote('wait', '正在识别作文（' + list.length + ' 页）…');
+  try {
+    let text = '';
+    try {
+      text = await callVision(list, '');
+    } catch (batchErr) {
+      if (list.length < 2) throw batchErr;
+      /* 整批失败 → 逐页识别再合并，单页失败不拖垮整篇 */
+      const parts = [];
+      for (let i = 0; i < list.length; i++) {
+        ocrNote('wait', '正在识别第 ' + (i + 1) + '/' + list.length + ' 页…');
+        try { parts.push(await callVision([list[i]], '这是第 ' + (i + 1) + ' 页，只转录本页正文。')) }
+        catch (e) { parts.push('') }
+      }
+      text = parts.filter(Boolean).join('\n\n');
+      if (!text.trim()) throw batchErr;
+    }
+    const sel = opts.target || '#essayText';
+    const ta = $(sel);
+    if (!ta) return false;
+    ta.value = text;
+    ta.placeholder = '识别结果已填入，请对照上方照片核对…';
+    if (sel === '#essayText') { state.ocrDone = true; state.ocrText = text; }
+    ocrNote('ok', '✓ 已自动识别 ' + list.length + ' 页原文，请对照照片核对后点「开始 AI 初批」');
+    if (opts.toast !== false) toast('作文原文已自动识别，请核对');
+    return true;
+  } catch (e) {
+    ocrNote('err', '识别失败：' + (e && e.message ? e.message : '未知错误') + '。可点「重新识别」重试，或手动录入。', !visionReady());
+    return false;
+  }
+}
+/* 「重新识别」按钮：用当前已带入的照片重跑 */
+function rerunRecognition() {
+  if (!state.essayImages || !state.essayImages.length) { toast('没有作文照片，先拍照或让学生用小程序上传'); return }
+  runRecognition(state.essayImages);
+}
+
+/* 拍照/连拍/上传 → 压缩 → 缩略图 → 自动识别 */
 function setupCapture() {
   const input = $('#photoInput'); if (!input) return;
-  input.onchange = e => {
-    const files = [...e.target.files]; if (!files.length) return;
-    const prev = $('#imgPrev'); prev.innerHTML = '<div class="thumbs"></div>';
-    const box = prev.querySelector('.thumbs');
-    files.forEach((f) => {
-      const reader = new FileReader();
-      reader.onload = ev => { const im = new Image(); im.src = ev.target.result; im.className = 'thumb'; box.appendChild(im); };
-      reader.readAsDataURL(f);
-    });
-    const pages = files.length > 1 ? [SAMPLE_ESSAY, SAMPLE_ESSAY_2].slice(0, files.length).join('\n\n') : SAMPLE_ESSAY;
-    $('#essayText').value = pages;
-    const note = $('#ocrNote'); note.classList.remove('hidden');
-    note.textContent = `✓ 已识别 ${files.length} 页（演示：真实环境将调用手写识别 API，支持连拍多页自动合并）`;
+  input.onchange = async e => {
+    const files = [...(e.target.files || [])]; if (!files.length) return;
+    const prev = $('#imgPrev');
+    if (prev) { prev.innerHTML = '<div class="thumbs"></div>'; }
+    const box = prev && prev.querySelector('.thumbs');
+    ocrNote('wait', '正在读取照片…');
+    const urls = [];
+    for (const f of files) {
+      try {
+        const u = await fileToDataUrl(f);
+        urls.push(u);
+        if (box) { const im = new Image(); im.src = u; im.className = 'thumb'; box.appendChild(im); }
+      } catch (err) { /* 单张失败跳过，不阻断其余 */ }
+    }
+    if (!urls.length) { ocrNote('err', '照片读取失败，请重拍或换一张'); return }
+    await runRecognition(urls);
   };
 }
 
@@ -435,7 +589,9 @@ function renderDashboard() {
           <button class="btn" onclick="navTo('materials')">📦 素材集</button>
           <button class="btn" onclick="navTo('miniapp')">📱 小程序版</button>
         </div>
-        <div class="ocr-note mt">📱 支持手机扫描/连拍学生作文：在「批改工作台」点「📷 拍照/连拍/上传」，图片经 OCR 识别为文字后自动进入批改。${DATA.settings.desensitize ? '<b>当前已开启姓名脱敏。</b>' : ''}</div>
+        <div class="ocr-note mt">📱 ${visionReady()
+          ? '<b>作文自动识别已启用</b>：小程序收稿或这里拍照后，手写原文会自动转录并填入，老师核对后一键 AI 初批。'
+          : '当前未启用「作文自动识别」：到「设置」启用多模态模型后，拍照即自动转录手写原文；现在也可直接录入/粘贴文字批改。'} <button class="btn ghost sm" onclick="navTo(\'settings\')">⚙️ 识别设置</button>${DATA.settings.desensitize ? '<b>当前已开启姓名脱敏。</b>' : ''}</div>
       </div>
       <div class="card">
         <div class="section-title">🕑 最近批改</div>
@@ -458,7 +614,15 @@ function renderGrade() {
   const tplOpts = DATA.templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
   const guide = DATA.settings.guides
     ? `<div class="guide-card">📐 <b>取景规范</b>：方格纸四边贴框 · 本子放平 · 只保留框内画面、别带页眉姓名 · 支持<b>连拍</b>多页作文</div>` : '';
+  const vOn = visionReady();
   view().innerHTML = `
+    <div class="step-flow">
+      <div class="sp on">① 选学生 / 题目</div>
+      <div class="sp ${state.ocrDone ? 'on' : ''}">② 拍照自动识别</div>
+      <div class="sp">③ 校对原文</div>
+      <div class="sp">④ 一键 AI 初批</div>
+      <div class="sp">⑤ 保存归档</div>
+    </div>
     <div class="grade-wrap">
       <div class="panel">
         <div class="section-title">① 录入作文</div>
@@ -469,18 +633,23 @@ function renderGrade() {
         </div>
         <div class="capture-zone">
           <div class="big">📷</div>
-          <div>手机拍照 / 扫描作文，自动识别为文字（支持连拍多页）</div>
+          <div>手机拍照 / 扫描作文，${vOn ? '<b>自动识别为文字</b>' : '可自动识别为文字（先在设置里启用）'}（支持连拍多页）</div>
           <div class="row-actions mt" style="justify-content:center">
             <button class="btn primary sm" id="captureBtn">📷 拍照 / 连拍 / 上传</button>
-            <button class="btn sm" onclick="loadSample(1)">载入示例①</button>
-            <button class="btn sm" onclick="loadSample(2)">载入示例②</button>
+            <button class="btn sm ghost" onclick="loadSample(1)">载入示例①</button>
+            <button class="btn sm ghost" onclick="loadSample(2)">载入示例②</button>
           </div>
           <input type="file" id="photoInput" accept="image/*" capture="environment" multiple class="hidden">
           <div id="imgPrev"></div>
-          <div class="ocr-note hidden" id="ocrNote"></div>
         </div>
+        <div class="ocr-bar">
+          <span class="st" id="visionBadge">自动识别：${vOn ? '<b style="color:#157f4a">已启用</b>' : '<b style="color:#92600a">未启用</b>'}</span>
+          <button class="btn sm ghost" onclick="rerunRecognition()">🔄 重新识别</button>
+          <button class="btn sm ghost" onclick="navTo('settings')">⚙️ 识别设置</button>
+        </div>
+        <div class="ocr-note hidden" id="ocrNote"></div>
         ${guide}
-        <label class="field">作文内容（OCR 识别后填入；也可直接输入/粘贴）</label>
+        <label class="field">② 作文原文（识别后自动填入，请对照照片核对）</label>
         <textarea id="essayText" rows="11" placeholder="在此粘贴或输入作文内容…"></textarea>
         <div class="toolbar mt" style="margin-bottom:12px">
           <span class="muted text-sm">评语模板</span>
@@ -495,8 +664,16 @@ function renderGrade() {
         </div>
       </div>
       <div class="panel" id="resultPanel">
-        <div class="section-title">② AI 初批结果</div>
-        <div class="empty" id="emptyHint"><div class="big">📋</div>录入作文后，点「开始 AI 初批」查看批改</div>
+        <div class="section-title">③ 批改建议（总评 / 亮点 / 改进 / 升格文）</div>
+        <div class="empty" id="emptyHint"><div class="result-guide">
+          <div style="font-size:26px;text-align:center;margin-bottom:6px">📋</div>
+          批改结果会显示在这里，流程与皮皮改作文一致：<br>
+          <b>1.</b> 上方选学生、拍照或让小程序收稿<br>
+          <b>2.</b> 系统自动识别手写原文并填入左栏<br>
+          <b>3.</b> 老师快速核对 / 修正识别误差<br>
+          <b>4.</b> 点「🤖 开始 AI 初批」生成总评、亮点、旁批、升格文<br>
+          <b>5.</b> 复核后「保存归档」，结果自动回写云端
+        </div></div>
         <div id="reportArea" class="hidden"></div>
       </div>
     </div>`;
@@ -504,10 +681,27 @@ function renderGrade() {
   $('#runBtn').onclick = runGrade;
   if (state.pendingStu) { const sel = $('#stuSel'); if (sel) sel.value = state.pendingStu; state.pendingStu = null; }
   setupCapture();
+  restoreImgPrev();
+  if (state.ocrText) { const ta = $('#essayText'); if (ta) { ta.value = state.ocrText; ta.oninput = () => { state.ocrText = ta.value; }; } }
+  else { const ta = $('#essayText'); if (ta) ta.oninput = () => { state.ocrText = ta.value; }; }
+  if (state.ocrMsg) ocrNote(state.ocrMsg.kind, state.ocrMsg.msg, state.ocrMsg.canConfig);
+}
+/* 切视图重渲染时恢复已带入的照片与识别文字 */
+function restoreImgPrev() {
+  const imgs = state.essayImages || [];
+  const prev = $('#imgPrev'); if (!prev || !imgs.length) return;
+  prev.innerHTML = '<div class="thumbs"></div>';
+  const box = prev.querySelector('.thumbs');
+  imgs.forEach(src => { const im = new Image(); im.src = src; im.className = 'thumb'; box.appendChild(im); });
 }
 
 function loadSample(n) { $('#essayText').value = n === 1 ? SAMPLE_ESSAY : SAMPLE_ESSAY_2; toast('已载入示例作文，可点「开始 AI 初批」'); }
-function clearEssay() { $('#essayText').value = ''; state.lastReport = null; $('#reportArea').classList.add('hidden'); $('#emptyHint').classList.remove('hidden'); }
+function clearEssay() {
+  $('#essayText').value = ''; state.lastReport = null;
+  state.ocrDone = false; state.ocrText = ''; state.ocrMsg = null;
+  $('#reportArea').classList.add('hidden'); $('#emptyHint').classList.remove('hidden');
+  const n = $('#ocrNote'); if (n) { n.classList.add('hidden'); n.innerHTML = ''; }
+}
 function openProfileById() { const sel = $('#stuSel'); if (sel) openProfile(sel.value); }
 
 async function runGrade() {
@@ -972,11 +1166,15 @@ function mpRender() {
 }
 function mpSetupCapture() {
   const input = $('#mpPhoto'); if (!input) return;
-  input.onchange = e => {
-    const files = [...e.target.files]; if (!files.length) return;
-    const pages = files.length > 1 ? [SAMPLE_ESSAY, SAMPLE_ESSAY_2].slice(0, files.length).join('\n\n') : SAMPLE_ESSAY;
-    $('#mpText').value = pages;
-    toast(`已识别 ${files.length} 页（演示：真实环境调用手写识别API）`);
+  input.onchange = async e => {
+    const files = [...(e.target.files || [])]; if (!files.length) return;
+    if (!visionReady()) { toast('请先在「设置」启用作文自动识别，或手动粘贴原文'); return }
+    toast('正在识别作文…');
+    const urls = [];
+    for (const f of files) { try { urls.push(await fileToDataUrl(f)) } catch (err) {} }
+    if (!urls.length) { toast('照片读取失败'); return }
+    const ok = await runRecognition(urls, { target: '#mpText', toast: false });
+    toast(ok ? '原文已自动识别，请核对' : '识别失败，可手动粘贴原文');
   };
 }
 function mpCollectSubmit() {
@@ -992,13 +1190,72 @@ function mpCollectSubmit() {
 }
 
 /* ---------- 设置 ---------- */
+/* 2.6.92 作文自动识别配置：与批改模型分开，因为识别模型必须支持图片输入 */
+function saveVisionConfig() {
+  const v = visionCfg();
+  v.mode = $('#vMode') ? $('#vMode').value : 'off';
+  v.baseUrl = $('#vBase') ? $('#vBase').value.trim() : '';
+  v.apiKey = $('#vKey') ? $('#vKey').value.trim() : '';
+  v.model = $('#vModel') ? $('#vModel').value.trim() : '';
+  v.enabled = $('#vEnabled') ? $('#vEnabled').checked : false;
+  if (v.mode === 'vision' && v.enabled && !(v.baseUrl && v.apiKey && v.model)) {
+    toast('请填完整 Base URL / API Key / 视觉模型名'); return;
+  }
+  save(); toast('识别配置已保存' + (visionReady() ? '（自动识别已启用）' : '（未启用）'));
+}
+/* 沿用批改模型的端点与密钥（同一厂商的多模态模型时最省事） */
+function copyModelToVision() {
+  const m = DATA.settings.model || {};
+  const map = { vBase: m.baseUrl || '', vKey: m.apiKey || '', vModel: m.model || '' };
+  Object.keys(map).forEach(k => { const el = $('#' + k); if (el) el.value = map[k]; });
+  const mode = $('#vMode'); if (mode) mode.value = 'vision';
+  const en = $('#vEnabled'); if (en) en.checked = true;
+  toast('已沿用批改模型的端点/密钥，请确认模型名支持图片输入后点「保存配置」');
+}
+/* 连通性测试：发一张 1×1 图 + 指令，能返回文本即端点/密钥/模型可用 */
+const VISION_TEST_IMG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
+async function testVision() {
+  const box = $('#visionTest'); if (!box) return;
+  const v = visionCfg();
+  if (!(v.baseUrl && v.apiKey && v.model)) { box.style.display = 'block'; box.className = 'model-test err'; box.textContent = '请先填写完整的 Base URL / API Key / 视觉模型名'; return }
+  box.style.display = 'block'; box.className = 'model-test wait'; box.textContent = '正在测试识别通道…';
+  try {
+    const out = await callVision([VISION_TEST_IMG], '（连通性测试，只需回复“收到”二字）');
+    box.className = 'model-test ok';
+    box.textContent = '✓ 识别通道已连通（返回：' + String(out).slice(0, 40) + '）';
+  } catch (e) {
+    box.className = 'model-test err';
+    box.textContent = '✗ 失败：' + (e && e.message ? e.message : '未知错误') + '（若提示 CORS，需换支持浏览器直连的端点或经后端代理）';
+  }
+}
 function renderSettings() {
   const s = DATA.settings;
   const m = s.model || {};
+  const v = visionCfg();
   view().innerHTML = `
+    <div class="card mb"><div class="section-title">📷 作文自动识别（2.6.92 · 皮皮式流程）</div>
+      <div class="muted text-sm mb">启用后：小程序收稿或这里拍照 → <b>自动识别手写原文</b> → 老师核对 → 一键 AI 初批。需要一个支持<b>图片输入</b>的 OpenAI 兼容多模态模型（/chat/completions）。不启用则可手动输入/粘贴，功能不受影响。</div>
+      <div class="model-form">
+        <label>识别模式</label><select id="vMode">
+          <option value="vision" ${v.mode === 'vision' ? 'selected' : ''}>多模态模型自动识别</option>
+          <option value="off" ${v.mode !== 'vision' ? 'selected' : ''}>关闭（手动录入）</option>
+        </select>
+        <label>Base URL</label><input type="text" id="vBase" placeholder="https://your-endpoint/v1" value="${escapeHtml(v.baseUrl || '')}">
+        <label>API Key</label><input type="text" id="vKey" placeholder="sk-..." value="${escapeHtml(v.apiKey || '')}">
+        <label>视觉模型名</label><input type="text" id="vModel" placeholder="如支持图片输入的模型名" value="${escapeHtml(v.model || '')}">
+        <label>启用</label><label class="switch"><input type="checkbox" id="vEnabled" ${v.enabled ? 'checked' : ''}><span class="slider"></span></label>
+      </div>
+      <div class="test-row">
+        <button class="btn primary sm" onclick="saveVisionConfig()">保存配置</button>
+        <button class="btn sm" onclick="testVision()">测试识别</button>
+        <button class="btn sm ghost" onclick="copyModelToVision()">沿用批改模型端点</button>
+      </div>
+      <div id="visionTest" class="model-test" style="display:none"></div>
+      <div class="ocr-note mt">⚠️ 风险与部署建议：① 密钥保存在本浏览器 localStorage，公用电脑请勿保存；② 作文照片会外发到该模型服务，涉及未成年人作品，建议选用可信服务或私有化部署；③ 浏览器直连可能受 CORS 限制，若测试报 CORS，请换支持跨域的端点，或在教室桌面端/自建代理转发；④ 识别结果务必由老师核对后再批改，手写体难免有误差。</div>
+    </div>
     <div class="card mb"><div class="section-title">🔒 设置 / 隐私合规</div>
       <div class="switch-line"><div><b>学生姓名脱敏</b><div class="desc">调用 AI 前将真实姓名替换为化名（学生A/B…），保护未成年人隐私。强烈建议保持开启。</div></div><label class="switch"><input type="checkbox" ${s.desensitize ? 'checked' : ''} onchange="setSetting('desensitize',this.checked)"><span class="slider"></span></label></div>
-      <div class="switch-line"><div><b>拍照取景规范提示</b><div class="desc">在录入区显示方格纸贴框、本子放平等拍摄指引，提升 OCR 准确率。</div></div><label class="switch"><input type="checkbox" ${s.guides ? 'checked' : ''} onchange="setSetting('guides',this.checked)"><span class="slider"></span></label></div>
+      <div class="switch-line"><div><b>拍照取景规范提示</b><div class="desc">在录入区显示方格纸贴框、本子放平等拍摄指引，提升识别准确率。</div></div><label class="switch"><input type="checkbox" ${s.guides ? 'checked' : ''} onchange="setSetting('guides',this.checked)"><span class="slider"></span></label></div>
       <div class="row-actions mt"><button class="btn ghost" onclick="resetData()">重置演示数据</button></div>
     </div>
     <div class="card"><div class="section-title">🤖 自定义模型（一键配置 WorkBuddy）</div>
@@ -1195,6 +1452,10 @@ window.openCollectMaterial = openCollectMaterial; window.quickConfigWorkBuddy = 
 window.saveModelConfig = saveModelConfig; window.testModel = testModel;
 window.openStudent = openStudent; window.renderStudents = renderStudents;
 window.gotoGradeWithStudent = gotoGradeWithStudent;
+/* 2.6.92 作文自动识别 */
+window.saveVisionConfig = saveVisionConfig; window.testVision = testVision;
+window.copyModelToVision = copyModelToVision; window.rerunRecognition = rerunRecognition;
+window.runRecognition = runRecognition; window.visionReady = visionReady;
 
 /* =====================================================================
    集成 API（供宿主工作台 / 小程序 web-view 调用）
@@ -1230,16 +1491,21 @@ window.EssayGrader = {
           const box = prev.querySelector('.thumbs');
           imgs.forEach(src => { const im = new Image(); im.src = src; im.className = 'thumb'; im.title = '学生作文原文（小程序上传）'; box.appendChild(im); });
         }
-        const note = $('#ocrNote');
-        if (note) {
-          note.classList.remove('hidden');
-          note.textContent = imgs.length
-            ? `✓ 已带入 ${imgs.length} 张作文照片（学生原文）。请对照照片把作文文字抄录/粘贴到下方输入框，然后点「开始 AI 初批」。`
-            : '该篇没有照片，请把作文文字录入下方输入框，然后点「开始 AI 初批」。';
-        }
+        state.essayImages = imgs.slice();
+        state.ocrDone = false;
         const ta = $('#essayText');
-        if (ta) { ta.placeholder = '对照上方照片，把作文文字输入/粘贴到这里…'; ta.focus(); }
-        toast(opts.studentName ? ('已定位 ' + opts.studentName + ' 的《' + (opts.title || '未命名') + '》，录入文字即可批改') : '已带入收稿信息');
+        if (ta) { ta.placeholder = visionReady() ? '正在自动识别作文内容…' : '对照上方照片，把作文文字输入/粘贴到这里…'; }
+        /* 2.6.92 皮皮式流程：带入照片即自动识别；没配识别模型时给明确引导，
+           不再要求老师「对照照片抄录」，也绝不塞示例文本冒充识别结果。 */
+        if (imgs.length && visionReady()) {
+          runRecognition(imgs, { toast: false });
+          toast(opts.studentName ? ('已定位 ' + opts.studentName + '，正在自动识别《' + (opts.title || '未命名') + '》') : '已带入收稿信息，正在识别');
+        } else {
+          ocrNote('err', imgs.length
+            ? '已带入 ' + imgs.length + ' 张作文照片。启用「作文自动识别」后拍照即自动转录原文；当前可对照照片手动输入/粘贴。'
+            : '该篇没有照片，请把作文文字录入下方输入框，然后点「开始 AI 初批」。', !visionReady());
+          toast(opts.studentName ? ('已定位 ' + opts.studentName + ' 的《' + (opts.title || '未命名') + '》') : '已带入收稿信息');
+        }
       } catch (e) { console.warn('prefillGrade:', e); }
     }, 80);
     return true;
@@ -1254,6 +1520,17 @@ window.EssayGrader = {
   getStudents() { return DATA.classes[0].students.map(s => ({ id: s.id, name: s.name, profile: s.profile, ...analyzeStudent(s) })); },
   /** 配置自定义模型（一键 WorkBuddy） */
   config(opts) { Object.assign(DATA.settings.model, opts || {}); save(); },
+  /** 配置自动识别模型（宿主工作台可一键下发，免去逐个填表） */
+  configVision(opts) {
+    const v = visionCfg();
+    Object.assign(v, opts || {});
+    if (v.mode === 'vision' && v.enabled && v.baseUrl && v.apiKey && v.model) v.mode = 'vision';
+    save();
+    if (state.view === 'settings') renderSettings();
+    return visionReady();
+  },
+  /** 宿主直接把已有照片交给批改台识别（不经过 DOM 选图） */
+  recognize(images, target) { return runRecognition(images, { target: target || '#essayText' }); },
   setDesensitize(b) { DATA.settings.desensitize = !!b; save(); },
   setGuides(b) { DATA.settings.guides = !!b; save(); },
   /** 接入宿主已有班级数据：arr=[{id,name,profile?}] */
