@@ -449,7 +449,7 @@ function renderDashboard() {
 function statCard(icon, num, label, chip) {
   return `<div class="card stat"><div class="icon">${icon}</div><div class="num">${num}</div><div class="label">${label}</div><div class="chip">${chip}</div></div>`;
 }
-function scoreColor(s) { return s >= 90 ? '#16a34a' : s >= 80 ? '#2f6fed' : s >= 70 ? '#f59e0b' : '#ef4444'; }
+function scoreColor(s) { return s >= 90 ? '#1a9c5b' : s >= 80 ? '#3fbf84' : s >= 70 ? '#f59e0b' : '#ef4444'; }
 
 /* ---------- 批改工作台 ---------- */
 function renderGrade() {
@@ -737,13 +737,13 @@ function radarChart(dims) {
   const cx = 160, cy = 150, R = 100, N = keys.length;
   const pt = (i, r) => { const ang = -Math.PI / 2 + i * 2 * Math.PI / N; return [cx + r * Math.cos(ang), cy + r * Math.sin(ang)]; };
   let rings = '';
-  [0.25, 0.5, 0.75, 1].forEach(rr => { const p = keys.map((_, i) => pt(i, R * rr).join(',')).join(' '); rings += `<polygon points="${p}" fill="none" stroke="#e6ebf4" stroke-width="1"/>`; });
+  [0.25, 0.5, 0.75, 1].forEach(rr => { const p = keys.map((_, i) => pt(i, R * rr).join(',')).join(' '); rings += `<polygon points="${p}" fill="none" stroke="#e2ece7" stroke-width="1"/>`; });
   let axes = '';
-  keys.forEach((_, i) => { const [x, y] = pt(i, R); axes += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#e6ebf4"/>`; });
+  keys.forEach((_, i) => { const [x, y] = pt(i, R); axes += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#e2ece7"/>`; });
   const dataPts = vals.map((v, i) => pt(i, R * v / 100).join(',')).join(' ');
   let labelsSvg = '';
-  keys.forEach((_, i) => { const [x, y] = pt(i, R + 20); labelsSvg += `<text x="${x}" y="${y}" font-size="11" fill="#6b7280" text-anchor="middle" dominant-baseline="middle">${labels[i]}\n${vals[i]}</text>`; });
-  return `<svg class="radar" viewBox="0 0 320 300" width="100%">${rings}${axes}<polygon points="${dataPts}" fill="rgba(47,111,237,.18)" stroke="#2f6fed" stroke-width="2"/>${labelsSvg}</svg>`;
+  keys.forEach((_, i) => { const [x, y] = pt(i, R + 20); labelsSvg += `<text x="${x}" y="${y}" font-size="11" fill="#76867e" text-anchor="middle" dominant-baseline="middle">${labels[i]}\n${vals[i]}</text>`; });
+  return `<svg class="radar" viewBox="0 0 320 300" width="100%">${rings}${axes}<polygon points="${dataPts}" fill="rgba(26,156,91,.18)" stroke="#1a9c5b" stroke-width="2"/>${labelsSvg}</svg>`;
 }
 function renderInsight() {
   const a = analyzeClass();
@@ -1053,7 +1053,7 @@ function resetData() { localStorage.removeItem(STORE_KEY); DATA = seed(); save()
 function studentTier(avg) {
   if (avg >= 90) return { key: 'top', name: '拔尖层', color: '#7c3aed', goal: '拔高冲刺：在语言文采与立意深度上精进，冲刺一类文、争作范文。' };
   if (avg >= 80) return { key: 'good', name: '优良层', color: '#16a34a', goal: '稳步提升：保持优势，精修细节、结构与书写，向优秀迈进。' };
-  if (avg >= 70) return { key: 'pass', name: '达标层', color: '#2f6fed', goal: '夯实基础：强化分段意识、书写规范与字数达标，巩固合格线。' };
+  if (avg >= 70) return { key: 'pass', name: '达标层', color: '#1a9c5b', goal: '夯实基础：强化分段意识、书写规范与字数达标，巩固合格线。' };
   return { key: 'lift', name: '待提升层', color: '#ef4444', goal: '基础补漏：先攻克错别字、把句子写通顺、达到年段字数要求。' };
 }
 const DIM_TRAIN = {
@@ -1102,9 +1102,9 @@ function trendChart(essays) {
   const xs = i => pad + (n === 1 ? W / 2 : i * (W - 2 * pad) / (n - 1));
   const ys = v => H - pad - v * (H - 2 * pad) / 100;
   const line = data.map((e, i) => `${xs(i).toFixed(1)},${ys(e.total).toFixed(1)}`).join(' ');
-  const dots = data.map((e, i) => `<circle cx="${xs(i).toFixed(1)}" cy="${ys(e.total).toFixed(1)}" r="3.5" fill="#2f6fed"/><text x="${xs(i).toFixed(1)}" y="${(ys(e.total) - 9).toFixed(1)}" font-size="9" fill="#6b7280" text-anchor="middle">${e.total}</text>`).join('');
+  const dots = data.map((e, i) => `<circle cx="${xs(i).toFixed(1)}" cy="${ys(e.total).toFixed(1)}" r="3.5" fill="#1a9c5b"/><text x="${xs(i).toFixed(1)}" y="${(ys(e.total) - 9).toFixed(1)}" font-size="9" fill="#76867e" text-anchor="middle">${e.total}</text>`).join('');
   const labels = data.map((e, i) => `<text x="${xs(i).toFixed(1)}" y="${H - 9}" font-size="8" fill="#9aa3b2" text-anchor="middle">${e.date.slice(5)}</text>`).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%"><line x1="${pad}" y1="${H - pad}" x2="${W - pad}" y2="${H - pad}" stroke="#e6ebf4"/><line x1="${pad}" y1="${pad}" x2="${pad}" y2="${H - pad}" stroke="#e6ebf4"/><polyline points="${line}" fill="none" stroke="#2f6fed" stroke-width="2"/>${dots}${labels}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%"><line x1="${pad}" y1="${H - pad}" x2="${W - pad}" y2="${H - pad}" stroke="#e2ece7"/><line x1="${pad}" y1="${pad}" x2="${pad}" y2="${H - pad}" stroke="#e2ece7"/><polyline points="${line}" fill="none" stroke="#1a9c5b" stroke-width="2"/>${dots}${labels}</svg>`;
 }
 function renderStudents() {
   const cls = DATA.classes[0];
@@ -1123,7 +1123,7 @@ function renderStudents() {
   view().innerHTML = `
     <div class="card mb"><div class="section-title">🎯 学生个性化分析</div>
       <div class="muted text-sm mb">基于每位学生已批作文，自动生成<b>能力分层</b>、<b>分层训练方案</b>与<b>习作进度追踪</b>。点学生卡片查看详情。</div>
-      <div class="tier-legend">${['拔尖层', '优良层', '达标层', '待提升层'].map((t, i) => `<span class="tier-legend-item"><i style="background:${['#7c3aed', '#16a34a', '#2f6fed', '#ef4444'][i]}"></i>${t}</span>`).join('')}</div>
+      <div class="tier-legend">${['拔尖层', '优良层', '达标层', '待提升层'].map((t, i) => `<span class="tier-legend-item"><i style="background:${['#7c3aed', '#16a34a', '#1a9c5b', '#ef4444'][i]}"></i>${t}</span>`).join('')}</div>
     </div>
     <div class="grid cols-4">${cards}</div>`;
 }
