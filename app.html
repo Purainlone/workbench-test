@@ -124,6 +124,12 @@ body.essay-full #essayDrafts{max-height:126px}
 body.essay-full #s-essay .chartbox{padding:8px 10px;margin-bottom:0}
 #essayFrame{height:calc(100vh - 300px)!important}
 body.essay-full #essayFrame{height:calc(100vh - 226px)!important}
+/* 2.6.90 皮皮改作文外接视图：与自有批改台二选一显示 */
+#s-essay #ppWrap{display:none}
+#s-essay.pp-on #ppWrap{display:block}
+#s-essay.pp-on #essayFrame{display:none!important}
+#ppFrame{height:calc(100vh - 348px)!important}
+body.essay-full #ppFrame{height:calc(100vh - 274px)!important}
 
 /* 课程表 */
 table.tt{width:100%;border-collapse:collapse;font-size:13px}
@@ -2302,13 +2308,25 @@ table.paper td.l{text-align:left;font-weight:600}
         <button class="btn2 sm" onclick="essayNav('grade')">✍️ 批改</button>
         <button class="btn2 sm" onclick="essayNav('students')">🎯 学生分析</button>
         <button class="btn2 sm" onclick="essayNav('insight')">📈 班级学情</button>
+        <button class="btn2 sm" id="ppToggleBtn" onclick="ppToggle()">🟠 皮皮批</button>
         <button class="btn2 sm" id="essayFullBtn" onclick="essayFullToggle()">⤡ 退出全屏</button>
       </span></h2>
-    <div class="sub">手机小程序「作文上传」拍照/扫码录入 → 这里收稿、批改、分析。批改保存后自动写回云端，多端可见 · 模块数据保存在本浏览器</div>
+    <div class="sub">手机小程序「作文上传」拍照/扫码录入 → 这里收稿、批改、分析。批改保存后自动写回云端，多端可见 · 模块数据保存在本浏览器 · 也可以点学生行「🟠 皮皮批」直接交给皮皮改作文（手写识别 + AI 批改）</div>
     <div id="essayDrafts" style="max-height:172px;overflow:auto;padding-right:4px"></div>
-    <div class="sctip" style="margin:8px 0 0">💡 批改三步：点「✍️ 去批改」自动带入学生和作文照片 → 对照照片把文字录入左栏输入框 → 点「🤖 开始 AI 初批」，核对分数和评语后「保存归档」，结果自动回传云端（小程序可见）。</div>
+    <div class="sctip" style="margin:8px 0 0">💡 批改三步：点「✍️ 去批改」自动带入学生和作文照片 → 对照照片把文字录入左栏输入框 → 点「🤖 开始 AI 初批」，核对分数和评语后「保存归档」，结果自动回传云端（小程序可见）。点「🟠 皮皮批」则切到皮皮改作文（首次在框内登录一次即可），点学生的「🟠 皮皮批」直达该生该篇的批改页。</div>
     <div class="chartbox" style="margin:12px 0 0">
       <iframe id="essayFrame" title="作文批改工作台" style="width:100%;height:calc(100vh - 300px);border:0;background:#fff;display:block" src="about:blank"></iframe>
+      <div id="ppWrap">
+        <div style="display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap;background:#fffdf8">
+          <button class="btn2 sm" onclick="ppBack()">← 我的批改台</button>
+          <span style="font-size:12.5px;color:#5a6b7a">皮皮班级名：</span>
+          <input id="ppClsInput" placeholder="如：六3班" style="width:110px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;font-size:12.5px" onchange="ppSaveCls()" onblur="ppSaveCls()">
+          <span id="ppState" style="font-size:12px;color:#8a5a2d"></span>
+          <span style="flex:1"></span>
+          <button class="btn2 sm" onclick="ppHome()">🏠 皮皮首页</button>
+        </div>
+        <iframe id="ppFrame" title="皮皮改作文" style="width:100%;height:calc(100vh - 348px);border:0;background:#fff;display:block" src="about:blank"></iframe>
+      </div>
     </div>
   </section>
 
@@ -16070,7 +16088,7 @@ try {
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
 var WB_MY_VER = '优化版 vT39 · 班级守护';
-var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.89';
+var WB_BUILD_DATE = '11-04', WB_BUILD_NO = '2.6.90';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -18170,6 +18188,70 @@ function essayFullToggle() {
   if (btn) btn.textContent = document.body.classList.contains('essay-full') ? '⤡ 退出全屏' : '⤢ 全屏';
 }
 
+/* ============ 2.6.90 皮皮改作文外接（ppessay.com） ============
+   皮皮页面未设 X-Frame-Options，可直接内嵌；登录态存它自己域的
+   localStorage（首次在框里登录一次即可，之后免登录）。
+   deep-link：/submission.html?class=班级&student=姓名&assignment=作业题 */
+var PP_BASE = 'https://ppessay.com/';
+function ppCfg() { try { return JSON.parse(localStorage.getItem('wb_pp_cfg') || '{}') || {} } catch (e) { return {} } }
+function ppSaveCls() {
+  var el = document.getElementById('ppClsInput'); if (!el) return;
+  var cfg = ppCfg(); cfg.cls = String(el.value || '').trim();
+  try { localStorage.setItem('wb_pp_cfg', JSON.stringify(cfg)) } catch (e) {}
+  var st = document.getElementById('ppState');
+  if (st) st.textContent = cfg.cls ? ('直达班级：' + cfg.cls) : '';
+}
+function ppSyncToolbar() {
+  var el = document.getElementById('ppClsInput'); if (!el) return;
+  var cfg = ppCfg(); el.value = cfg.cls || '';
+  var st = document.getElementById('ppState');
+  if (st) st.textContent = cfg.cls ? ('直达班级：' + cfg.cls) : '填班级名后，点学生行「皮皮批」可直达';
+}
+function ppEnsure() {
+  var f = document.getElementById('ppFrame');
+  if (f && (!f.src || f.src === 'about:blank' || f.getAttribute('src') === 'about:blank')) f.src = PP_BASE + 'app.html';
+}
+function ppToggle() {
+  var sec = document.getElementById('s-essay'); if (!sec) return;
+  var on = sec.classList.toggle('pp-on');
+  var btn = document.getElementById('ppToggleBtn');
+  if (btn) btn.textContent = on ? '🟠 皮皮批 ✓' : '🟠 皮皮批';
+  if (on) { ppEnsure(); ppSyncToolbar(); }
+}
+function ppBack() {
+  var sec = document.getElementById('s-essay'); if (sec) sec.classList.remove('pp-on');
+  var btn = document.getElementById('ppToggleBtn');
+  if (btn) btn.textContent = '🟠 皮皮批';
+}
+function ppGo(cls, student, assignment) {
+  cls = String(cls || '').trim(); student = String(student || '').trim(); assignment = String(assignment || '').trim();
+  if (!cls) {
+    ppToggle(); ppSyncToast('先在上方填「皮皮班级名」（和皮皮里的班级名一致，如：六3班）');
+    var el = document.getElementById('ppClsInput'); if (el) el.focus();
+    return;
+  }
+  try { var cfg = ppCfg(); cfg.cls = cls; localStorage.setItem('wb_pp_cfg', JSON.stringify(cfg)) } catch (e) {}
+  var sec = document.getElementById('s-essay');
+  if (sec && !sec.classList.contains('pp-on')) ppToggle();
+  var f = document.getElementById('ppFrame');
+  if (f) f.src = PP_BASE + 'submission.html?class=' + encodeURIComponent(cls) +
+    '&student=' + encodeURIComponent(student) + '&assignment=' + encodeURIComponent(assignment);
+}
+function ppHome() {
+  var f = document.getElementById('ppFrame'); if (f) f.src = PP_BASE + 'app.html';
+}
+function ppSyncToast(msg) { try { toastMsg(msg) } catch (e) { alert(msg) } }
+
+/* 学生行直达：把收稿记录的标题当皮皮的「作业题」，姓名当学生 */
+function essayOpenPipi(name, rid) {
+  var rec = null;
+  (essayAll() || []).forEach(function (r) { if (String(r.id) === String(rid)) rec = r; });
+  var cls = ppCfg().cls || '';
+  var title = (rec && rec.title) || '';
+  if (!title) { ppSyncToast('这篇还没填作文题，先在批改台里补标题，或到皮皮首页手动选'); ppToggle(); return }
+  ppGo(cls, name, title);
+}
+
 function essayRenderDrafts() {
   var box = document.getElementById('essayDrafts'); if (!box) return;
   var list = essayAll().slice().sort(function (a, b) { return (Number(b.ts) || 0) - (Number(a.ts) || 0) });
@@ -18195,6 +18277,7 @@ function essayRenderDrafts() {
       '<span style="font-size:12.5px;color:#5a6b7a">《' + essEsc(r.title || '未命名') + '》· ' + essEsc(r.date || '') + '</span>' + st +
       '<span style="flex:1"></span>' +
       '<button class="btn2 sm primary" onclick="essayOpenGrade(\'' + essEsc(r.name) + '\',' + sid + ',\'' + essEsc(r.id) + '\')">✍️ 去批改</button>' +
+      '<button class="btn2 sm" onclick="essayOpenPipi(\'' + essEsc(r.name) + '\',\'' + essEsc(r.id) + '\')" title="在皮皮改作文里批这篇（直达该生该篇）">🟠 皮皮批</button>' +
       '<button class="btn2 sm danger" onclick="essayDelAsk(\'' + essEsc(r.id) + '\')">🗑</button>' +
       '</div>';
   }).join('');
