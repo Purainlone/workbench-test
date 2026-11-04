@@ -12060,6 +12060,48 @@ function hwTomAddKey(k){
     if(typeof tomSave==='function')tomSave(a);
   }catch(e){}
 }
+/* vT52 作业【记录级】墓碑键：姓名|作业名|日期 —— 与 recBizKey / 小程序 _hwKey 同一套口径。
+   根因复盘：「先登完再取消」之所以「数据总是自动恢复成登记状态」，
+   是因为取消只删了飞书那一条记录，而 Gitee doc.tables.hw 里上一轮快照还在 ——
+   下一轮同步按业务键找不到这条 → 当成「本机缺失」重新插回去 → 复活。
+   光删记录不够，必须同时写墓碑，各端合并时按墓碑跳过，云端残留也会被清掉。
+   姓名用 tomNorm（与小程序 nameKey 完全一致），作业名双写（原样 + 小写），
+   任一端写出来的墓碑都能被另一端命中。 */
+function hwRecTomKeys(name,item,date){
+  var nm=tomNorm(name);
+  var it=String(item==null?'':item).replace(/\s+/g,'');
+  var dt=hwDateKey(date)||hwDateOnly(date);
+  if(!nm||!it||!dt)return [];
+  var out=[];
+  function push(b){var k=nm+'|'+b+'|'+dt;if(out.indexOf(k)<0)out.push(k)}
+  push(it);                       /* 原样作业名：小程序按原样比对 */
+  push(it.toLowerCase());         /* 小写作业名：网页端比对口径 */
+  return out;
+}
+/* 取消登记 → 写墓碑 */
+function hwTomAddRec(name,item,date){
+  var ks=hwRecTomKeys(name,item,date);
+  for(var i=0;i<ks.length;i++)hwTomAddKey(ks[i]);
+  return ks.length;
+}
+/* 重新登记 → 撤墓碑（vT49 改名的同一教训：
+   「登记 → 取消 → 再登记」时旧墓碑还挂着，会把刚登记的这条当成已删除而静默丢失） */
+function hwTomDropRec(name,item,date){
+  var ks=hwRecTomKeys(name,item,date);
+  if(!ks.length)return 0;
+  var low=ks.map(function(k){return k.toLowerCase()});
+  var a=tomLoad(),out=[],hit=0;
+  for(var i=0;i<a.length;i++){
+    var x=a[i];
+    if(x&&x.t==='hw'&&x.k&&x.k.indexOf('|col|')!==0){
+      var kk=String(x.k).replace(/\s+/g,'').toLowerCase();
+      if(low.indexOf(kk)>=0){hit++;continue}
+    }
+    out.push(x);
+  }
+  if(hit)tomSave(out);
+  return hit;
+}
 function hwDeleteColumn(name,date){
   if(!name)return;
   var dk=hwSubjKey(name,date);
@@ -12112,6 +12154,11 @@ function hwToggleCell(td,name,item){
   var task;
   if(had&&oldLv===HW_LV){
     /* 同等级再点 = 取消 */
+    /* vT52 关键修复：取消必须【先写记录级墓碑】再删飞书记录。
+       只删记录的话，Gitee doc.tables.hw 里上一轮快照还在，下一轮同步会把它
+       当成「本机缺失」重新插回去 —— 表现就是「取消后又自动恢复成已登记」。
+       墓碑会随 doc.deletes 透传到小程序/科任端，各端都不会再复活这条。 */
+    hwTomAddRec(name,item.name,item.date);
     task=db.deleteRecord({databaseId:'fCfl0cuMIVzFDi0iDuAEv2',recordId:rid})
       .then(function(){HW_ROWS=HW_ROWS.filter(function(x){return recId(x)!==rid})},
             function(err){throw err});
@@ -12120,6 +12167,8 @@ function hwToggleCell(td,name,item){
       properties:{'等级':{select:HW_LV},'分值':{number:HW_SCORE[HW_LV]},'备注':{text:''}}})
       .then(function(){
         HW_ROWS.forEach(function(x){if(recId(x)===rid){x['等级']=HW_LV;x['分值']=HW_SCORE[HW_LV]}});
+        /* vT52：重新登记 → 撤掉之前的「取消」墓碑，否则这条会被墓碑当成已删除 */
+        hwTomDropRec(name,item.name,item.date);
       },function(err){throw err});
   }else{
     task=db.addRecord({databaseId:'fCfl0cuMIVzFDi0iDuAEv2',properties:{
@@ -12133,6 +12182,8 @@ function hwToggleCell(td,name,item){
       if(!(r&&r.id))throw new Error('addRecord 未返回 id');
       HW_ROWS.push({id:r.id,'日期':item.date,'作业名称':item.name,'学生姓名':name,'等级':HW_LV,'分值':HW_SCORE[HW_LV]});
       hwSubjSet(item.name,item.date,item.subject||'语文');   /* 记住本列科目，工作台主页据此过滤 */
+      /* vT52：新建登记 → 撤掉之前的「取消」墓碑（「登记→取消→再登记」要能活回来） */
+      hwTomDropRec(name,item.name,item.date);
     },function(err){throw err});
   }
   task.then(function(){
@@ -15295,10 +15346,21 @@ function hwColTombSet(){
   }catch(e2){}
   return s;
 }
-/* vT28 记录级作业墓碑集合（本机 ∪ 远端）：键 = 姓名(去空格,小写)|作业名(去空格,小写)|日期 */
+/* vT28 记录级作业墓碑集合（本机 ∪ 远端）：键 = 姓名(去空格,小写)|作业名(去空格,小写)|日期
+   vT52：统一归一口径 —— 姓名走 tomNorm（与小程序 nameKey 完全一致：去空白/全角转半角/异体字合并/小写），
+   作业名去空白并小写，日期走 hwDateKey。这样不管墓碑是网页端、小程序端还是科任端写的，
+   归一后都是同一个键，命中判定不会因为大小写/空白/异体字差一点点而漏判。 */
 function hwRecTombSet(){
   var s={};
-  function add(k){ if(k) s[String(k).toLowerCase()]=1 }
+  function add(k){
+    if(!k)return;
+    var p=String(k).split('|');
+    if(p.length>=3){
+      var nm=tomNorm(p[0]), it=String(p[1]).replace(/\s+/g,'').toLowerCase(), dt=hwDateKey(p[2]);
+      if(nm&&it&&dt){s[nm+'|'+it+'|'+dt]=1;return}
+    }
+    s[String(k).replace(/\s+/g,'').toLowerCase()]=1;
+  }
   try{
     (typeof tomLoad==='function'?tomLoad():[]).forEach(function(x){
       if(x&&x.t==='hw'&&x.k&&x.k.indexOf('|col|')!==0) add(x.k);
@@ -15315,7 +15377,11 @@ function hwRecTombSet(){
   }catch(e2){}
   return s;
 }
-/* vT28：从一条作业记录里取出「列键」和「记录键」（不依赖 recBizKey/表 ID 匹配） */
+/* vT28：从一条作业记录里取出「列键」和「记录键」（不依赖 recBizKey/表 ID 匹配）
+   vT52：记录键的姓名改用 tomNorm，与 hwRecTombSet 的归一完全对齐；
+   同时兼容 Gitee doc.tables.hw 的【扁平结构】（item/name/date）——
+   以前只认飞书的「作业名称/学生姓名/日期」，所以从 Gitee 拉回来的行算不出记录键，
+   墓碑过滤对云端行形同虚设（这正是「取消后又被并回来」的另一个漏口）。 */
 function hwRecKeys(rec){
   var p=(rec&&rec.properties)||rec||{};
   function hv(k){
@@ -15323,9 +15389,12 @@ function hwRecKeys(rec){
     if(x&&typeof x==='object')return String(x.text!=null?x.text:(x.date!=null?x.date:(x.select!=null?x.select:(x.value!=null?x.value:''))));
     return String(x==null?'':x);
   }
-  var it=String(hv('作业名称')||'').replace(/\s+/g,'').toLowerCase();
-  var dt=hwDateKey(hv('日期'));
-  var nm=String(hv('学生姓名')||'').replace(/\s+/g,'').toLowerCase();
+  var itemRaw=hv('作业名称')||p.item||p['作业名']||'';
+  var nameRaw=hv('学生姓名')||p.name||p['姓名']||'';
+  var dateRaw=hv('日期')||p.date||p['打卡日期']||'';
+  var it=String(itemRaw||'').replace(/\s+/g,'').toLowerCase();
+  var dt=hwDateKey(dateRaw);
+  var nm=tomNorm(nameRaw);
   return { col:(it&&dt)?(it+'|'+dt):'', rec:(nm&&it&&dt)?(nm+'|'+it+'|'+dt):'' };
 }
 function tomKey(sub, exam, name, date) { return [sub || '', exam || '', tomNorm(name), String(date || '').slice(0, 10)].join('|') }
@@ -17601,6 +17670,9 @@ function mpFromDeskBuild(o) {
      这是最后一道保险 —— 万一飞书删除失败或合并时序竞争，被删的列也绝不再写回 Gitee，
      否则其它端（小程序/科任/桌面）又会把它拉回来。 */
   var _ct = (typeof hwColTombSet === 'function') ? hwColTombSet() : {};
+  /* vT52：回写 Gitee 前再剔一次「记录级作业墓碑」命中的登记 ——
+     已取消的登记绝不能被写回 doc.tables.hw，否则小程序/科任端下一轮又会拉回来。 */
+  var _rt = (typeof hwRecTombSet === 'function') ? hwRecTombSet() : {};
   /* ---------- 2.6.15 出口按键去重（治本之一）----------
      反复写脏数据的源头：云端数据表（Bitable）里堆着历史重复记录
      （学生 67 条实际 51 人、作业/诵读同理）。以前这里原样读出，
@@ -17621,8 +17693,12 @@ function mpFromDeskBuild(o) {
         var hi = String(dv(p, '作业名称') || '').replace(/\s+/g, '');
         if (!nm || !hi) return true;
         var _hd = (typeof hwDateKey === 'function') ? hwDateKey(dv(p, '日期')) : String(dv(p, '日期') || '').slice(0, 10);
+        var _hiL = hi.toLowerCase();
         /* vT28 整列删除墓碑：被删列的登记绝不回写（日期/大小写统一归一后比对） */
-        if (_ct[hi.toLowerCase() + '|' + _hd]) return false;
+        if (_ct[_hiL + '|' + _hd]) return false;
+        /* vT52 记录级墓碑：被「取消」的登记绝不回写（否则下一轮同步又复活） */
+        var _rn = (typeof tomNorm === 'function') ? tomNorm(nm) : nm.toLowerCase();
+        if (_rn && _rt[_rn + '|' + _hiL + '|' + _hd]) return false;
         k = 'hw|' + nm + '|' + hi + '|' + _hd;
       } else if (String(tid) === String(MP_SYNC.rc.table)) {
         var rt = String(dv(p, '篇目') || '').replace(/\s+/g, '');
