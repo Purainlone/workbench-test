@@ -111,6 +111,13 @@ nav button.active{background:linear-gradient(135deg,var(--primary),var(--primary
 .hm-hwlist .it .dt{font-weight:500;color:#a8814a;margin-left:8px;font-size:12px}
 .hm-hwlist .nm{display:block;font-size:17px;font-weight:700;color:#c2410c;line-height:1.9;letter-spacing:.3px}
 .hm-hwlist .nm b{color:#dc2626}
+/* vT53 首页「本周作业『差』」榜 */
+.hm-cha-tag{font-size:12px;font-weight:700;color:#c0392b;background:#fdeceb;border-radius:8px;padding:2px 10px}
+.hm-cha-chips{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 10px}
+.hm-cha-chip{display:inline-flex;align-items:center;font-size:14px;color:#7a2f27;background:#fff5f4;border:1px solid #f6d5d1;border-radius:10px;padding:5px 12px;transition:.12s}
+.hm-cha-chip:hover{background:#ffe9e7;border-color:#e8a9a2}
+.hm-cha-chip b{color:#c0392b;font-weight:700;margin-left:6px}
+.hm-cha-tip{font-size:12px;color:#a8b4ac}
 main{flex:1;min-width:0;padding:24px 28px}   /* 2.6.91 去掉 max-width:1200px：宽屏铺满，右下角不再留大片空白 */
 h2{font-size:19px;margin-bottom:6px}
 .sub{color:var(--muted);font-size:13px;margin-bottom:18px}
@@ -1243,7 +1250,7 @@ table.paper td.l{text-align:left;font-weight:600}
 <body data-page-node-id="VWm2YCKhwxOUBWSlexIaam">
 <aside data-page-node-id="uyTdXvcdMMBT8HJ1ZWRO9X">
   <div data-page-node-id="YkELpTUKfJkpu7qzDPa66K" class="logo"><!--pnid:7ytoUsgxIUXQsQNXnaE57T-->教师工作台</div>
-  <div class="verline" id="appVer">✨ 教室桌面 v2.6.91 · 便签显示在线 + 远程控制</div>
+  <div class="verline" id="appVer">✨ 教室桌面 v2.6.94 · 首页差榜 + 桌面便签留堂</div>
   <nav data-page-node-id="ljZdrlGNjxdpectAoWjkyv" id="nav">
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS" class="active" data-s="home">🏠 <span class="lbl">今日首页</span></button>
 
@@ -14066,6 +14073,45 @@ function hmHwUndone(){
           overN:over.reduce(function(s,v){return s+v.und.length},0),
           total:total,exN:exN};
 }
+/* vT53 本周作业质量「差」榜：周一至今按人计次，每周一自然清零。
+   与小程序首页 / 教室大屏同一口径（都只看本周、都按登记过的「差」计数，不做任何排除）。
+   数据源要同时看飞书 HW_ROWS 与 Gitee 快照 HW_GITEE_HW ——
+   科任老师在别端登记的「差」只会回流到 Gitee，网页端只读飞书会漏人。
+   ⚠️ 但同一条登记在飞书和 Gitee 里都会有一份（网页端自己写的会两边都落），
+      必须按「作业名+日期+姓名」去重，否则一次「差」被算两次。 */
+function hmHwCha(){
+  var ws=hmWeekStart(new Date()),we=new Date(ws.getTime()+7*864e5);
+  var wsS=ymd(ws),weS=ymd(we);
+  var map={},seen={};
+  function add(nm,it,dt){
+    var n=String(nm==null?'':nm).replace(/\s+/g,'').trim();
+    var d=hwDateOnly(dt);
+    if(!n||!d)return;
+    if(d<wsS||d>=weS)return;
+    var i=String(it==null?'':it).replace(/\s+/g,'').toLowerCase();
+    var k=n+'|'+i+'|'+d;
+    if(seen[k])return;          /* 同一「谁·哪项作业·哪天」只算一次 */
+    seen[k]=1;
+    map[n]=(map[n]||0)+1;
+  }
+  try{
+    (typeof HW_ROWS!=='undefined'?HW_ROWS:[]).forEach(function(r){
+      if(!r)return;
+      if(String(fval(r,'等级')||'')!=='差')return;
+      add(fval(r,'学生姓名'),fval(r,'作业名称'),fval(r,'日期'));
+    });
+  }catch(e){}
+  try{
+    (typeof HW_GITEE_HW!=='undefined'&&HW_GITEE_HW?HW_GITEE_HW:[]).forEach(function(r){
+      if(!r||String(r.level||'')!=='差')return;
+      add(r.name,r.item,r.date);
+    });
+  }catch(e2){}
+  var list=Object.keys(map).map(function(n){return {name:n,n:map[n]}});
+  list.sort(function(a,b){return b.n-a.n||String(a.name).localeCompare(String(b.name),'zh')});
+  var tot=0;list.forEach(function(x){tot+=x.n});
+  return {list:list,total:tot,from:wsS};
+}
 /* 渲染一个分组（本周 / 过往） */
 function hmHwGroup(title,items){
   var box=el('div','hm-hwgrp');
@@ -14284,6 +14330,43 @@ function renderHome(){
     }
   }catch(e){console.error('[首页] 未交作业卡片失败',e)}
 
+  /* ---------- vT53 本周作业「差」榜（周一至今按人计次，下周一自动清零） ----------
+     与小程序首页 / 教室大屏同一口径。放在「未交作业」卡下面 —— 老师一眼能看到
+     「本周谁被记了差」，点名字直接跳到作业登记去补登记/改等级。 */
+  try{
+    var cha=hmHwCha();
+    if(cha.list.length){
+      var cCha=el('div','hm-card hm-cha-card');
+      cCha.style.marginBottom='16px';
+      cCha.style.border='2px solid #e8a9a2';
+      cCha.style.boxShadow='0 2px 12px rgba(192,57,43,.14)';
+      var hdCha=el('div','hm-hd');
+      hdCha.appendChild(el('h4',null,'⚠️ 本周作业「差」'));
+      var chaRight=el('div');
+      chaRight.style.cssText='display:flex;gap:8px;align-items:center';
+      chaRight.appendChild(el('span','hm-cha-tag',cha.list.length+' 人 · '+cha.total+' 次'));
+      var mCha=el('button','more','去作业登记 →');
+      mCha.type='button';
+      mCha.onclick=function(){hmGo('hw')};
+      chaRight.appendChild(mCha);
+      hdCha.appendChild(chaRight);
+      cCha.appendChild(hdCha);
+      var chips=el('div','hm-cha-chips');
+      cha.list.forEach(function(x){
+        var chip=el('span','hm-cha-chip');
+        chip.appendChild(document.createTextNode(x.name));
+        chip.appendChild(el('b',null,'×'+x.n));
+        chip.title='本周有 '+x.n+' 次作业被记「差」· 点击去作业登记';
+        chip.style.cursor='pointer';
+        chip.onclick=function(){hmGo('hw')};
+        chips.appendChild(chip);
+      });
+      cCha.appendChild(chips);
+      cCha.appendChild(el('div','hm-cha-tip',cha.from+' 起统计（周一至今），下周一自动清零 · 与教室大屏、小程序首页同一口径'));
+      gf.appendChild(cCha);
+    }
+  }catch(e2){console.error('[首页] 本周作业「差」榜失败',e2)}
+
   /* ---------- 2.5 班务上还没跟完的事 ---------- */
   try{
     var cwTodo=((typeof CW_ROWS!=='undefined'&&CW_ROWS)||[]).map(function(r){
@@ -14426,7 +14509,7 @@ function hmTodayMyClasses(now){
    开关与显示项存在 localStorage：wb_desktag（on / date / alert / tt / hw / 位置）。 */
 var DT_WIN=null;
 function dtCfg(){
-  var d={on:1,date:1,alert:1,tt:1,hw:1,desk:1,w:340,h:640,x:null,y:null};
+  var d={on:1,date:1,alert:1,tt:1,hw:1,dt:1,desk:1,w:340,h:640,x:null,y:null};
   try{var s=JSON.parse(localStorage.getItem('wb_desktag')||'{}');for(var k in s)if(k in d)d[k]=s[k]}catch(e){}
   return d;
 }
@@ -14504,10 +14587,29 @@ function dtData(){
   return {date:(now.getMonth()+1)+'月'+now.getDate()+'日',wd:hmWDName(now),week:NOW_WEEK,
           duty:dtDuty(now),memos:dtMemos(now),now:tt.now,next:tt.next,my:tt.my,
           hw:hw,cfg:dtCfg(),ts:now.getTime(),
+          /* vT53 今日留堂（s-detain）：桌面便签也要一眼看到今天谁留堂。
+             数据与教室大屏、家长端同源 —— 都是 s-detain 表当天未删除的记录。 */
+          detain:dtTagDetainNames(),
           /* vT51 教室桌面在线状态：桌面标签小窗要显示「教室端在线/离线」。
              来源 = 主窗口的 window.__deskPresence（MQTT presence 通道收到的心跳）。
              小窗是通过 op.dtData() 从主窗口取数的（同源直读），所以这里直接读主窗口的全局即可。 */
           desk:dtDeskPresence()};
+}
+/* vT53 今日留堂名单（当天、未删除、去重）
+   ⚠️ 名字不能叫 dtDetainToday —— vT16 留堂模块（IIFE 内）已占用该名，语义不同
+      （那个返回日期选择框的值）。vT29 教训：跨 <script> 块同名符号会互相覆盖。 */
+function dtTagDetainNames(){
+  var out=[];
+  try{
+    var d=dtDayStr(new Date());
+    (typeof ntRows==='function'?ntRows('s-detain'):[]).forEach(function(r){
+      if(!r||r.deleted||!r.name)return;
+      if(String(r.date||'').slice(0,10)!==d)return;
+      var n=String(r.name).replace(/\s+/g,'').trim();
+      if(n&&out.indexOf(n)<0)out.push(n);
+    });
+  }catch(e){}
+  return out;
 }
 /* vT51 教室端在线状态（桌面标签 + 教室桌面模块共用一份口径）
    ⚠️ 在线判定不能只看 state：presence 是 60 秒一次心跳，若中途断网，
@@ -14587,6 +14689,16 @@ function dtRenderHTML(d){
     }
     h+=sec('📝 未交作业',b3);
   }
+  /* vT53 今日留堂：桌面便签上也要看到今天谁留堂（与教室大屏、家长端同源） */
+  if(c.dt){
+    var dtN=d.detain||[];
+    var b5=dtN.length
+      ? '<div class="dt-row dt-detain"><b>⏰ 今日留堂 '+dtN.length+' 人</b></div>'+
+        '<div class="dt-names dt-detain-names">'+dtN.map(function(n){return '<span>'+dtEsc(n)+'</span>'}).join('')+'</div>'+
+        '<div class="dt-sub">放学后留堂 · 每天 16:05 教室大屏放大提醒并语音播报</div>'
+      : '<div class="dt-empty">今天没有留堂学生</div>';
+    h+=sec('⏰ 今日留堂',b5);
+  }
   /* vT51 教室桌面在线状态：桌面标签上也能一眼看到教室电脑在不在 */
   if(c.desk){
     var dk=d.desk||{state:'none',id:'',at:0,ago:-1};
@@ -14635,6 +14747,8 @@ function dtShellHTML(){
    +'.dt-names span{background:#fff3e8;color:#a8601a;border-radius:5px;padding:2px 6px;font-size:12px}'
    +'.dt-names span.dt-ov{background:#fde8e8;color:#dc2626;font-weight:600}'
    +'.dt-empty{color:#98a2b0;font-size:13px;padding:6px 0}'
+   /* vT53 今日留堂：桌面便签里的留堂名单，用暖红色区分（别和「未交」的橙色混了） */
+   +'.dt-detain{color:#c0392b}.dt-detain-names span{background:#fdeceb;color:#a33a2f;font-weight:600}'
    /* vT51 教室桌面在线状态：小圆点 + 一行文字，样式对齐「教室桌面」模块 */
    +'.dt-desk{display:flex;align-items:flex-start;gap:6px;font-size:13px;line-height:1.5}'
    +'.dt-dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px;margin-top:4px;background:#c8ced6}'
@@ -14647,7 +14761,7 @@ function dtShellHTML(){
    +'<div class="dt-top"><span class="dt-title">📌 桌面标签</span><span class="dt-btns">'
    +'<button id="dtSet" title="显示哪些板块">⚙</button><button id="dtRef" title="立即刷新">↻</button><button id="dtHide" title="收起标签">×</button>'
    +'</span></div>'
-   +'<div class="dt-cfg" id="dtCfg" style="display:none">'+ck('date','日期周次')+ck('alert','提醒')+ck('tt','课程')+ck('hw','未交作业')+ck('desk','教室桌面')+'</div>'
+   +'<div class="dt-cfg" id="dtCfg" style="display:none">'+ck('date','日期周次')+ck('alert','提醒')+ck('tt','课程')+ck('hw','未交作业')+ck('dt','今日留堂')+ck('desk','教室桌面')+'</div>'
    +'<div id="dt"></div><div class="dt-foot" id="dtFoot"></div>'
    +'<scr'+'ipt>(function(){'
    +'var box=document.getElementById("dt"),foot=document.getElementById("dtFoot"),op=null;'
@@ -16342,8 +16456,8 @@ try {
    发现自己不是最新版 → 弹提示并自动刷新页面，本轮绝不写回。
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
-var WB_MY_VER = '优化版 vT39 · 班级守护';
-var WB_BUILD_DATE = '11-04', WB_BUILD_NO = '2.6.93';
+var WB_MY_VER = '优化版 vT53 · 差榜 + 留堂';
+var WB_BUILD_DATE = '11-04', WB_BUILD_NO = '2.6.94';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
