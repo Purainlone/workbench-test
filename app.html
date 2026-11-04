@@ -2079,6 +2079,7 @@ table.paper td.l{text-align:left;font-weight:600}
           <button class="btn2" onclick="cmAiSave()">💾 保存</button>
           <button class="btn2 ghost" onclick="cmAiTest()">🔍 测试连通</button>
           <button class="btn2 primary" onclick="cmAiImport()" title="粘贴 WorkBuddy 模型导入码或三行配置，一键填好保存">📥 导入 WorkBuddy 模型</button>
+          <button class="btn2" onclick="wbModelMgr()" title="从模型库选择已保存的自定义模型，省去重复填写">📂 从模型库选</button>
         </div>
         <div class="sub" id="cmAiMsg" style="margin-top:6px">提示：填 OpenAI 兼容接口（地址 + 密钥 + 模型名）。接口需允许浏览器跨域调用；生成失败时可用「模板拼装」兜底。</div>
       </details>
@@ -2316,6 +2317,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <button class="btn2 sm" onclick="essayNav('students')">🎯 学生分析</button>
         <button class="btn2 sm" onclick="essayNav('insight')">📈 班级学情</button>
         <button class="btn2 sm" onclick="essayNav('settings')">📷 识别设置</button>
+        <button class="btn2 sm" onclick="wbModelMgr()" title="管理多个自定义模型；批改台「一键配置」会自动检索这里，并可一键部署">🧠 模型库</button>
         <button class="btn2 sm" id="ppToggleBtn" onclick="ppToggle()">🟠 皮皮批</button>
         <button class="btn2 sm" id="essayFullBtn" onclick="essayFullToggle()">⤢ 全屏</button>
       </span></h2>
@@ -18371,14 +18373,21 @@ window.addEventListener('message', function (ev) {
 /* vT47 暴露宿主「自定义模型」给内嵌批改模块：批改台「一键配置 WorkBuddy 自定义模型」
    会来检索，这里把 WorkBuddy 已载入的自定义模型（评语 AI 接口 wb_cm_ai_v1 + 通用清单 wb_custom_models）回传。 */
 function wbCustomModels() {
-  var list = [];
+  var list = [], cmUrl = '', cmModel = '';
   try {
     var c = JSON.parse(localStorage.getItem('wb_cm_ai_v1') || '{}');
-    if (c && c.url && c.model) list.push({ name: (c.name || c.model), baseUrl: c.url, apiKey: c.key || '', model: c.model, note: '评语 AI 接口' });
+    if (c && c.url && c.model) {
+      cmUrl = c.url; cmModel = c.model;
+      list.push({ name: (c.name || c.model), baseUrl: c.url, apiKey: c.key || '', model: c.model, note: '评语 AI 接口' });
+    }
   } catch (e) {}
   try {
     var arr = JSON.parse(localStorage.getItem('wb_custom_models') || '[]');
-    if (Array.isArray(arr)) arr.forEach(function (m) { if (m && m.url && m.model) list.push({ name: (m.name || m.model), baseUrl: m.url, apiKey: m.apiKey || '', model: m.model, note: (m.note || '自定义模型') }); });
+    if (Array.isArray(arr)) arr.forEach(function (m) {
+      if (!m || !m.url || !m.model) return;
+      if (m.url === cmUrl && m.model === cmModel) return;   /* 与评语接口同一个模型，不重复列出 */
+      list.push({ name: (m.name || m.model), baseUrl: m.url, apiKey: m.apiKey || '', model: m.model, note: (m.note || '自定义模型') });
+    });
   } catch (e) {}
   return list;
 }
@@ -18389,6 +18398,147 @@ window.addEventListener('message', function (ev) {
     try { if (ev.source && ev.source.postMessage) ev.source.postMessage({ type: 'WB_MODELS', models: wbCustomModels() }, '*'); } catch (e) {}
   }
 });
+/* ================= vT48 自定义模型库（多个自定义模型并存） =================
+   统一数据源：localStorage 'wb_custom_models' = [{id,name,url,apiKey,model,note}]
+   · 作文批改台「⚡ 一键配置 WorkBuddy 自定义模型」通过 WB_REQ_MODELS 自动检索这里
+   · 「⭐ 设为评语模型」把选中模型写入 wb_cm_ai_v1（评语 AI 接口沿用同一套）
+   · 「⬇️ 部署到批改台」通过 WB_DEPLOY_MODEL 消息直推批改台
+   ============================================================== */
+var WB_MODELS_KEY = 'wb_custom_models';
+function wbModelStore() {
+  try { var a = JSON.parse(localStorage.getItem(WB_MODELS_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+}
+function wbModelSaveAll(list) { try { localStorage.setItem(WB_MODELS_KEY, JSON.stringify(list || [])); } catch (e) {} }
+function wbModelGet(id) { var a = wbModelStore(); for (var i = 0; i < a.length; i++) { if (a[i].id === id) return a[i]; } return null; }
+function wbCmCfg() { try { return JSON.parse(localStorage.getItem('wb_cm_ai_v1') || '{}') || {}; } catch (e) { return {}; } }
+var wbModelEditingId = '';
+function wbModelMgr() {
+  var box = document.getElementById('wbModelMgrBox');
+  if (!box) { box = document.createElement('div'); box.id = 'wbModelMgrBox'; document.body.appendChild(box); }
+  wbModelMgrRender();
+}
+function wbModelMgrRender() {
+  var box = document.getElementById('wbModelMgrBox'); if (!box) return;
+  var list = wbModelStore(), cm = wbCmCfg();
+  var h = '<div style="position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)wbModelMgrClose()">'
+    + '<div style="background:#fff;border-radius:14px;padding:20px;width:660px;max-width:94vw;max-height:88vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.25)">'
+    + '<h3 style="margin:0 0 6px;font-size:16px">🧠 自定义模型库</h3>'
+    + '<div class="sub" style="margin-bottom:12px">管理多个自定义模型（OpenAI 兼容接口）。保存后，作文批改台的「⚡ 一键配置 WorkBuddy 自定义模型」会自动检索到它们，可一键部署到批改台。</div>';
+  if (!list.length) {
+    h += '<div class="sub" style="padding:10px;background:#f6f8fb;border-radius:10px">📦 模型库还是空的，先在下方添加一个。</div>';
+  } else {
+    h += list.map(function (m) {
+      var isCm = cm.url === m.url && cm.model === m.model;
+      return '<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:#fafdfb;flex-wrap:wrap">'
+        + '<div style="flex:1;min-width:180px">'
+        + '<b style="font-size:14px">' + esc(m.name || m.model) + '</b>'
+        + (isCm ? ' <span class="tag" style="background:#e4f5ec;color:#0f7a46">当前评语模型</span>' : '')
+        + '<div class="sub" style="margin:2px 0 0;font-size:12px;word-break:break-all">' + esc((m.url || '').replace(/\/+$/, '')) + ' · ' + esc(m.model || '') + '</div>'
+        + (m.note ? '<div class="sub" style="margin:2px 0 0;font-size:12px">' + esc(m.note) + '</div>' : '')
+        + '</div>'
+        + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+        + '<button class="btn2 sm" onclick="wbModelEdit(\'' + m.id + '\')">✏️ 编辑</button>'
+        + '<button class="btn2 sm" onclick="wbModelTest(\'' + m.id + '\')">🧪 测试</button>'
+        + '<button class="btn2 sm primary" onclick="wbModelDeploy(\'' + m.id + '\')">⬇️ 部署到批改台</button>'
+        + '<button class="btn2 sm" onclick="wbModelUseForComment(\'' + m.id + '\')">⭐ 设为评语模型</button>'
+        + '<button class="btn2 sm ghost" onclick="wbModelDel(\'' + m.id + '\')">🗑 删除</button>'
+        + '</div></div>';
+    }).join('');
+  }
+  var ed = wbModelEditingId ? wbModelGet(wbModelEditingId) : null;
+  h += '<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">'
+    + '<div style="font-size:13px;font-weight:700;margin-bottom:8px">' + (ed ? '✏️ 编辑模型：' + esc(ed.name || ed.model) : '➕ 新增模型') + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    + '<input type="text" id="wbmName" placeholder="显示名称，如 通义千问" value="' + esc(ed ? (ed.name || '') : '') + '">'
+    + '<input type="text" id="wbmUrl" placeholder="接口地址，如 https://api.xx.com/v1" value="' + esc(ed ? (ed.url || '') : '') + '">'
+    + '<input type="password" id="wbmKey" placeholder="API Key" value="' + esc(ed ? (ed.apiKey || '') : '') + '">'
+    + '<input type="text" id="wbmModel" placeholder="模型名，如 qwen-max" value="' + esc(ed ? (ed.model || '') : '') + '">'
+    + '</div>'
+    + '<input type="text" id="wbmNote" placeholder="备注（可选），如 6.3 班专用" value="' + esc(ed ? (ed.note || '') : '') + '" style="width:100%;margin-top:8px">'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'
+    + (ed ? '<button class="btn2" onclick="wbModelEdit(\'\')">取消编辑</button>' : '')
+    + '<button class="btn2" onclick="wbModelMgrClose()">关闭</button>'
+    + '<button class="btn2 primary" onclick="wbModelSave()">💾 ' + (ed ? '更新模型' : '保存到模型库') + '</button>'
+    + '</div></div></div></div>';
+  box.innerHTML = h;
+}
+function wbModelMgrClose() { var b = document.getElementById('wbModelMgrBox'); if (b) b.innerHTML = ''; }
+function wbModelEdit(id) { wbModelEditingId = id || ''; wbModelMgrRender(); }
+function wbModelSave() {
+  var name = (document.getElementById('wbmName').value || '').trim();
+  var url = (document.getElementById('wbmUrl').value || '').trim();
+  var key = (document.getElementById('wbmKey').value || '').trim();
+  var model = (document.getElementById('wbmModel').value || '').trim();
+  var note = (document.getElementById('wbmNote').value || '').trim();
+  if (!url || !model) { toastMsg('⚠️ 接口地址和模型名必填'); return; }
+  var list = wbModelStore();
+  if (wbModelEditingId) {
+    list = list.map(function (m) {
+      return m.id === wbModelEditingId ? { id: m.id, name: name || model, url: url.replace(/\/+$/, ''), apiKey: key, model: model, note: note } : m;
+    });
+    toastMsg('✅ 已更新「' + (name || model) + '」');
+  } else {
+    list.push({ id: 'M' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name || model, url: url.replace(/\/+$/, ''), apiKey: key, model: model, note: note });
+    toastMsg('✅ 已保存「' + (name || model) + '」，批改台「一键配置」即可检索到');
+  }
+  wbModelSaveAll(list);
+  wbModelEditingId = '';
+  wbModelMgrRender();
+}
+function wbModelDel(id) {
+  var m = wbModelGet(id); if (!m) return;
+  if (!confirm('删除模型「' + (m.name || m.model) + '」？')) return;
+  wbModelSaveAll(wbModelStore().filter(function (x) { return x.id !== id; }));
+  if (wbModelEditingId === id) wbModelEditingId = '';
+  toastMsg('🗑 已删除「' + (m.name || m.model) + '」');
+  wbModelMgrRender();
+}
+function wbModelUseForComment(id) {
+  var m = wbModelGet(id); if (!m) return;
+  localStorage.setItem('wb_cm_ai_v1', JSON.stringify({ url: m.url, key: m.apiKey || '', model: m.model, name: m.name || m.model }));
+  try {
+    var u = document.getElementById('cmAiUrl'); if (u) u.value = m.url;
+    var k = document.getElementById('cmAiKey'); if (k) k.value = m.apiKey || '';
+    var mm = document.getElementById('cmAiModel'); if (mm) mm.value = m.model;
+  } catch (e) {}
+  toastMsg('⭐ 已设为当前评语模型');
+  wbModelMgrRender();
+}
+function wbModelTest(id) {
+  var m = wbModelGet(id); if (!m) return;
+  toastMsg('🧪 正在测试「' + (m.name || m.model) + '」…');
+  fetch(m.url.replace(/\/+$/, '') + '/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (m.apiKey || '') },
+    body: JSON.stringify({ model: m.model, messages: [{ role: 'user', content: '请只回复两个字：连通' }], max_tokens: 10 })
+  }).then(function (r) { return r.json(); }).then(function (j) {
+    if (j && j.choices && j.choices[0]) toastMsg('✅ 连通正常：' + (((j.choices[0].message || {}).content) || '').trim());
+    else toastMsg('❌ 接口返回异常：' + ((j && j.error && j.error.message) || JSON.stringify(j).slice(0, 120)));
+  }).catch(function (e) { toastMsg('❌ 测试失败：' + ((e && e.message) || e) + '（多半是浏览器跨域 CORS 拦截）'); });
+}
+/* 一键部署到批改台：确保 essay iframe 就绪后把模型推过去 */
+function wbModelDeploy(id) {
+  var m = wbModelGet(id); if (!m) return;
+  var f = document.getElementById('essayFrame');
+  if (!f) { toastMsg('⚠️ 找不到批改台窗口'); return; }
+  var payload = { name: m.name || m.model, baseUrl: m.url, apiKey: m.apiKey || '', model: m.model };
+  var sent = false;
+  function send() {
+    if (sent) return; sent = true;
+    try {
+      var w = f.contentWindow;
+      if (!w || !w.postMessage) { toastMsg('⚠️ 批改台尚未就绪，请先打开「作文平台」'); return; }
+      w.postMessage({ type: 'WB_DEPLOY_MODEL', model: payload }, '*');
+      toastMsg('✅ 已部署「' + payload.name + '」到作文批改台');
+    } catch (e) { toastMsg('⚠️ 部署失败：' + e.message); }
+  }
+  var w0 = null; try { w0 = f.contentWindow; } catch (e) {}
+  if (w0 && w0.EssayGrader) { send(); return; }         /* 已就绪，直接推 */
+  toastMsg('⏳ 正在打开作文平台，请稍候…');
+  try { var btn = document.querySelector('#nav button[data-s="essay"]'); if (btn) btn.click(); } catch (e) {}
+  f.addEventListener('load', function onL() { f.removeEventListener('load', onL); setTimeout(send, 350); });
+  setTimeout(function () { if (!sent) send(); }, 3000);    /* 兜底：已加载但 EssayGrader 尚未就绪 */
+}
 function essayApplyGraded(p) {
   if (!p || !p.studentName) return;
   var list = essayAll(), hit = null;
