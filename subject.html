@@ -489,7 +489,19 @@ function applyDoc(doc) {
   var t = doc.tables || {};
   STU = (t.students || []).filter(function (r) { return r && r.name });
   HWI = (t.hwItems || []).filter(function (r) { return r && r.item });
-  HW = t.hw || [];
+  /* vT52：别的端「取消登记」过的，本机列表里立刻就不该再显示它
+     （云端快照还留着那一行是正常的 —— 写回时会被墓碑清掉并跳过复活）。 */
+  try {
+    var T = hwTombSetsSub(doc);
+    HW = (t.hw || []).filter(function (r) {
+      if (!r) return false;
+      var rk = hwRecKeySub(r.name, r.item, r.date);
+      if (rk && T.rec[rk]) return false;
+      var ck = String(r.item == null ? '' : r.item).replace(/\s+/g, '').toLowerCase() + '|' + String(r.date || '').slice(0, 10);
+      if (T.col[ck]) return false;
+      return true;
+    });
+  } catch (_e) { HW = t.hw || []; }
   SC = t.scores || [];
   SA = t['s-assign'] || [];
   try { renderAssign() } catch (e) {}
@@ -745,6 +757,48 @@ function markAllOverdue() {
   if (flushTimer) clearTimeout(flushTimer);
   flushTimer = setTimeout(function () { flushHw(false) }, 2500);
 }
+/* vT52 作业【记录级】墓碑键：姓名|作业名|日期（作业名小写）
+   口径与网页端 hwRecKeys / 小程序 hwRecTomKey 完全一致 ——
+   别的端「取消登记」后写下的墓碑，本端写回云端时必须认得，否则会把已取消的登记又推回去复活。 */
+function hwRecKeySub(name, item, date) {
+  var nm = tomNormSub(name);
+  var it = String(item == null ? '' : item).replace(/\s+/g, '').toLowerCase();
+  var d = String(date == null ? '' : date).slice(0, 10);
+  return (nm && it && d) ? (nm + '|' + it + '|' + d) : '';
+}
+/* 从 doc.deletes 里取出作业类墓碑：{ rec:{记录键:1}, col:{列键:1} } */
+function hwTombSetsSub(doc) {
+  var rec = {}, col = {};
+  (Array.isArray(doc && doc.deletes) ? doc.deletes : []).forEach(function (x) {
+    if (!x || x.t !== 'hw' || !x.k) return;
+    var k = String(x.k);
+    if (k.indexOf('|col|') === 0) {
+      var p = k.slice(5).split('|');
+      if (p.length >= 2) col[String(p[0]).replace(/\s+/g, '').toLowerCase() + '|' + p[1]] = 1;
+      return;
+    }
+    var s = k.indexOf('hw|') === 0 ? k.slice(3) : k;
+    var q = s.split('|');
+    if (q.length < 3) return;
+    var nm = tomNormSub(q[0]), it = String(q[1]).replace(/\s+/g, '').toLowerCase(), d = String(q[2]).slice(0, 10);
+    if (nm && it && d) rec[nm + '|' + it + '|' + d] = 1;
+  });
+  return { rec: rec, col: col };
+}
+/* 撤掉一条作业记录级墓碑（老师明确又登记了一次 → 取消墓碑不该再指向它） */
+function hwDropRecTombSub(del, key) {
+  if (!key) return del;
+  return del.filter(function (x) {
+    if (!x || x.t !== 'hw' || !x.k) return true;
+    var k = String(x.k);
+    if (k.indexOf('|col|') === 0) return true;
+    var s = k.indexOf('hw|') === 0 ? k.slice(3) : k;
+    var q = s.split('|');
+    if (q.length < 3) return true;
+    var nm = tomNormSub(q[0]), it = String(q[1]).replace(/\s+/g, '').toLowerCase(), d = String(q[2]).slice(0, 10);
+    return !((nm + '|' + it + '|' + d) === key);
+  });
+}
 async function flushHw(manual) {
   var keys = Object.keys(dirtyHw);
   if (!keys.length) { if (manual) $('hwMsg').textContent = '没有需要保存的改动'; return }
@@ -754,7 +808,23 @@ async function flushHw(manual) {
   try {
     await writeDoc(function (doc) {
       var arr = Array.isArray(doc.tables.hw) ? doc.tables.hw : [];
+      var del = Array.isArray(doc.deletes) ? doc.deletes : [];
+      /* vT52：别的端「取消登记」过的，本端写回时绝不能复活。
+         ① 先按墓碑把 doc.tables.hw 里已取消的行清掉（云端快照不再留残骸）；
+         ② 本次老师明确登记的（batch 里），同时撤掉那条取消墓碑 ——
+            「登记 → 取消 → 再登记」必须能活回来（与网页端 tomDropScore 同一道理）。 */
+      var T = hwTombSetsSub(doc);
+      arr = arr.filter(function (r) {
+        if (!r) return false;
+        var rk = hwRecKeySub(r.name, r.item, r.date);
+        if (rk && T.rec[rk]) return false;
+        var ck = String(r.item == null ? '' : r.item).replace(/\s+/g, '').toLowerCase() + '|' + String(r.date || '').slice(0, 10);
+        if (T.col[ck]) return false;
+        return true;
+      });
       batch.forEach(function (b) {
+        var bk = hwRecKeySub(b.name, b.it.item, b.it.date);
+        if (bk) del = hwDropRecTombSub(del, bk);
         var rec = null;
         for (var i = 0; i < arr.length; i++) {
           var r = arr[i];
@@ -774,6 +844,7 @@ async function flushHw(manual) {
         }
       });
       doc.tables.hw = arr;
+      doc.deletes = del;
     });
     $('hwMsg').textContent = '✅ 已保存 ' + batch.length + ' 条登记（' + nowStr() + '）';
   } catch (e) {
@@ -820,6 +891,18 @@ function delHwItem(key) {
     var arr = Array.isArray(doc.tables.hwItems) ? doc.tables.hwItems : [];
     doc.tables.hwItems = arr.filter(function (x) { return !(x && x.item === item && String(x.date || '').slice(0, 10) === date); });
     var ha = Array.isArray(doc.tables.hw) ? doc.tables.hw : [];
+    var del = Array.isArray(doc.deletes) ? doc.deletes : [];
+    /* vT52 删列必须写墓碑：不然网页端/小程序下一轮同步会把云端快照里的这一列
+       又并回来 —— 表现就是「删完又恢复」（网页端 vT28 / 小程序 2.6.40 早已是这个规矩）。
+       列级键 '|col|作业名|日期'，再补记录级键 姓名|作业名|日期，双保险。 */
+    var nowT = Date.now();
+    del.push({ t: 'hw', k: '|col|' + String(item).replace(/\s+/g, '') + '|' + date, at: nowT });
+    ha.forEach(function (r) {
+      if (!r || r.item !== item || String(r.date || '').slice(0, 10) !== date) return;
+      var rk = hwRecKeySub(r.name, r.item, r.date);
+      if (rk) del.push({ t: 'hw', k: rk, at: nowT });
+    });
+    doc.deletes = del;
     doc.tables.hw = ha.filter(function (r) { return !(r && r.item === item && String(r.date || '').slice(0, 10) === date); });
   }).then(function () {
     $('hwMsg').textContent = '✅ 已删除「' + item + '」(' + date + ')，已从云端移除';
