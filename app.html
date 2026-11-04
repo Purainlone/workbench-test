@@ -116,6 +116,14 @@ h2{font-size:19px;margin-bottom:6px}
 .sub{color:var(--muted);font-size:13px;margin-bottom:18px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(30,40,90,.05)}
 .section{display:none}.section.active{display:block}
+/* 2.6.88 作文平台沉浸式全屏：藏工作台侧栏、压缩收稿箱，批改区占满窗口 */
+body.essay-full aside{display:none}
+body.essay-full #s-essay{padding:8px 14px}
+body.essay-full #s-essay .sub{display:none}
+body.essay-full #essayDrafts{max-height:126px}
+body.essay-full #s-essay .chartbox{padding:8px 10px;margin-bottom:0}
+#essayFrame{height:calc(100vh - 300px)!important}
+body.essay-full #essayFrame{height:calc(100vh - 226px)!important}
 
 /* 课程表 */
 table.tt{width:100%;border-collapse:collapse;font-size:13px}
@@ -2289,11 +2297,17 @@ table.paper td.l{text-align:left;font-weight:600}
 
   <!-- ============ 作文平台（vT43） ============ -->
   <section class="section" id="s-essay">
-    <h2>作文平台 <span id="essayDraftTip" style="font-size:12px;font-weight:400;color:#8a5a2d;background:#fdf3e4;border-radius:8px;padding:2px 10px;vertical-align:middle"></span></h2>
+    <h2>作文平台 <span id="essayDraftTip" style="font-size:12px;font-weight:400;color:#8a5a2d;background:#fdf3e4;border-radius:8px;padding:2px 10px;vertical-align:middle"></span>
+      <span style="float:right;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <button class="btn2 sm" onclick="essayNav('grade')">✍️ 批改</button>
+        <button class="btn2 sm" onclick="essayNav('students')">🎯 学生分析</button>
+        <button class="btn2 sm" onclick="essayNav('insight')">📈 班级学情</button>
+        <button class="btn2 sm" id="essayFullBtn" onclick="essayFullToggle()">⤡ 退出全屏</button>
+      </span></h2>
     <div class="sub">手机小程序「作文上传」拍照/扫码录入 → 这里收稿、批改、分析。批改保存后自动写回云端，多端可见 · 模块数据保存在本浏览器</div>
     <div id="essayDrafts" style="max-height:172px;overflow:auto;padding-right:4px"></div>
     <div class="chartbox" style="margin:12px 0 0">
-      <iframe id="essayFrame" title="作文批改工作台" style="width:100%;height:calc(100vh - 290px);border:0;background:#fff;display:block" src="about:blank"></iframe>
+      <iframe id="essayFrame" title="作文批改工作台" style="width:100%;height:calc(100vh - 300px);border:0;background:#fff;display:block" src="about:blank"></iframe>
     </div>
   </section>
 
@@ -16055,7 +16069,7 @@ try {
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
 var WB_MY_VER = '优化版 vT39 · 班级守护';
-var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.87';
+var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.88';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -18124,7 +18138,8 @@ function essEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').re
 function essayInit() {
   var f = document.getElementById('essayFrame');
   if (f && (!f.src || f.src === 'about:blank' || f.getAttribute('src') === 'about:blank')) {
-    f.src = 'essay/index.html';
+    /* embed=1：隐藏模块自己的侧栏/顶栏，工作台里只显示内容区 */
+    f.src = 'essay/index.html?embed=1';
     f.addEventListener('load', function () {
       try {
         var w = f.contentWindow;
@@ -18134,10 +18149,24 @@ function essayInit() {
           }).filter(function (x) { return x.name });
           if (roster.length) w.EssayGrader.replaceStudents(roster);
         }
+        /* 2.6.88 落地直进批改工作台（像皮皮改作文：进来就是工作区） */
+        setTimeout(function () { if (w && w.navTo) { try { w.navTo('grade') } catch (e) {} } }, 150);
       } catch (e) {}
     });
   }
   essayRenderDrafts();
+}
+
+/* 2.6.88 顶栏快捷切换模块视图（同源，直接调模块的 navTo） */
+function essayNav(v) {
+  var f = document.getElementById('essayFrame');
+  if (f && f.contentWindow && f.contentWindow.navTo) { try { f.contentWindow.navTo(v) } catch (e) {} }
+}
+/* 2.6.88 全屏开关：隐藏工作台侧栏，给批改区让出全部宽度 */
+function essayFullToggle() {
+  document.body.classList.toggle('essay-full');
+  var btn = document.getElementById('essayFullBtn');
+  if (btn) btn.textContent = document.body.classList.contains('essay-full') ? '⤡ 退出全屏' : '⤢ 全屏';
 }
 
 function essayRenderDrafts() {
@@ -18301,6 +18330,9 @@ document.getElementById('nav').addEventListener('click',e=>{
   if(b.dataset.s==='pet'){try{wbPetRender()}catch(e){}}
   if(b.dataset.s==='guard'){try{gdRender()}catch(e){console.error('[守护] 渲染失败',e)}}   /* 班级守护 */
   if(b.dataset.s==='comment'){try{cmThemeRender()}catch(e){}try{cmRosterRender()}catch(e){}try{cmResultRender()}catch(e){}}   /* vT14 学生评语 */
+  /* 2.6.88 作文平台沉浸式：进入全屏（藏工作台侧栏），切走自动恢复 */
+  if(b.dataset.s==='essay'){document.body.classList.add('essay-full');try{essayInit()}catch(e){}}
+  else{document.body.classList.remove('essay-full')}
   if(b.dataset.s==='essay'){try{essayInit()}catch(e){console.error('[作文] 初始化失败',e)}}   /* vT43 作文平台 */
   /* 2.0.6：每次进诵读页都重新拉一次。以前只在页面加载时拉一次，
      导入互传包 / 换了数据源之后切回来还是老画面（"导入了没变化"）。 */
