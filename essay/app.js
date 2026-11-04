@@ -630,6 +630,10 @@ const view = () => $('#view');
 
 function navTo(v) {
   state.view = v;
+  /* vT50 批改工作台「撑满窗口」：给 body 打一个当前视图标记，
+     嵌入模式 + 批改工作台这一页时，内容区自己撑满窗口高度（见 styles.css）。
+     只加 body class 不改渲染逻辑，任何视图都能安全退回原来的滚动布局。 */
+  document.body.classList.toggle('gview-grade', v === 'grade');
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === v));
   const titles = {
   dashboard: ['工作台', '小学语文 · 作文批改工作台'],
@@ -1582,7 +1586,7 @@ window.applyVisionPreset = applyVisionPreset;
    集成 API（供宿主工作台 / 小程序 web-view 调用）
    ===================================================================== */
 window.EssayGrader = {
-  version: '1.1.0',
+  version: '1.2.0',   /* vT50 批改工作台高度自适应：内容撑满窗口、原文框吃满剩余高度 */
   navTo: navTo,
   /** vT48 宿主模型库一键部署：写入批改模型配置并启用 */
   applyWbModel: applyWbModel,
