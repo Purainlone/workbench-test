@@ -1221,7 +1221,7 @@ table.paper td.l{text-align:left;font-weight:600}
 <body data-page-node-id="VWm2YCKhwxOUBWSlexIaam">
 <aside data-page-node-id="uyTdXvcdMMBT8HJ1ZWRO9X">
   <div data-page-node-id="YkELpTUKfJkpu7qzDPa66K" class="logo"><!--pnid:7ytoUsgxIUXQsQNXnaE57T-->教师工作台</div>
-  <div class="verline" id="appVer">✨ 优化版 vT39 · 班级守护 · 2.6.80</div>
+  <div class="verline" id="appVer">✨ 作业登记 v2.6.89 · 隐藏不交作业同学</div>
   <nav data-page-node-id="ljZdrlGNjxdpectAoWjkyv" id="nav">
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS" class="active" data-s="home">🏠 <span class="lbl">今日首页</span></button>
 
@@ -11727,6 +11727,14 @@ function stuRoster(){
   });
   return out;
 }
+/* 参与作业登记的学生（名单去掉不交作业的人：柯骏豪、方浩轩，固定座、不参与交作业）。
+   与小程序 store.hwStudents()、科任端 SUBJ_HW_EXCLUDE 同一口径。
+   作业登记网格、待登记/未交统计、一键超时未交 都用它，让他们不出现在作业登记里、也不占未交分母。
+   他们仍正常保留在名单、积分、成绩、座位等其它模块。 */
+function hwRoster(){
+  var ex=HM_HW_EXCLUDE||{};
+  return stuRoster().filter(function(s){return !ex[s.姓名]});
+}
 /* 小组清单：按档案表里的组别聚合 */
 function groupList(){
   var map={},out=[];
@@ -11843,7 +11851,7 @@ function hwMarkAllOverdue(){
   if(!items.length){toastMsg('还没有作业列');return}
   var it=items[items.length-1];   /* 最新（最右侧）一列 */
   var m=hwMapRows();
-  var roster=stuRoster();
+  var roster=hwRoster();   /* 只算参与交作业的学生：柯骏豪、方浩轩 不会被一键记成超时未交 */
   var remain=roster.filter(function(s){return !m[hwKey(s.姓名,it)]});
   if(!remain.length){toastMsg('「'+it.name+'」都已登记，没有可标记的');return}
   if(!confirm('把「'+it.name+'」剩下 '+remain.length+' 名未登记学生记为超时未交（每人扣 2 分）？'))return;
@@ -12016,7 +12024,7 @@ var HW_MODE_READY=false;
 /* vT16 作业列自动隐藏：超过两周 或 全班都已登记 的列不再显示（数据保留，可点按钮临时查看） */
 var HW_SHOW_AUTO=false;
 function hwAutoSplit(){
-  var m=hwMapRows(),roster=stuRoster();
+  var m=hwMapRows(),roster=hwRoster();   /* 自动隐藏「全班都已登记」：分母只算参与交作业的学生 */
   var lim=new Date(Date.now()-14*86400000),p=function(n){return (n<10?'0':'')+n};
   var limStr=lim.getFullYear()+'-'+p(lim.getMonth()+1)+'-'+p(lim.getDate());
   var vis=[],hid=[];
@@ -12056,7 +12064,8 @@ function renderHW(){
   }catch(_wke){}
   var box=document.getElementById('hwTable');
   if(!box)return;
-  var stu=stuRoster();
+  /* 作业登记只列参与交作业的学生：柯骏豪、方浩轩 不参与，不进网格、不进未交分母 */
+  var stu=hwRoster();
   var m=hwMapRows();
   hwBuildItemsOnRender();
   var split=hwAutoSplit(),items=HW_SHOW_AUTO?HW_ITEMS:split.vis;
@@ -31293,7 +31302,8 @@ function cwInit(){
     if (!item) { box.value = '（还没有作业列，先在「作业」里建一次作业）'; return }
     var done = {};
     tcHwRows().forEach(function (r) { if (r.item === item && r.date === date && r.name) done[r.name] = 1 });
-    var all = tcStuRows().map(function (s) { return s.name });
+    var ex = HM_HW_EXCLUDE || {};
+    var all = tcStuRows().map(function (s) { return s.name }).filter(function (n) { return !ex[n] });
     var undone = all.filter(function (n) { return !done[n] });
     var maxN = Number(val('tcSpkMax')) || 0;
     var text;
