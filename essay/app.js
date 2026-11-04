@@ -1206,6 +1206,44 @@ window.EssayGrader = {
   loadStudent(idOrName) { const s = findStudent(idOrName); if (s) { state.stuId = s.id; navTo('students'); } return !!s; },
   /** 打开该学生的批改工作台（自动选中） */
   openGrade(idOrName) { const s = findStudent(idOrName); if (s) { state.pendingStu = s.id; navTo('grade'); } return !!s; },
+  /** 2.6.88 宿主收稿箱「去批改」：一次性带入 学生+标题+原文照片，并给出操作指引 */
+  prefillGrade(opts) {
+    opts = opts || {};
+    navTo('grade');
+    setTimeout(() => {
+      try {
+        const sel = $('#stuSel');
+        if (sel) {
+          const wantId = String(opts.studentId || '');
+          let hit = [...sel.options].find(o => o.value === wantId);
+          if (!hit && opts.studentName) {
+            const st = DATA.classes[0].students.find(s => s.name === String(opts.studentName));
+            if (st) hit = [...sel.options].find(o => o.value === st.id);
+          }
+          if (hit) sel.value = hit.value;
+        }
+        if (opts.title) { const t = $('#essayTitle'); if (t) t.value = String(opts.title); }
+        const imgs = (Array.isArray(opts.images) ? opts.images : []).filter(Boolean);
+        const prev = $('#imgPrev');
+        if (prev && imgs.length) {
+          prev.innerHTML = '<div class="thumbs"></div>';
+          const box = prev.querySelector('.thumbs');
+          imgs.forEach(src => { const im = new Image(); im.src = src; im.className = 'thumb'; im.title = '学生作文原文（小程序上传）'; box.appendChild(im); });
+        }
+        const note = $('#ocrNote');
+        if (note) {
+          note.classList.remove('hidden');
+          note.textContent = imgs.length
+            ? `✓ 已带入 ${imgs.length} 张作文照片（学生原文）。请对照照片把作文文字抄录/粘贴到下方输入框，然后点「开始 AI 初批」。`
+            : '该篇没有照片，请把作文文字录入下方输入框，然后点「开始 AI 初批」。';
+        }
+        const ta = $('#essayText');
+        if (ta) { ta.placeholder = '对照上方照片，把作文文字输入/粘贴到这里…'; ta.focus(); }
+        toast(opts.studentName ? ('已定位 ' + opts.studentName + ' 的《' + (opts.title || '未命名') + '》，录入文字即可批改') : '已带入收稿信息');
+      } catch (e) { console.warn('prefillGrade:', e); }
+    }, 80);
+    return true;
+  },
   /** 打开该学生的个性化分析 */
   openAnalyze(idOrName) { const s = findStudent(idOrName); if (s) { state.stuId = s.id; navTo('students'); } return !!s; },
   /** 返回单个学生的分析结果对象（无需渲染，供宿主直接取数） */
