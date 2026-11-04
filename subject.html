@@ -341,6 +341,10 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
 
 var ME = null, DOC = null, SHA = '', BRANCH = '';
 var STU = [], HWI = [], HW = [], SC = [], SA = [];   /* SA = s-assign 布置作业 */
+/* 不参与作业登记的同学（固定座、不交作业）：科任作业网格、未交名单、一键超时未交 都排除他们，
+   但仍保留在名单 / 成绩里。与网页 app.html 的 HM_HW_EXCLUDE、小程序 store.hwStudents 同一口径。 */
+var SUBJ_HW_EXCLUDE = { '柯骏豪': 1, '方浩轩': 1 };
+function hwStu() { return (STU || []).filter(function (s) { return !SUBJ_HW_EXCLUDE[s.name]; }); }
 var LV_SCORE = { '优': 2, '良': 1, '中': 0, '差': -1, '超时未交': -2 };
 var dirtyHw = {}, flushTimer = null, curLv = '优';
 /* vT5 表格视图状态 */
@@ -553,7 +557,7 @@ function renderHwTab() {
     var d = Date.parse(String(x.date || '').slice(0, 10) + 'T00:00:00');
     if (!isNaN(d) && d < lim) return false;
     var done = hwDoneMap(String(x.item) + '|' + String(x.date || '').slice(0, 10));
-    return !STU.length || STU.some(function (s) { return !(s.name in done); });
+    return !hwStu().length || hwStu().some(function (s) { return !(s.name in done); });
   });
   COLS = mine.slice(-12).map(function (x) {
     return { key: hwItemKey(x), item: x.item, date: String(x.date || '').slice(0, 10) };
@@ -562,7 +566,7 @@ function renderHwTab() {
   renderHwTable();
   renderHwCards();
   var hi = $('hwHeadInfo');
-  if (hi) hi.textContent = COLS.length + ' 次作业 · ' + STU.length + ' 人';
+  if (hi) hi.textContent = COLS.length + ' 次作业 · ' + hwStu().length + ' 人';
 }
 function lvRank(lv) { return lv === '优' ? 4 : lv === '良' ? 3 : lv === '中' ? 2 : lv === '差' ? 1 : 0 }
 function hwDoneMap(key) {
@@ -584,9 +588,10 @@ function renderHwTable() {
   var maps = {};
   COLS.forEach(function (c) { maps[c.key] = hwDoneMap(c.key) });
 
-  /* 行顺序：默认按名单；点列头按该列等级排序（优良中差，再点逆序，第三次恢复） */
+  /* 行顺序：默认按名单；点列头按该列等级排序（优良中差，再点逆序，第三次恢复）。
+     行只列参与作业登记的学生（柯骏豪、方浩轩 不交作业，不进网格） */
   var q = (($('hwSearch') && $('hwSearch').value) || '').trim();
-  var rows = STU.slice();
+  var rows = hwStu().slice();
   if (sortKey && sortDir) {
     var m0 = maps[sortKey] || {};
     rows.sort(function (a, b) {
@@ -620,13 +625,13 @@ function renderHwTable() {
   }).join('');
   tb.innerHTML = '<thead>' + head + '</thead><tbody>' + body + '</tbody>';
 
-  /* 统计：以最新一列为准 */
+  /* 统计：以最新一列为准（分母只算参与作业登记的学生） */
   var last = COLS[COLS.length - 1];
   var lm = maps[last.key];
-  var doneN = STU.filter(function (s) { return lm[s.name] }).length;
-  var overN = STU.filter(function (s) { return lm[s.name] === '超时未交' }).length;
-  var miss = STU.filter(function (s) { return !lm[s.name] }).map(function (s) { return s.name });
-  $('hwStat').innerHTML = '最新列「' + esc(last.item) + '」已登记 <b>' + doneN + '</b> / ' + STU.length + ' 人' +
+  var doneN = hwStu().filter(function (s) { return lm[s.name] }).length;
+  var overN = hwStu().filter(function (s) { return lm[s.name] === '超时未交' }).length;
+  var miss = hwStu().filter(function (s) { return !lm[s.name] }).map(function (s) { return s.name });
+  $('hwStat').innerHTML = '最新列「' + esc(last.item) + '」已登记 <b>' + doneN + '</b> / ' + hwStu().length + ' 人' +
     (overN ? ' · <span style="color:#dc2626">超时未交 ' + overN + ' 人</span>' : '') +
     (miss.length ? ' · 未交：<span style="color:#a04a32">' + esc(miss.join('、')) + '</span>' : ' · 全部交齐 🎉') +
     ' ｜ 全班作业积分合计 <b>' + (clsSum > 0 ? '+' + clsSum : clsSum) + '</b>';
@@ -640,13 +645,13 @@ function renderHwCards() {
   COLS.forEach(function (c) { maps[c.key] = hwDoneMap(c.key); });
   box.innerHTML = COLS.map(function (c, i) {
     var m = maps[c.key], you = 0, liang = 0, zhong = 0, cha = 0, over = 0, done = 0;
-    STU.forEach(function (s) {
+    hwStu().forEach(function (s) {
       var lv = m[s.name];
       if (!lv) return;
       done++;
       if (lv === '优') you++; else if (lv === '良') liang++; else if (lv === '中') zhong++; else if (lv === '差') cha++; else if (lv === '超时未交') over++;
     });
-    var und = STU.length - done;
+    var und = hwStu().length - done;
     return '<div class="hwcard' + (i === COLS.length - 1 ? ' on' : '') + '">' +
       '<div class="hwc-name">' + esc(c.item) + '</div>' +
       '<div class="hwc-date">' + esc(String(c.date).slice(5)) + '</div>' +
@@ -727,7 +732,7 @@ function markAllOverdue() {
   var c = COLS[COLS.length - 1], key = c.key, p = key.split('|');
   var it = { item: p[0], date: p.slice(1).join('|') || today() };
   var m = hwDoneMap(key);
-  var remain = (STU || []).filter(function (s) { return !m[s.name]; });
+  var remain = hwStu().filter(function (s) { return !m[s.name]; });   /* 只算参与作业登记的学生 */
   if (!remain.length) { $('hwMsg').textContent = '这一列都已登记，没有可标记的'; return; }
   if (!confirm('把剩下 ' + remain.length + ' 名未登记学生标记为「超时未交」（每人扣 2 分）？')) return;
   remain.forEach(function (s) {
@@ -1119,7 +1124,7 @@ function undoneOf(it) {
   HW.forEach(function (r) {
     if (r && r.item === it.item && String(r.date).slice(0, 10) === it.date && r.name) done[r.name] = 1;
   });
-  return STU.filter(function (s) { return !done[s.name] }).map(function (s) { return s.name });
+  return hwStu().filter(function (s) { return !done[s.name] }).map(function (s) { return s.name });   /* 不交作业的同学不进未交名单 */
 }
 function buildSpeak() {
   var sel = $('spkSel');
