@@ -272,6 +272,7 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
       <div class="row">
         <span class="sub">看哪场考试</span>
         <select id="anExam" style="min-width:230px" onchange="renderAn()"></select>
+        <button class="btn sec" id="anRenameBtn" onclick="anRenameClick()">✏️ 改这场考试的名字</button>
         <button class="btn sec" id="anDelBtn" onclick="anDelClick()">🗑 删除这场考试</button>
       </div>
       <div class="sub" style="margin-top:-4px">删除是两段确认：点一下按钮进入待确认（5 秒内再点一次才真删）。删错可点提示里的「⟲ 撤回恢复」，成绩原样回来。</div>
@@ -2036,6 +2037,71 @@ function anDelBtnReset() {
   var b = $('anDelBtn');
   if (b) { b.textContent = '🗑 删除这场考试'; b.style.background = ''; b.style.color = ''; }
 }
+/* ===== vT49 修改考试名称 =====
+   一场考试 = 科目 + 考试名称，改名要把这一场所有记录一起改。
+   ⚠️ 考试名称是成绩记录的业务键之一（科目|考试名|姓名|日期），
+   改名 = 业务键变了。按项目既有铁律（删除整场 / 备忘改标题 / 作业列改名）：
+   **旧键必须写墓碑**，否则手机端那份「旧名」记录会被当成「本机缺失」拽回来，
+   同一场变成两场。墓碑键用 tomNormSub，与桌面端 tomKey / 小程序 tomK 同源。 */
+function anRenameClick() {
+  var exam = $('anExam').value;
+  if (!exam) { $('anMsg').textContent = '⚠️ 先选一场考试'; return; }
+  /* 改名要覆盖这一场的【全部】记录（包括还没填分数的），
+     不能用 anRows —— 它只挑有分数的，会漏掉空记录导致改了一半。 */
+  var rows = (SC || []).filter(function (r) { return r && r.subject === ME.subject && r.exam === exam; });
+  if (!rows.length) { $('anMsg').textContent = '这场考试没有成绩可改名'; return; }
+  var nn = prompt('把这场考试的名字改成：\n\n科目：' + (ME.subject || '') + '\n原名称：' + exam + '\n共 ' + rows.length + ' 条成绩会一起改名。\n\n（留空取消）', exam);
+  if (nn === null) return;
+  nn = String(nn).trim();
+  if (!nn) { $('anMsg').textContent = '考试名称不能为空'; return; }
+  if (nn === exam) { $('anMsg').textContent = '名称没变'; return; }
+  /* 重名拦截：本科目下已有同名考试 → 合并会把两场搅在一起，必须拒绝 */
+  var dup = (SC || []).filter(function (r) { return r && r.subject === ME.subject && r.exam === nn; });
+  if (dup.length) {
+    $('anMsg').textContent = '⚠️ 本科目下已经有一场「' + nn + '」（' + dup.length + ' 条）。换个名字，或先删掉那一场。';
+    $('anMsg').className = 'msg err';
+    return;
+  }
+  anRenameExam(exam, nn, rows);
+}
+
+function anRenameExam(exam, nn, rows) {
+  /* 旧键进墓碑：手机/桌面那份「旧名」记录靠它被清掉，不会变成两场 */
+  var tombs = rows.map(function (r) {
+    return { t: 'score', k: [ME.subject || '', exam || '', tomNormSub(r.name), String(r.date || '').slice(0, 10)].join('|'), at: Date.now() };
+  });
+  $('anMsg').textContent = '改名中…';
+  $('anMsg').className = 'msg';
+  writeDoc(function (doc) {
+    var arr = Array.isArray(doc.tables.scores) ? doc.tables.scores : [];
+    var now = Date.now();
+    arr.forEach(function (r) {
+      if (!r || r.subject !== ME.subject || r.exam !== exam) return;
+      r.exam = nn;
+      r.updatedAt = new Date(now).toISOString();
+      r.ts = now;
+    });
+    doc.tables.scores = arr;
+    var del = Array.isArray(doc.deletes) ? doc.deletes : [];
+    /* ⚠️ 撤掉【新名】的旧墓碑：A→B→A 改回来时，新名会命中自己写的旧墓碑，
+       被当成「已删除」抹掉（数据静默丢失）。新名既然又活回来了，墓碑就不该再指向它。 */
+    var newKeys = {};
+    rows.forEach(function (r) {
+      newKeys[[ME.subject || '', nn || '', tomNormSub(r.name), String(r.date || '').slice(0, 10)].join('|')] = 1;
+    });
+    del = del.filter(function (x) { return !(x && x.t === 'score' && newKeys[x.k]); });
+    tombs.forEach(function (tb) { del.push(tb); });
+    doc.deletes = del;
+  }).then(function () {
+    anCurExam = nn;              /* 改名后仍选中这场（名字变了，下拉里要跟着定位） */
+    switchTabAn();
+    $('anMsg').innerHTML = '✏️ 已把「' + esc(exam) + '」改名为「' + esc(nn) + '」（' + rows.length + ' 条，已同步到手机/教室端）。';
+  }).catch(function (e) {
+    $('anMsg').textContent = '❌ 改名失败：' + (e.message || '');
+    $('anMsg').className = 'msg err';
+  });
+}
+
 function anDelClick() {
   var exam = $('anExam').value;
   if (!exam) { $('anMsg').textContent = '⚠️ 先选一场考试'; return; }
