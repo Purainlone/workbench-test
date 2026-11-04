@@ -399,11 +399,18 @@ function requestWbModels(cb) {
   /* ② 同源直接读宿主配置（更快，免消息往返）：评语 AI 接口 + 通用自定义模型清单 */
   try {
     if (window.parent && window.parent !== window) {
-      var list = [];
+      var list = [], cmUrl = '', cmModel = '';
       var c = JSON.parse(window.parent.localStorage.getItem('wb_cm_ai_v1') || '{}');
-      if (c && c.url && c.model) list.push({ name: (c.name || c.model), baseUrl: c.url, apiKey: c.key || '', model: c.model, note: '评语 AI 接口' });
+      if (c && c.url && c.model) {
+        cmUrl = c.url; cmModel = c.model;
+        list.push({ name: (c.name || c.model), baseUrl: c.url, apiKey: c.key || '', model: c.model, note: '评语 AI 接口' });
+      }
       var arr = JSON.parse(window.parent.localStorage.getItem('wb_custom_models') || '[]');
-      if (Array.isArray(arr)) arr.forEach(function (m) { if (m && m.url && m.model) list.push({ name: (m.name || m.model), baseUrl: m.url, apiKey: m.apiKey || '', model: m.model, note: (m.note || '自定义模型') }); });
+      if (Array.isArray(arr)) arr.forEach(function (m) {
+        if (!m || !m.url || !m.model) return;
+        if (m.url === cmUrl && m.model === cmModel) return;   /* 与评语接口同一个模型，不重复列出 */
+        list.push({ name: (m.name || m.model), baseUrl: m.url, apiKey: m.apiKey || '', model: m.model, note: (m.note || '自定义模型') });
+      });
       if (list.length) finish(list);
     }
   } catch (e) {}
@@ -419,8 +426,23 @@ function deployWbModel(i) {
     model: m.model || '',
     enabled: true
   };
-  save(); renderSettings(); closeModal();
+  save(); if (state.view === 'settings') renderSettings(); closeModal();
   toast('✅ 已部署「' + (m.name || m.model) + '」到批改模型并启用，可点「测试连接」验证');
+}
+/* vT48 宿主模型库一键部署：宿主选中自定义模型 → 直接写入批改模型配置并启用 */
+function applyWbModel(m) {
+  if (!m || !m.baseUrl || !m.model) { toast('⚠️ 模型信息不完整，未部署'); return false; }
+  DATA.settings.model = {
+    provider: 'workbuddy',
+    baseUrl: String(m.baseUrl).replace(/\/+$/, ''),
+    apiKey: m.apiKey || '',
+    model: m.model,
+    enabled: true
+  };
+  save();
+  if (state.view === 'settings') renderSettings();   /* 不在设置页时不要覆盖当前视图 */
+  toast('✅ 已部署「' + (m.name || m.model) + '」到批改模型并启用');
+  return true;
 }
 function saveModelConfig() {
   DATA.settings.model = {
@@ -1546,6 +1568,7 @@ window.renderInsight = renderInsight; window.renderModels = renderModels; window
 window.deleteModel = deleteModel; window.exportModel = exportModel; window.openCollectModel = openCollectModel;
 window.renderMaterials = renderMaterials; window.filterMaterials = filterMaterials; window.matCatSwitch = matCatSwitch; window.deleteMaterial = deleteMaterial;
 window.openCollectMaterial = openCollectMaterial; window.quickConfigWorkBuddy = quickConfigWorkBuddy;
+window.applyWbModel = applyWbModel;
 window.saveModelConfig = saveModelConfig; window.testModel = testModel;
 window.openStudent = openStudent; window.renderStudents = renderStudents;
 window.gotoGradeWithStudent = gotoGradeWithStudent;
@@ -1559,8 +1582,10 @@ window.applyVisionPreset = applyVisionPreset;
    集成 API（供宿主工作台 / 小程序 web-view 调用）
    ===================================================================== */
 window.EssayGrader = {
-  version: '1.0.0',
+  version: '1.1.0',
   navTo: navTo,
+  /** vT48 宿主模型库一键部署：写入批改模型配置并启用 */
+  applyWbModel: applyWbModel,
   /** 按 学号/姓名 加载学生（小程序扫码识别后调用） */
   loadStudent(idOrName) { const s = findStudent(idOrName); if (s) { state.stuId = s.id; navTo('students'); } return !!s; },
   /** 打开该学生的批改工作台（自动选中） */
