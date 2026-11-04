@@ -347,7 +347,8 @@ async function testModel() {
 }
 function quickConfigWorkBuddy() {
   showModal('⚡ 一键配置 WorkBuddy 自定义模型', `
-    <div class="muted text-sm mb">在 WorkBuddy 中创建自定义模型后，把以下信息粘贴进来即可一键填入（也可手动编辑）：</div>
+    <div id="wbModelsBox" class="wb-models-box"><div class="muted text-sm">🔄 正在检索 WorkBuddy 已载入的自定义模型…</div></div>
+    <div class="divider"><span>或手动填写</span></div>
     <div class="model-form">
       <label>Base URL</label><input type="text" id="qbBase" placeholder="https://api.workbuddy.ai/v1" value="https://api.workbuddy.ai/v1">
       <label>API Key</label><input type="text" id="qbKey" placeholder="wb-...">
@@ -363,6 +364,63 @@ function quickConfigWorkBuddy() {
     });
     save(); renderSettings(); toast('已填入 WorkBuddy 模型配置，记得点「保存配置」并「测试连接」');
   }, '填入');
+  /* 拉取宿主（WorkBuddy 工作台）已载入的自定义模型并渲染可选列表 */
+  requestWbModels(function (models) {
+    __wbModels = models || [];
+    var box = document.getElementById('wbModelsBox');
+    if (!box) return;
+    if (!__wbModels.length) {
+      box.innerHTML = '<div class="muted text-sm">ℹ️ WorkBuddy 暂未检测到已载入的自定义模型。可先在 WorkBuddy「评语 AI 接口」配置一个，或直接在下方手动填写。</div>';
+      return;
+    }
+    box.innerHTML = '<div class="muted text-sm mb">✅ 检索到 ' + __wbModels.length + ' 个 WorkBuddy 自定义模型，点击即可部署到批改模型并启用：</div>' +
+      __wbModels.map(function (m, i) {
+        return '<div class="wb-model-item">' +
+          '<div class="wb-model-info"><b>' + escapeHtml(m.name || m.model) + '</b>' +
+          (m.note ? ' <span class="wb-model-note">' + escapeHtml(m.note) + '</span>' : '') +
+          '<div class="wb-model-url">' + escapeHtml((m.baseUrl || '').replace(/\/+$/, '')) + ' · ' + escapeHtml(m.model || '') + '</div></div>' +
+          '<button class="btn primary sm" onclick="deployWbModel(' + i + ')">⬇️ 部署到此</button>' +
+          '</div>';
+      }).join('');
+  });
+}
+/* vT47 一键配置：检索并关联宿主（WorkBuddy 工作台）已载入的自定义模型 */
+var __wbModels = [];
+function requestWbModels(cb) {
+  var done = false;
+  function finish(list) { if (done) return; done = true; try { window.removeEventListener('message', onMsg); } catch (e) {} cb(list || []); }
+  function onMsg(ev) {
+    var d = ev.data || {};
+    if (d && d.type === 'WB_MODELS' && Array.isArray(d.models)) finish(d.models);
+  }
+  window.addEventListener('message', onMsg);
+  /* ① 优先 postMessage 问宿主（跨域也安全） */
+  try { if (window.parent && window.parent !== window) window.parent.postMessage({ type: 'WB_REQ_MODELS' }, '*'); } catch (e) {}
+  /* ② 同源直接读宿主配置（更快，免消息往返）：评语 AI 接口 + 通用自定义模型清单 */
+  try {
+    if (window.parent && window.parent !== window) {
+      var list = [];
+      var c = JSON.parse(window.parent.localStorage.getItem('wb_cm_ai_v1') || '{}');
+      if (c && c.url && c.model) list.push({ name: (c.name || c.model), baseUrl: c.url, apiKey: c.key || '', model: c.model, note: '评语 AI 接口' });
+      var arr = JSON.parse(window.parent.localStorage.getItem('wb_custom_models') || '[]');
+      if (Array.isArray(arr)) arr.forEach(function (m) { if (m && m.url && m.model) list.push({ name: (m.name || m.model), baseUrl: m.url, apiKey: m.apiKey || '', model: m.model, note: (m.note || '自定义模型') }); });
+      if (list.length) finish(list);
+    }
+  } catch (e) {}
+  /* ③ 超时兜底（宿主无响应时给出手动填写入口） */
+  setTimeout(function () { finish([]); }, 1500);
+}
+function deployWbModel(i) {
+  var m = (__wbModels || [])[i]; if (!m) return;
+  DATA.settings.model = {
+    provider: 'workbuddy',
+    baseUrl: (m.baseUrl || '').replace(/\/+$/, ''),
+    apiKey: m.apiKey || '',
+    model: m.model || '',
+    enabled: true
+  };
+  save(); renderSettings(); closeModal();
+  toast('✅ 已部署「' + (m.name || m.model) + '」到批改模型并启用，可点「测试连接」验证');
 }
 function saveModelConfig() {
   DATA.settings.model = {
