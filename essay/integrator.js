@@ -42,6 +42,10 @@
       if (d.type === 'PREFILL_GRADE' && window.EssayGrader && window.EssayGrader.prefillGrade) {
         try { window.EssayGrader.prefillGrade(d) } catch (e) {}
       }
+      /* vT48 宿主模型库「⬇️ 部署到批改台」：把选中的自定义模型写入批改模型配置并启用 */
+      if (d.type === 'WB_DEPLOY_MODEL' && window.EssayGrader && window.EssayGrader.applyWbModel) {
+        try { window.EssayGrader.applyWbModel(d.model || {}) } catch (e) {}
+      }
     });
   }
 
