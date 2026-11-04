@@ -1227,6 +1227,7 @@ table.paper td.l{text-align:left;font-weight:600}
     <button data-page-node-id="VgwUZ3tLyOZ5F9hNTwxvzn" data-s="recite">📖 <span class="lbl">诵读管理</span></button>
     <button data-page-node-id="Sc1Kp8mNvQ2xRy7bTz4WdE" data-s="score">📊 <span class="lbl">成绩管理</span></button>
     <button data-page-node-id="Gp1" data-s="group">👥 <span class="lbl">小组活动</span></button>
+    <button data-s="essay">📝 <span class="lbl">作文平台</span><span class="new">新</span></button>
     <div class="navgrp" id="navPetGrp">宠物</div>
     <button data-s="pet" id="navPetBtn">🐾 <span class="lbl">班级宠物</span></button>
     <button data-s="guard" id="navGuardBtn">🛡️ <span class="lbl">班级守护</span><span class="new">新</span></button>
@@ -2283,6 +2284,16 @@ table.paper td.l{text-align:left;font-weight:600}
       </div>
       <div class="tc-hint">提示：播报会在教室桌面弹出横幅并朗读。同一条不会重复播（按作业列+日期去重）。</div>
       <div id="tcSpkHist" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- ============ 作文平台（vT43） ============ -->
+  <section class="section" id="s-essay">
+    <h2>作文平台 <span id="essayDraftTip" style="font-size:12px;font-weight:400;color:#8a5a2d;background:#fdf3e4;border-radius:8px;padding:2px 10px;vertical-align:middle"></span></h2>
+    <div class="sub">手机小程序「作文上传」拍照/扫码录入 → 这里收稿、批改、分析。批改保存后自动写回云端，多端可见 · 模块数据保存在本浏览器</div>
+    <div id="essayDrafts"></div>
+    <div class="chartbox" style="margin:12px 0 0">
+      <iframe id="essayFrame" title="作文批改工作台" style="width:100%;height:calc(100vh - 240px);border:0;background:#fff;display:block" src="about:blank"></iframe>
     </div>
   </section>
 
@@ -16044,7 +16055,7 @@ try {
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
 var WB_MY_VER = '优化版 vT39 · 班级守护';
-var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.85';
+var WB_BUILD_DATE = '11-03', WB_BUILD_NO = '2.6.86';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -16709,6 +16720,7 @@ function syncCycleCore(manual) {
         /* vT2 教室端新表（s-rota/s-safety/s-speech/s-notice/s-msg/s-desktop）：
            每轮同步把远端这些表 LWW 并入本机缓存 wb_nt_v1，写回时再合并出去 */
         try { if (typeof ntPullRemote === 'function') ntPullRemote(tables) } catch (_ntP) {}
+        try { if (typeof essayPullRemote === 'function') essayPullRemote(tables) } catch (_essP) {}   /* vT43 作文收稿 */
         /* 2.6.2 有表合并写入失败 → 本机数据不完整，本轮放弃写回，保住 Gitee 上的完整数据。
            08-27 事故复盘：云端写入部分失败后仍按"云端为真源"写回，把 Gitee 上
            六上第一单元 48 条成绩冲没了。宁可这轮不同步，也绝不用残缺数据覆盖。 */
@@ -17575,8 +17587,35 @@ function mpFromDeskBuild(o) {
       };
     }).filter(Boolean);
   } catch (_af) {}
+  /* vT43 作文平台：本机收稿/批改 ∪ 云端 tables.essay（键=essay|姓名|标题|日期，LWW 按 updatedAt/ts），墓碑剔除 */
+  var essayOut = [];
+  try {
+    var _esRem = Array.isArray(o.essay) ? o.essay : [];
+    var _esLoc = (typeof essayAll === 'function') ? essayAll() : [];
+    var _esToms = []; try { _esToms = (typeof tomLoad === 'function') ? tomLoad() : [] } catch (_ete) {}
+    function _esTomb(r) {
+      var bk = 'essay|' + String(r && r.name || '').replace(/\s+/g, '') + '|' + String(r && r.title || '').replace(/\s+/g, '') + '|' + String(r && r.date || '').slice(0, 10);
+      for (var _i = 0; _i < _esToms.length; _i++) { if (_esToms[_i] && _esToms[_i].t === 'essay' && _esToms[_i].k === bk) return true }
+      return false;
+    }
+    var _esSeen = {};
+    _esRem.concat(_esLoc).forEach(function (r) {
+      if (!r || !r.id || _esTomb(r)) return;
+      var bk = (typeof essayKey === 'function') ? essayKey(r) : '';
+      if (bk && _esSeen[bk]) {
+        var prev = _esSeen[bk];
+        if ((Number(r.updatedAt || r.ts) || 0) > (Number(prev.updatedAt || prev.ts) || 0)) {
+          var _pi = essayOut.indexOf(prev);
+          if (_pi >= 0) essayOut[_pi] = r;
+        }
+        return;
+      }
+      if (bk) _esSeen[bk] = r;
+      essayOut.push(r);
+    });
+  } catch (_ese) { essayOut = (typeof essayAll === 'function') ? essayAll() : [] }
   return mpDropEmpty({ students: stu, hw: hw, hwItems: items, affairs: affairsOut, manual: [], scores: scores, rc: rc,
-                       memos: memos, duty: dutyRows2 });
+                       memos: memos, duty: dutyRows2, essay: essayOut });
 }
 function mpTrim365(rows) {
   var lim = new Date(Date.now() - 365 * 86400000);
@@ -18071,6 +18110,184 @@ function syncInit() {
   if (inp && !inp.__bound) { inp.__bound = true; inp.addEventListener('change', syncPickFile) }
 }
 
+/* ================= 作文平台（vT43） =================
+   小程序拍照上传 → Gitee 仓库 essayimg/ 目录 + doc.tables.essay 登记；
+   这里收稿（看照片录入文本）→ 内嵌作文批改模块批改 → graded 事件写回云端。
+   模块自身数据存在本浏览器 localStorage（cw_data_v2），花名册每次打开时注入。 */
+var ESSAY_LKEY = 'wb_essay_v1';
+var essayImgCache = {};            /* 相对路径 -> dataURL */
+function essayAll() { try { var a = JSON.parse(localStorage.getItem(ESSAY_LKEY) || '[]'); return Array.isArray(a) ? a : [] } catch (e) { return [] } }
+function essaySaveList(a) { try { localStorage.setItem(ESSAY_LKEY, JSON.stringify(a)) } catch (e) {} }
+function essayKey(r) { return 'essay|' + String(r && r.name || '').replace(/\s+/g, '') + '|' + String(r && r.title || '').replace(/\s+/g, '') + '|' + String(r && r.date || '').slice(0, 10); }
+function essEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;').replace(/"/g, '&quot;') }
+
+function essayInit() {
+  var f = document.getElementById('essayFrame');
+  if (f && (!f.src || f.src === 'about:blank' || f.getAttribute('src') === 'about:blank')) {
+    f.src = 'essay/index.html';
+    f.addEventListener('load', function () {
+      try {
+        var w = f.contentWindow;
+        if (w && w.EssayGrader && w.EssayGrader.replaceStudents) {
+          var roster = stuRoster().map(function (s) {
+            return { id: String(s.学号 || '').trim() || String(s.姓名 || '').trim(), name: String(s.姓名 || '').trim() };
+          }).filter(function (x) { return x.name });
+          if (roster.length) w.EssayGrader.replaceStudents(roster);
+        }
+      } catch (e) {}
+    });
+  }
+  essayRenderDrafts();
+}
+
+function essayRenderDrafts() {
+  var box = document.getElementById('essayDrafts'); if (!box) return;
+  var list = essayAll().slice().sort(function (a, b) { return (Number(b.ts) || 0) - (Number(a.ts) || 0) });
+  var drafts = list.filter(function (r) { return (r.status || 'draft') !== 'graded' }).length;
+  var tip = document.getElementById('essayDraftTip');
+  if (tip) tip.textContent = list.length ? ('收稿 ' + list.length + ' 篇 · 待批 ' + drafts) : '';
+  if (!list.length) {
+    box.innerHTML = '<div class="sctip" style="display:block;padding:10px 0 4px">📭 暂无作文。让同学在手机小程序「作文上传」里拍照提交；也可以直接在下方批改工作台粘贴文字批改。</div>';
+    return;
+  }
+  var html = list.slice(0, 12).map(function (r) {
+    var st = (r.status === 'graded')
+      ? '<span style="color:#2d8f63;background:#e8f4ee;border-radius:8px;padding:1px 8px;font-size:11.5px">已批 ' + (r.grade && r.grade.total != null ? (r.grade.total + '分·' + (r.grade.level || '')) : '') + '</span>'
+      : '<span style="color:#8a5a2d;background:#fdf3e4;border-radius:8px;padding:1px 8px;font-size:11.5px">待批改</span>';
+    var imgs = Array.isArray(r.images) ? r.images : [];
+    var thumb = imgs.length
+      ? '<img data-essimg="' + essEsc(encodeURIComponent(imgs[0])) + '" alt="作文照片" style="max-height:72px;border-radius:8px;margin-right:4px;cursor:pointer;vertical-align:middle;border:1px solid var(--line)">'
+      : '';
+    var sid = Number(r.no) || 0;
+    return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px dashed var(--line)">' +
+      thumb +
+      '<b style="font-size:13.5px">' + essEsc(r.name) + '</b>' +
+      '<span style="font-size:12.5px;color:#5a6b7a">《' + essEsc(r.title || '未命名') + '》· ' + essEsc(r.date || '') + '</span>' + st +
+      '<span style="flex:1"></span>' +
+      '<button class="btn2 sm primary" onclick="essayOpenGrade(\'' + essEsc(r.name) + '\',' + sid + ')">✍️ 去批改</button>' +
+      '<button class="btn2 sm danger" onclick="essayDelAsk(\'' + essEsc(r.id) + '\')">🗑</button>' +
+      '</div>';
+  }).join('');
+  box.innerHTML = html;
+  box.querySelectorAll('img[data-essimg]').forEach(function (img) {
+    img.addEventListener('click', function () { essayViewImg(decodeURIComponent(img.getAttribute('data-essimg'))) });
+    essayImgLoad(img);
+  });
+}
+
+function essayImgFetch(rel, cb) {
+  if (essayImgCache[rel]) { cb(essayImgCache[rel]); return }
+  try {
+    var cfg = giteeCfg();
+    var url = 'https://gitee.com/api/v5/repos/' + encodeURIComponent(cfg.owner) + '/' + encodeURIComponent(cfg.repo) +
+              '/contents/' + rel + '?access_token=' + encodeURIComponent(cfg.token);
+    fetch(url).then(function (r) { return r.json() }).then(function (j) {
+      if (!j || !j.content) return;
+      var b64 = String(j.content).replace(/\s/g, '');
+      var u = (b64.slice(0, 8) === 'iVBORw0K') ? ('data:image/png;base64,' + b64) : ('data:image/jpeg;base64,' + b64);
+      essayImgCache[rel] = u; cb(u);
+    }).catch(function () {});
+  } catch (e) {}
+}
+function essayImgLoad(img) {
+  var rel = decodeURIComponent(img.getAttribute('data-essimg'));
+  essayImgFetch(rel, function (u) { img.src = u });
+}
+function essayViewImg(rel) {
+  essayImgFetch(rel, function (u) {
+    var w = window.open('', '_blank');
+    if (w) { w.document.write('<title>作文照片</title><body style="margin:0;background:#222;text-align:center"><img src="' + u + '" style="max-width:100%"></body>') }
+  });
+}
+
+function essayOpenGrade(name, no) {
+  var f = document.getElementById('essayFrame');
+  if (!f) return;
+  if (!f.src || f.src === 'about:blank') essayInit();
+  var tryPost = function (n) {
+    var w = f.contentWindow;
+    if (w && w.EssayGrader) {
+      /* 花名册 id = 学号（注入时定的），模块 findStudent 学号/姓名都认 */
+      w.postMessage({ type: 'SCAN_STUDENT', studentId: no ? String(no) : name, studentName: name, mode: 'grade' }, '*');
+    } else if (n < 20) { setTimeout(function () { tryPost(n + 1) }, 300) }
+  };
+  tryPost(0);
+}
+
+/* 批改模块保存作文后回传 → 记到收稿记录上，云端守望自动同步到小程序/桌面 */
+window.addEventListener('message', function (ev) {
+  var d = ev.data || {};
+  if (d && d.source === 'essay-grader' && d.type === 'graded') {
+    try { essayApplyGraded(d.payload || {}) } catch (e) {}
+  }
+});
+function essayApplyGraded(p) {
+  if (!p || !p.studentName) return;
+  var list = essayAll(), hit = null;
+  var i;
+  for (i = list.length - 1; i >= 0; i--) {
+    var r = list[i];
+    if (String(r.name) === String(p.studentName) && String(r.title || '') === String(p.title || '') && r.status !== 'graded') { hit = r; break }
+  }
+  if (!hit) {
+    for (i = list.length - 1; i >= 0; i--) {
+      var r2 = list[i];
+      if (String(r2.name) === String(p.studentName) && r2.status !== 'graded') { hit = r2; break }
+    }
+  }
+  var rec = hit || { id: 'ESS' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: String(p.studentName), title: String(p.title || '未命名'), date: String(p.date || '').slice(0, 10) || ymd(new Date()), images: [], ts: Date.now() };
+  rec.status = 'graded';
+  rec.grade = { total: Number(p.total) || 0, level: String(p.level || ''), date: String(p.date || '').slice(0, 10) };
+  rec.updatedAt = Date.now(); rec.updatedBy = 'web';
+  if (!hit) list.push(rec);
+  essaySaveList(list);
+  essayRenderDrafts();
+  try { toastMsg('✅ 已记录批改：' + rec.name + '《' + rec.title + '》' + rec.grade.total + ' 分，云端守望会自动同步') } catch (e) {}
+}
+
+function essayDelAsk(id) {
+  var list = essayAll(), r = null;
+  list.forEach(function (x) { if (x && x.id === id) r = x });
+  if (!r) return;
+  if (!confirm('确定删除 ' + r.name + '《' + (r.title || '') + '》？多端都会删除。')) return;
+  try {
+    var t = tomLoad();
+    t.push({ t: 'essay', k: essayKey(r), at: Date.now() });
+    localStorage.setItem('wb_mp_tombstones', JSON.stringify(t));
+  } catch (e) {}
+  essaySaveList(list.filter(function (x) { return x && x.id !== id }));
+  essayRenderDrafts();
+}
+
+/* 云端守望每轮：远端 essay 表 LWW 并入本机（跳过墓碑） */
+function essayPullRemote(tables) {
+  var remote = Array.isArray(tables && tables.essay) ? tables.essay : null;
+  if (!remote || !remote.length) return;
+  var tom = [];
+  try { tom = tomLoad() } catch (e) {}
+  function tombed(r) {
+    var bk = essayKey(r);
+    for (var i = 0; i < tom.length; i++) { if (tom[i] && tom[i].t === 'essay' && tom[i].k === bk) return true }
+    return false;
+  }
+  var local = essayAll(), idx = {};
+  local.forEach(function (r, i) { if (r && r.id) idx[r.id] = i });
+  var changed = false;
+  remote.forEach(function (r) {
+    if (!r || !r.id || tombed(r)) return;
+    var old = idx[r.id] != null ? local[idx[r.id]] : null;
+    if (!old || (Number(r.updatedAt || r.ts) || 0) > (Number(old.updatedAt || old.ts) || 0)) {
+      if (old) local[idx[r.id]] = r; else { local.push(r); idx[r.id] = local.length - 1 }
+      changed = true;
+    }
+  });
+  if (changed) {
+    essaySaveList(local);
+    if (document.getElementById('s-essay') && document.getElementById('s-essay').classList.contains('active')) essayRenderDrafts();
+  }
+}
+/* ================= 作文平台结束 ================= */
+
 /* ---------- 导航 ---------- */
 document.getElementById('nav').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
@@ -18084,6 +18301,7 @@ document.getElementById('nav').addEventListener('click',e=>{
   if(b.dataset.s==='pet'){try{wbPetRender()}catch(e){}}
   if(b.dataset.s==='guard'){try{gdRender()}catch(e){console.error('[守护] 渲染失败',e)}}   /* 班级守护 */
   if(b.dataset.s==='comment'){try{cmThemeRender()}catch(e){}try{cmRosterRender()}catch(e){}try{cmResultRender()}catch(e){}}   /* vT14 学生评语 */
+  if(b.dataset.s==='essay'){try{essayInit()}catch(e){console.error('[作文] 初始化失败',e)}}   /* vT43 作文平台 */
   /* 2.0.6：每次进诵读页都重新拉一次。以前只在页面加载时拉一次，
      导入互传包 / 换了数据源之后切回来还是老画面（"导入了没变化"）。 */
   if(b.dataset.s==='recite'){try{if(typeof loadReciteFromDB==='function')loadReciteFromDB()}catch(e){console.error('[诵读] 刷新失败',e)}}
