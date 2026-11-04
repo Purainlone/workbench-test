@@ -122,6 +122,21 @@ body.essay-full #s-essay{padding:8px 14px}
 body.essay-full #s-essay .sub{display:none}
 body.essay-full #essayDrafts{max-height:126px}
 body.essay-full #s-essay .chartbox{padding:8px 10px;margin-bottom:0}
+/* vT50 批改工作台「窗口再高一点」：全屏时把占高度的三块收起来，
+   流程说明改成可点开的折叠条（默认收起，不藏内容）、收稿箱收成一个按钮，
+   再把宿主 main 的上下留白压到最小 —— 全部让给批改区。
+   ⤢ 全屏 = 纯批改模式；退出全屏后下面这些都会恢复。 */
+body.essay-full main{padding:10px 14px 6px}
+body.essay-full #s-essay h2{margin-bottom:2px}
+body.essay-full #s-essay .chartbox{padding:6px 8px}
+/* 桌面版提示条（💾 数据保存在本机）在全屏批改时也收起 —— 它有 inline display，
+   必须 !important 才压得住，否则白占 46px 高度，还把整页顶出一条多余滚动条。 */
+body.essay-full #wbLocalBar{display:none!important}
+body.essay-full #essayDrafts{display:none}
+body.essay-full #essayDraftBar{display:flex}
+body.essay-full.essay-drafts-open #essayDrafts{display:block;max-height:126px}
+/* 非全屏时收稿箱直接铺开，就不需要那个「展开」按钮了 */
+#essayDraftBar{display:none}
 /* vT46 批改工作台 iframe 撑满「作文平台」剩余高度：改用 flex 自适应，不再写死偏移，
    左右两栏不再被截断、整页也不再出现多余滚动条 */
 #s-essay.active{display:flex;flex-direction:column;height:calc(100vh - 48px);overflow:hidden}
@@ -136,7 +151,7 @@ body.essay-full #ppFrame{height:calc(100vh - 274px)!important}
 /* vT46 皮皮批视图（pp-on）同样撑满；全屏模式（⤢）压缩顶栏留白也撑满窗口 */
 #s-essay.pp-on #ppWrap{flex:1 1 auto;min-height:0;display:flex!important;flex-direction:column}
 #s-essay.pp-on #ppFrame{flex:1 1 auto;min-height:0;height:auto!important}
-body.essay-full #s-essay.active{height:calc(100vh - 64px)}
+body.essay-full #s-essay.active{height:calc(100vh - 32px)}   /* vT50：main 留白压到 10+6=16，加 section 自身 16 → 32 */
 
 /* 课程表 */
 table.tt{width:100%;border-collapse:collapse;font-size:13px}
@@ -1228,7 +1243,7 @@ table.paper td.l{text-align:left;font-weight:600}
 <body data-page-node-id="VWm2YCKhwxOUBWSlexIaam">
 <aside data-page-node-id="uyTdXvcdMMBT8HJ1ZWRO9X">
   <div data-page-node-id="YkELpTUKfJkpu7qzDPa66K" class="logo"><!--pnid:7ytoUsgxIUXQsQNXnaE57T-->教师工作台</div>
-  <div class="verline" id="appVer">✨ 成绩管理 v2.6.90 · 点考试名即可改名</div>
+  <div class="verline" id="appVer">✨ 成绩管理 v2.6.90 · 批改台高度自适应</div>
   <nav data-page-node-id="ljZdrlGNjxdpectAoWjkyv" id="nav">
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS" class="active" data-s="home">🏠 <span class="lbl">今日首页</span></button>
 
@@ -1272,7 +1287,7 @@ table.paper td.l{text-align:left;font-weight:600}
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS2" data-s="hol">⏳ <span class="lbl">假期倒计时</span></button>
   </nav>
 </aside>
-<main data-page-node-id="ITT3cuGkIc09jRoWYNPF2W"><main data-page-node-id="ITT3cuGkIc09jRoWYNPF2W">
+<main data-page-node-id="ITT3cuGkIc09jRoWYNPF2W">
     <div id="wbLocalBar" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:8px 13px;border-radius:11px;background:#eef7f2;border:1px solid #cfe7db;font-size:12.5px;color:#25574a">
       <span>💾 桌面版 · 数据保存在本机</span>
       <span id="wbSaveTip" style="color:#6b8a7e"></span>
@@ -2327,8 +2342,15 @@ table.paper td.l{text-align:left;font-weight:600}
         <button class="btn2 sm" id="essayFullBtn" onclick="essayFullToggle()">⤢ 全屏</button>
       </span></h2>
     <div class="sub">手机小程序「作文上传」拍照/扫码录入 → 这里收稿、自动识别原文、批改、分析。批改保存后自动写回云端，多端可见 · 模块数据保存在本浏览器 · 也可以点学生行「🟠 皮皮批」直接交给皮皮改作文</div>
+    <div id="essayDraftBar" style="margin:6px 0 0;align-items:center;gap:8px">
+      <button class="btn2 sm" onclick="essayDraftsToggle()">📥 展开收稿箱</button>
+      <span id="essayDraftBarTip" style="font-size:12px;color:#8a5a2d"></span>
+    </div>
     <div id="essayDrafts" style="max-height:172px;overflow:auto;padding-right:4px"></div>
-    <div class="sctip" style="margin:8px 0 0">💡 皮皮式批改流程：点收稿行「✍️ 去批改」自动带入学生、题目和作文照片 → <b>系统自动识别手写原文</b>填入左栏 → 老师快速核对 → 点「🤖 开始 AI 初批」→ 复核总评/亮点/建议后「保存归档」，结果自动回传云端（小程序可见）。首次使用请点顶部「📷 识别设置」启用自动识别；未启用时也可手动录入文字。</div>
+    <details class="sctip" id="essayTipBox" style="margin:8px 0 0">
+      <summary style="cursor:pointer;font-weight:500;color:#5a6b7a">💡 皮皮式批改流程（点开看说明）</summary>
+      <div style="margin-top:6px">点收稿行「✍️ 去批改」自动带入学生、题目和作文照片 → <b>系统自动识别手写原文</b>填入左栏 → 老师快速核对 → 点「🤖 开始 AI 初批」→ 复核总评/亮点/建议后「保存归档」，结果自动回传云端（小程序可见）。首次使用请点顶部「📷 识别设置」启用自动识别；未启用时也可手动录入文字。</div>
+    </details>
     <div class="chartbox" style="margin:12px 0 0">
       <iframe id="essayFrame" title="作文批改工作台" style="width:100%;height:calc(100vh - 300px);border:0;background:#fff;display:block" src="about:blank"></iframe>
       <div id="ppWrap">
@@ -18297,6 +18319,13 @@ function essayFullToggle() {
   var btn = document.getElementById('essayFullBtn');
   if (btn) btn.textContent = document.body.classList.contains('essay-full') ? '⤡ 退出全屏' : '⤢ 全屏';
 }
+/* vT50 全屏模式下「收稿箱」默认收起（把高度让给批改区），
+   点一下再展开 —— 不是藏功能，篇数会显示在按钮旁边。 */
+function essayDraftsToggle() {
+  var open = document.body.classList.toggle('essay-drafts-open');
+  var b = document.querySelector('#essayDraftBar button');
+  if (b) b.textContent = open ? '📥 收起收稿箱' : '📥 展开收稿箱';
+}
 
 /* ============ 2.6.90 皮皮改作文外接（ppessay.com） ============
    皮皮页面未设 X-Frame-Options，可直接内嵌；登录态存它自己域的
@@ -18368,6 +18397,9 @@ function essayRenderDrafts() {
   var drafts = list.filter(function (r) { return (r.status || 'draft') !== 'graded' }).length;
   var tip = document.getElementById('essayDraftTip');
   if (tip) tip.textContent = list.length ? ('收稿 ' + list.length + ' 篇 · 待批 ' + drafts) : '';
+  /* vT50：全屏时收稿箱收成一行按钮，篇数显示在按钮旁，收起也不「消失」 */
+  var barTip = document.getElementById('essayDraftBarTip');
+  if (barTip) barTip.textContent = list.length ? ('共 ' + list.length + ' 篇 · 待批 ' + drafts) : '暂无稿';
   if (!list.length) {
     box.innerHTML = '<div class="sctip" style="display:block;padding:10px 0 4px">📭 暂无作文。让同学在手机小程序「作文上传」里拍照提交；也可以直接在下方批改工作台粘贴文字批改。</div>';
     return;
