@@ -1250,7 +1250,7 @@ table.paper td.l{text-align:left;font-weight:600}
 <body data-page-node-id="VWm2YCKhwxOUBWSlexIaam">
 <aside data-page-node-id="uyTdXvcdMMBT8HJ1ZWRO9X">
   <div data-page-node-id="YkELpTUKfJkpu7qzDPa66K" class="logo"><!--pnid:7ytoUsgxIUXQsQNXnaE57T-->教师工作台</div>
-  <div class="verline" id="appVer">✨ 教室桌面 v2.6.94 · 首页差榜 + 桌面便签留堂</div>
+  <div class="verline" id="appVer">✨ 教室桌面 v2.6.96 · 自省补责任务 + 收稿箱转登记 + 家长投稿</div>
   <nav data-page-node-id="ljZdrlGNjxdpectAoWjkyv" id="nav">
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS" class="active" data-s="home">🏠 <span class="lbl">今日首页</span></button>
 
@@ -1695,6 +1695,23 @@ table.paper td.l{text-align:left;font-weight:600}
         <input id="asDate" type="date" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
         <input id="asText" placeholder="今天要做的作业内容，如：练习册 P23；听写第三课词语" style="flex:1;min-width:240px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
         <button class="btn2 primary" onclick="asPush()">📢 布置到教室</button>
+      </div>
+      <!-- vT57 自省补责：只布置给部分同学的追加任务（违纪/未按要求完成），带完成期限 -->
+      <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;user-select:none;color:#b3403a">
+          <input type="checkbox" id="asRdOn" onchange="asTypeToggle(this)"> 🎯 自省补责（只给选中的同学，含完成期限）
+        </label>
+        <span class="sctip">勾选后下方会出现学生名单与期限；普通布置不受影响</span>
+      </div>
+      <div id="asRdPanel" style="display:none;margin-top:8px;border:1px solid #f0c7c2;background:#fffaf9;border-radius:10px;padding:10px 12px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <span style="font-size:13px;font-weight:700;color:#b3403a">完成期限</span>
+          <input id="asRdDue" type="date" style="border:1px solid var(--line);border-radius:9px;padding:6px 10px;font-size:13px;font-family:inherit">
+          <button class="btn2 sm" onclick="asRdSelAll(true)">全选</button>
+          <button class="btn2 sm ghost" onclick="asRdSelAll(false)">清空</button>
+          <span class="sctip">一般用于学生违纪或未按要求完成时追加的任务；到期后各端自动不再显示</span>
+        </div>
+        <div id="asRdGrid" style="display:flex;flex-wrap:wrap;gap:6px"></div>
       </div>
       <div id="asList" style="margin-top:8px"></div>
     </div>
@@ -2368,6 +2385,7 @@ table.paper td.l{text-align:left;font-weight:600}
     <div id="essayDraftBar" style="margin:6px 0 0;align-items:center;gap:8px">
       <button class="btn2 sm" onclick="essayDraftsToggle()">📥 展开收稿箱</button>
       <span id="essayDraftBarTip" style="font-size:12px;color:#8a5a2d"></span>
+      <button class="btn2 sm" style="margin-left:auto" onclick="essayToHw()">📥 转入作业登记</button>
     </div>
     <div id="essayDrafts" style="max-height:172px;overflow:auto;padding-right:4px"></div>
     <details class="sctip" id="essayTipBox" style="margin:8px 0 0">
@@ -14367,6 +14385,54 @@ function renderHome(){
     }
   }catch(e2){console.error('[首页] 本周作业「差」榜失败',e2)}
 
+  /* ---------- vT57 自省补责（生效中：date<=今天<=due 且未完成/未删除） ----------
+     只布置给部分同学的追加任务（违纪/未按要求完成）。与桌面标签、教室大屏、小程序首页同一口径。 */
+  try{
+    var rds=(typeof rdActiveRows==='function')?rdActiveRows():[];
+    if(rds.length){
+      var cRd=el('div','hm-card');
+      cRd.style.marginBottom='16px';
+      cRd.style.border='2px solid #e8a9a2';
+      cRd.style.boxShadow='0 2px 12px rgba(192,57,43,.12)';
+      var hdRd=el('div','hm-hd');
+      hdRd.appendChild(el('h4',null,'🎯 自省补责'));
+      var rdRight=el('div');
+      rdRight.style.cssText='display:flex;gap:8px;align-items:center';
+      rdRight.appendChild(el('span','hm-cha-tag',rds.length+' 项生效中'));
+      var mRd=el('button','more','去布置 →');
+      mRd.type='button';
+      mRd.onclick=function(){hmGo('hw')};
+      rdRight.appendChild(mRd);
+      hdRd.appendChild(rdRight);
+      cRd.appendChild(hdRd);
+      var rdWrap=el('div');
+      var today0=ymd(new Date());
+      rds.forEach(function(r){
+        var it=el('div');
+        it.style.cssText='padding:8px 0;border-bottom:1px dashed #f0d5d1';
+        var t1=el('div');
+        t1.style.cssText='font-size:13.5px;font-weight:600;color:#7a2e28';
+        t1.textContent='📌 '+(r.content||'（无内容）');
+        var dd=String(r.due||'').slice(0,10);
+        var left='';try{if(dd){var dl=Math.round((new Date(dd+'T23:59:59')-new Date())/86400000);left=dl>=0?('还剩 '+dl+' 天'):'今日到期'}}catch(e){}
+        t1.appendChild(el('span','hm-cha-tag','期限 '+(dd||'-')+(left?' · '+left:'')));
+        it.appendChild(t1);
+        var names=el('div');
+        names.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin-top:5px';
+        (r.names||[]).forEach(function(n){
+          var sp=el('span');
+          sp.style.cssText='background:#fdecea;color:#b3403a;border-radius:5px;padding:2px 7px;font-size:12px;font-weight:600';
+          sp.textContent=n;
+          names.appendChild(sp);
+        });
+        it.appendChild(names);
+        rdWrap.appendChild(it);
+      });
+      cRd.appendChild(rdWrap);
+      gf.appendChild(cRd);
+    }
+  }catch(e3){console.error('[首页] 自省补责卡片失败',e3)}
+
   /* ---------- 2.5 班务上还没跟完的事 ---------- */
   try{
     var cwTodo=((typeof CW_ROWS!=='undefined'&&CW_ROWS)||[]).map(function(r){
@@ -14509,7 +14575,7 @@ function hmTodayMyClasses(now){
    开关与显示项存在 localStorage：wb_desktag（on / date / alert / tt / hw / 位置）。 */
 var DT_WIN=null;
 function dtCfg(){
-  var d={on:1,date:1,alert:1,tt:1,hw:1,dt:1,desk:1,w:340,h:640,x:null,y:null};
+  var d={on:1,date:1,alert:1,tt:1,hw:1,dt:1,desk:1,remedy:1,w:340,h:640,x:null,y:null};
   try{var s=JSON.parse(localStorage.getItem('wb_desktag')||'{}');for(var k in s)if(k in d)d[k]=s[k]}catch(e){}
   return d;
 }
@@ -14590,6 +14656,9 @@ function dtData(){
           /* vT53 今日留堂（s-detain）：桌面便签也要一眼看到今天谁留堂。
              数据与教室大屏、家长端同源 —— 都是 s-detain 表当天未删除的记录。 */
           detain:dtTagDetainNames(),
+          /* vT57 自省补责（s-remedy）：生效中的补责任务（date<=今天<=due、未完成）。
+             与工作台首页、教室大屏、小程序首页同一口径。 */
+          remedy:dtTagRemedies(),
           /* vT51 教室桌面在线状态：桌面标签小窗要显示「教室端在线/离线」。
              来源 = 主窗口的 window.__deskPresence（MQTT presence 通道收到的心跳）。
              小窗是通过 op.dtData() 从主窗口取数的（同源直读），所以这里直接读主窗口的全局即可。 */
@@ -14607,6 +14676,18 @@ function dtTagDetainNames(){
       if(String(r.date||'').slice(0,10)!==d)return;
       var n=String(r.name).replace(/\s+/g,'').trim();
       if(n&&out.indexOf(n)<0)out.push(n);
+    });
+  }catch(e){}
+  return out;
+}
+/* vT57 自省补责（生效中）：桌面标签展示用，取回轻量结构
+   ⚠️ 与 rdActiveRows 同一过滤口径（date<=今天<=due、未完成/未删除），这里只挑展示字段。 */
+function dtTagRemedies(){
+  var out=[];
+  try{
+    (typeof rdActiveRows==='function'?rdActiveRows():[]).forEach(function(r){
+      out.push({content:String(r.content||''),due:String(r.due||'').slice(0,10),
+                names:(Array.isArray(r.names)?r.names:[]).map(function(n){return String(n).replace(/\s+/g,'').trim()}).filter(Boolean)});
     });
   }catch(e){}
   return out;
@@ -14699,6 +14780,20 @@ function dtRenderHTML(d){
       : '<div class="dt-empty">今天没有留堂学生</div>';
     h+=sec('⏰ 今日留堂',b5);
   }
+  /* vT57 自省补责：生效中的补责任务（只给指定同学的追加任务，含期限） */
+  if(c.remedy){
+    var rds=d.remedy||[];
+    var b6=rds.length
+      ? rds.map(function(r){
+          var dd=String(r.due||'').slice(0,10);
+          var left='';try{if(dd){var dl=Math.round((new Date(dd+'T23:59:59')-d.ts)/86400000);left=dl>=0?' · 还剩 '+dl+' 天':' · 今日到期'}}catch(e){}
+          return '<div class="dt-row dt-remedy"><b>📌 '+dtEsc(r.content)+'</b>'+
+                 '<span class="dt-t">期限 '+dtEsc(dd||'-')+dtEsc(left)+' · '+(r.names||[]).length+' 人</span></div>'+
+                 '<div class="dt-names dt-remedy-names">'+(r.names||[]).map(function(n){return '<span>'+dtEsc(n)+'</span>'}).join('')+'</div>';
+        }).join('')
+      : '<div class="dt-empty">当前没有生效中的补责任务</div>';
+    h+=sec('🎯 自省补责',b6);
+  }
   /* vT51 教室桌面在线状态：桌面标签上也能一眼看到教室电脑在不在 */
   if(c.desk){
     var dk=d.desk||{state:'none',id:'',at:0,ago:-1};
@@ -14749,6 +14844,8 @@ function dtShellHTML(){
    +'.dt-empty{color:#98a2b0;font-size:13px;padding:6px 0}'
    /* vT53 今日留堂：桌面便签里的留堂名单，用暖红色区分（别和「未交」的橙色混了） */
    +'.dt-detain{color:#c0392b}.dt-detain-names span{background:#fdeceb;color:#a33a2f;font-weight:600}'
+   /* vT57 自省补责：暖红但比留堂浅一档，期限小字灰色 */
+   +'.dt-remedy{color:#b3403a}.dt-remedy-names span{background:#fdecea;color:#b3403a;font-weight:600}'
    /* vT51 教室桌面在线状态：小圆点 + 一行文字，样式对齐「教室桌面」模块 */
    +'.dt-desk{display:flex;align-items:flex-start;gap:6px;font-size:13px;line-height:1.5}'
    +'.dt-dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px;margin-top:4px;background:#c8ced6}'
@@ -14761,7 +14858,7 @@ function dtShellHTML(){
    +'<div class="dt-top"><span class="dt-title">📌 桌面标签</span><span class="dt-btns">'
    +'<button id="dtSet" title="显示哪些板块">⚙</button><button id="dtRef" title="立即刷新">↻</button><button id="dtHide" title="收起标签">×</button>'
    +'</span></div>'
-   +'<div class="dt-cfg" id="dtCfg" style="display:none">'+ck('date','日期周次')+ck('alert','提醒')+ck('tt','课程')+ck('hw','未交作业')+ck('dt','今日留堂')+ck('desk','教室桌面')+'</div>'
+   +'<div class="dt-cfg" id="dtCfg" style="display:none">'+ck('date','日期周次')+ck('alert','提醒')+ck('tt','课程')+ck('hw','未交作业')+ck('dt','今日留堂')+ck('remedy','自省补责')+ck('desk','教室桌面')+'</div>'
    +'<div id="dt"></div><div class="dt-foot" id="dtFoot"></div>'
    +'<scr'+'ipt>(function(){'
    +'var box=document.getElementById("dt"),foot=document.getElementById("dtFoot"),op=null;'
@@ -16457,7 +16554,7 @@ try {
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
 var WB_MY_VER = '优化版 vT53 · 差榜 + 留堂';
-var WB_BUILD_DATE = '11-04', WB_BUILD_NO = '2.6.94';
+var WB_BUILD_DATE = '11-05', WB_BUILD_NO = '2.6.96';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -18968,8 +19065,94 @@ function essayPullRemote(tables) {
   });
   if (changed) {
     essaySaveList(local);
-    if (document.getElementById('s-essay') && document.getElementById('s-essay').classList.contains('active')) essayRenderDrafts();
+      if (document.getElementById('s-essay') && document.getElementById('s-essay').classList.contains('active')) essayRenderDrafts();
   }
+}
+
+/* ============ vT56 收稿箱上交情况 → 作业登记 ============
+   把某次作文的「谁交了」一次性转成作业登记：已交标「良」、未交标「超时未交」。
+   数据源 = 本工作台收稿箱（essayAll()，已含小程序/家长投稿，按 tables.essay 同步）。
+   写入复用作业登记现有飞书路径（db.addRecord/updateRecord + 撤墓碑），与手动涂色一致。 */
+function hwSetLevelFor(name, item, lv) {
+  var k = hwKey(name, item);
+  var m = hwMapRows();
+  var had = m[k];
+  var score = (HW_SCORE && HW_SCORE[lv] != null) ? HW_SCORE[lv]
+            : (lv === '超时未交' ? -2 : (lv === '良' ? 1 : 0));
+  if (had) {
+    if (fval(had, '等级') === lv) return Promise.resolve('skip');
+    var rid = recId(had);
+    if (!dbReady) return Promise.resolve('nofeishu');
+    return db.updateRecord({ databaseId: 'fCfl0cuMIVzFDi0iDuAEv2', recordId: rid,
+      properties: { '等级': { select: lv }, '分值': { number: score }, '备注': { text: '' } }
+    }).then(function () {
+      HW_ROWS.forEach(function (x) { if (recId(x) === rid) { x['等级'] = lv; x['分值'] = score; } });
+      hwTomDropRec(name, item.name, item.date);
+      return 'upd';
+    });
+  } else {
+    if (!dbReady) return Promise.resolve('nofeishu');
+    return db.addRecord({ databaseId: 'fCfl0cuMIVzFDi0iDuAEv2', properties: {
+      '日期': { date: hwDateOnly(item.date) || ymd(new Date()) },
+      '作业名称': { text: item.name },
+      '学生姓名': { text: name },
+      '等级': { select: lv },
+      '分值': { number: score },
+      '备注': { text: '' }
+    } }).then(function (r) {
+      if (!(r && r.id)) throw new Error('addRecord 未返回 id');
+      HW_ROWS.push({ id: r.id, '日期': item.date, '作业名称': item.name, '学生姓名': name, '等级': lv, '分值': score });
+      hwSubjSet(item.name, item.date, item.subject || '语文');
+      hwTomDropRec(name, item.name, item.date);
+      return 'add';
+    });
+  }
+}
+function essayToHw() {
+  if (!HW_MODE) { toastMsg('👀 先在「作业登记」点「✍️ 开始登记」开启编辑'); return; }
+  if (!dbReady) { toastMsg('⚠️ 未连接飞书数据表，无法登记'); return; }
+  var list = essayAll() || [];
+  if (!list.length) { toastMsg('收稿箱还没有作文记录'); return; }
+  /* 按作文题聚合，选提交数最多的那一篇作为本次「作业登记」列 */
+  var g = {}, titles = [];
+  list.forEach(function (r) {
+    var t = String(r.title || '').trim(); if (!t) return;
+    if (!g[t]) { g[t] = { t: t, date: '', n: 0, names: {} }; titles.push(t); }
+    g[t].n++;
+    var d = hwDateOnly(r.date); if (d > g[t].date) g[t].date = d;
+    g[t].names[String(r.name || '').trim()] = 1;
+  });
+  if (!titles.length) { toastMsg('作文记录都缺标题，先在批改台补标题'); return; }
+  titles.sort(function (a, b) { return g[b].n - g[a].n; });
+  var pick = g[titles[0]];
+  if (!pick.date) pick.date = ymd(new Date());
+  /* 确保作业列存在（与 hwAddItem 同口径，幂等） */
+  var item = null;
+  for (var i = 0; i < HW_ITEMS.length; i++) {
+    if (HW_ITEMS[i].name === pick.t && hwDateOnly(HW_ITEMS[i].date) === pick.date) { item = HW_ITEMS[i]; break; }
+  }
+  if (!item) {
+    item = { name: pick.t, date: pick.date, subject: '语文', pending: true };
+    HW_ITEMS.push(item); hwSubjSet(pick.t, pick.date, '语文');
+    try { if (typeof hwBuildItems === 'function') hwBuildItems(); } catch (e) {}
+  }
+  var roster = hwRoster();
+  if (!roster.length) { toastMsg('还没有学生花名册'); return; }
+  var submitted = {}; Object.keys(pick.names).forEach(function (n) { submitted[tomNorm(n)] = 1; });
+  toastMsg('⏳ 正在把《' + pick.t + '》转入作业登记…');
+  Promise.all(roster.map(function (s) {
+    var lv = submitted[tomNorm(s.姓名)] ? '良' : '超时未交';
+    return hwSetLevelFor(s.姓名, item, lv).then(function (res) { return res; })
+      .catch(function () { return 'err'; });
+  })).then(function (reses) {
+    var add = 0, skip = 0, err = 0;
+    reses.forEach(function (r) { if (r === 'add' || r === 'upd') add++; else if (r === 'skip') skip++; else err++; });
+    renderHW(); renderStu();
+    setTimeout(function () { try { renderHome(); } catch (e) {} }, 0);
+    try { if (typeof syncScheduleSoon === 'function') syncScheduleSoon(); } catch (e) {}
+    toastMsg('✅ 已转入《' + pick.t + '》：' + add + ' 人登记（已交标「良」、未交标「超时未交」）'
+      + (skip ? '，' + skip + ' 条已存在跳过' : '') + (err ? '，' + err + ' 条失败' : ''));
+  });
 }
 /* ================= 作文平台结束 ================= */
 
@@ -29808,7 +29991,7 @@ function cwInit(){
   if (window.__WB_NT_LOADED__) return; window.__WB_NT_LOADED__ = true;
 
   /* ---------- 数据层 ---------- */
-  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain', 's-train', 's-hwadj', 's-rcmd'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 / s-train 展示训练营；vT17 + s-hwadj 科任端作业积分加减（并入作业积分汇总）；vT51 + s-rcmd 远程指令回执（桌面写、教师读） */
+  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain', 's-train', 's-hwadj', 's-rcmd', 's-remedy'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 / s-train 展示训练营；vT17 + s-hwadj 科任端作业积分加减（并入作业积分汇总）；vT51 + s-rcmd 远程指令回执（桌面写、教师读）；vT57 + s-remedy 自省补责（指定学生 + 完成期限，网页/小程序布置，首页/桌面标签/教室大屏/小程序首页展示） */
   var NT_STORE_KEY = 'wb_nt_v1';
   function ntLoad() {
     try { var o = JSON.parse(localStorage.getItem(NT_STORE_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} }
@@ -30286,14 +30469,77 @@ function cwInit(){
     toastMsg('已撤回，教室端将不再显示');
   };
   /* ===== vT13 布置作业（s-assign，随 nt 机制同步到教室桌面）===== */
+  /* ===== vT57 自省补责（s-remedy）：只布置给部分同学的追加任务，含完成期限。
+     记录结构：{id:'rd_..', date:布置日, due:期限, content, names:[姓名…], done:false, deleted:false, ts…}
+     展示口径（首页/桌面标签/教室大屏/小程序首页一致）：
+     生效中 = !deleted && !done && date<=今天<=due；到期后各端自动不再显示。 ===== */
+  function rdDayStr(dt) {
+    var d = dt || new Date(); var p = function (n) { return (n < 10 ? '0' : '') + n };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+  function rdActive(r, today) {
+    if (!r || r.deleted || r.done) return false;
+    var d0 = String(r.date || '').slice(0, 10), due = String(r.due || '').slice(0, 10);
+    today = today || rdDayStr();
+    if (!due) due = d0;
+    return !!d0 && d0 <= today && today <= due;
+  }
+  window.rdActiveRows = function (today) {
+    return ntRows('s-remedy').filter(function (r) { return rdActive(r, today); })
+      .sort(function (a, b) { return String(a.due || '').localeCompare(String(b.due || '')) || (a.ts || 0) - (b.ts || 0); });
+  };
+  var asRdSel = {};
+  window.asTypeToggle = function (cb) {
+    var on = !!cb.checked;
+    var subj = document.getElementById('asSubj'); if (subj) subj.style.display = on ? 'none' : '';
+    var panel = document.getElementById('asRdPanel'); if (panel) panel.style.display = on ? '' : 'none';
+    if (on) { asRdRenderGrid(); asRdPreDue(); }
+  };
+  function asRdPreDue() {
+    var el = document.getElementById('asRdDue'); if (!el || el.value) return;
+    var d = new Date(); d.setDate(d.getDate() + 2);   /* 默认期限 = 后天，可自行改 */
+    el.value = rdDayStr(d);
+  }
+  function asRdRenderGrid() {
+    var grid = document.getElementById('asRdGrid'); if (!grid) return;
+    var roster = stuRoster();
+    grid.innerHTML = roster.length ? roster.map(function (s) {
+      var on = !!asRdSel[s.姓名];
+      return '<label style="border:1px solid ' + (on ? '#e08a80' : 'var(--line)') + ';background:' + (on ? '#fdecea' : '#fff') + ';border-radius:9px;padding:5px 10px;font-size:13px;cursor:pointer;user-select:none">' +
+        '<input type="checkbox" data-nm="' + esc(s.姓名) + '"' + (on ? ' checked' : '') + ' onchange="asRdToggle(this)"> ' + esc(s.姓名) + '</label>';
+    }).join('') : '<span class="sub">还没有学生名单</span>';
+  }
+  window.asRdToggle = function (cb) { asRdSel[cb.getAttribute('data-nm')] = cb.checked; };
+  window.asRdSelAll = function (on) {
+    stuRoster().forEach(function (s) { asRdSel[s.姓名] = !!on; });
+    asRdRenderGrid();
+  };
   window.asPush = function () {
     var txt = (document.getElementById('asText').value || '').trim();
-    var sub = '语文';   /* 班主任兼语文：布置作业固定归入语文 */
-    if (!sub) { toastMsg('⚠️ 先填科目'); return }
-    if (!txt) { toastMsg('⚠️ 先写作业内容'); return }
+    if (!txt) { toastMsg('⚠️ 先写任务内容'); return }
     var dEl = document.getElementById('asDate');
     var d = (dEl && dEl.value) || new Date().toISOString().slice(0, 10);
-    var rec = { id: 'as_' + Date.now() + Math.floor(Math.random() * 9000 + 1000),
+    var rdOn = document.getElementById('asRdOn') && document.getElementById('asRdOn').checked;
+    var rec;
+    if (rdOn) {
+      var names = Object.keys(asRdSel).filter(function (k) { return asRdSel[k]; });
+      if (!names.length) { toastMsg('⚠️ 自省补责要先勾选至少 1 名同学'); return }
+      var dueEl = document.getElementById('asRdDue');
+      var due = (dueEl && dueEl.value) || d;
+      if (due < d) { toastMsg('⚠️ 完成期限不能早于布置日期'); return }
+      rec = { id: 'rd_' + Date.now() + Math.floor(Math.random() * 9000 + 1000),
+        date: d, due: due, subject: '自省补责', content: txt, names: names,
+        done: false, by: '班主任', deleted: false,
+        ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher' };
+      ntUpsert('s-remedy', rec);
+      document.getElementById('asText').value = '';
+      asRdSel = {}; asRdRenderGrid();
+      asRender(); ntChanged();
+      toastMsg('🎯 已布置自省补责（' + names.length + ' 人），首页/桌面标签/教室大屏/小程序首页将显示');
+      return;
+    }
+    var sub = '语文';   /* 班主任兼语文：布置作业固定归入语文 */
+    rec = { id: 'as_' + Date.now() + Math.floor(Math.random() * 9000 + 1000),
       date: d, subject: sub, content: txt, by: '班主任', deleted: false,
       ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher' };
     ntUpsert('s-assign', rec);
@@ -30308,19 +30554,46 @@ function cwInit(){
     ntUpsert('s-assign', rec); asRender(); ntChanged();
     toastMsg('已删除这条布置');
   };
+  window.asRdDone = function (id) {
+    var rec = ntGet('s-remedy', id); if (!rec) return;
+    rec.done = true; rec.ts = Date.now(); rec.updatedAt = new Date().toISOString();
+    ntUpsert('s-remedy', rec); asRender(); ntChanged();
+    toastMsg('✅ 已标记完成，各端不再显示');
+  };
+  window.asRdDel = function (id) {
+    if (!confirm('删除这条自省补责？各端将不再显示')) return;
+    var rec = ntGet('s-remedy', id); if (!rec) return;
+    rec.deleted = true; rec.ts = Date.now(); rec.updatedAt = new Date().toISOString();
+    ntUpsert('s-remedy', rec); asRender(); ntChanged();
+    toastMsg('已删除这条自省补责');
+  };
   window.asRender = function () {
     var box = document.getElementById('asList'); if (!box) return;
     var dEl = document.getElementById('asDate');
     var d = (dEl && dEl.value) || new Date().toISOString().slice(0, 10);
     var rows = ntRows('s-assign').filter(function (r) { return r && !r.deleted && String(r.date || '').slice(0, 10) === d; });
     rows.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0) });
-    box.innerHTML = rows.map(function (r) {
+    var rds = ntRows('s-remedy').filter(function (r) { return r && !r.deleted && String(r.date || '').slice(0, 10) === d; });
+    rds.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0) });
+    var html = rows.map(function (r) {
       return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed #e3ede7">' +
         '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#e8f4ee;color:#2d5a45;flex-shrink:0">' + esc(r.subject || '') + '</span>' +
         '<span style="flex:1;font-size:13px">' + esc(r.content || '') + '</span>' +
         '<span style="font-size:11px;color:#93a89b;flex-shrink:0">' + esc(r.by || '') + '</span>' +
         '<button class="btn2 sm ghost" style="color:#c2410c" onclick="asDel(\'' + r.id + '\')">删</button></div>';
-    }).join('') || '<div class="sub">这一天还没有布置作业</div>';
+    });
+    html = html.concat(rds.map(function (r) {
+      var nm = (r.names || []).join('、');
+      return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed #f0d5d1;' + (r.done ? 'opacity:.55' : '') + '">' +
+        '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#fdecea;color:#b3403a;flex-shrink:0">🎯 自省补责</span>' +
+        '<span style="flex:1;font-size:13px">' + esc(r.content || '') +
+        '<span style="font-size:11px;color:#b3403a;margin-left:6px">' + esc((r.names || []).length + ' 人') +
+        ' · 期限 ' + esc(String(r.due || '').slice(0, 10)) + (r.done ? ' · 已完成' : '') + '</span>' +
+        '<div style="font-size:11.5px;color:#8b6360;margin-top:2px">' + esc(nm) + '</div></span>' +
+        (r.done ? '' : '<button class="btn2 sm ghost" style="color:#2d7a4f" onclick="asRdDone(\'' + r.id + '\')">完成</button>') +
+        '<button class="btn2 sm ghost" style="color:#c2410c" onclick="asRdDel(\'' + r.id + '\')">删</button></div>';
+    }));
+    box.innerHTML = html.join('') || '<div class="sub">这一天还没有布置作业</div>';
   };
 
   /* ================= vT15 经典内容管理（每日一句/古诗词/小古文：s-classic 内容库 + s-csched 每日安排，随 nt 同步到教室大屏） ================= */
