@@ -1250,7 +1250,7 @@ table.paper td.l{text-align:left;font-weight:600}
 <body data-page-node-id="VWm2YCKhwxOUBWSlexIaam">
 <aside data-page-node-id="uyTdXvcdMMBT8HJ1ZWRO9X">
   <div data-page-node-id="YkELpTUKfJkpu7qzDPa66K" class="logo"><!--pnid:7ytoUsgxIUXQsQNXnaE57T-->教师工作台</div>
-  <div class="verline" id="appVer">✨ 教室桌面 v2.6.96 · 自省补责任务 + 收稿箱转登记 + 家长投稿</div>
+  <div class="verline" id="appVer">✨ 教室桌面 v2.6.97 · 自省补责逐人登记完成 + 补责转作业登记</div>
   <nav data-page-node-id="ljZdrlGNjxdpectAoWjkyv" id="nav">
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS" class="active" data-s="home">🏠 <span class="lbl">今日首页</span></button>
 
@@ -14418,13 +14418,20 @@ function renderHome(){
         t1.appendChild(el('span','hm-cha-tag','期限 '+(dd||'-')+(left?' · '+left:'')));
         it.appendChild(t1);
         var names=el('div');
-        names.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin-top:5px';
-        (r.names||[]).forEach(function(n){
+        names.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;align-items:center';
+        /* vT58 首页也能直接点姓名登记完成（与布置列表同一套逻辑） */
+        var rem=(typeof rdRemain==='function'?rdRemain(r):(r.names||[]));
+        var tot=(r.names||[]).length, dnDone=tot-rem.length;
+        rem.forEach(function(n){
           var sp=el('span');
-          sp.style.cssText='background:#fdecea;color:#b3403a;border-radius:5px;padding:2px 7px;font-size:12px;font-weight:600';
+          sp.style.cssText='cursor:pointer;user-select:none;background:#fdecea;color:#b3403a;border:1px solid #f0c7c2;border-radius:5px;padding:2px 7px;font-size:12px;font-weight:600';
+          sp.title='点一下：'+n+' 已完成（再点撤销）';
           sp.textContent=n;
+          sp.onclick=(function(nm){return function(){ if(typeof asRdCheck==='function') asRdCheck(r.id,nm); };})(n);
           names.appendChild(sp);
         });
+        if(!rem.length){ var sp0=el('span'); sp0.style.cssText='font-size:12px;color:#2d7a4f'; sp0.textContent='全部完成 ✓'; names.appendChild(sp0); }
+        if(dnDone){ var sp1=el('span'); sp1.style.cssText='font-size:11.5px;color:#2d7a4f;margin-left:2px'; sp1.textContent='已完成 '+dnDone+'/'+tot+' 人'; names.appendChild(sp1); }
         it.appendChild(names);
         rdWrap.appendChild(it);
       });
@@ -14686,8 +14693,10 @@ function dtTagRemedies(){
   var out=[];
   try{
     (typeof rdActiveRows==='function'?rdActiveRows():[]).forEach(function(r){
+      /* vT58 只显示「还没完成」的同学 —— 点绿的人不再出现在便签上 */
+      var ns=(typeof rdRemain==='function')?rdRemain(r):(Array.isArray(r.names)?r.names:[]);
       out.push({content:String(r.content||''),due:String(r.due||'').slice(0,10),
-                names:(Array.isArray(r.names)?r.names:[]).map(function(n){return String(n).replace(/\s+/g,'').trim()}).filter(Boolean)});
+                names:ns.map(function(n){return String(n).replace(/\s+/g,'').trim()}).filter(Boolean)});
     });
   }catch(e){}
   return out;
@@ -14788,7 +14797,7 @@ function dtRenderHTML(d){
           var dd=String(r.due||'').slice(0,10);
           var left='';try{if(dd){var dl=Math.round((new Date(dd+'T23:59:59')-d.ts)/86400000);left=dl>=0?' · 还剩 '+dl+' 天':' · 今日到期'}}catch(e){}
           return '<div class="dt-row dt-remedy"><b>📌 '+dtEsc(r.content)+'</b>'+
-                 '<span class="dt-t">期限 '+dtEsc(dd||'-')+dtEsc(left)+' · '+(r.names||[]).length+' 人</span></div>'+
+                 '<span class="dt-t">期限 '+dtEsc(dd||'-')+dtEsc(left)+' · 还剩 '+(r.names||[]).length+' 人</span></div>'+
                  '<div class="dt-names dt-remedy-names">'+(r.names||[]).map(function(n){return '<span>'+dtEsc(n)+'</span>'}).join('')+'</div>';
         }).join('')
       : '<div class="dt-empty">当前没有生效中的补责任务</div>';
@@ -16554,7 +16563,7 @@ try {
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
 var WB_MY_VER = '优化版 vT53 · 差榜 + 留堂';
-var WB_BUILD_DATE = '11-05', WB_BUILD_NO = '2.6.96';
+var WB_BUILD_DATE = '11-05', WB_BUILD_NO = '2.6.97';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -30477,12 +30486,22 @@ function cwInit(){
     var d = dt || new Date(); var p = function (n) { return (n < 10 ? '0' : '') + n };
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
   }
+  /* vT58 按学生登记完成：doneNames 存已完成的姓名（大小写/空格按原样比对，名单来自同一处 stuRoster）
+     - doneNames 为空 = 一个都没完成
+     - 全部姓名都进 doneNames → 自动置 done=true 归档，四端一齐消失
+     - 展示口径：各端只显示「还没完成的人」，完成的人从卡上消失（而不是整条任务消失） */
+  function rdDoneNames(r) { return (r && Array.isArray(r.doneNames)) ? r.doneNames : []; }
+  function rdRemain(r) {
+    var dn = rdDoneNames(r);
+    return (r && Array.isArray(r.names) ? r.names : []).filter(function (n) { return dn.indexOf(n) < 0; });
+  }
+  window.rdRemain = rdRemain;   /* 首页/桌面标签同用一份口径 */
   function rdActive(r, today) {
     if (!r || r.deleted || r.done) return false;
     var d0 = String(r.date || '').slice(0, 10), due = String(r.due || '').slice(0, 10);
     today = today || rdDayStr();
     if (!due) due = d0;
-    return !!d0 && d0 <= today && today <= due;
+    return !!d0 && d0 <= today && today <= due && rdRemain(r).length > 0;
   }
   window.rdActiveRows = function (today) {
     return ntRows('s-remedy').filter(function (r) { return rdActive(r, today); })
@@ -30554,11 +30573,66 @@ function cwInit(){
     ntUpsert('s-assign', rec); asRender(); ntChanged();
     toastMsg('已删除这条布置');
   };
-  window.asRdDone = function (id) {
+  /* vT58 逐人登记完成：点学生姓名 → 标记该生完成（再点一次撤销）
+     全部姓名都完成后自动归档（done=true），四端同时不再显示 */
+  window.asRdCheck = function (id, nm) {
     var rec = ntGet('s-remedy', id); if (!rec) return;
-    rec.done = true; rec.ts = Date.now(); rec.updatedAt = new Date().toISOString();
+    var arr = rdDoneNames(rec).slice();
+    var i = arr.indexOf(nm), undo = i >= 0;
+    if (undo) arr.splice(i, 1); else arr.push(nm);
+    rec.doneNames = arr;
+    var remain = (Array.isArray(rec.names) ? rec.names : []).filter(function (n) { return arr.indexOf(n) < 0; });
+    rec.done = remain.length === 0;
+    rec.ts = Date.now(); rec.updatedAt = new Date().toISOString(); rec.updatedBy = 'teacher';
+    ntUpsert('s-remedy', rec);
+    asRender(); ntChanged();
+    try { renderHome(); } catch (e) {}
+    toastMsg(undo ? ('↩️ 已撤销「' + nm + '」的完成标记，还剩 ' + remain.length + ' 人')
+      : ('✅ 已登记「' + nm + '」完成' + (rec.done ? '，全部完成，各端不再显示' : '，还剩 ' + remain.length + ' 人')));
+  };
+  /* 一键把这条补责的所有学生标完成（个别漏点/整体收尾用） */
+  window.asRdDoneAll = function (id) {
+    var rec = ntGet('s-remedy', id); if (!rec) return;
+    var all = (Array.isArray(rec.names) ? rec.names : []).slice();
+    if (!all.length) { toastMsg('这条补责没有学生名单'); return }
+    if (!confirm('把「' + all.length + ' 人」全部标记完成？标记后各端不再显示这条补责')) return;
+    rec.doneNames = all; rec.done = true;
+    rec.ts = Date.now(); rec.updatedAt = new Date().toISOString(); rec.updatedBy = 'teacher';
     ntUpsert('s-remedy', rec); asRender(); ntChanged();
-    toastMsg('✅ 已标记完成，各端不再显示');
+    try { renderHome(); } catch (e) {}
+    toastMsg('✅ 全部完成，各端不再显示');
+  };
+  /* vT58 把「已完成」的同学登记进作业登记（记「良」+1 分），未完成的留在补责卡上继续盯
+     —— 复用 hwSetLevelFor 的飞书写路径，与手动涂色完全一致 */
+  window.asRdToHw = function (id) {
+    var rec = ntGet('s-remedy', id); if (!rec) return;
+    var done = rdDoneNames(rec);
+    if (!done.length) { toastMsg('还没有人标记完成——先点学生姓名把完成的同学点绿'); return }
+    if (!dbReady) { toastMsg('⚠️ 未连接飞书数据表，无法登记'); return }
+    var nm = '自省补责·' + String(rec.content || '').slice(0, 18);
+    var d = String(rec.date || '').slice(0, 10) || ymd(new Date());
+    var item = null;
+    for (var i = 0; i < HW_ITEMS.length; i++) {
+      if (HW_ITEMS[i].name === nm && hwDateOnly(HW_ITEMS[i].date) === d) { item = HW_ITEMS[i]; break; }
+    }
+    if (!item) {
+      item = { name: nm, date: d, subject: '自省补责', pending: true };
+      HW_ITEMS.push(item);
+      try { hwSubjSet(nm, d, '自省补责'); } catch (e) {}
+      try { if (typeof hwBuildItems === 'function') hwBuildItems(); } catch (e) {}
+    }
+    toastMsg('⏳ 正在把 ' + done.length + ' 人登记进作业登记…');
+    Promise.all(done.map(function (n) {
+      return hwSetLevelFor(n, item, '良').then(function (r) { return r; }).catch(function () { return 'err'; });
+    })).then(function (reses) {
+      var ok = 0, skip = 0, err = 0;
+      reses.forEach(function (r) { if (r === 'add' || r === 'upd') ok++; else if (r === 'skip') skip++; else err++; });
+      try { renderHW(); renderStu(); } catch (e) {}
+      setTimeout(function () { try { renderHome(); } catch (e) {} }, 0);
+      try { if (typeof syncScheduleSoon === 'function') syncScheduleSoon(); } catch (e) {}
+      toastMsg('✅ 已登记到作业登记「' + nm + '」：' + ok + ' 人记「良」+1 分'
+        + (skip ? '，' + skip + ' 条已存在跳过' : '') + (err ? '，' + err + ' 条失败' : ''));
+    });
   };
   window.asRdDel = function (id) {
     if (!confirm('删除这条自省补责？各端将不再显示')) return;
@@ -30583,15 +30657,28 @@ function cwInit(){
         '<button class="btn2 sm ghost" style="color:#c2410c" onclick="asDel(\'' + r.id + '\')">删</button></div>';
     });
     html = html.concat(rds.map(function (r) {
-      var nm = (r.names || []).join('、');
-      return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed #f0d5d1;' + (r.done ? 'opacity:.55' : '') + '">' +
+      /* vT58 学生姓名变成可点的「完成开关」：灰红=未完成，绿底✓=已完成 */
+      var dn = rdDoneNames(r), all = (Array.isArray(r.names) ? r.names : []), total = all.length;
+      var chips = all.map(function (n) {
+        var on = dn.indexOf(n) >= 0;
+        return '<span data-rid="' + esc(r.id) + '" data-nm="' + esc(n) + '" onclick="asRdCheck(this.getAttribute(\'data-rid\'),this.getAttribute(\'data-nm\'))"' +
+          ' title="点一下：这个同学已完成（再点撤销）" style="cursor:pointer;user-select:none;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;' +
+          'border:1px solid ' + (on ? '#bfe0cf' : '#f0c7c2') + ';background:' + (on ? '#e8f4ee' : '#fdecea') + ';color:' + (on ? '#2d7a4f' : '#b3403a') + '">' +
+          (on ? '✓ ' : '') + esc(n) + '</span>';
+      }).join(' ');
+      return '<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed #f0d5d1;' + (r.done ? 'opacity:.55' : '') + '">' +
         '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#fdecea;color:#b3403a;flex-shrink:0">🎯 自省补责</span>' +
-        '<span style="flex:1;font-size:13px">' + esc(r.content || '') +
-        '<span style="font-size:11px;color:#b3403a;margin-left:6px">' + esc((r.names || []).length + ' 人') +
-        ' · 期限 ' + esc(String(r.due || '').slice(0, 10)) + (r.done ? ' · 已完成' : '') + '</span>' +
-        '<div style="font-size:11.5px;color:#8b6360;margin-top:2px">' + esc(nm) + '</div></span>' +
-        (r.done ? '' : '<button class="btn2 sm ghost" style="color:#2d7a4f" onclick="asRdDone(\'' + r.id + '\')">完成</button>') +
-        '<button class="btn2 sm ghost" style="color:#c2410c" onclick="asRdDel(\'' + r.id + '\')">删</button></div>';
+        '<span style="flex:1;min-width:0;font-size:13px">' + esc(r.content || '') +
+        '<span style="font-size:11px;color:#b3403a;margin-left:6px">' +
+        (r.done ? '全部完成（' + total + ' 人）' : '已完成 ' + dn.length + '/' + total + ' 人') +
+        ' · 期限 ' + esc(String(r.due || '').slice(0, 10)) + '</span>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">' +
+        (chips || '<span style="font-size:11.5px;color:#93a89b">无学生名单</span>') + '</div></span>' +
+        '<div style="display:flex;gap:4px;flex-shrink:0">' +
+        (r.done ? '' : '<button class="btn2 sm ghost" style="color:#2d7a4f" onclick="asRdDoneAll(\'' + r.id + '\')" title="把这条补责的所有人一次性标完成">全部完成</button>') +
+        (dn.length ? '<button class="btn2 sm ghost" style="color:#1d5c8f" onclick="asRdToHw(\'' + r.id + '\')" title="把已完成的人登记进作业登记（记「良」+1 分）">登记</button>' : '') +
+        '<button class="btn2 sm ghost" style="color:#c2410c" onclick="asRdDel(\'' + r.id + '\')">删</button>' +
+        '</div></div>';
     }));
     box.innerHTML = html.join('') || '<div class="sub">这一天还没有布置作业</div>';
   };
