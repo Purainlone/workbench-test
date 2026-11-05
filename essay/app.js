@@ -301,6 +301,9 @@ function snippet(text, i, len) {
 function extractJSON(s) {
   if (!s) return null;
   try { return JSON.parse(s); } catch (e) {}
+  /* 剥掉 ```json ... ``` 代码围栏（智谱等模型习惯用围栏包裹 JSON） */
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) { try { return JSON.parse(fence[1].trim()); } catch (e) {} }
   const m = s.match(/\{[\s\S]*\}/);
   if (m) { try { return JSON.parse(m[0]); } catch (e) {} }
   return null;
@@ -1329,15 +1332,27 @@ function copyModelToVision() {
   const en = $('#vEnabled'); if (en) en.checked = true;
   toast('已沿用批改模型的端点/密钥，请确认模型名支持图片输入后点「保存配置」');
 }
-/* 连通性测试：发一张 1×1 图 + 指令，能返回文本即端点/密钥/模型可用 */
-const VISION_TEST_IMG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
+/* 连通性测试：发一张有效的占位图 + 指令，能返回文本即端点/密钥/模型可用。
+   注意：用 canvas 运行时生成有效图，不要用 1×1 退化图——智谱 glm-4v-flash 等模型
+   会拒绝 1×1 图报 1210 图片格式错误；真实手写作文照片不受影响。 */
+function makeVisionTestImg() {
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 32;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#eef1f5';
+    ctx.fillRect(0, 0, 32, 32);
+    return c.toDataURL('image/png');
+  } catch (e) { return null; }  // 极端情况：跳过图，改用纯文本测试通道
+}
 async function testVision() {
   const box = $('#visionTest'); if (!box) return;
   const v = visionCfg();
   if (!(v.baseUrl && v.apiKey && v.model)) { box.style.display = 'block'; box.className = 'model-test err'; box.textContent = '请先填写完整的 Base URL / API Key / 视觉模型名'; return }
   box.style.display = 'block'; box.className = 'model-test wait'; box.textContent = '正在测试识别通道…';
   try {
-    const out = await callVision([VISION_TEST_IMG], '（连通性测试，只需回复“收到”二字）');
+    const tImg = makeVisionTestImg();
+    const out = await callVision(tImg ? [tImg] : [], '（连通性测试，只需回复“收到”二字）');
     box.className = 'model-test ok';
     box.textContent = '✓ 识别通道已连通（返回：' + String(out).slice(0, 40) + '）';
   } catch (e) {
