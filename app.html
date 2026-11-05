@@ -1250,7 +1250,7 @@ table.paper td.l{text-align:left;font-weight:600}
 <body data-page-node-id="VWm2YCKhwxOUBWSlexIaam">
 <aside data-page-node-id="uyTdXvcdMMBT8HJ1ZWRO9X">
   <div data-page-node-id="YkELpTUKfJkpu7qzDPa66K" class="logo"><!--pnid:7ytoUsgxIUXQsQNXnaE57T-->教师工作台</div>
-  <div class="verline" id="appVer">✨ 教室桌面 v2.6.97 · 自省补责逐人登记完成 + 补责转作业登记</div>
+  <div class="verline" id="appVer">✨ 教室桌面 v2.6.98 · 宠物误发可收回（支持反悔恢复）</div>
   <nav data-page-node-id="ljZdrlGNjxdpectAoWjkyv" id="nav">
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS" class="active" data-s="home">🏠 <span class="lbl">今日首页</span></button>
 
@@ -16630,7 +16630,7 @@ try {
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
 var WB_MY_VER = '优化版 vT53 · 差榜 + 留堂';
-var WB_BUILD_DATE = '11-05', WB_BUILD_NO = '2.6.97';
+var WB_BUILD_DATE = '11-05', WB_BUILD_NO = '2.6.98';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -33568,6 +33568,9 @@ function cwInit(){
     var stus = (typeof stuRoster === 'function') ? stuRoster() : [];
     return stus.map(function (x) { return x.姓名; }).filter(Boolean);
   }
+  /* vT65 宠物回收：误发收回不真删，只打 deleted 标记 —— 同步按 updatedAt 取较新，云端旧数据不会把它复活；
+     需要反悔时可在「赠送记录」里一键恢复。所有展示/统计都走 ptPets()。 */
+  function ptPets() { return ptGet().pets.filter(function (p) { return p && !p.deleted; }); }
 
   /* ---------------- 种子：宠物池 + 商城 ---------------- */
   function ptBuildSeed() {
@@ -33650,12 +33653,13 @@ function cwInit(){
       '<button class="btn2 sm" onclick="ptDraw(\'' + pet.id + '\')"' + dis + '>🎲 抽奖(-' + d + ')</button>' +
       '<button class="btn2 sm" onclick="ptRedeem(\'' + pet.id + '\')"' + dis + '>🎁 兑换(-' + r + ')</button>' +
       (pet.graduated ? '' : '<button class="btn2 sm" onclick="ptGradReq(\'' + pet.id + '\')">🎓 申请毕业</button>') +
+      '<button class="btn2 sm" onclick="ptRevoke(\'' + pet.id + '\')" title="误发了可以收回（可在后台赠送记录里恢复）">↩ 收回</button>' +
       '</div>' + grad + '</div>';
   }
   function ptRenderWall() {
     var box = document.getElementById('petPanel-wall'); if (!box) return;
-    var s = ptGet();
-    var html = s.pets.length ? s.pets.map(ptCard).join('') : '<div class="pet-empty">还没有宠物，去「🥚 孵化器」给同学发一只吧～</div>';
+    var s = ptGet(); var list = ptPets();
+    var html = list.length ? list.map(ptCard).join('') : '<div class="pet-empty">还没有宠物，去「🥚 孵化器」给同学发一只吧～</div>';
     box.innerHTML = '<div class="pet-grid">' + html + '</div>';
   }
   function ptRenderIncubator() {
@@ -33763,7 +33767,7 @@ function cwInit(){
   function ptRenderGrad() {
     var box = document.getElementById('petPanel-grad'); if (!box) return;
     var s = ptGet(); var lv = ptGradLevel();
-    var q = s.pets.filter(function (p) { return !p.graduated && (p.level || 1) >= lv; });
+    var q = ptPets().filter(function (p) { return !p.graduated && (p.level || 1) >= lv; });
     var html = q.length ? q.map(function (p) {
       return '<div class="pet-row"><span>🎓 ' + ptEsc(p.name) + ' · 主人 ' + ptEsc(p.studentName) + ' · Lv.' + (p.level || 1) + '</span>' +
         '<span class="pet-acts"><button class="btn2 sm primary" onclick="ptGradApprove(\'' + p.id + '\')">🎓 批准毕业</button></span></div>';
@@ -33823,9 +33827,10 @@ function cwInit(){
 
     /* 赠送记录 */
     var giftRows = s.petGift.slice().sort(function (a, b) { return (Number(b.at) || 0) - (Number(a.at) || 0); }).slice(0, 20).map(function (g) {
-      var kn = ({ point: '积分', item: '商品', egg: '宠物蛋' })[g.kind] || g.kind;
+      var kn = ({ point: '积分', item: '商品', egg: '宠物蛋', revoke: '↩ 收回', revive: '↩️ 恢复' })[g.kind] || g.kind;
+      var backBtn = (g.kind === 'revoke' && g.petId) ? '<button class="btn2 sm" onclick="ptRevive(\'' + g.petId + '\')">↩️ 恢复</button>' : '';
       return '<div class="pet-row"><span>🎁 ' + ptEsc(g.studentName) + ' · ' + kn + ' · ' + ptEsc(g.item || '') + ' ×' + (Number(g.qty) || 1) + '</span>' +
-        '<span class="pet-own">' + ptEsc(g.atText || '') + ' ' + ptEsc(g.note || '') + '</span></div>';
+        '<span class="pet-own">' + ptEsc(g.atText || '') + ' ' + ptEsc(g.note || '') + '</span>' + backBtn + '</div>';
     }).join('');
 
     var whoOpts = '<option value="*">全班（每人一份）</option>' + ptNames().map(function (n) { return '<option value="' + ptEsc(n) + '">' + ptEsc(n) + '</option>'; }).join('');
@@ -34018,7 +34023,7 @@ function cwInit(){
         jobs.push(ptAddManual(n, '宠物商城 · 赠送积分', qty).catch(function () {}));
         s.petGift.push({ id: ptNewId('gf'), studentName: n, kind: 'point', item: '积分', qty: qty, at: Date.now(), atText: atText, note: note });
       } else if (kind === 'item') {
-        var pet = s.pets.filter(function (p) { return p.studentName === n; })[0];
+        var pet = s.pets.filter(function (p) { return p.studentName === n && !p.deleted; })[0];
         if (!pet) { jobs.push(Promise.resolve()); s.petGift.push({ id: ptNewId('gf'), studentName: n, kind: 'item', item: itemName + '（⚠ 该同学还没有宠物，未发放）', qty: qty, at: Date.now(), atText: atText, note: note }); }
         else {
           for (var i = 0; i < qty; i++) pet.ownedItems = (pet.ownedItems || []).concat([itemName]);
@@ -34083,9 +34088,37 @@ function cwInit(){
     var sp = s.petPool[Math.floor(Math.random() * s.petPool.length)];
     ptHatch(sel.value, sp.id);
   }
+  /* vT65 误发收回：打 deleted 标记（不真删，便于反悔恢复，且同步不会被云端旧数据复活） */
+  function ptRevoke(petId) {
+    if (!ptNeedAdmin()) return;
+    var s = ptGet();
+    var pet = s.pets.filter(function (p) { return p && p.id === petId && !p.deleted; })[0];
+    if (!pet) return toastMsg('这只宠物已经不在墙上了');
+    if (!confirm('收回「' + pet.name + '」？\n主人：' + pet.studentName + '\n\n收回后全班各端（网页 / 小程序 / 教室桌面）都不再显示这只宠物；\n如需反悔，可在「🎁 直接赠送 → 赠送记录」里点「↩️ 恢复」。')) return;
+    pet.deleted = true; pet.deletedAt = Date.now(); pet.updatedAt = Date.now();
+    s.petGift.push({ id: ptNewId('gf'), studentName: pet.studentName, kind: 'revoke', item: '收回宠物：' + pet.name, qty: 1, petId: pet.id, at: Date.now(), atText: ptYmd(new Date()), note: '误发收回' });
+    ptSave(s); PET_DB = s;
+    toastMsg('↩ 已收回「' + pet.name + '」（' + pet.studentName + '）');
+    ptRenderWall(); ptRenderGrad();
+    if (ptAdminUnlocked()) ptRenderAdmin();
+  }
+  /* vT65 反悔：把收回的宠物放回原位（等级/经验/背包都原样保留） */
+  function ptRevive(petId) {
+    if (!ptNeedAdmin()) return;
+    var s = ptGet();
+    var pet = s.pets.filter(function (p) { return p && p.id === petId; })[0];
+    if (!pet) return toastMsg('找不到这条宠物记录');
+    if (!pet.deleted) return toastMsg('这只宠物本来就在墙上');
+    pet.deleted = false; pet.updatedAt = Date.now();
+    s.petGift.push({ id: ptNewId('gf'), studentName: pet.studentName, kind: 'revive', item: '恢复宠物：' + pet.name, qty: 1, petId: pet.id, at: Date.now(), atText: ptYmd(new Date()), note: '撤销收回' });
+    ptSave(s); PET_DB = s;
+    toastMsg('↩️ 已恢复「' + pet.name + '」（' + pet.studentName + '）');
+    ptRenderWall(); ptRenderGrad();
+    if (ptAdminUnlocked()) ptRenderAdmin();
+  }
   function ptFeed(petId) {
     if (!ptPlayable()) return toastMsg('⏸ 宠物模块已暂停 / 关停');
-    var s = ptGet(); var pet = s.pets.filter(function (p) { return p.id === petId; })[0]; if (!pet) return;
+    var s = ptGet(); var pet = s.pets.filter(function (p) { return p.id === petId && !p.deleted; })[0]; if (!pet) return;
     var cost = ptCost('feed');
     if (ptStuPoints(pet.studentName) < cost) return toastMsg('⚠️ ' + pet.studentName + ' 积分不足（需 ' + cost + '）');
     ptAddManual(pet.studentName, '宠物喂养 · 喂食', -cost).then(function () {
@@ -34096,7 +34129,7 @@ function cwInit(){
   }
   function ptDraw(petId) {
     if (!ptPlayable()) return toastMsg('⏸ 宠物模块已暂停 / 关停');
-    var s = ptGet(); var pet = s.pets.filter(function (p) { return p.id === petId; })[0]; if (!pet) return;
+    var s = ptGet(); var pet = s.pets.filter(function (p) { return p.id === petId && !p.deleted; })[0]; if (!pet) return;
     var cost = ptCost('draw');
     if (ptStuPoints(pet.studentName) < cost) return toastMsg('⚠️ ' + pet.studentName + ' 积分不足（需 ' + cost + '）');
     ptAddManual(pet.studentName, '宠物喂养 · 抽奖', -cost).then(function () {
@@ -34108,7 +34141,7 @@ function cwInit(){
   }
   function ptRedeem(petId) {
     if (!ptPlayable()) return toastMsg('⏸ 宠物模块已暂停 / 关停');
-    var s = ptGet(); var pet = s.pets.filter(function (p) { return p.id === petId; })[0]; if (!pet) return;
+    var s = ptGet(); var pet = s.pets.filter(function (p) { return p.id === petId && !p.deleted; })[0]; if (!pet) return;
     var cost = ptCost('redeem');
     if (ptStuPoints(pet.studentName) < cost) return toastMsg('⚠️ ' + pet.studentName + ' 积分不足（需 ' + cost + '）');
     var items = ['皇冠', '墨镜', '围巾', '蝴蝶结', '彩虹光圈', '圣诞帽'];
@@ -34129,7 +34162,7 @@ function cwInit(){
     if (!ptPlayable()) return toastMsg('⏸ 模块暂停 / 关停中，不能批准消耗类提案');
     var s = ptGet(); var it = s.parentQueue.filter(function (x) { return x.id === id; })[0]; if (!it) return;
     var who = it.studentName || it.studentId;
-    var pet = s.pets.filter(function (p) { return (p.studentId || p.studentName) === who; })[0];
+    var pet = s.pets.filter(function (p) { return (p.studentId || p.studentName) === who && !p.deleted; })[0];
     var cost = (it.action === 'draw') ? ptCost('draw') : (it.action === 'redeem') ? ptCost('redeem') : ptCost('feed');
     var actName = (it.action === 'feed') ? '喂食' : (it.action === 'draw') ? '抽奖' : (it.action === 'redeem') ? '兑换' : '喂养';
     ptAddManual(who, '宠物喂养 · 家长' + actName, -cost).then(function () {
