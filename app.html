@@ -2554,6 +2554,26 @@ table.paper td.l{text-align:left;font-weight:600}
     </div>
 
     <div class="synccard">
+      <h3>家长端显示设置 · 后台控制</h3>
+      <div class="syncdesc">勾选家长手机「家长端」页面要显示的板块。取消勾选后，家长端对应板块立即隐藏（网页端约 10 秒内自动发布生效；也可点下方「保存并显示到家长端」立即发布）。</div>
+      <div id="ptPanels" style="display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:8px">
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="detain" checked> 留堂通知</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="points" checked> 积分卡</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="hw" checked> 当天作业</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="rc" checked> 诵读打卡</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="cmt" checked> 老师点评</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="grade" checked> 成绩等级</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="essay" checked> 提交孩子作文</label>
+      </div>
+      <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center">
+        <button class="btn2 primary" onclick="ptPanelsSave()">💾 保存并显示到家长端</button>
+        <button class="btn2" onclick="ptPanelsAll(true)">全选</button>
+        <button class="btn2" onclick="ptPanelsAll(false)">全不选</button>
+        <span id="ptPanelsStatus" class="syncstatus"></span>
+      </div>
+    </div>
+
+    <div class="synccard">
       <h3>⑥ 五种方式怎么选（同步范围总览）</h3>
       <div class="syncdesc">现在的数据早已不只是「学生 / 作业 / 班务 / 奖惩」四类，
         而是 <b>18 张表</b>。不同方式覆盖的范围不一样，选错就会出现"同步了但看不到"。</div>
@@ -16217,6 +16237,53 @@ function mpSyncFill() {
   var gp = document.getElementById('gPath'); if (gp && !gp.value) gp.value = s.gPath;
   var gt = document.getElementById('gToken'); if (gt && !gt.value) gt.value = s.gToken;
   var ga = document.getElementById('gAuto'); if (ga) ga.checked = !!s.gAuto;
+  ptPanelsFill();
+}
+/* ================= vT59 家长端显示设置（后台控制：勾选家长端显示哪些板块） ================= */
+var PT_PANEL_KEYS = ['detain', 'points', 'hw', 'rc', 'cmt', 'grade', 'essay'];
+function ptPanelsDefault() { return { detain: true, points: true, hw: true, rc: true, cmt: true, grade: true, essay: true }; }
+function ptPanelsGet() {
+  var d = ptPanelsDefault();
+  try {
+    var raw = localStorage.getItem('wb_pt_panels');
+    if (raw) {
+      var o = JSON.parse(raw);
+      if (o && typeof o === 'object') { for (var k in d) { if (typeof o[k] === 'boolean') d[k] = o[k]; } }
+    }
+  } catch (e) {}
+  return d;
+}
+function ptPanelsFill() {
+  var d = ptPanelsGet();
+  var box = document.getElementById('ptPanels');
+  if (!box) return;
+  var cbs = box.getElementsByTagName('input');
+  for (var i = 0; i < cbs.length; i++) {
+    var pk = cbs[i].getAttribute('data-pk');
+    if (pk && (pk in d)) cbs[i].checked = (d[pk] !== false);
+  }
+}
+function ptPanelsSave() {
+  var d = ptPanelsDefault();
+  var box = document.getElementById('ptPanels');
+  if (box) {
+    var cbs = box.getElementsByTagName('input');
+    for (var i = 0; i < cbs.length; i++) {
+      var pk = cbs[i].getAttribute('data-pk');
+      if (pk && (pk in d)) d[pk] = !!cbs[i].checked;
+    }
+  }
+  try { localStorage.setItem('wb_pt_panels', JSON.stringify(d)); } catch (e) {}
+  var st = document.getElementById('ptPanelsStatus');
+  if (st) st.textContent = '✅ 已保存';
+  toastMsg('家长端显示设置已保存，正在发布…');
+  try { if (typeof ptwPublish === 'function') ptwPublish(); } catch (e) {}
+}
+function ptPanelsAll(on) {
+  var box = document.getElementById('ptPanels');
+  if (!box) return;
+  var cbs = box.getElementsByTagName('input');
+  for (var i = 0; i < cbs.length; i++) { if (cbs[i].getAttribute('data-pk')) cbs[i].checked = !!on; }
 }
 /* 设置码：把 Gitee 设置串成 base64 给小程序粘贴 */
 /* -------- 诊断：把 Gitee 的真实返回原样打印出来 -------- */
@@ -34419,6 +34486,14 @@ function cwInit(){
         return r.text().then(function (txt) {
           var j = null; try { j = JSON.parse(txt) } catch (_e) {}
           var sha = (r.status === 200 && j && j.sha) ? j.sha : '';
+          /* vT59 家长端板块后台控制：把老师勾选的板块开关写入快照顶层；并保留已有的家长投稿仓库配置，
+             避免网页发布把小程序端设的投稿令牌冲掉（顺手修复的潜在 bug）。 */
+          doc.parentPanels = (typeof ptPanelsGet === 'function') ? ptPanelsGet() : null;
+          if (j) {
+            if (j.parentEssayOwner) doc.parentEssayOwner = j.parentEssayOwner;
+            if (j.parentEssayRepo) doc.parentEssayRepo = j.parentEssayRepo;
+            if (j.parentEssayToken) doc.parentEssayToken = j.parentEssayToken;
+          }
           return ptwGiteeWrite(api, pr.token, doc, sha);
         });
       });
