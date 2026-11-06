@@ -2564,6 +2564,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="cmt" checked> 老师点评</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="grade" checked> 成绩等级</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="essay" checked> 提交孩子作文</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="codex" checked> 📖 启灵图鉴</label>
       </div>
       <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center">
         <button class="btn2 primary" onclick="ptPanelsSave()">💾 保存并显示到家长端</button>
@@ -16271,8 +16272,8 @@ function mpSyncFill() {
   ptPanelsFill();
 }
 /* ================= vT59 家长端显示设置（后台控制：勾选家长端显示哪些板块） ================= */
-var PT_PANEL_KEYS = ['detain', 'points', 'hw', 'rc', 'cmt', 'grade', 'essay'];
-function ptPanelsDefault() { return { detain: true, points: true, hw: true, rc: true, cmt: true, grade: true, essay: true }; }
+var PT_PANEL_KEYS = ['detain', 'points', 'hw', 'rc', 'cmt', 'grade', 'essay', 'codex'];
+function ptPanelsDefault() { return { detain: true, points: true, hw: true, rc: true, cmt: true, grade: true, essay: true, codex: true }; }
 function ptPanelsGet() {
   var d = ptPanelsDefault();
   try {
@@ -23214,12 +23215,14 @@ function cwInit(){
         try { sessionStorage.setItem(ADMIN_FLAG, '1'); } catch (e) {}
         toastMsg('🔓 已进入后台管理');
         ptRenderAdmin();
+        if (typeof ptRenderCodexAdmin === 'function') ptRenderCodexAdmin();
       } else { alert('口令不对，再试一次。'); }
     }).catch(function (e) { console.error('[pet] 口令校验失败', e); alert('口令校验失败：' + (e && e.message || e)); });
   }
   function ptAdminLock() {
     try { sessionStorage.removeItem(ADMIN_FLAG); } catch (e) {}
     toastMsg('🔒 已退出后台管理'); ptRenderAdmin();
+    if (typeof ptRenderCodexAdmin === 'function') ptRenderCodexAdmin();
   }
   /* 需要口令的动作统一走这个闸门 */
   function ptNeedAdmin() {
@@ -23583,9 +23586,14 @@ function cwInit(){
     /* vT67+ 图鉴种子：按 id 增量补齐 196 只灵杰。老用户强刷后自动追加新增形象，
        旧种子、老师改过的品级/系列、已收回的条目全部保留；后台「重置灵杰池」可全量重建。 */
     var seedAll = ptBuildCodexSeed();
-    var seedHave = {};
+    var seedHave = {}, seedExcl = {};
     s.petPool.forEach(function (x) { if (x && x.id) seedHave[x.id] = 1; });
-    var seedAdd = seedAll.filter(function (d) { return !seedHave[d.id]; });
+    /* vT68 回收站清空后记入排除名单，避免种子把老师永久删掉的灵杰补回来 */
+    try {
+      var cxCfg = (s.petCfg || []).filter(function (x) { return x && x.id === 'cfg'; })[0];
+      ((cxCfg && cxCfg.excludeDefIds) || []).forEach(function (id) { seedExcl[id] = 1; });
+    } catch (e) {}
+    var seedAdd = seedAll.filter(function (d) { return !seedHave[d.id] && !seedExcl[d.id]; });
     if (seedAdd.length) { s.petPool = s.petPool.concat(seedAdd); dirty = true; }
     var c = s.petCfg.filter(function (x) { return x.id === 'cfg'; })[0];
     if (!c) { s.petCfg.push(ptDefaultCfg()); dirty = true; }
@@ -23796,7 +23804,7 @@ function cwInit(){
 
     /* 赠送记录 */
     var giftRows = s.petGift.slice().sort(function (a, b) { return (Number(b.at) || 0) - (Number(a.at) || 0); }).slice(0, 20).map(function (g) {
-      var kn = ({ point: '积分', item: '商品', egg: '灵杰蛋', rare: '🏅 灵杰授予', revoke: '↩ 收回', revive: '↩️ 恢复' })[g.kind] || g.kind;
+      var kn = ({ point: '积分', item: '商品', egg: '灵杰蛋', rare: '🏅 灵杰授予', grant: '📖 图鉴发放', revoke: '↩ 收回', revive: '↩️ 恢复' })[g.kind] || g.kind;
       var backBtn = (g.kind === 'revoke' && g.petId) ? '<button class="btn2 sm" onclick="ptRevive(\'' + g.petId + '\')">↩️ 恢复</button>' : '';
       return '<div class="pet-row"><span>🎁 ' + ptEsc(g.studentName) + ' · ' + kn + ' · ' + ptEsc(g.item || '') + ' ×' + (Number(g.qty) || 1) + '</span>' +
         '<span class="pet-own">' + ptEsc(g.atText || '') + ' ' + ptEsc(g.note || '') + '</span>' + backBtn + '</div>';
@@ -23865,30 +23873,19 @@ function cwInit(){
       (cpRows || '<div class="pet-empty">还没有优惠券</div>') +
       '</div>' +
 
-      /* ---- vT67 灵杰品级管理 ---- */
-      '<div class="pet-sec"><h3>🏅 灵杰品级管理</h3>' +
-      '<div class="gpset">' +
-      '<span class="lbl">灵杰</span><select class="search" id="ptTierSel">' + (tierOpts || '<option value="">（暂无图鉴灵杰）</option>') + '</select>' +
-      '<span class="lbl">品级</span><select class="search" id="ptTierVal"><option>普通</option><option>隐藏</option><option>典藏</option></select>' +
-      '<span class="lbl">系列</span><select class="search" id="ptSeriesVal">' +
-      ['名著先贤', '江湖侠客', '山海异兽', '精灵星座', '萌宠灵物'].map(function (x) { return '<option>' + x + '</option>'; }).join('') +
-      '</select>' +
-      '<button class="btn2 primary" onclick="ptCodexSetTier()">💾 保存品级/系列</button>' +
-      '</div>' +
-      '<div class="sub">隐藏/典藏灵杰不会出现在抽奖与灵杰蛋里，只能在这里改品级后通过「🎁 直接赠送 → 🏅 灵杰授予」发给学生（不扣积分）。隐藏灵杰解锁途径：整本书阅读汇报、辩论赛、课本剧、跨学科实践、创意写作；典藏灵杰授予优秀小组与重大挑战完成者。</div></div>' +
 
       /* ---- 5 赠送 ---- */
-      '<div class="pet-sec"><h3>🎁 直接赠送</h3>' +
+      '<div class="pet-sec"><h3>🎁 直接赠送（旧宠物 / 积分商城）</h3>' +
       '<div class="gpset">' +
       '<span class="lbl">送给</span><select class="search" id="ptGiftWho">' + whoOpts + '</select>' +
       '<span class="lbl">送</span><select class="search" id="ptGiftKind" onchange="ptGiftKindChange()">' +
-      '<option value="point">积分</option><option value="item">商城商品</option><option value="egg">灵杰蛋</option><option value="rare">🏅 灵杰授予（隐藏/典藏）</option></select>' +
+      '<option value="point">积分</option><option value="item">商城商品</option><option value="egg">灵杰蛋</option></select>' +
       '<span id="ptGiftItemWrap"><span class="lbl">商品</span><select class="search" id="ptGiftItem">' + (shopOpts || '<option value="">（无在售商品）</option>') + '</select></span>' +
       '<span class="lbl">数量</span><input class="search" style="width:56px" type="number" min="1" id="ptGiftQty" value="1">' +
       '<input class="search" style="width:120px" id="ptGiftNote" placeholder="备注（可选）">' +
       '<button class="btn2 primary" onclick="ptGiftGo()">🎁 确认赠送</button>' +
       '</div>' +
-      '<div class="sub">赠送积分会写一条正数奖惩记录，直接进入学生积分流水；赠送商品会存进该同学灵杰的背包；灵杰蛋会立刻唤醒一只随机普通灵杰；「🏅 灵杰授予」需先在「🏅 灵杰品级管理」里把灵杰设为隐藏/典藏，再选中授予（不扣学生积分）。</div>' +
+      '<div class="sub">这里只管旧宠物 / 积分商城：积分、商品、灵杰蛋。<b>《启灵图鉴》的灵杰发放、品级、删除与导入已移到「📖 启灵图鉴」页</b>，两边互不影响。</div>' +
       (giftRows || '<div class="pet-empty">暂无赠送记录</div>') +
       '</div>' +
 
@@ -24059,7 +24056,7 @@ function cwInit(){
       '<button class="btn2" onclick="ptImport()">📥 导入JSON</button>' +
       '<input type="file" id="petFile" style="display:none" onchange="ptImportFile(event)">' +
       '<button class="btn2" onclick="ptResetPool()">🌱 重置灵杰池为种子</button></div>' +
-      '<div class="sub">导出含 灵杰 / 家长队列 / 灵杰池 / 投稿 / 商城 / 优惠券 / 配置 / 赠送记录 八张表，可备份或迁移。</div>';
+      '<div class="sub">导出含 灵杰 / 家长队列 / 灵杰池 / 投稿 / 商城 / 优惠券 / 配置 / 赠送记录 八张表，可备份或迁移。<br><b>只想增删单只灵杰 / 导入清单 CSV？请到「📖 启灵图鉴」页底部的「🛠 图鉴管理」。</b></div>';
   }
   function ptBadges() {
     var s = ptGet();
@@ -24323,9 +24320,11 @@ function cwInit(){
       '<h3 style="margin-top:8px">⭐ 高阶挑战（解锁隐藏灵杰）</h3>' +
       '<div class="sub" style="line-height:1.9">完成整本书阅读项目式学习 · 参加辩论赛、主题演讲 · 独立完成创意作品、跨学科实践成果</div></div>' +
       '<div class="pet-sec" style="margin-top:10px"><h3>🌱 学生成长宣言</h3>' +
-      '<div class="sub" style="line-height:2">积蓄启灵之力，唤醒心中灵杰；<br>以阅读为舟，以思考为翼；<br>在文字里游历山海，在坚持中慢慢成长。</div></div>';
+      '<div class="sub" style="line-height:2">积蓄启灵之力，唤醒心中灵杰；<br>以阅读为舟，以思考为翼；<br>在文字里游历山海，在坚持中慢慢成长。</div></div>' +
+      '<div class="pet-sec" id="codexAdminBox"></div>';
     var cEl = document.getElementById('codexCnt'); if (cEl) cEl.textContent = '已唤醒 ' + ownedN + ' / ' + list.length;
     setTimeout(ptCodexObserve, 0);
+    ptRenderCodexAdmin();
   }
   function ptCodexFilter(k, v) { CODEX_STATE[k] = v; ptRenderCodex(); }
   function ptCodexSetTier() {
@@ -24339,7 +24338,7 @@ function cwInit(){
     sp.updatedAt = Date.now();
     ptSave(s); PET_DB = s;
     toastMsg('🏅 已保存：' + sp.name + ' → ' + tv + ' / ' + sv);
-    ptRenderAdmin(); ptRenderCodex();
+    ptRenderCodex();
   }
   /* vT67 数据迁移：老数据补 tier/updatedAt（防 LWW 合并丢字段），不动任何用户数据 */
   function ptEnsureCodexFields() {
@@ -24354,6 +24353,355 @@ function cwInit(){
       }
     });
     if (dirty) { ptSave(s); PET_DB = s; }
+  }
+/* vT68《启灵图鉴》老师操作区代码片段 —— 由 tools/patch_v68.py 插入 source/_pet_app.js 的 IIFE 内。
+   设计：图鉴的发放 / 品级 / 删除 / 导入全部收进「📖 启灵图鉴」tab，
+   与旧宠物、积分商城（⚙ 后台管理 → 🎁 直接赠送）彻底分开。
+   所有写操作统一走 ptNeedAdmin() 班主任口令闸门；删除一律软删（墓碑），
+   避免 LWW 合并被云端旧数据复活、也避免图鉴种子把删掉的编号补回来。 */
+  var PT_IMPORT_MODE = '';
+  var PT_CODEX_BASE_URL = 'https://purainlone.github.io/workbench-test/';
+
+  function ptDefAll(s) {
+    return (s.petPool || []).filter(function (p) { return p && p.id && !p.purged; });
+  }
+  function ptCodexDefs(s) {
+    return ptDefAll(s).filter(function (p) { return p.origin === 'codex' && !p.deleted; });
+  }
+  function ptAt(x) { return ptEsc(String(x == null ? '' : x)); }
+  function ptCodexGrantOpts(s) {
+    var groups = {}, order = [];
+    ptCodexDefs(s).forEach(function (p) {
+      var k = p.series || '未分系列';
+      if (!groups[k]) { groups[k] = []; order.push(k); }
+      groups[k].push(p);
+    });
+    order.sort(function (a, b) { return a.localeCompare(b, 'zh'); });
+    return order.map(function (k) {
+      return '<optgroup label="' + ptAt(k) + '">' + groups[k].map(function (p) {
+        return '<option value="' + ptAt(p.id) + '">' + ptAt(p.name) + ' · ' + ptAt(p.tier || '普通') + '</option>';
+      }).join('') + '</optgroup>';
+    }).join('');
+  }
+  function ptDefOpts(s) {
+    return ptDefAll(s).map(function (p) {
+      var src = p.origin === 'codex' ? '图鉴' : (p.origin === 'student' ? '共创' : '旧宠物');
+      return '<option value="' + ptAt(p.id) + '">' + ptAt(p.name) + ' · ' + src + ' · ' + ptAt(p.series || '') + (p.deleted ? ' · 已移除' : '') + '</option>';
+    }).join('');
+  }
+  function ptPetOpts(s) {
+    return (s.pets || []).filter(function (p) { return p && p.id && !p.purged; }).slice()
+      .sort(function (a, b) { return (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0); })
+      .map(function (p) {
+        return '<option value="' + ptAt(p.id) + '">' + ptAt(p.studentName) + ' · ' + ptAt(p.name) + (p.deleted ? ' · 已删除' : '') + '</option>';
+      }).join('');
+  }
+  function ptRecycleOpts(s) {
+    var a = (s.petPool || []).filter(function (p) { return p && (p.purged || p.deleted); });
+    var b = (s.pets || []).filter(function (p) { return p && (p.purged || p.deleted); });
+    return a.concat(b).map(function (p) {
+      return '<option value="' + ptAt(p.id) + '">' + (p.studentName ? ptAt(p.studentName) + ' · ' : '') +
+        ptAt(p.name || '（已清除）') + (p.purged ? ' ☠ 永久' : ' 🗑 移除') + (p.studentName ? '（宠物记录）' : '（图鉴条目）') + '</option>';
+    }).join('');
+  }
+
+  /* ---------------- 图鉴 tab 内的老师操作区 ---------------- */
+  function ptRenderCodexAdmin() {
+    var box = document.getElementById('codexAdminBox'); if (!box) return;
+    if (!ptAdminUnlocked()) {
+      box.innerHTML = '<h3>🛠 图鉴管理 · 发放 / 品级 / 删除 / 导入</h3>' +
+        '<div class="pet-empty">🔒 这些操作需要班主任口令，学生和其它端只能浏览图鉴。<br><br>' +
+        '<button class="btn2 primary" onclick="ptAdminUnlock()">🔑 输入班主任口令进入</button></div>';
+      return;
+    }
+    var s = ptGet();
+    var whoOpts = '<option value="*">全班（每人一份）</option>' + ptNames().map(function (n) {
+      return '<option value="' + ptAt(n) + '">' + ptAt(n) + '</option>';
+    }).join('');
+    var defOpts = ptDefOpts(s), petOpts = ptPetOpts(s), recOpts = ptRecycleOpts(s);
+    var tierOpts = ptCodexDefs(s).map(function (p) {
+      return '<option value="' + ptAt(p.id) + '">' + ptAt(p.name) + ' · ' + ptAt(p.series || '') + ' · ' + ptAt(p.tier || '普通') + '</option>';
+    }).join('');
+
+    box.innerHTML =
+      '<h3>🛠 图鉴管理 <span class="sctip">仅老师可见 · 已通过班主任口令</span></h3>' +
+
+      /* ① 发放 */
+      '<div class="pet-sec"><h3>🎁 灵杰发放（图鉴专用，与旧宠物分开）</h3>' +
+      '<div class="gpset">' +
+      '<span class="lbl">发给</span><select class="search" id="cxGrantWho" style="min-width:130px">' + whoOpts + '</select>' +
+      '<span class="lbl">灵杰</span><select class="search" id="cxGrantDef" style="min-width:190px">' +
+      (ptCodexGrantOpts(s) || '<option value="">（图鉴还没有灵杰）</option>') + '</select>' +
+      '<input class="search" style="width:130px" id="cxGrantNote" placeholder="备注（可选）">' +
+      '<button class="btn2 primary" onclick="ptCodexGrant()">🎁 确认发放</button></div>' +
+      '<div class="sub">这里发放的是《班级启灵图鉴》里的灵杰，普通 / 隐藏 / 典藏都可以直接指定发放，不扣学生积分；发放记录写入赠送流水。' +
+      '<b>旧宠物、积分、商城商品、灵杰蛋</b>仍在「⚙ 后台管理 → 🎁 直接赠送」，两边互不干扰。</div></div>' +
+
+      /* ② 品级 / 系列 */
+      '<div class="pet-sec"><h3>🏅 灵杰品级 / 系列管理</h3>' +
+      '<div class="gpset">' +
+      '<span class="lbl">灵杰</span><select class="search" id="ptTierSel" style="min-width:190px">' + (tierOpts || '<option value="">（暂无图鉴灵杰）</option>') + '</select>' +
+      '<span class="lbl">品级</span><select class="search" id="ptTierVal"><option>普通</option><option>隐藏</option><option>典藏</option></select>' +
+      '<span class="lbl">系列</span><select class="search" id="ptSeriesVal">' +
+      ['名著先贤', '江湖侠客', '山海异兽', '精灵星座', '萌宠灵物'].map(function (x) { return '<option>' + x + '</option>'; }).join('') +
+      '</select><button class="btn2 primary" onclick="ptCodexSetTier()">💾 保存品级/系列</button></div>' +
+      '<div class="sub">隐藏 / 典藏灵杰不会进入随机唤醒与灵杰蛋，只能由老师在这里改品级后从上方「🎁 灵杰发放」指定授予。隐藏灵杰解锁途径：整本书阅读汇报、辩论赛、课本剧、跨学科实践、创意写作；典藏灵杰授予优秀小组与重大挑战完成者。</div></div>' +
+
+      /* ③ 图鉴条目删除 */
+      '<div class="pet-sec"><h3>🗑 图鉴条目管理（灵杰池）</h3>' +
+      '<div class="gpset"><select class="search" id="cxDefSel" style="min-width:230px">' + (defOpts || '<option value="">（灵杰池为空）</option>') + '</select>' +
+      '<button class="btn2 sm" onclick="ptDefRemove(false)">🗑 移出图鉴</button>' +
+      '<button class="btn2 sm" onclick="ptDefRemove(true)">☠ 永久删除</button>' +
+      '<button class="btn2 sm" onclick="ptCodexRestore()">↩️ 恢复</button></div>' +
+      '<div class="sub">「移出图鉴」只做标记，可随时恢复；「永久删除」会保留一条不可见的墓碑，保证云端同步与图鉴种子不会把它复活，可在下方回收站恢复。已发给同学的灵杰不受影响。</div></div>' +
+
+      /* ④ 宠物记录删除 */
+      '<div class="pet-sec"><h3>🐾 宠物 / 灵杰记录管理（已发放）</h3>' +
+      '<div class="gpset"><select class="search" id="cxPetSel" style="min-width:230px">' + (petOpts || '<option value="">（还没有已发放的灵杰）</option>') + '</select>' +
+      '<button class="btn2 sm" onclick="ptPetRemove(false)">🗑 删除记录</button>' +
+      '<button class="btn2 sm" onclick="ptPetRemove(true)">☠ 永久删除</button>' +
+      '<button class="btn2 sm" onclick="ptCodexRestore()">↩️ 恢复</button></div>' +
+      '<div class="sub">删除的是某位同学名下这条「已唤醒灵杰」记录（含旧宠物），不会改动图鉴里的形象定义。删除后全班各端都不再显示。</div></div>' +
+
+      /* ⑤ 回收站 */
+      '<div class="pet-sec"><h3>♻️ 回收站（已移除 / 已删除）</h3>' +
+      '<div class="gpset"><select class="search" id="cxRecycleSel" style="min-width:230px">' + (recOpts || '<option value="">（回收站是空的）</option>') + '</select>' +
+      '<button class="btn2 sm" onclick="ptCodexRestore()">↩️ 恢复选中</button>' +
+      '<button class="btn2 sm" onclick="ptPurgeEmpty()">🧹 清空回收站</button></div>' +
+      '<div class="sub">清空回收站会真正抹掉数据，不可恢复；被清空的图鉴编号会记入排除名单，不会被图鉴种子自动补回。</div></div>' +
+
+      /* ⑥ 导入导出 */
+      '<div class="pet-sec"><h3>📥 导入 / 📦 导出（手动维护）</h3>' +
+      '<div class="gpset" style="flex-wrap:wrap">' +
+      '<button class="btn2 sm" onclick="ptCodexExportCsv(\'def\')">📦 导出图鉴清单 CSV</button>' +
+      '<button class="btn2 sm" onclick="ptCodexExportCsv(\'pet\')">📦 导出宠物记录 CSV</button>' +
+      '<button class="btn2 sm" onclick="ptCodexImportPick(\'def\')">📥 导入图鉴灵杰</button>' +
+      '<button class="btn2 sm" onclick="ptCodexImportPick(\'pet\')">📥 导入宠物记录</button>' +
+      '<button class="btn2 sm" onclick="ptImport()">📥 导入完整备份 JSON</button>' +
+      '<button class="btn2 sm" onclick="ptExport()">📦 导出完整备份 JSON</button>' +
+      '<input type="file" id="cxImportFile" style="display:none" accept=".csv,.json,.txt" onchange="ptCodexImportFile(event)"></div>' +
+      '<div class="sub" style="line-height:1.9">' +
+      '<b>图鉴灵杰</b>支持 CSV / JSON，列名：编号、名字、系列、品级(普通/隐藏/典藏)、图片(codeximg/197.png 或完整网址)、寄语；同名跳过，编号留空自动排。<br>' +
+      '<b>宠物记录</b>支持 CSV / JSON，列名：学生姓名、灵杰名字、定义编号(可空，按名字匹配)；按图鉴定义生成该同学的已唤醒灵杰。<br>' +
+      '<b>完整备份 JSON</b>为八张表整体覆盖导入，用于换机 / 恢复，导入前请先导出备份。<br>' +
+      '建议流程：先「导出图鉴清单 CSV」→ 在 Excel 里改名字 / 系列 / 品级 → 删掉原有行只留要新增的行 →「导入图鉴灵杰」。</div></div>' +
+
+      '<div class="gpset"><button class="btn2" onclick="ptAdminLock()">🔒 退出图鉴管理</button>' +
+      '<span class="sctip">管理权限只在当前标签页有效，关掉标签页自动失效</span></div>';
+  }
+
+  /* ---------------- 发放 ---------------- */
+  function ptCodexGrant() {
+    if (!ptNeedAdmin()) return;
+    var s = ptGet();
+    var who = (document.getElementById('cxGrantWho') || {}).value || '*';
+    var defId = (document.getElementById('cxGrantDef') || {}).value || '';
+    var note = ((document.getElementById('cxGrantNote') || {}).value || '').trim();
+    var def = s.petPool.filter(function (x) { return x && x.id === defId && !x.deleted && !x.purged; })[0];
+    if (!def) return toastMsg('⚠️ 请先选择要发放的图鉴灵杰');
+    var targets = (who === '*') ? ptNames() : [who];
+    if (!targets.length) return toastMsg('⚠️ 没有找到学生名单');
+    if (!confirm('确认把「' + def.name + '」（' + (def.tier || '普通') + '）发放给 ' + targets.length + ' 位同学？\n不扣积分，发放记录会写入赠送流水。')) return;
+    var atText = ptYmd(new Date());
+    targets.forEach(function (n) {
+      var np = ptMkPet(n, def); np.fromGrant = true; s.pets.push(np);
+      s.petGift.push({ id: ptNewId('gf'), studentName: n, kind: 'grant', item: '图鉴灵杰：' + def.name, qty: 1, at: Date.now(), atText: atText, note: note });
+    });
+    ptSave(s); PET_DB = s;
+    toastMsg('🎁 已发放「' + def.name + '」给 ' + targets.length + ' 位同学');
+    ptRenderAll();
+  }
+
+  /* ---------------- 删除 / 恢复 ---------------- */
+  function ptTombstone(p) {
+    var t = {}; for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) t[k] = p[k]; }
+    t.deleted = true; t.purged = true; t.purgedAt = Date.now(); t.updatedAt = Date.now();
+    return t;
+  }
+  function ptDefRemove(permanent) {
+    if (!ptNeedAdmin()) return;
+    var id = (document.getElementById('cxDefSel') || {}).value || '';
+    var s = ptGet();
+    var p = (s.petPool || []).filter(function (x) { return x && x.id === id && !x.purged; })[0];
+    if (!p) return toastMsg('⚠️ 请先选择图鉴条目');
+    if (permanent) {
+      if (!confirm('☠ 永久删除「' + p.name + '」？\n该形象不再出现在图鉴、随机唤醒与导出清单里，也不会被图鉴种子补回。\n可在「♻️ 回收站」恢复。')) return;
+      s.petPool = s.petPool.map(function (x) { return x && x.id === id ? ptTombstone(x) : x; });
+    } else {
+      if (p.deleted) return toastMsg('这条已经在回收站里了');
+      if (!confirm('把「' + p.name + '」移出图鉴？\n已发给同学的灵杰不受影响，可在回收站恢复。')) return;
+      p.deleted = true; p.deletedAt = Date.now(); p.updatedAt = Date.now();
+    }
+    ptSave(s); PET_DB = s; toastMsg(permanent ? '☠ 已永久删除（回收站可恢复）' : '🗑 已移出图鉴');
+    ptRenderAll();
+  }
+  function ptPetRemove(permanent) {
+    if (!ptNeedAdmin()) return;
+    var id = (document.getElementById('cxPetSel') || {}).value || '';
+    var s = ptGet();
+    var p = (s.pets || []).filter(function (x) { return x && x.id === id && !x.purged; })[0];
+    if (!p) return toastMsg('⚠️ 请先选择宠物记录');
+    if (permanent) {
+      if (!confirm('☠ 永久删除 ' + p.studentName + ' 的「' + p.name + '」？\n可在「♻️ 回收站」恢复。')) return;
+      s.pets = s.pets.map(function (x) { return x && x.id === id ? ptTombstone(x) : x; });
+    } else {
+      if (p.deleted) return toastMsg('这条已经在回收站里了');
+      if (!confirm('删除 ' + p.studentName + ' 的「' + p.name + '」？\n全班各端将不再显示，可在回收站恢复。')) return;
+      p.deleted = true; p.deletedAt = Date.now(); p.updatedAt = Date.now();
+    }
+    ptSave(s); PET_DB = s; toastMsg(permanent ? '☠ 已永久删除（回收站可恢复）' : '🗑 已删除宠物记录');
+    ptRenderAll();
+  }
+  function ptCodexRestore() {
+    if (!ptNeedAdmin()) return;
+    var a = (document.getElementById('cxRecycleSel') || {}).value || '';
+    var b = (document.getElementById('cxDefSel') || {}).value || '';
+    var c = (document.getElementById('cxPetSel') || {}).value || '';
+    var id = a || b || c;
+    if (!id) return toastMsg('⚠️ 请先在回收站或列表里选中一条');
+    var s = ptGet(), hit = null;
+    ['petPool', 'pets'].forEach(function (tbl) {
+      (s[tbl] || []).forEach(function (x) {
+        if (x && x.id === id && (x.deleted || x.purged)) hit = x;
+      });
+    });
+    if (!hit) return toastMsg('这条没有被删除，无需恢复');
+    hit.deleted = false; hit.purged = false; hit.updatedAt = Date.now();
+    ptSave(s); PET_DB = s; toastMsg('↩️ 已恢复「' + (hit.name || '') + '」');
+    ptRenderAll();
+  }
+  function ptPurgeEmpty() {
+    if (!ptNeedAdmin()) return;
+    var s = ptGet();
+    var ids = (s.petPool || []).filter(function (p) { return p && p.purged; }).map(function (p) { return p.id; })
+      .concat((s.pets || []).filter(function (p) { return p && p.purged; }).map(function (p) { return p.id; }));
+    if (!ids.length) return toastMsg('回收站里没有永久删除的条目');
+    if (!confirm('🧹 彻底清空回收站（' + ids.length + ' 条）？\n数据会被真正抹掉，无法恢复。')) return;
+    var cfgi = (s.petCfg || []).filter(function (x) { return x && x.id === 'cfg'; })[0];
+    if (cfgi) { cfgi.excludeDefIds = (cfgi.excludeDefIds || []).concat(ids); cfgi.updatedAt = Date.now(); }
+    s.petPool = (s.petPool || []).filter(function (p) { return !(p && p.purged); });
+    s.pets = (s.pets || []).filter(function (p) { return !(p && p.purged); });
+    ptSave(s); PET_DB = s; toastMsg('🧹 回收站已清空（' + ids.length + ' 条）');
+    ptRenderAll();
+  }
+
+  /* ---------------- CSV / JSON 导入导出 ---------------- */
+  function ptCsvRows(text) {
+    var rows = [], row = [], cell = '', q = false, t = String(text || '').replace(/^\uFEFF/, '');
+    for (var i = 0; i < t.length; i++) {
+      var ch = t.charAt(i);
+      if (q) {
+        if (ch === '"') { if (t.charAt(i + 1) === '"') { cell += '"'; i++; } else q = false; }
+        else cell += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === ',') { row.push(cell); cell = ''; }
+      else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+      else if (ch !== '\r') cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    if (rows.length < 2) return [];
+    var head = rows[0].map(function (x) { return String(x).trim(); });
+    return rows.slice(1).filter(function (r) {
+      return r.some(function (x) { return String(x).trim() !== ''; });
+    }).map(function (r) {
+      var o = {}; head.forEach(function (h, j) { o[h] = String(r[j] == null ? '' : r[j]).trim(); }); return o;
+    });
+  }
+  function ptImportParse(text) {
+    var t = String(text || '').replace(/^\uFEFF/, '').trim();
+    if (!t) return [];
+    if (t.charAt(0) === '[' || t.charAt(0) === '{') {
+      var o = JSON.parse(t);
+      if (Array.isArray(o)) return o;
+      if (o && Array.isArray(o.rows)) return o.rows;
+      if (o && Array.isArray(o.list)) return o.list;
+      return [];
+    }
+    return ptCsvRows(t);
+  }
+  function ptImportDefs(s, rows) {
+    var exist = {}, added = 0, skipped = 0;
+    ptDefAll(s).forEach(function (p) { exist[p.name] = 1; });
+    rows.forEach(function (r, i) {
+      var name = r['名字'] || r.name || r['名称'] || '';
+      if (!name || exist[name]) { skipped++; return; }
+      var no = parseInt(r['编号'] || r.no || '0', 10);
+      if (!isFinite(no) || no < 1) no = 197 + i;
+      var base = 'cx' + ('00' + no).slice(-3), id = base, k = 1;
+      while (ptDefAll(s).some(function (p) { return p.id === id; })) id = base + '_' + (k++);
+      var series = r['系列'] || r.series || '精灵星座';
+      s.petPool.push({
+        id: id, name: name, series: series, tier: r['品级'] || r.tier || '普通',
+        img: r['图片'] || r.img || '', blessing: r['寄语'] || r.blessing || (PT_CODEX_BLESS[series] || ''),
+        archetype: 'object', rarity: '普通', origin: 'codex', emoji: '📖',
+        deleted: false, updatedAt: Date.now()
+      });
+      exist[name] = 1; added++;
+    });
+    return { added: added, skipped: skipped };
+  }
+  function ptImportPets(s, rows) {
+    var defs = ptDefAll(s).filter(function (p) { return !p.deleted; });
+    var added = 0, skipped = 0;
+    rows.forEach(function (r) {
+      var stu = r['学生姓名'] || r.studentName || r['姓名'] || '';
+      var key = r['定义编号'] || r.defId || r['编号'] || r.no || '';
+      var nm = r['灵杰名字'] || r.name || '';
+      if (!stu) { skipped++; return; }
+      var def = null;
+      if (key) def = defs.filter(function (p) {
+        return p.id === key || p.id === ('cx' + ('00' + (parseInt(key, 10) || 0)).slice(-3));
+      })[0];
+      if (!def && nm) def = defs.filter(function (p) { return p.name === nm; })[0];
+      if (!def) { skipped++; return; }
+      var np = ptMkPet(stu, def); np.fromImport = true; s.pets.push(np); added++;
+    });
+    return { added: added, skipped: skipped };
+  }
+  function ptCodexImportPick(mode) {
+    if (!ptNeedAdmin()) return;
+    PT_IMPORT_MODE = mode;
+    var f = document.getElementById('cxImportFile'); if (f) f.click();
+  }
+  function ptCodexImportFile(e) {
+    var f = e.target.files[0]; if (!f) return;
+    var mode = PT_IMPORT_MODE; e.target.value = '';
+    var rd = new FileReader();
+    rd.onload = function () {
+      try {
+        var rows = ptImportParse(rd.result);
+        if (!rows.length) return toastMsg('⚠️ 没读到有效数据（CSV 首行需为列名）');
+        if (!confirm('即将导入 ' + rows.length + ' 行「' + (mode === 'def' ? '图鉴灵杰' : '宠物记录') + '」。\n同名会跳过，不会覆盖已有数据。建议先导出备份，继续？')) return;
+        var s = ptGet();
+        var res = mode === 'def' ? ptImportDefs(s, rows) : ptImportPets(s, rows);
+        ptSave(s); PET_DB = s; ptRenderAll();
+        toastMsg('✅ 导入完成：新增 ' + res.added + '，跳过 ' + res.skipped);
+      } catch (err) {
+        toastMsg('⚠️ 解析失败：' + (err && err.message ? err.message : String(err)));
+      }
+    };
+    rd.readAsText(f);
+  }
+  function ptCodexExportCsv(kind) {
+    var s = ptGet(), head, lines;
+    if (kind === 'def') {
+      head = ['编号', '名字', '系列', '品级', '图片', '寄语'];
+      lines = ptDefAll(s).filter(function (p) { return !p.deleted; }).map(function (p) {
+        return [String(p.id || '').replace(/^cx/, ''), p.name, p.series || '', p.tier || '普通', p.img || '', p.blessing || ''];
+      });
+    } else {
+      head = ['学生姓名', '灵杰名字', '定义编号', '系列', '品级', '发放日期'];
+      lines = (s.pets || []).filter(function (p) { return p && !p.deleted && !p.purged; }).map(function (p) {
+        return [p.studentName || '', p.name || '', p.defId || '', p.series || '', p.tier || '普通', p.hatchedAt || ''];
+      });
+    }
+    function cell(x) { return '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"'; }
+    var csv = '\uFEFF' + [head].concat(lines).map(function (r) { return r.map(cell).join(','); }).join('\r\n');
+    var a = document.createElement('a');
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    a.download = kind === 'def' ? '启灵图鉴清单.csv' : '宠物灵杰记录.csv';
+    a.click();
+    toastMsg('📦 已导出 ' + lines.length + ' 行');
   }
   function ptTab(name) {
     ['inc', 'wall', 'codex', 'parent', 'sub', 'grad', 'admin', 'io'].forEach(function (t) {
@@ -24430,6 +24778,16 @@ function cwInit(){
   window.ptCodexFilter = ptCodexFilter;
   window.ptCodexSetTier = ptCodexSetTier;
   window.ptEnsureCodexFields = ptEnsureCodexFields;
+  /* vT68 图鉴管理：发放 / 删除 / 恢复 / 导入导出 */
+  window.ptRenderCodexAdmin = ptRenderCodexAdmin;
+  window.ptCodexGrant = ptCodexGrant;
+  window.ptDefRemove = ptDefRemove;
+  window.ptPetRemove = ptPetRemove;
+  window.ptCodexRestore = ptCodexRestore;
+  window.ptPurgeEmpty = ptPurgeEmpty;
+  window.ptCodexImportPick = ptCodexImportPick;
+  window.ptCodexImportFile = ptCodexImportFile;
+  window.ptCodexExportCsv = ptCodexExportCsv;
   /* 定价 / 折扣 / 开关：供测试与其它端复用 */
   window.ptPriceOf = ptPriceOf;
   window.ptCost = ptCost;
@@ -24587,13 +24945,32 @@ function cwInit(){
       });
     } catch (e) {}
 
+    /* vT68 家长端第 8 个板块：启灵图鉴。公开目录放快照顶层，孩子已唤醒的灵杰放进各自加密块。 */
+    var codexPool = [], codexPets = {};
+    try {
+      var pdb = JSON.parse(localStorage.getItem('wb_pet_db_v1') || 'null');
+      if (pdb) {
+        codexPool = (pdb.petPool || []).filter(function (x) {
+          return x && x.origin === 'codex' && !x.deleted && !x.purged;
+        }).map(function (x) {
+          return { id: x.id, name: x.name, series: x.series || '', tier: x.tier || '普通', img: x.img || '', blessing: x.blessing || '' };
+        });
+        (pdb.pets || []).forEach(function (p) {
+          if (!p || p.deleted || p.purged || p.graduated) return;
+          var nm = p.studentName || ''; if (!nm) return;
+          if (!codexPets[nm]) codexPets[nm] = [];
+          codexPets[nm].push({ defId: p.defId || '', name: p.name || '', series: p.series || '', tier: p.tier || '普通', img: p.img || '', blessing: p.blessing || '', hatchedAt: p.hatchedAt || '' });
+        });
+      }
+    } catch (e) {}
     var s2 = (typeof mpSyncSettings === 'function') ? mpSyncSettings() : {};
     return {
       app: '李老师工作台·家长端', ver: 3, ts: Date.now(),
       classId: (s2 && s2.classId) || '', className: '',
       exportedAt: new Date().toISOString(),
       students: stus, hwItems: items, hw: hwRows, rc: rcRows,
-      points: points, comments: comments, grades: grades, detain: detain
+      points: points, comments: comments, grades: grades, detain: detain,
+      codexPool: codexPool, codexPets: codexPets
     };
   }
 
@@ -24631,7 +25008,8 @@ function cwInit(){
         points: (snap.points || []).filter(function (r) { return r.name === st.name; })[0] || { hw: 0, manual: 0, total: 0 },
         comments: (snap.comments || []).filter(function (r) { return r.name === st.name; }),
         grades: (snap.grades || []).filter(function (r) { return r.name === st.name; }),
-        detain: (snap.detain || []).filter(function (r) { return r.name === st.name; })
+        detain: (snap.detain || []).filter(function (r) { return r.name === st.name; }),
+        codex: (snap.codexPets && snap.codexPets[st.name]) || []
       };
       blocks[st.name] = { code: String(st.code || '').toUpperCase(), data: seal(per, st.code || st.name) };
     });
@@ -24644,6 +25022,8 @@ function cwInit(){
           /* vT59 家长端板块后台控制：把老师勾选的板块开关写入快照顶层；并保留已有的家长投稿仓库配置，
              避免网页发布把小程序端设的投稿令牌冲掉（顺手修复的潜在 bug）。 */
           doc.parentPanels = (typeof ptPanelsGet === 'function') ? ptPanelsGet() : null;
+          /* vT68 家长端「📖 启灵图鉴」卡片：公开图鉴目录（只有名字/形象/系列，无学生隐私） */
+          doc.codexCatalog = snap.codexPool || [];
           if (j) {
             if (j.parentEssayOwner) doc.parentEssayOwner = j.parentEssayOwner;
             if (j.parentEssayRepo) doc.parentEssayRepo = j.parentEssayRepo;
