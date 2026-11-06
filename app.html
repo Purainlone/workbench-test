@@ -23341,7 +23341,7 @@ function cwInit(){
     });
     return list;
   }
-  /* ---------------- vT67 启灵图鉴种子：176 只灵杰（追加不删，老师可在后台改品级/系列） ---------------- */
+  /* ---------------- vT67+ 启灵图鉴种子：196 只灵杰（追加不删，老师可在后台改品级/系列） ---------------- */
   var PT_CODEX_ROWS = [
 [1,'焰角小白羊','萌宠灵物'],
 [2,'抱晶小精','精灵星座'],
@@ -23518,7 +23518,27 @@ function cwInit(){
 [173,'豹盔枪将','江湖侠客'],
 [174,'旋风尚青剑','江湖侠客'],
 [175,'抱星灰鼠','萌宠灵物'],
-[176,'抬爪金毛','萌宠灵物']
+[176,'抬爪金毛','萌宠灵物'],
+[177,'金巾羽扇生','名著先贤'],
+[178,'月兜影刃客','江湖侠客'],
+[179,'紫冠星铠将','精灵星座'],
+[180,'紫角翼魔君','山海异兽'],
+[181,'鹿角翠杖灵','精灵星座'],
+[182,'赤焰圆盾士','江湖侠客'],
+[183,'星帽持杖巫','精灵星座'],
+[184,'珊瑚蓝角灵','山海异兽'],
+[185,'金角青矛将','山海异兽'],
+[186,'雪发冰晶使','精灵星座'],
+[187,'紫帽书翼灵','名著先贤'],
+[188,'墨衣执笔生','名著先贤'],
+[189,'焰发圆环剑','江湖侠客'],
+[190,'青鬃绿袍剑','江湖侠客'],
+[191,'玄铠圆盾卫','江湖侠客'],
+[192,'橙焰羽翼士','山海异兽'],
+[193,'紫兜猫耳童','萌宠灵物'],
+[194,'薄荷吹笛生','名著先贤'],
+[195,'月纹蓝剑士','江湖侠客'],
+[196,'银发逐风剑','江湖侠客']
   ];
   var PT_CODEX_BLESS = {
     '名著先贤': '以先贤为镜，品读文字，读懂人心',
@@ -23560,10 +23580,13 @@ function cwInit(){
     var s = ptGet();
     var dirty = false;
     if (!s.petPool.length) { s.petPool = ptBuildSeed(); dirty = true; }
-    /* vT67 图鉴种子：首次检测到池里没有 codex 条目时追加 176 只灵杰（旧种子保留，后台可手动重置） */
-    if (!s.petPool.some(function (x) { return x && x.origin === 'codex'; })) {
-      s.petPool = s.petPool.concat(ptBuildCodexSeed()); dirty = true;
-    }
+    /* vT67+ 图鉴种子：按 id 增量补齐 196 只灵杰。老用户强刷后自动追加新增形象，
+       旧种子、老师改过的品级/系列、已收回的条目全部保留；后台「重置灵杰池」可全量重建。 */
+    var seedAll = ptBuildCodexSeed();
+    var seedHave = {};
+    s.petPool.forEach(function (x) { if (x && x.id) seedHave[x.id] = 1; });
+    var seedAdd = seedAll.filter(function (d) { return !seedHave[d.id]; });
+    if (seedAdd.length) { s.petPool = s.petPool.concat(seedAdd); dirty = true; }
     var c = s.petCfg.filter(function (x) { return x.id === 'cfg'; })[0];
     if (!c) { s.petCfg.push(ptDefaultCfg()); dirty = true; }
     else if (!c.shopSeeded && !s.petShop.length) { s.petShop = ptBuildShopSeed(); c.shopSeeded = true; dirty = true; }
@@ -24215,7 +24238,7 @@ function cwInit(){
     rd.readAsText(f);
   }
   function ptResetPool() {
-    if (!confirm('重置灵杰池为图鉴全集（176 只灵杰 + 旧种子）？已有的同学共创投稿会保留。')) return;
+    if (!confirm('重置灵杰池为图鉴全集（196 只灵杰 + 旧种子）？已有的同学共创投稿会保留。')) return;
     var s = ptGet();
     var keep = s.petPool.filter(function (x) { return x.origin === 'student'; });
     s.petPool = ptBuildSeed().concat(ptBuildCodexSeed()).concat(keep);
