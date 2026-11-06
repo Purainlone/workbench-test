@@ -2656,7 +2656,8 @@ table.paper td.l{text-align:left;font-weight:600}
       #s-pet .pet-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
       #s-pet .pet-panel{margin-top:8px}
       #s-pet .pet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:10px}
-      #s-pet .pet-card{background:#fff;border:1px solid var(--line,#e3e8ee);border-radius:14px;padding:10px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+      #s-pet .pet-card{background:linear-gradient(180deg,#fff 0%,#fbfcff 62%,#f2f7ff 100%);border:1px solid var(--line,#e3e8ee);border-radius:14px;padding:10px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.05);transition:transform .18s ease,box-shadow .18s ease}
+      #s-pet .pet-card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.09)}
       #s-pet .pet-card svg{width:100%;height:120px;display:block}
       #s-pet .pet-nm{font-weight:600;margin-top:4px;font-size:13px}
       #s-pet .pet-own{font-size:11px;color:#76867e;margin:2px 0}
@@ -22452,9 +22453,27 @@ function cwInit(){
     if (rar === '隐藏') return `<circle class="aura" cx="50" cy="50" r="47" fill="${acc}" opacity=".25"/><circle cx="50" cy="50" r="46" fill="none" stroke="${acc}" stroke-width="2" opacity=".6"/><text class="spark" x="18" y="26" font-size="12" fill="#fff">✦</text><text class="spark" x="82" y="30" font-size="10" fill="#fff">✦</text><text class="spark" x="78" y="78" font-size="11" fill="#fff">✧</text><text class="spark" x="22" y="74" font-size="9" fill="#fff">✧</text>`;
     return `<circle cx="50" cy="50" r="47" fill="none" stroke="url(#gold)" stroke-width="3"/><g class="sweep"><path d="M50,50 L50,6 A44,44 0 0 1 88,28 Z" fill="#fff" opacity=".12"/></g><text x="50" y="14" font-size="16" text-anchor="middle">👑</text><text class="spark" x="80" y="22" font-size="11" fill="#ffd23f">✦</text>`;
   }
-  function bgLayer(bg) {
+  function bgLayer(bg, c, sg) {
+    c = c || {};
     if (bg === 'grad') return `<defs><radialGradient id="bgG" cx="50%" cy="42%"><stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#dfe9ff"/></radialGradient></defs><rect x="0" y="0" width="100" height="100" fill="url(#bgG)"/>`;
-    if (bg === 'stage') return `<defs><radialGradient id="bgS" cx="50%" cy="38%"><stop offset="0%" stop-color="#fff7e6"/><stop offset="60%" stop-color="#ffd98a" stop-opacity=".5"/><stop offset="100%" stop-color="#c98a2a" stop-opacity=".2"/></radialGradient></radialGradient></defs><rect x="0" y="0" width="100" height="100" fill="url(#bgS)"/><path d="M10,98 Q50,82 90,98 Z" fill="#a86a1a" opacity=".25"/>`;
+    if (bg === 'stage') return `<defs><radialGradient id="bgS" cx="50%" cy="38%"><stop offset="0%" stop-color="#fff7e6"/><stop offset="60%" stop-color="#ffd98a" stop-opacity=".5"/><stop offset="100%" stop-color="#c98a2a" stop-opacity=".2"/></radialGradient></defs><rect x="0" y="0" width="100" height="100" fill="url(#bgS)"/><path d="M10,98 Q50,82 90,98 Z" fill="#a86a1a" opacity=".25"/>`;
+    /* vT69 柔光卡面：淡彩径向光 + 细环 + 落地投影 + 星点。
+       id 带 sg 后缀，保证同一页多个 inline SVG 不会串色；传 bg:'none' 可回到纯透明。 */
+    if (bg === 'aura') {
+      const ac = c.acc || '#ffd23f', sk = c.skin || '#ffd1b3';
+      const uid = 'aura' + (sg || 'x');
+      return `<defs><radialGradient id="${uid}G" cx="50%" cy="42%" r="58%">
+        <stop offset="0%" stop-color="#ffffff"/>
+        <stop offset="56%" stop-color="${oshade(ac, 54)}" stop-opacity=".36"/>
+        <stop offset="100%" stop-color="${oshade(ac, 26)}" stop-opacity="0"/>
+      </radialGradient></defs>
+      <circle cx="50" cy="50" r="48" fill="url(#${uid}G)"/>
+      <circle cx="50" cy="50" r="44" fill="none" stroke="${oshade(ac, 6)}" stroke-width=".8" opacity=".26"/>
+      <ellipse cx="50" cy="92" rx="26" ry="5" fill="${oshade(sk, -42)}" opacity=".13"/>
+      <text x="13" y="23" font-size="7" fill="${ac}" opacity=".5">✦</text>
+      <text x="85" y="32" font-size="6" fill="${ac}" opacity=".42">✧</text>
+      <text x="17" y="77" font-size="5.5" fill="${ac}" opacity=".38">✦</text>`;
+    }
     return '';
   }
 
@@ -22508,18 +22527,20 @@ function cwInit(){
     const hornSvg = def.horn ? drawHorn(def.horn, acc) : '';
     const hatSvg = (def.hat && def.hat !== 'cape') ? drawHat(def.hat, hair, acc) : '';
     const rar = o.rar || def.rarity || '普通';
+    const bg = o.bg == null ? 'aura' : o.bg;
     const tilt = `rotate(${proc.tilt} 50 50)`;
     const expr = (o.expr && o.expr !== 'auto') ? o.expr : null;
     return `<svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
     <defs><radialGradient id="${sg}" cx="36%" cy="30%"><stop offset="0%" stop-color="${oshade(skin, 16)}"/><stop offset="100%" stop-color="${oshade(skin, -26)}"/></radialGradient>
     <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffe9a8"/><stop offset="50%" stop-color="#d4af37"/><stop offset="100%" stop-color="#fff3c4"/></linearGradient></defs>
-    ${bgLayer(o.bg)}
+    ${bgLayer(bg, c, sg)}
     <g transform="${tilt}">
       ${rarityLayer(rar, acc)}
       ${A.body}
       ${patternOverlay(proc.pattern, head, c, proc.spotSeed)}
       <g transform="translate(${dx},${dy})">${earSvg}${hornSvg}</g>
       <circle cx="${head.cx}" cy="${head.cy}" r="${head.r}" fill="url(#${sg})" stroke="${line}" stroke-width="2.2"/>
+      <ellipse cx="${(head.cx - head.r * 0.3).toFixed(1)}" cy="${(head.cy - head.r * 0.52).toFixed(1)}" rx="${(head.r * 0.36).toFixed(1)}" ry="${(head.r * 0.16).toFixed(1)}" fill="#ffffff" opacity=".26" transform="rotate(-26 ${head.cx} ${head.cy})"/>
       ${A.extra}
       <g transform="translate(${dx},${dy})">${hatSvg}</g>
       <g transform="translate(${dx},${dy})">${drawFace(def.style || '中性', hashStr((def.id || 'x')) + (proc.eyeVar * 7))}</g>
@@ -22537,7 +22558,7 @@ function cwInit(){
     const paths = (def.customSvg || []).map(d => `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
     return `<svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
     <defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffe9a8"/><stop offset="50%" stop-color="#d4af37"/><stop offset="100%" stop-color="#fff3c4"/></linearGradient></defs>
-    ${bgLayer(o.bg)}
+    ${bgLayer(o.bg == null ? 'aura' : o.bg, { acc: acc, skin: skin }, 'fh' + Math.abs(hashStr(def.id || def.name || 'x')))}
     <g transform="rotate(${tilt} 50 50)">
       ${rarityLayer(rar, acc)}
       <rect x="8" y="8" width="84" height="84" rx="14" fill="${oshade(skin, 24)}" opacity=".35" stroke="${oshade(skin, -20)}" stroke-width="1.5"/>
@@ -23050,7 +23071,7 @@ function cwInit(){
     return `<svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
     <defs><radialGradient id="${sg}" cx="36%" cy="30%"><stop offset="0%" stop-color="${oshade(c.skin, 16)}"/><stop offset="100%" stop-color="${oshade(c.skin, -26)}"/></radialGradient>
     <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffe9a8"/><stop offset="50%" stop-color="#d4af37"/><stop offset="100%" stop-color="#fff3c4"/></linearGradient></defs>
-    ${bgLayer(o.bg)}
+    ${bgLayer(o.bg == null ? 'aura' : o.bg, c, sg)}
       ${rarityLayer(rar, c.acc)}
       ${wOpen}${bodyParts}${wClose}
       ${deco}
@@ -24419,6 +24440,11 @@ function cwInit(){
       return '<option value="' + ptAt(n) + '">' + ptAt(n) + '</option>';
     }).join('');
     var defOpts = ptDefOpts(s), petOpts = ptPetOpts(s), recOpts = ptRecycleOpts(s);
+    var seriesSeen = {}, seriesOpts = '<option value="*">全部系列</option>';
+    ptCodexDefs(s).forEach(function (d) {
+      var k = d.series || '未分系列';
+      if (!seriesSeen[k]) { seriesSeen[k] = 1; seriesOpts += '<option value="' + ptAt(k) + '">' + ptAt(k) + '</option>'; }
+    });
     var tierOpts = ptCodexDefs(s).map(function (p) {
       return '<option value="' + ptAt(p.id) + '">' + ptAt(p.name) + ' · ' + ptAt(p.series || '') + ' · ' + ptAt(p.tier || '普通') + '</option>';
     }).join('');
@@ -24436,6 +24462,16 @@ function cwInit(){
       '<button class="btn2 primary" onclick="ptCodexGrant()">🎁 确认发放</button></div>' +
       '<div class="sub">这里发放的是《班级启灵图鉴》里的灵杰，普通 / 隐藏 / 典藏都可以直接指定发放，不扣学生积分；发放记录写入赠送流水。' +
       '<b>旧宠物、积分、商城商品、灵杰蛋</b>仍在「⚙ 后台管理 → 🎁 直接赠送」，两边互不干扰。</div></div>' +
+
+
+      /* ①-b 按系列批量发放 */
+      '<div class="gpset" style="flex-wrap:wrap">' +
+      '<span class="lbl">批量</span><select class="search" id="cxBatchSeries" style="min-width:120px">' + seriesOpts + '</select>' +
+      '<select class="search" id="cxBatchTier" style="min-width:100px"><option value="*">全部品级</option><option>普通</option><option>隐藏</option><option>典藏</option></select>' +
+      '<span class="lbl">每人</span><input class="search" id="cxBatchN" type="number" min="1" max="20" value="1" style="width:58px">' +
+      '<span class="lbl">发给</span><select class="search" id="cxBatchWho" style="min-width:130px">' + whoOpts + '</select>' +
+      '<button class="btn2" onclick="ptCodexGrantBatch()">📦 批量发放</button></div>' +
+      '<div class="sub">按系列（可再筛品级）给每人随机发 N 位<b>不重复</b>灵杰，适合单元活动后一次铺开；不扣积分、也不经过随机唤醒池，隐藏 / 典藏可整批授予。每人汇总为一条赠送流水，误发可在下方「宠物 / 灵杰记录管理」移出。</div></div>' +
 
       /* ② 品级 / 系列 */
       '<div class="pet-sec"><h3>🏅 灵杰品级 / 系列管理</h3>' +
@@ -24509,6 +24545,40 @@ function cwInit(){
     });
     ptSave(s); PET_DB = s;
     toastMsg('🎁 已发放「' + def.name + '」给 ' + targets.length + ' 位同学');
+    ptRenderAll();
+  }
+
+  /* ---------------- 按系列批量发放 ---------------- */
+  function ptCodexGrantBatch() {
+    if (!ptNeedAdmin()) return;
+    var s = ptGet();
+    var g = function (id) { return (document.getElementById(id) || {}).value || ''; };
+    var series = g('cxBatchSeries') || '*', tier = g('cxBatchTier') || '*';
+    var n = Math.max(1, Math.min(20, parseInt(g('cxBatchN'), 10) || 1));
+    var who = g('cxBatchWho') || '*';
+    var pool = ptCodexDefs(s).filter(function (d) {
+      return (series === '*' || (d.series || '未分系列') === series) &&
+             (tier === '*' || (d.tier || '普通') === tier);
+    });
+    if (!pool.length) return toastMsg('⚠️ 该筛选下没有可发放的灵杰');
+    var targets = (who === '*') ? ptNames() : [who];
+    if (!targets.length) return toastMsg('⚠️ 没有找到学生名单');
+    var per = Math.min(n, pool.length);
+    if (!confirm('按「' + (series === '*' ? '全部系列' : series) + ' · ' + (tier === '*' ? '全部品级' : tier) + '」批量发放\n' +
+      '发给 ' + targets.length + ' 位同学，每人 ' + per + ' 位不重复灵杰，共 ' + (targets.length * per) + ' 条记录。\n不扣积分，确认继续？')) return;
+    var atText = ptYmd(new Date());
+    targets.forEach(function (name) {
+      var bag = pool.slice(), got = [];
+      for (var i = 0; i < per && bag.length; i++) {
+        var sp = bag.splice(Math.floor(Math.random() * bag.length), 1)[0];
+        var np = ptMkPet(name, sp); np.fromGrant = true; s.pets.push(np); got.push(sp.name);
+      }
+      s.petGift.push({ id: ptNewId('gf'), studentName: name, kind: 'grant',
+        item: '批量发放：' + (series === '*' ? '全部系列' : series) + ' · ' + got.join('、'),
+        qty: got.length, at: Date.now(), atText: atText, note: 'vT69 按系列批量发放' });
+    });
+    ptSave(s); PET_DB = s;
+    toastMsg('📦 已发放 ' + (targets.length * per) + ' 位灵杰给 ' + targets.length + ' 位同学');
     ptRenderAll();
   }
 
@@ -24781,6 +24851,7 @@ function cwInit(){
   /* vT68 图鉴管理：发放 / 删除 / 恢复 / 导入导出 */
   window.ptRenderCodexAdmin = ptRenderCodexAdmin;
   window.ptCodexGrant = ptCodexGrant;
+  window.ptCodexGrantBatch = ptCodexGrantBatch;
   window.ptDefRemove = ptDefRemove;
   window.ptPetRemove = ptPetRemove;
   window.ptCodexRestore = ptCodexRestore;
