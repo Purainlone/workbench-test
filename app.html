@@ -24104,7 +24104,9 @@ function cwInit(){
      需要反悔时可在「赠送记录」里一键恢复。所有展示/统计都走 ptPets()。 */
   function ptPets() { return ptGet().pets.filter(function (p) { return p && !p.deleted; }); }
   /* vT67 品级闸门：积分可抽取的池只含普通灵杰（隐藏/典藏只能老师授予） */
-  function codexDrawPool(s) { return (s.petPool || []).filter(function (p) { return p && !p.deleted && (p.tier || '普通') === '普通'; }); }
+  /* vT86 唤醒台移除后，随机唤醒只从《启灵图鉴》的普通灵杰里抽，
+     不再混入旧版自动生成的宠物（老师对这些形象不满意，已整体下架）。 */
+  function codexDrawPool(s) { return (s.petPool || []).filter(function (p) { return p && !p.deleted && p.origin === 'codex' && (p.tier || '普通') === '普通'; }); }
 
   /* ---------------- 种子：宠物池 + 商城 ---------------- */
   function ptBuildSeed() {
