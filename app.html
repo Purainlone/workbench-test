@@ -2720,6 +2720,10 @@ table.paper td.l{text-align:left;font-weight:600}
       #s-pet .cx-q[data-t="隐藏"].on{background:#7c5cff;border-color:#7c5cff}
       #s-pet .cx-q[data-t="典藏"].on{background:#d8a520;border-color:#d8a520}
       #s-pet.codex-all .cx-card.locked .cx-img img{filter:none;opacity:1}
+      /* vT80 点卡发放模式：卡面可点、悬停金框提示 */
+      #s-pet .cx-card.grantable:hover{border-color:#d8a520;box-shadow:0 3px 14px rgba(216,165,32,.45);transform:translateY(-2px);transition:all .12s}
+      #s-pet .cx-card.grantable::after{content:'🎁 点击发放';position:absolute;left:50%;bottom:26px;transform:translateX(-50%);font-size:10px;line-height:1.6;padding:1px 8px;border-radius:8px;background:rgba(216,165,32,.92);color:#fff;opacity:0;pointer-events:none;transition:opacity .12s;z-index:3;white-space:nowrap}
+      #s-pet .cx-card.grantable:hover::after{opacity:1}
     </style>
     <h2>📖 班级启灵图鉴 <span style="font-size:12px;color:#76867e;font-weight:400;margin-left:8px" id="petSub">积蓄启灵之力 · 唤醒灵杰 · 收录图鉴</span><span id="petStateTag" class="pet-state s-on">🟢 运行中</span></h2>
     <div class="sub">唤醒灵杰消耗的积分 = 学生「个人累计积分」（作业+小组+奖惩汇总），蓄灵 / 唤醒 / 兑换会写一条「启灵图鉴」奖惩记录，自动进入学生流水与积分榜。在启灵世界里，每一次认真品读、大胆表达、坚持书写、团结协作，都能积蓄启灵之力，唤醒一位灵杰，点亮你的专属图鉴。</div>
@@ -16810,29 +16814,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v67';
-/* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
-   WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
-   WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v67';
-/* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
-   WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
-   WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v67';
-/* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
-   WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
-   WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v67';
-/* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
-   WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
-   WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v67';
-/* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
-   WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
-   WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v67';
-var WB_MY_VER = '优化版 vT67 · 启灵图鉴';
-var WB_BUILD_DATE = '11-06', WB_BUILD_NO = '2.6.101';
+var WB_VER_TAG = 'v80';
+var WB_MY_VER = '优化版 vT80 · 铺满窗口与点卡发放';
+var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.102';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24449,6 +24433,8 @@ function cwInit(){
   /* vT72 图鉴品级快设：老师解锁口令后，可直接在卡片上把灵杰设为 隐藏 / 典藏 / 普通；
      CODEX_SHOW_ALL 让老师一键看未唤醒灵杰的原图（学生端仍保持灰色悬念）。 */
   var CODEX_QUICK = false, CODEX_SHOW_ALL = false;
+  /* vT80 点卡发放：老师开启后直接点图鉴卡面即可发放给同学 */
+  var CODEX_GRANT = false;
   var PT_CIMG_OBS = null;
   /* vT67 图鉴图片直连线上 Pages 仓库 codeximg/，不依赖 Gitee 令牌（老师端令牌只在浏览器本地）。
      手绘宠物照片仍走 wbPetFetchImg 的 Gitee 通道，两条路互不影响。 */
@@ -24528,6 +24514,7 @@ function cwInit(){
     var seenM = {}, seriesList = ['*'];
     pool.forEach(function (p) { var x = p.series || '未分系列'; if (!seenM[x]) { seenM[x] = 1; seriesList.push(x); } });
     seriesList.sort(function (a, b) { return a === '*' ? -1 : b === '*' ? 1 : a.localeCompare(b, 'zh'); });
+    var admin = ptAdminUnlocked();
     var tiers = [['*', '全部'], ['普通', '普通'], ['隐藏', '隐藏灵杰'], ['典藏', '典藏灵杰']];
     var chips = '<div class="gpset" style="flex-wrap:wrap"><span class="lbl">系列</span>' +
       seriesList.map(function (x) { return '<button class="btn2 sm' + (CODEX_STATE.series === x ? ' primary' : '') + '" onclick="ptCodexFilter(\'series\',\'' + ptEsc(x) + '\')">' + (x === '*' ? '全部' : ptEsc(x)) + '</button>'; }).join('') + '</div>' +
@@ -24535,27 +24522,33 @@ function cwInit(){
       tiers.map(function (t) { return '<button class="btn2 sm' + (CODEX_STATE.tier === t[0] ? ' primary' : '') + '" onclick="ptCodexFilter(\'tier\',\'' + t[0] + '\')">' + t[1] + '</button>'; }).join('') +
       '<span class="sctip" id="codexCnt"></span>' +
       '<button class="btn2 sm' + (CODEX_QUICK ? ' primary' : '') + '" onclick="ptCodexQuickToggle()">🏅 ' + (CODEX_QUICK ? '退出品级快设' : '品级快设') + '</button>' +
-      '<button class="btn2 sm" onclick="ptCodexToggleGray()">' + (CODEX_SHOW_ALL ? '🙈 恢复灰色悬念' : '👁 显示未唤醒原图') + '</button></div>';
+      (admin ? '<button class="btn2 sm' + (CODEX_GRANT ? ' primary' : '') + '" onclick="ptCodexGrantToggle()" title="开启后点任意卡面即可直接发放给同学">🎁 ' + (CODEX_GRANT ? '退出点卡发放' : '点卡发放') + '</button>' : '') +
+      '<button class="btn2 sm" onclick="ptCodexToggleGray()">' + (CODEX_SHOW_ALL ? '🙈 恢复灰色悬念' : '👁 显示未唤醒原图') + '</button></div>' +
+      (admin && CODEX_GRANT ? '<div class="sub" style="margin:-4px 0 6px;color:#b06a00">🎁 点卡发放模式：直接点下面的卡面 → 选学生 → 确认发放（可发给全班每人一份）。</div>' : '');
     var list = pool.filter(function (p) {
       var sr = p.series || '未分系列';
       return (CODEX_STATE.series === '*' || sr === CODEX_STATE.series) && (CODEX_STATE.tier === '*' || (p.tier || '普通') === CODEX_STATE.tier);
     });
     /* vT72 老师一键去掉「未唤醒」灰卡滤镜；学生端默认仍保留收集悬念 */
     try { var sec = document.getElementById('s-pet'); if (sec) sec.classList.toggle('codex-all', CODEX_SHOW_ALL); } catch (e) {}
-    var admin = ptAdminUnlocked();
     var ownedN = 0;
+    var grantable = admin && CODEX_GRANT;
     var cards = list.map(function (p) {
       var a = awake[p.id]; if (a) ownedN++;
       var curTier = p.tier || '普通';
       var tierCls = ({ '普通': 't0', '隐藏': 't1', '典藏': 't2' })[curTier] || 't0';
       var tierTag = '<span class="cx-tier ' + tierCls + '"' +
-        (admin ? ' title="点一下循环切换 普通 → 隐藏 → 典藏" onclick="ptCodexCycleTier(\'' + ptAt(p.id) + '\')" style="cursor:pointer"' : '') +
+        (admin ? ' title="点一下循环切换 普通 → 隐藏 → 典藏" onclick="' + (grantable ? 'event.stopPropagation();' : '') + 'ptCodexCycleTier(\'' + ptAt(p.id) + '\')" style="cursor:pointer"' : '') +
         '>' + ptEsc(curTier) + '</span>';
       var quick = (CODEX_QUICK && admin) ? '<div class="cx-quick">' +
         ['普通', '隐藏', '典藏'].map(function (tt) {
-          return '<button class="cx-q' + (curTier === tt ? ' on' : '') + '" data-t="' + tt + '" onclick="ptCodexQuickSet(\'' + ptAt(p.id) + '\',\'' + tt + '\')">' + tt + '</button>';
+          return '<button class="cx-q' + (curTier === tt ? ' on' : '') + '" data-t="' + tt + '" onclick="' + (grantable ? 'event.stopPropagation();' : '') + 'ptCodexQuickSet(\'' + ptAt(p.id) + '\',\'' + tt + '\')">' + tt + '</button>';
         }).join('') + '</div>' : '';
-      return '<div class="cx-card' + (a ? ' owned' : ' locked') + '" title="' + ptEsc(p.blessing || '') + '">' +
+      /* vT80 点卡发放模式：整张卡可点，点卡即弹出发放对话框 */
+      return '<div class="cx-card' + (a ? ' owned' : ' locked') + (grantable ? ' grantable' : '') + '"' +
+        (grantable
+          ? ' title="🎁 点击这张卡直接发放给同学（' + ptEsc(p.name) + '）" onclick="ptCodexGrantPick(\'' + ptAt(p.id) + '\')" style="cursor:pointer"'
+          : ' title="' + ptEsc(p.blessing || '') + '"') + '>' +
         tierTag +
         ptCodexImgHtml(p) +
         '<div class="cx-nm">' + ptEsc(p.name) + '</div>' +
@@ -24794,12 +24787,9 @@ function cwInit(){
   }
 
   /* ---------------- 发放 ---------------- */
-  function ptCodexGrant() {
-    if (!ptNeedAdmin()) return;
+  /* vT80 发放执行体：下拉表单与「点卡发放」弹窗共用 */
+  function ptCodexGrantDo(defId, who, note) {
     var s = ptGet();
-    var who = (document.getElementById('cxGrantWho') || {}).value || '*';
-    var defId = (document.getElementById('cxGrantDef') || {}).value || '';
-    var note = ((document.getElementById('cxGrantNote') || {}).value || '').trim();
     var def = s.petPool.filter(function (x) { return x && x.id === defId && !x.deleted && !x.purged; })[0];
     if (!def) return toastMsg('⚠️ 请先选择要发放的图鉴灵杰');
     var targets = (who === '*') ? ptNames() : [who];
@@ -24813,6 +24803,53 @@ function cwInit(){
     ptSave(s); PET_DB = s;
     toastMsg('🎁 已发放「' + def.name + '」给 ' + targets.length + ' 位同学');
     ptRenderAll();
+  }
+  function ptCodexGrant() {
+    if (!ptNeedAdmin()) return;
+    var g = function (id) { return ((document.getElementById(id) || {}).value || ''); };
+    ptCodexGrantDo(g('cxGrantDef'), g('cxGrantWho') || '*', g('cxGrantNote').trim());
+  }
+  /* vT80 点卡发放：开启后点图鉴卡面直接弹发放对话框 */
+  function ptCodexGrantToggle() {
+    if (!ptNeedAdmin()) return;
+    CODEX_GRANT = !CODEX_GRANT;
+    ptRenderCodex();
+    toastMsg(CODEX_GRANT ? '🎁 点卡发放已开：点任意卡面即可发放（点按钮退出）' : '已退出点卡发放模式');
+  }
+  function ptCodexGrantPick(defId) {
+    if (!ptNeedAdmin()) return;
+    var s = ptGet();
+    var def = s.petPool.filter(function (x) { return x && x.id === defId && !x.deleted && !x.purged; })[0];
+    if (!def) return toastMsg('⚠️ 找不到该图鉴灵杰');
+    var old = document.getElementById('cxGrantModal'); if (old) old.parentNode.removeChild(old);
+    var opts = '<option value="*">全班（每人一份）</option>' + ptNames().map(function (n) {
+      return '<option value="' + ptAt(n) + '">' + ptAt(n) + '</option>';
+    }).join('');
+    var ov = document.createElement('div');
+    ov.id = 'cxGrantModal';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:98;background:rgba(18,28,24,.45);display:flex;align-items:center;justify-content:center';
+    ov.innerHTML =
+      '<div style="background:#fff;border-radius:14px;padding:18px 20px 16px;width:min(92vw,400px);box-shadow:0 12px 44px rgba(0,0,0,.32);font-size:14px">' +
+      '<h3 style="margin:0 0 6px;font-size:16px;color:#223">🎁 发放「' + ptAt(def.name) + '」' +
+      (def.tier && def.tier !== '普通' ? '<span style="color:#b06a00">（' + ptAt(def.tier) + '）</span>' : '') + '</h3>' +
+      '<div style="font-size:12px;color:#6b7c86;margin-bottom:12px;line-height:1.7">不扣积分，发放记录写入赠送流水；同一个灵杰可以发给多位同学，每人一份独立记录。</div>' +
+      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">' +
+      '<span style="font-size:13px;white-space:nowrap">发给</span>' +
+      '<select id="cxPickWho" style="flex:1;height:34px;border:1px solid #d7dee8;border-radius:8px;padding:0 8px">' + opts + '</select></div>' +
+      '<input id="cxPickNote" placeholder="备注（可选）" style="width:100%;height:34px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;margin-bottom:14px;box-sizing:border-box">' +
+      '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+      '<button id="cxPickCancel" class="btn2">取消</button>' +
+      '<button id="cxPickOk" class="btn2 primary">🎁 确认发放</button></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function (e) { if (e.target === ov) ov.parentNode.removeChild(ov); });
+    document.getElementById('cxPickCancel').onclick = function () { ov.parentNode.removeChild(ov); };
+    document.getElementById('cxPickOk').onclick = function () {
+      var who = document.getElementById('cxPickWho').value || '*';
+      var note = (document.getElementById('cxPickNote').value || '').trim();
+      ov.parentNode.removeChild(ov);
+      ptCodexGrantDo(def.id, who, note);
+    };
+    try { document.getElementById('cxPickWho').focus(); } catch (e) {}
   }
 
   /* ---------------- 按系列批量发放 ---------------- */
@@ -25124,6 +25161,9 @@ function cwInit(){
   window.ptRenderCodexAdmin = ptRenderCodexAdmin;
   window.ptCodexGrant = ptCodexGrant;
   window.ptCodexGrantBatch = ptCodexGrantBatch;
+  /* vT80 点卡发放 */
+  window.ptCodexGrantToggle = ptCodexGrantToggle;
+  window.ptCodexGrantPick = ptCodexGrantPick;
   window.ptDefRemove = ptDefRemove;
   window.ptPetRemove = ptPetRemove;
   window.ptCodexRestore = ptCodexRestore;
