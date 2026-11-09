@@ -16814,9 +16814,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v81';
-var WB_MY_VER = '优化版 vT81 · 通知置顶与祝贺可见';
-var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.103';
+var WB_VER_TAG = 'v82';
+var WB_MY_VER = '优化版 vT82 · 图鉴灵杰卡面直显';
+var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.104';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -23170,7 +23170,9 @@ function cwInit(){
   }
 
   /* 照片型宠物：学生的手绘作品直接当形象，不走 SVG */
-  function isPhotoDef(def) { return !!(def && (def.img || def.photo)); }
+  /* vT82 图鉴灵杰的 img 指向线上卡面 codeximg/，不是手绘作品 —— 排除之，
+     否则墙上/小程序会把图鉴灵杰误判成手绘，去 Gitee 同步仓库拉图必然 404。 */
+  function isPhotoDef(def) { var im = def && def.img ? String(def.img) : ''; return !!(def && ((im && im.indexOf('codeximg/') !== 0) || def.photo)); }
 
   /* 品种配色：不套 petSkin 的随机色偏 —— 英短必须是灰蓝，不能被偏移成绿的 */
   function breedColors(br, o) {
@@ -23813,8 +23815,11 @@ function cwInit(){
   function ptCard(pet) {
     var def = ptPetDefOf(pet);
     var isPhoto = PetCore.isPhotoDef(pet);
+    /* vT82 图鉴灵杰：img 指向 codeximg/ 卡面，直接显示线上卡面（含 gif 动效回退链） */
+    var isCxPic = !isPhoto && pet.img && String(pet.img).indexOf('codeximg/') === 0;
     var stage = PetCore.stageOf(pet.level, pet.graduated, ptStageCfg());
     var svg = isPhoto ? (ptPetPhotoHtml(pet, 'pet-photo', stage) || '<div class="pet-photo" style="display:flex;align-items:center;justify-content:center">🖼️</div>')
+                      : isCxPic ? ptCodexPetPicHtml(pet, 'pet-photo')
                       : PetCore.renderPet(def, { seed: pet.id, level: pet.level, graduated: pet.graduated, stageCfg: ptStageCfg() });
     var grad = pet.graduated ? '<span class="pet-grad">🎓 已毕业 · ' + ptEsc(pet.gradCode || '') + '</span>' : '';
     var f = ptCost('feed'), d = ptCost('draw'), r = ptCost('redeem');
@@ -23843,8 +23848,12 @@ function cwInit(){
     var opts = ptNames().map(function (n) { return '<option value="' + ptEsc(n) + '">' + ptEsc(n) + '</option>'; }).join('');
     var pool = s.petPool.map(function (sp) {
       var isPhoto = PetCore.isPhotoDef(sp);
+      /* vT82 图鉴灵杰在池子里也直接显示卡面（不再误走手绘通道） */
+      var isCxPic = !isPhoto && sp.img && String(sp.img).indexOf('codeximg/') === 0;
       /* vT37 池子里的宠物一律以「蛋」呈现 —— 发放那一刻才孵化，惊喜感留给学生 */
-      var pic = isPhoto ? ptPetPhotoHtml(sp, 'pet-photo', 'egg') : PetCore.renderPet(sp, { seed: sp.id, egg: true });
+      var pic = isPhoto ? ptPetPhotoHtml(sp, 'pet-photo', 'egg')
+              : isCxPic ? ptCodexPetPicHtml(sp, 'pet-photo')
+              : PetCore.renderPet(sp, { seed: sp.id, egg: true });
       var kind = (sp.origin === 'student') ? ' <span class="pet-stu">同学共创</span>' : '';
       return '<div class="pet-card" style="cursor:pointer" onclick="ptHatchFromSel(\'' + sp.id + '\')">' + pic +
         '<div class="pet-nm">' + ptEsc(sp.name) + ' <span class="pet-rare r-' + ptRarClass(sp.rarity) + '">' + ptEsc(sp.rarity) + '</span>' + kind + '</div>' +
@@ -23889,6 +23898,17 @@ function cwInit(){
     });
   }
   window.wbPetFetchImg = wbPetFetchImg;
+  /* vT82 图鉴灵杰（img 指向线上卡面 codeximg/）直接显示卡面，复用图鉴页的多镜像回退，
+     不再误走手绘作品的 Gitee 通道（那里根本没有 codeximg/，必然空白破图）。 */
+  function ptCodexPetPicHtml(p, cls) {
+    var rel = String(p.img || '');
+    var srcs = ptCodexImgSrcs(rel, p.tier || (p.def && p.def.tier) || '普通');
+    if (!srcs.length) return '';
+    var key = 'w' + (p.id || rel);
+    PT_CX_SRCS[key] = srcs;
+    return '<div class="pet-photobox"><img class="' + (cls || 'pet-photo') + '" src="' + ptEsc(srcs[0]) +
+      '" data-cxk="' + ptEsc(key) + '" onerror="ptCodexImgErr(this)" alt="' + ptEsc(p.name || '') + '"></div>';
+  }
   /* 宠物（已入池/墙上）取手绘照片 + 成长装饰层，取到后原位补渲染 */
   function ptPetPhotoHtml(p, cls, stage) {
     var rel = p.img || (p.def && p.def.img) || '';
