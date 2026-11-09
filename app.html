@@ -25277,7 +25277,20 @@ function cwInit(){
             var cx = cv.getContext('2d');
             cx.fillStyle = '#fff'; cx.fillRect(0, 0, cw, ch);   /* 透明底铺白，防 JPEG 变黑 */
             cx.drawImage(im, 0, 0, cw, ch);
-            res(cv.toDataURL('image/jpeg', q || 0.82));
+            var uri = cv.toDataURL('image/jpeg', q || 0.82);
+            /* 二次压缩：超过 ~52KB 的再缩到 70% 边长、质量 0.62，
+               避免一次导入十几张就把同步快照撑大 */
+            if (uri.length > 72000) {
+              try {
+                var cw2 = Math.max(1, Math.round(cw * 0.7)), ch2 = Math.max(1, Math.round(ch * 0.7));
+                cv.width = cw2; cv.height = ch2;
+                var c2 = cv.getContext('2d');
+                c2.fillStyle = '#fff'; c2.fillRect(0, 0, cw2, ch2);
+                c2.drawImage(im, 0, 0, cw2, ch2);
+                uri = cv.toDataURL('image/jpeg', 0.62);
+              } catch (e2) {}
+            }
+            res(uri);
           } catch (e) { res(raw); }
         };
         im.onerror = function () { res(raw); };
@@ -25338,6 +25351,7 @@ function cwInit(){
       ptRenderCodex(); ptRenderWall();
       toastMsg('✅ 已导入 ' + added + ' 位灵杰（约 ' + Math.max(1, Math.round(bytes / 1024)) + 'KB）' + (skipped ? '，跳过 ' + skipped + ' 张' : ''));
       if (confirm('导入完成：' + names.slice(0, 5).join('、') + (names.length > 5 ? ' 等 ' + names.length + ' 位' : '') +
+        (bytes > 800 * 1024 ? ('\n\n提示：本次图片合计约 ' + Math.round(bytes / 1024) + 'KB（已自动压缩）。一次导入很多张会让同步稍慢，建议分两三次。') : '') +
         '\n\n现在就打开「点卡发放」，把它们发给同学吗？\n（点取消则稍后在图鉴里自己点卡发放）')) {
         CODEX_GRANT = true; ptRenderCodex();
       }
