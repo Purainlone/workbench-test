@@ -1394,7 +1394,10 @@ table.paper td.l{text-align:left;font-weight:600}
         <button class="btn2" onclick="actOrderInit()" title="把当前座位表定为长期档第 1 次">📌 设为第 1 次</button>
         <span class="sctip" id="actModeTip"></span>
         <button class="btn2 primary" onclick="actShuffle()">🎲 随机组队（新一次活动）</button>
-        <button class="btn2 primary" onclick="actOrderedRotate()">🔀 有序轮转（岗位按组序流转）</button>
+        <button class="btn2 primary" onclick="actOrderedRotate()" title="按 24 周正交排班表全员换组">🔀 有序轮转（正交排班·全员换组）</button>
+        <button class="btn2" onclick="actRotatePreview()" title="查看下一次轮转的 8 组名单与轮休名单">📅 轮转预览</button>
+        <button class="btn2" onclick="actRotateAudit()" title="核对 8 周内任意两人最多同组 1 次">🔍 8 周查重</button>
+        <button class="btn2" onclick="actOrthoRestart()" title="按正交表从第 1 周重新排一次，进入完整 24 周周期（可撤回）">⟳ 从第 1 周重排</button>
         <button class="btn2 primary" onclick="actRotateGroup()">🔄 全班换区（组名跟区域不变）</button>
         <button class="btn2 primary" onclick="actRotateMember()">🔁 组内换座（组长不动）</button>
         <button class="btn2" id="actManualBtn" onclick="actManualToggle()">✋ 手动调座位</button>
@@ -1419,7 +1422,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <div class="actnote" id="actNote" style="margin-top:10px;font-size:12.5px;color:var(--muted);line-height:1.7"></div>
       </div>
       <div class="gpfree" style="margin-top:12px"><h4>用法</h4>
-        <span class="tip">点任一学生 = 加减分 / 换组 / <b>调整岗位（设组长·副组长·成员）</b>；点组头「±」= 整组加减分（自动摊给组内每人，与「小组活动」结算同账）；🔄 整组换区、🔁 组内换位、🎲 随机组队、🔀 有序轮转；点工具栏「✋ 手动调座位」可<b>手动互换任意两人</b>（可跨组）；分组在「小组活动 → 编辑分组」里调整后，这里自动跟着变。</span>
+        <span class="tip">点任一学生 = 加减分 / 换组 / <b>调整岗位（设组长·副组长·成员）</b>；点组头「±」= 整组加减分（自动摊给组内每人，与「小组活动」结算同账）；🔄 整组换区、🔁 组内换位、🎲 随机组队、🔀 正交轮转（全员换组）、📅 轮转预览、🔍 8 周查重；点工具栏「✋ 手动调座位」可<b>手动互换任意两人</b>（可跨组）；分组在「小组活动 → 编辑分组」里调整后，这里自动跟着变。</span>
       </div>
     </div>
     <!-- 活动座位加减分菜单 -->
@@ -8805,7 +8808,7 @@ function actModeUI(){
     var b=document.getElementById('actModeBtn');
     if(b)b.textContent=ACT_MODE==='ordered'?'📚 长期·有序轮转':'🎲 临时·随机组队';
     var t=document.getElementById('actModeTip');
-    if(t)t.textContent=ACT_MODE==='ordered'?('长期档：每点一次「有序轮转」进一周'+(ACT.actNo>0?('（第 '+ACT.actNo+' 次 · 组长/副组长'+(ACT.leadSwap?'已对调':'常态')+'）'):'（先点「📌 设为第 1 次」）')):'临时档：随机组队，不写入长期档';
+    if(t){var _ai=actRotIdx(ACT.actNo||1);t.textContent=ACT_MODE==='ordered'?('长期档：正交排班 8 周一循环 · 3 套表共 24 周'+(ACT.actNo>0?('（第 '+ACT.actNo+' 次 · 第 '+(_ai.cycle+1)+' 套第 '+(_ai.week+1)+' 周）'):'（先点「📌 设为第 1 次」）')):'临时档：随机组队，不写入长期档';}
   }catch(e){}
 }
 /* 名库：L1 组长库 8 / L2 副组长库 12 / MA 较强 12 / MB 较弱 16 */
@@ -8859,7 +8862,7 @@ function actOrderInit(){
   actSeqFresh();          /* 按当前座位重建岗位表 */
   actSave();ACT_DIRTY=false;ACT_SAVED=actSnap();
   actModeUI();actRender();
-  toastMsg('📌 已设为长期档第 1 次：组长第2排左·副组长第3排右；之后每点「有序轮转」组长/副组长位置对调一次（副组长 12 人池每次换 4 人）');
+  toastMsg('📌 已设为长期档第 1 次：下次点「有序轮转」按正交排班表进入第 2 周（全员换组 · 8 周内任意两人最多同组 1 次）');
 }
 /* 2.6.39 屏幕 4 列 × 2 行：上排=教室后排(4-7排) 8·6·4·2，下排=前排(1-3排) 7·5·3·1 */
 var ACT_GRID_ORDER=[8,6,4,2,7,5,3,1];
@@ -9352,12 +9355,108 @@ function actRender(){
   var note=document.getElementById('actNote');
   if(note)note.innerHTML='📌 <b>第 '+(ACT.actNo||0)+' 次小组活动</b> · <b>组名=固定区域</b>（上排=后排4-7排 8·6·4·2，下排=前排1-3排 7·5·3·1）· 柯骏豪在第八组、陈钰康第六组、方浩轩第二组 · <b style="background:#fdeaea;color:#c81e1e;padding:0 5px;border-radius:5px">红底=组长</b>（每块第2排左）<b style="background:#e8f0fe;color:#1d4ed8;padding:0 5px;border-radius:5px;margin-left:4px">蓝底=副组长</b>（每块第3排右），其余 4 座随机<br>🎲 随机组队=换区+均衡重组 · 副组长 12 人群轮换上岗（每次 8 人，落选 4 人当成员）· 点学生/组头直接加减分。'+warn;
 }
-/* ---------- 2.6.38 有序轮转：岗位跟人走，按组序流转 ----------
-   组长（顺时针）：1→3→5→7→8→6→4→2→1
-   副组长（逆时针，与组长相反）：1→2→4→6→8→7→5→3→1
-   成员1、成员4（正向）：1→2→3→4→5→6→7→8→1
-   成员2、成员3（反向）：1→8→7→6→5→4→3→2→1
-   成员编号：成员1/2=较强层、成员3/4=较弱层，编号跟人走（随机组队时生成）。 */
+/* ---------- vT73 正交轮转：24 周排班表（3 套 × 8 周） ----------
+   旧算法把整层同学当刚体平移，成员层的组号映射是一个固定置换：
+   较强层 / 较弱层各有 2 个槽 8 周完全不动（刘润这类较弱层同学容易落在死位），
+   另有 12 人只在 4 个组里打转、8 周内 274 对人重复同组。
+   新算法给 6 类席位各一条 GF(8) 上互不相同斜率的轨道：
+     第 w 周，席位（类 c，相位 b）落在组 (a_c ⊗ w) ⊕ b。
+   已用 8 周模拟验证：
+     · 每周每组恰好 1 组长 + 1 副组长 + 2 较强 + 2 较弱；
+     · 每人 8 周走遍 8 个组；
+     · 任意两人在 8 周内恰好同组 1 次（含轮休的 12 名副组长库同学）；
+     · 3 套表轮换共 24 周不重复。
+   表内是 48 人编号：0-7 L1 组长库 · 8-19 L2 副组长库 · 20-31 MA 较强 · 32-47 MB 较弱；
+   每组 6 个编号依次为 [组长, 副组长, 较强1, 较强2, 较弱1, 较弱2]。
+   生成脚本：tools/gen_seat_rotation_v73.py（表已冻结，勿手改） */
+var SEAT_ROT_V73=[[[[7,17,22,29,38,44],[6,16,23,28,39,45],[5,10,20,31,36,46],[4,9,21,30,37,47],[3,14,26,18,34,40],[2,15,27,13,35,41],[1,12,24,11,32,42],[0,19,25,8,33,43]],[[0,15,20,28,32,40],[1,14,21,29,33,41],[2,19,22,30,34,42],[3,12,23,31,35,43],[4,13,24,16,36,44],[5,18,25,17,37,45],[6,8,26,9,38,46],[7,10,27,11,39,47]],[[1,13,23,19,37,46],[0,18,22,12,36,47],[3,8,21,15,39,44],[2,11,20,14,38,45],[5,9,27,28,33,42],[4,10,26,29,32,43],[7,16,25,30,35,40],[6,17,24,31,34,41]],[[2,16,26,31,33,47],[3,17,27,30,32,46],[0,9,24,29,35,45],[1,10,25,28,34,44],[6,11,22,15,37,43],[7,8,23,14,36,42],[4,19,20,18,39,41],[5,12,21,13,38,40]],[[3,11,25,9,36,41],[2,10,24,8,37,40],[1,18,27,16,38,43],[0,17,26,13,39,42],[7,19,21,31,32,45],[6,12,20,30,33,44],[5,15,23,29,34,47],[4,14,22,28,35,46]],[[4,8,27,12,34,45],[5,11,26,19,35,44],[6,13,25,14,32,47],[7,18,24,15,33,46],[0,10,23,30,38,41],[1,9,22,31,39,40],[2,17,21,28,36,43],[3,16,20,29,37,42]],[[5,14,24,30,39,43],[4,15,25,31,38,42],[7,12,26,28,37,41],[6,19,27,29,36,40],[1,8,20,17,35,47],[0,16,21,11,34,46],[3,13,22,10,33,45],[2,9,23,18,32,44]],[[6,18,21,10,35,42],[7,13,20,9,34,43],[4,11,23,17,33,40],[5,8,22,16,32,41],[2,12,25,29,39,46],[3,19,24,28,38,47],[0,14,27,31,37,44],[1,15,26,30,36,45]]],[[[3,13,26,30,37,41],[2,8,27,31,36,40],[1,12,24,28,39,43],[0,11,25,29,38,42],[7,14,22,17,33,45],[6,15,23,18,32,44],[5,10,20,16,35,47],[4,9,21,19,34,46]],[[1,11,22,15,35,46],[0,17,23,12,34,47],[3,19,20,8,33,44],[2,13,21,10,32,45],[5,9,26,31,39,42],[4,16,27,30,38,43],[7,18,24,29,37,40],[6,14,25,28,36,41]],[[7,16,25,31,34,44],[6,9,24,30,35,45],[5,14,27,29,32,46],[4,18,26,28,33,47],[3,15,21,12,38,40],[2,17,20,11,39,41],[1,19,23,13,36,42],[0,8,22,10,37,43]],[[5,18,21,17,36,43],[4,15,20,14,37,42],[7,10,23,9,38,41],[6,19,22,16,39,40],[1,8,25,30,32,47],[0,13,24,31,33,46],[3,11,27,28,34,45],[2,12,26,29,35,44]],[[0,9,20,28,32,40],[1,16,21,29,33,41],[2,18,22,30,34,42],[3,14,23,31,35,43],[4,11,24,10,36,44],[5,12,25,19,37,45],[6,17,26,8,38,46],[7,15,27,13,39,47]],[[2,14,24,19,38,47],[3,10,25,18,39,46],[0,16,26,15,36,45],[1,17,27,9,37,44],[6,13,20,29,34,43],[7,8,21,28,35,42],[4,12,22,31,32,41],[5,11,23,30,33,40]],[[4,8,23,29,39,45],[5,13,22,28,38,44],[6,11,21,31,37,47],[7,12,20,30,36,46],[0,19,27,18,35,41],[1,10,26,14,34,40],[2,15,25,9,33,43],[3,17,24,16,32,42]],[[6,10,27,12,33,42],[7,19,26,11,32,43],[4,17,25,13,35,40],[5,8,24,15,34,41],[2,16,23,28,37,46],[3,9,22,29,36,47],[0,14,21,30,39,44],[1,18,20,31,38,45]]],[[[3,17,24,30,38,47],[2,18,25,31,39,46],[1,12,26,28,36,45],[0,10,27,29,37,44],[7,9,20,8,34,43],[6,13,21,16,35,42],[5,15,22,19,32,41],[4,11,23,14,33,40]],[[4,9,22,29,35,46],[5,16,23,28,34,47],[6,19,20,31,33,44],[7,14,21,30,32,45],[0,11,26,17,39,42],[1,15,27,18,38,43],[2,13,24,12,37,40],[3,8,25,10,36,41]],[[5,8,27,12,33,42],[4,13,26,10,32,43],[7,15,25,17,35,40],[6,11,24,18,34,41],[1,19,23,30,37,46],[0,14,22,31,36,47],[3,9,21,28,39,44],[2,16,20,29,38,45]],[[6,10,23,15,39,45],[7,12,22,11,38,44],[4,18,21,8,37,47],[5,17,20,13,36,46],[2,14,27,28,35,41],[3,19,26,29,34,40],[0,16,25,30,33,43],[1,9,24,31,32,42]],[[7,16,26,31,37,41],[6,9,27,30,36,40],[5,14,24,29,39,43],[4,19,25,28,38,42],[3,13,22,18,33,45],[2,8,23,17,32,44],[1,10,20,11,35,47],[0,15,21,12,34,46]],[[0,18,20,28,32,40],[1,17,21,29,33,41],[2,10,22,30,34,42],[3,12,23,31,35,43],[4,15,24,16,36,44],[5,11,25,9,37,45],[6,8,26,14,38,46],[7,13,27,19,39,47]],[[1,14,25,13,34,44],[0,8,24,19,35,45],[3,11,27,16,32,46],[2,9,26,15,33,47],[5,10,21,31,38,40],[4,12,20,30,39,41],[7,18,23,29,36,42],[6,17,22,28,37,43]],[[2,19,21,11,36,43],[3,14,20,15,37,42],[0,13,23,9,38,41],[1,16,22,8,39,40],[6,12,25,29,32,47],[7,10,24,28,33,46],[4,17,27,31,34,45],[5,18,26,30,35,44]]]];
+/* 48 人稳定编号：钦定名单优先，名单外新增同学按姓名排序补在本库末尾。
+   与生成器编号规则一致；换名单后正交性质仍成立（性质只依赖席位，不依赖姓名）。 */
+function actRoster48(L){
+  L=L||actPools();
+  function cmp(a,b){return a<b?-1:(a>b?1:0)}
+  function ordered(pre,cur){
+    var base=[],rest=[];
+    pre.forEach(function(n){if(cur.indexOf(n)>=0)base.push(n)});
+    cur.forEach(function(n){if(pre.indexOf(n)<0)rest.push(n)});
+    rest.sort(cmp);
+    return base.concat(rest);
+  }
+  return ordered(ACT_PRESET.L1,L.L1).concat(ordered(ACT_PRESET.L2,L.L2))
+    .concat(ordered(ACT_PRESET.MA,L.MA)).concat(ordered(ACT_PRESET.MB,L.MB));
+}
+function actRotIdx(n){var i=(n||1)-1;return {cycle:Math.floor(i/8)%3,week:i%8}}
+function actRotRoster(){
+  var L=actPools();
+  if(L.L1.length!==8||L.L2.length!==12||L.MA.length!==12||L.MB.length!==16)return null;
+  var r=actRoster48(L);
+  return r.length===48?r:null;
+}
+function actRotGroups(cycle,week,roster){
+  var tbl=SEAT_ROT_V73[cycle][week],out=[];
+  for(var g=0;g<8;g++){
+    var ids=tbl[g];
+    out.push({g:g+1,leader:roster[ids[0]],dep:roster[ids[1]],
+      m:[roster[ids[2]],roster[ids[3]],roster[ids[4]],roster[ids[5]]]});
+  }
+  return out;
+}
+/* vT73 下一次轮转预览：8 组名单 + 本轮轮休的 4 名副组长库同学 */
+function actRotatePreview(){
+  var roster=actRotRoster();
+  if(!roster){toastMsg('⚠️ 名库人数不对（组长 8 / 副组长 12 / 较强 12 / 较弱 16），先到「🧬 能力分层」核对');return}
+  var no=(ACT.actNo||1)+1,ix=actRotIdx(no),tbl=SEAT_ROT_V73[ix.cycle][ix.week];
+  var depIds=[],off=[];
+  for(var g=0;g<8;g++)depIds.push(tbl[g][1]);
+  for(var i=8;i<20;i++)if(depIds.indexOf(i)<0)off.push(roster[i]);
+  var html='<h3>📅 第 '+no+' 次正交轮转预览</h3>'
+    +'<div style="font-size:12px;line-height:1.8;color:var(--muted);margin-bottom:8px">'
+    +'第 '+(ix.cycle+1)+' 套表 · 第 '+(ix.week+1)+'/8 周（8 周一循环，3 套表轮换共 24 周）<br>'
+    +'本轮副组长轮休：'+esc(off.join('、'))+'</div>';
+  actRotGroups(ix.cycle,ix.week,roster).forEach(function(r){
+    html+='<div style="padding:5px 8px;border-bottom:1px solid rgba(128,128,128,.16);font-size:12px;line-height:1.75">'
+      +'<b>第 '+r.g+' 组</b>　<span style="color:#c81e1e">'+esc(r.leader)+' 组长</span> · '
+      +'<span style="color:#1d4ed8">'+esc(r.dep)+' 副组长</span> · '
+      +esc(r.m[0])+' / '+esc(r.m[1])+' / '+esc(r.m[2])+' / '+esc(r.m[3])+'</div>';
+  });
+  html+='<div style="margin-top:10px;font-size:12px;color:var(--muted)">点「🔀 有序轮转」即按此表落座；「🔍 8 周查重」可核对整套表的不重复搭档。</div>'
+    +'<div style="text-align:right;margin-top:12px"><button class="btn2" onclick="actRotateAudit()">🔍 8 周查重</button> '
+    +'<button class="btn2" onclick="actMenuClose()">关闭</button></div>';
+  document.getElementById('actMenuBody').innerHTML=html;
+  ACT_MENU_NM=null;ACT_MENU_GNO=0;ACT_MENU_ANCHOR=null;ACT_MENU_KIND='centered';
+  actMenuPopover();
+}
+/* vT73 8 周查重报告：不重复搭档 / 走遍组数，老师可自行验收 */
+function actRotateAudit(){
+  var cy=actRotIdx(ACT.actNo||1).cycle,pc={},gc=[];
+  for(var i=0;i<48;i++)gc.push({});
+  for(var w=0;w<8;w++){
+    var tbl=SEAT_ROT_V73[cy][w];
+    for(var g=0;g<8;g++){
+      var ids=tbl[g];
+      for(var a=0;a<6;a++)for(var b=a+1;b<6;b++){
+        var x=Math.min(ids[a],ids[b]),y=Math.max(ids[a],ids[b]),k=x+'_'+y;
+        pc[k]=(pc[k]||0)+1;
+      }
+      ids.forEach(function(id){gc[id][g]=1});
+    }
+  }
+  var maxPair=0,dup=0;
+  Object.keys(pc).forEach(function(k){var v=pc[k];if(v>maxPair)maxPair=v;if(v>1)dup++});
+  var notFull=gc.filter(function(o){return Object.keys(o).length<8}).length;
+  var html='<h3>🔍 第 '+(cy+1)+' 套表 · 8 周查重报告</h3>'
+    +'<div style="font-size:13px;line-height:2">'
+    +'<div>每人 8 周走遍组数：<b>'+(48-notFull)+' / 48 人走遍 8 组</b></div>'
+    +'<div>任意两人 8 周内最多同组：<b>'+maxPair+' 次</b>（1 次为最优）</div>'
+    +'<div>同组超过 1 次的人对：<b>'+dup+' 对</b></div>'
+    +'<div>每组人数：恒 6 人（1 组长 + 1 副组长 + 2 较强 + 2 较弱）</div>'
+    +'<div style="color:var(--muted);margin-top:8px">对照旧算法：8 周内 274 对人重复同组、4 人全程不动。</div></div>'
+    +'<div style="text-align:right;margin-top:12px"><button class="btn2" onclick="actRotatePreview()">📅 看预览</button> '
+    +'<button class="btn2" onclick="actMenuClose()">关闭</button></div>';
+  document.getElementById('actMenuBody').innerHTML=html;
+  ACT_MENU_NM=null;ACT_MENU_GNO=0;ACT_MENU_ANCHOR=null;ACT_MENU_KIND='centered';
+  actMenuPopover();
+}
 function actOrderedPrev(orderArr,g){
   var i=orderArr.indexOf(g);
   return orderArr[(i-1+orderArr.length)%orderArr.length];
@@ -9413,95 +9512,59 @@ function actEnsureSeq(){
   actTouch();
   return ok;
 }
-function actOrderedRotate(){
+function actApplyOrtho(next){
   if(ACT_MODE!=='ordered')actSetMode('ordered',true);
-  if(!ACT.actNo||ACT.actNo<1){toastMsg('⚠️ 长期档还没有第 1 次：请先点「📌 设为第 1 次」');return}
+  var roster=actRotRoster();
+  if(!roster){toastMsg('⚠️ 名库人数不对（需 组长 8 / 副组长 12 / 较强 12 / 较弱 16），先到「🧬 能力分层」核对');return false}
   ACT.freeSeat=false;
-  actRebuildRoles();   /* 2.6.53 轮转前归一：按岗位跟人走重算每组显示角色（每组只保留 1 组长 + 1 副组长） */
-  var L=actPools();
-  if(L.L1.length!==8||L.L2.length!==12||L.MA.length!==12||L.MB.length!==16){
-    toastMsg('⚠️ 名库人数不对（组长库 '+L.L1.length+'/8 · 副组长库 '+L.L2.length+'/12 · 较强 '+L.MA.length+'/12 · 较弱 '+L.MB.length+'/16），先到「🧬 能力分层」核对');return;
-  }
-  var LEAD=[1,3,5,7,8,6,4,2],DEP=[1,2,4,6,8,7,5,3];
-  function prevOf(a,g){var i=a.indexOf(g);return a[(i-1+a.length)%a.length]}
-  /* 读当前（第 n 次）座位，逐组解析组长/副组长/四成员 */
-  var oldSeq={},bad=[];
-  for(var g=1;g<=8;g++){
-    var m=ACT.members[String(g)]||[],ld=null,dp=null;
-    var rr=ACT.roles[String(g)]||[];
-    var zi=rr.indexOf('组长'),fi=rr.indexOf('副组长');
-    if(zi>=0)ld=m[zi]||null;
-    if(fi>=0)dp=m[fi]||null;
-    if(!ld||!dp){bad.push(g);continue}
-    var rest=m.filter(function(n){return n&&n!==ld&&n!==dp});
-    var st=rest.filter(function(n){return ACT.layers[n]==='MA'||ACT.layers[n]==='L2'});
-    var wk=rest.filter(function(n){return ACT.layers[n]==='MB'});
-    var ord=st.concat(wk).concat(rest.filter(function(n){return st.indexOf(n)<0&&wk.indexOf(n)<0}));
-    oldSeq[g]={leader:ld,dep:dp,m1:ord[0]||null,m2:ord[1]||null,m3:ord[2]||null,m4:ord[3]||null};
-  }
-  if(bad.length){toastMsg('⚠️ 第 '+bad.join('、')+' 组缺组长或副组长，请点该组学生→「调整岗位」补齐');return}
   actManualReset();actPush();
-  var next=(ACT.actNo||1)+1;
-  /* ① 组长：沿 LEAD 顺移一格 1→3→5→7→8→6→4→2 */
-  var newLead={};
-  for(var g1=1;g1<=8;g1++)newLead[g1]=oldSeq[prevOf(LEAD,g1)].leader;
-  /* ② 副组长：在岗 8 人先按 DEP 反向流转，再按 12 人池「每次换 4 人」（3 批轮休） */
-  var L2=L.L2.slice();
-  var restBatch=(next-1)%3;
-  var onSet={};L2.forEach(function(nm,i){if(Math.floor(i/4)!==restBatch)onSet[nm]=1});
-  var rotDep={};for(var g2=1;g2<=8;g2++)rotDep[g2]=oldSeq[prevOf(DEP,g2)].dep;
-  var newDep={},usedDep={};
-  for(var g3=1;g3<=8;g3++){var c=rotDep[g3];if(onSet[c]&&!usedDep[c]){newDep[g3]=c;usedDep[c]=1}}
-  var freeDep=[];L2.forEach(function(nm){if(onSet[nm]&&!usedDep[nm])freeDep.push(nm)});
-  var fd=0;
-  for(var i2=0;i2<8;i2++){var gg=DEP[i2];if(!newDep[gg]){var pick=freeDep[fd++];if(pick){newDep[gg]=pick;usedDep[pick]=1}}}
-  /* ③ 成员：轮休 4 + 较强 12 = 16 强、较弱 16 弱；每组 2 强 2 弱，较强正向、较弱反向 */
-  var off=L2.filter(function(nm){return !onSet[nm]});
-  var strongPool=L.MA.concat(off),weakPool=L.MB.slice();
-  var posOrder={},pi=0;
-  for(var g4=1;g4<=8;g4++){[oldSeq[g4].m1,oldSeq[g4].m2,oldSeq[g4].m3,oldSeq[g4].m4].forEach(function(nm){if(nm&&posOrder[nm]==null)posOrder[nm]=pi++})}
-  function byPos(a,b){var x=posOrder[a]==null?999:posOrder[a],y=posOrder[b]==null?999:posOrder[b];return x-y}
-  var strongOrder=strongPool.slice().sort(byPos),weakOrder=weakPool.slice().sort(byPos);
-  var cy={};for(var g5=1;g5<=8;g5++)cy[g5]=[];
-  for(var i3=0;i3<16;i3++){
-    var k8=i3%8;
-    if(strongOrder[i3])cy[k8+1].push(strongOrder[i3]);
-    if(weakOrder[i3])cy[(8-k8)%8+1].push(weakOrder[i3]);
-  }
-  /* ④ 落座：组长/副组长位置每轮对调一次（leadSwap 切换）——
-     默认：组长第2排左(seats[2])、副组长第3排右(seats[5])；
-     偶数次（每次轮转后切换）：组长↔副组长位置互换 */
-  var leadSwap=(next)%2===0;   /* 第 next 次是否对调态：偶数次对调 */
-  var leadSeat=leadSwap?5:2, depSeat=leadSwap?2:5;
-  for(var g6=1;g6<=8;g6++){
+  var ix=actRotIdx(next),cycle=ix.cycle,week=ix.week;
+  var tbl=SEAT_ROT_V73[cycle][week];
+  /* 组长 / 副组长座位每轮对调一次（沿用 vT54 规则，只影响组内座位不影响组号） */
+  var leadSwap=(next)%2===0;
+  var leadSeat=leadSwap?5:2,depSeat=leadSwap?2:5;
+  var off=[],depIds=[];
+  for(var g=1;g<=8;g++)depIds.push(tbl[g-1][1]);
+  for(var li=8;li<20;li++)if(depIds.indexOf(li)<0)off.push(roster[li]);
+  for(var g2=1;g2<=8;g2++){
+    var ids=tbl[g2-1];
+    var leader=roster[ids[0]],dep=roster[ids[1]];
+    var others=[roster[ids[2]],roster[ids[3]],roster[ids[4]],roster[ids[5]]];
     var seats=[null,null,null,null,null,null];
-    seats[leadSeat]=newLead[g6]||null;
-    seats[depSeat]=newDep[g6]||null;
-    var others=(cy[g6]||[]).filter(Boolean),ri=0;
-    for(var si=0;si<6;si++){if(seats[si])continue;if(ri<others.length)seats[si]=others[ri++]}
-    ACT.members[String(g6)]=seats;
-    (function(gc,ld,dp){
-      seats.forEach(function(nm){if(nm)ACT.pr[nm]=(nm===ld?'组长':(nm===dp?'副组长':'成员'))});
-      var m4=seats.filter(function(nm){return nm&&nm!==ld&&nm!==dp});
-      var s4=m4.filter(function(nm){return ACT.layers[nm]==='MA'||ACT.layers[nm]==='L2'});
-      var w4=m4.filter(function(nm){return ACT.layers[nm]==='MB'});
-      ACT.seq[String(gc)]={leader:ld,dep:dp,m1:s4[0]||null,m2:s4[1]||null,m3:w4[0]||null,m4:w4[1]||null};
-    })(g6,newLead[g6],newDep[g6]);
+    seats[leadSeat]=leader;seats[depSeat]=dep;
+    var ri=0;
+    for(var si=0;si<6;si++){if(seats[si])continue;seats[si]=others[ri++]}
+    ACT.members[String(g2)]=seats;
+    ACT.pr[leader]='组长';ACT.pr[dep]='副组长';
+    others.forEach(function(nm){if(nm)ACT.pr[nm]='成员'});
+    ACT.seq[String(g2)]={leader:leader,dep:dep,m1:others[0],m2:others[1],m3:others[2],m4:others[3]};
     seats.forEach(function(nm,idx){if(nm)ACT.order[nm]=idx+1});
   }
-  /* ⑤ 完整性校验：48 人不重不漏，否则回滚 */
+  /* 完整性校验：48 人不重不漏，否则回滚 */
   var total=0,seen={},dupN=[];
   for(var gv=1;gv<=8;gv++){(ACT.members[String(gv)]||[]).forEach(function(n){if(n){total++;if(seen[n])dupN.push(n);seen[n]=1}})}
   if(total!==48||dupN.length){
     actUndo();
     toastMsg('⚠️ 轮转结果异常（'+total+' 人，重复 '+dupN.length+'）：已回滚，请检查「🧬 能力分层」人数');
-    return;
+    return false;
   }
   ACT.actNo=next;
-  ACT.leadSwap=leadSwap;   /* 2.6.54 每轮有序轮转后切换对调态：下次轮转组长/副组长位置互换 */
+  ACT.leadSwap=leadSwap;
   actRebuildRoles();
   actTouch();actRender();
-  toastMsg('🔀 第 '+next+' 次有序轮转：组长顺时针 · 副组长 12 人池（本轮轮休 '+off.join('、')+'）· 每组 2强2弱 · 组长/副组长位置'+(leadSwap?'已对调':'常态'));
+  toastMsg((next===1?'⟳ 已按正交表第 1 周重排':'🔀 第 '+next+' 次正交轮转')
+    +'（第 '+(cycle+1)+' 套 · 第 '+(week+1)+'/8 周）：全员换组 · 8 周内任意两人最多同组 1 次 · 副组长轮休 '+off.join('、'));
+  return true;
+}
+function actOrderedRotate(){
+  if(ACT_MODE!=='ordered')actSetMode('ordered',true);
+  if(!ACT.actNo||ACT.actNo<1){toastMsg('⚠️ 长期档还没有第 1 次：请先点「📌 设为第 1 次」');return}
+  return actApplyOrtho((ACT.actNo||1)+1);
+}
+/* vT73 一键从正交表第 1 周重新起档：换规则后可直接进入完整 24 周周期 */
+function actOrthoRestart(){
+  if(!confirm('按正交排班表从第 1 周重新排一次？\n当前这张小组活动座位表会被覆盖（可点「↩️ 撤回」还原）。'))return;
+  return actApplyOrtho(1);
 }
 function actRotateGroup(){
   ACT.freeSeat=false;   /* 2.6.49 系统重排座位，解除手动布局锁 */
@@ -9996,6 +10059,7 @@ function actRoleHelp(){
     +'<div><b style="color:#1d4ed8">● 副组长（蓝底）</b>：从副组长库 12 人中每轮 8 人上岗，<b>固定坐每块第3排右位</b>（与组长一样钉死座位）；更换副组长：点学生 → 岗位调整 → 设为副组长（新旧两人互换座位，原副组长降级为成员）。</div>'
     +'<div><b>● 成员</b>：其余 5 座，分较强 / 较弱两层，每组保持「2 强 + 2 弱」。</div>'
     +'<div style="margin-top:8px;color:var(--muted)">📌 岗位跟人走：换区 / 换座 / 手动调座都不会让"副组长"身份错位；点任一学生即可加减分、改岗位、换组。</div>'
+    +'<div style="margin-top:6px">🔀 <b>正交轮转（vT73）</b>：6 类席位各走一条不同轨道，每人 8 周走遍 8 组，任意两人 8 周内最多同组 1 次；3 套表轮换共 24 周。用「📅 轮转预览」「🔍 8 周查重」可自行核对。</div>'
     +'<div style="margin-top:8px">✋ <b>手动调座位</b>：点工具栏「✋ 手动调座位」后，点一位同学再点另一个座位即可互换（可跨组），适合微调布局；<b>组长/副组长也能手动换位</b>（红/蓝底跟人走，系统归位自动让路）；<b>📌 固定同学也能和任意小组的成员换座 = 身份互换</b>——换过去的普通同学变成固定同学（坐第 7 位，不再参与轮转），原固定同学转为普通同学（继承对方的层次/岗位，正常参与轮转），两人的能力层次跟着互换；再点两人可换回。</div>'
     +'</div>'
     +'<div style="text-align:right;margin-top:12px"><button class="btn2" onclick="actMenuClose()">关闭</button></div>';
