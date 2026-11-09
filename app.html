@@ -8672,7 +8672,8 @@ function scBonusApply() {
   Promise.all(jobs).then(function () {
     return loadST();
   }).then(function () {
-    renderStu(); renderHome && renderHome();
+    renderStu();
+    try { if (typeof renderHome === 'function') renderHome(); } catch (e) {}
     picks.forEach(function (r) { SC_BONUS_SEL[r.name] = 1; });
     scBonusRender({ keepPts: true });
     toastMsg('✅ 已加分：' + picks.length + ' 人 · 合计 +' + sum + ' 分');
