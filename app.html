@@ -10820,7 +10820,23 @@ function openRMEditor(r){
 function loadMemosFromDB(){
   try{
     pullMemos(function(rows){
-      RM_ROWS=(rows||[]).map(rmRec).filter(function(x){return x._id});
+      var all=(rows||[]).map(rmRec).filter(function(x){return x._id});
+      /* vT85 重复自愈：飞书表里同一标题可能堆了多行（历史脏数据 / 同步插入竞争 /
+         限流时本机缓存为空导致的重复插入）。按 recBizKey 的口径「标题即业务键」
+         去重：保留更新时间最新的一行，其余的直接从表里删掉。
+         不删的话每轮同步原样拉回，首页待办永远是一串重复项、勾选也对不上。 */
+      var byT={},memDels=[];
+      all.forEach(function(x){
+        var k=String(x.标题||'').replace(/\s+/g,'');
+        if(!k){byT['#'+x._id]=x;return}
+        var old=byT[k];
+        if(!old){byT[k]=x;return}
+        var ta=Date.parse(x.更新||'')||0,tb=Date.parse(old.更新||'')||0;
+        var loser=(ta>tb)?old:x;
+        byT[k]=(ta>tb)?x:old;
+        if(loser._id)memDels.push(loser._id);
+      });
+      RM_ROWS=Object.keys(byT).map(function(k){return byT[k]});
       RM_ROWS.sort(function(a,b){
         if(!!a.完成!==!!b.完成)return a.完成?1:-1;
         var ta=a.到时?a.到时.getTime():9e15,tb=b.到时?b.到时.getTime():9e15;
@@ -10833,6 +10849,19 @@ function loadMemosFromDB(){
          现在同步更新后连首页一起重绘（hmBody 不在页面时 renderHome 自己会跳过）。 */
       try{ if(typeof renderHome==='function') renderHome() }catch(e){}
       try{rmCheckAlerts()}catch(e){}
+      /* 自愈：把表里的重复行删掉（保留的那条不动）。删除失败不影响界面 ——
+         下一轮拉取会再次进入这里继续清。 */
+      if(memDels.length&&dbReady&&db&&typeof db.deleteRecord==='function'){
+        var mdLeft=memDels.length,mdDel=0;
+        memDels.forEach(function(mid){
+          db.deleteRecord({databaseId:RM_DB,recordId:mid}).then(function(){
+            mdDel++;
+            if(--mdLeft===0)toastMsg('🧹 已合并 '+mdDel+' 条重复待办');
+          },function(){
+            if(--mdLeft===0&&mdDel)toastMsg('🧹 已合并 '+mdDel+' 条重复待办');
+          });
+        });
+      }
     },function(err){
       console.error('[database] 读取备忘提醒失败:',err);
       dbFail('备忘提醒',err);
@@ -16826,9 +16855,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v84';
-var WB_MY_VER = '优化版 vT84 · 通知按时间过期';
-var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.106';
+var WB_VER_TAG = 'v85';
+var WB_MY_VER = '优化版 vT85 · 待办重复自愈';
+var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.107';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -17577,33 +17606,23 @@ function syncCycleCore(manual) {
              飞书表始终是电脑端的真源：快照层的修改必须被表吸收才算数。
              回写成功后统一重拉一次表（loadMemosFromDB 不触发同步，无循环风险）。 */
           (function () {
-            if (!merged || !merged.length) return;
+            if (!merged || !merged.length || !mineMemos.length) return;
+            /* vT85：本机缓存为空时（读表失败/页面刚打开 RM_ROWS 还没加载）整段跳过 ——
+               这个窗口里无法判断「表里到底有没有」，任何插入都会变成每轮重插，
+               同步风暴下几分钟就能堆出五六条重复待办（11-09 事故）。 */
             if (typeof db === 'undefined' || !db) return;
             var mineById = {};
             mineMemos.forEach(function (m) { if (m && m.id) mineById[m.id] = m; });
-            var pendingBf = 0, addedKeys = {};
+            var pendingBf = 0;
             function bfDone() { if (pendingBf <= 0) setTimeout(function () { try { loadMemosFromDB() } catch (_e) {} }, 700) }
             merged.forEach(function (m) {
               if (!m || !m.id || /^m_/.test(m.id)) return;      /* 无真实记录 id 的不回写 */
               var loc = mineById[m.id];
-              if (!loc) {
-                /* 手机新增的备忘（表里还没有）→ 新建；按标题去重防重复插入 */
-                var bk = keyOf(m);
-                if (!bk || addedKeys[bk]) return;
-                addedKeys[bk] = 1;
-                try {
-                  var now0 = new Date().toISOString();
-                  var props0 = { '标题': { text: m.text || '' }, '内容': { text: m.text || '' }, '备注': { text: m.note || '' },
-                    '清单': { select: m.list || '工作' }, '是否完成': { checkbox: !!m.done }, '重要': { checkbox: !!m.important },
-                    '更新时间': { date: now0 } };
-                  if (m.due) props0['截止时间'] = { date: m.due };
-                  if (m.remind) props0['提醒时间'] = { date: m.remind };
-                  pendingBf++;
-                  db.addRecord({ databaseId: 'qd0ZfL69wR0A4jjn3NbIUO', properties: props0 })
-                    .then(bfDone, function () { pendingBf--; bfDone() });
-                } catch (_e0) { pendingBf = Math.max(0, pendingBf - 1) }
-                return;
-              }
+              /* vT85：手机新增的备忘不再在这里插入 —— giteeMergeIntoCloud 每轮都会把
+                 快照里的新备忘按「标题业务键 + 落库前二次判重」安全写进飞书表，
+                 这里的裸 addRecord 没有判重兜底，本机缓存不全时就会每轮重插一条
+                 （11-09 首页待办 6 条重复的直接来源）。只保留「远端胜出 → 改字段」。 */
+              if (!loc) return;
               if ((m.ts || 0) <= (wbRecTs(loc) || 0)) return;    /* 本机(表)版本不旧于远端 → 不回写 */
               var diff = {};
               if (!!m.done !== !!loc.done) diff['是否完成'] = { checkbox: !!m.done };
@@ -17722,15 +17741,21 @@ function syncCycleCore(manual) {
             seen[b] = 1; merged.push(r); backfill.push(r);   /* 手机端新增的班务 */
           });
           out.tables.affairs = merged;
+          /* vT85：本机班务缓存为空时整段跳过（无法判断表里有没有，插入必然变成每轮重插） */
+          if (!mineA.length) return;
           if (!backfill.length) return;
           if (typeof db === 'undefined' || !db) return;
           var locById = {};
           mineA.forEach(function (r) { if (r && r.id) locById[r.id] = r });
-          var addedAff = {}, pendingAff = 0;
+          var pendingAff = 0;
           function affDone() { if (pendingAff <= 0) setTimeout(function () { try { loadAffairFromDB() } catch (_e) {} }, 700) }
           backfill.forEach(function (a) {
             var loc = (a.id && locById[a.id]) || null;
-            if (loc) {
+            /* vT85：手机新增的班务不再在这里插入 —— 与备忘同理，giteeMergeIntoCloud
+               每轮都会按「班务业务键 + 落库前二次判重」把新班务安全写进飞书真表；
+               这里的裸 addRecord 没有判重兜底，本机缓存不全时就会每轮重插一条。
+               只保留「同一条记录、手机端版本更新 → 改字段」。 */
+            if (!loc) return;
               /* 同一条记录、手机端版本更新 → 把差异字段写回飞书真表 */
               function s(v) { return String(v == null ? '' : v) }
               var diff = {};
@@ -17748,28 +17773,6 @@ function syncCycleCore(manual) {
                 db.updateRecord({ databaseId: MP_SYNC.aff.table, recordId: a.id, properties: diff })
                   .then(affDone, function () { pendingAff--; affDone() });
               } catch (_ea) { pendingAff = Math.max(0, pendingAff - 1) }
-            } else {
-              /* 手机端新增的班务 → 新建；按业务键去重防重复插入 */
-              var bk = mpBizKey('affairs', a);
-              if (!bk || addedAff[bk]) return;
-              addedAff[bk] = 1;
-              var p = {
-                '日期': { date: String(a.date || '').slice(0, 10) },
-                '类型': { select: String(a.type || '班级事务') },
-                '标题': mpTxt(String(a.title || '')),
-                '学生姓名': mpTxt(String(a.stu || '')),
-                '内容': mpTxt(String(a.body || '')),
-                '跟进': { select: String(a.follow || '无需跟进') },
-                '记录人': mpTxt(String(a.who || '李老师')),
-                '创建时间': { date: (tsA(a) > 0 ? new Date(tsA(a)).toISOString() : new Date().toISOString()) }
-              };
-              if (a.followDate) p['跟进日期'] = { date: String(a.followDate).slice(0, 10) };
-              try {
-                pendingAff++;
-                db.addRecord({ databaseId: MP_SYNC.aff.table, properties: p })
-                  .then(affDone, function () { pendingAff--; affDone() });
-              } catch (_eb) { pendingAff = Math.max(0, pendingAff - 1) }
-            }
           });
         })();
         if (unionLog.length) {
@@ -18404,7 +18407,7 @@ function mpFromDeskBuild(o) {
         }
         var upd = dv(p, '更新时间');
         return {
-          id: (r && (r.id || r._id)) || ('m_' + t),
+          id: (r && (r.id || r._id || r.recordId || r.record_id)) || ('m_' + t),   /* vT85 补 record_id 口径 */
           text: t,
           done: dvBool(p, '是否完成'),
           note: String(dv(p, '备注') || ''),
@@ -18454,7 +18457,7 @@ function mpFromDeskBuild(o) {
     if (_dutyRaw && _dutyRaw.length) {
       _dr = _dutyRaw.map(function (r) {
         var p = (r && r.properties) || r || {};
-        return { _id: (r && (r.id || r._id)) || '', '值班日期': dv(p, '值班日期') || dv(p, '日期'), '星期': dv(p, '星期'),
+        return { _id: (r && (r.id || r._id || r.recordId || r.record_id)) || '', '值班日期': dv(p, '值班日期') || dv(p, '日期'), '星期': dv(p, '星期'),
                  '值班时段': dv(p, '值班时段') || dv(p, '时段'), '值班人': dv(p, '值班人'), '状态': dv(p, '状态') };
       });
     } else {
@@ -18495,7 +18498,7 @@ function mpFromDeskBuild(o) {
       var bd = String(dv(p, '内容') || '').trim();
       if (!ti && !bd) return null;
       return {
-        id: (r && (r.id || r._id)) || '',
+        id: (r && (r.id || r._id || r.recordId || r.record_id)) || '',
         title: ti || bd.slice(0, 20),
         body: bd,
         date: dvDate(dv(p, '日期')),
