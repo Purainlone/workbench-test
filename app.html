@@ -1478,6 +1478,20 @@ table.paper td.l{text-align:left;font-weight:600}
             if(s&&s.w>320&&s.h>220){w.style.width=s.w+'px';w.style.height=s.h+'px';w.style.maxHeight='none';}
           }catch(e){}
           var sx,sy,sw,sh;
+          /* vT79 把手始终贴住表格卡片（rcWrap）的右下角，而不是外层 rcmain 的右下角：
+             之前锚在 rcmain 上，一旦拖过宽度（wb_rc_size 记住自定义尺寸）卡片比容器窄，
+             把手就悬到页面最右侧、脱离表格底部的横向滚动条；排名面板更高时还会下沉。
+             现在按 rcWrap 的实际盒子实时回贴把手位置，拖动时跟着角走。 */
+          function sync(){
+            try{
+              var m=grip.offsetParent.getBoundingClientRect(),r=w.getBoundingClientRect();
+              grip.style.right=Math.max(-2,m.right-r.right-2)+'px';
+              grip.style.bottom=Math.max(-2,m.bottom-r.bottom-2)+'px';
+            }catch(e){}
+          }
+          if(window.ResizeObserver){try{var _ro=new ResizeObserver(sync);_ro.observe(w);_ro.observe(grip.offsetParent||w)}catch(e){}}
+          window.addEventListener('resize',sync);
+          sync();
           function down(e){
             if(document.body.classList.contains('rcfull'))return;
             e.preventDefault();
@@ -1490,6 +1504,7 @@ table.paper td.l{text-align:left;font-weight:600}
             var nw=Math.max(320,sw+e.clientX-sx),nh=Math.max(220,sh+e.clientY-sy);
             w.style.maxHeight='none';
             w.style.width=nw+'px';w.style.height=nh+'px';
+            sync();
           }
           function up(){
             document.removeEventListener('mousemove',move);
