@@ -23501,7 +23501,7 @@ function cwInit(){
     });
     return list;
   }
-  /* ---------------- vT67+ 启灵图鉴种子：215 只灵杰（追加不删，老师可在后台改品级/系列） ---------------- */
+  /* ---------------- vT67+ 启灵图鉴种子：219 只灵杰（追加不删，老师可在后台改品级/系列） ---------------- */
   var PT_CODEX_ROWS = [
 [1,'焰角小白羊','萌宠灵物'],
 [2,'抱晶小精','精灵星座'],
@@ -23717,7 +23717,11 @@ function cwInit(){
 [212,'弯月紫裙姬','精灵星座'],
 [213,'星冠法阵师','精灵星座'],
 [214,'赤焰羽笔使','精灵星座'],
-[215,'苍龙战斧神','山海异兽']
+[215,'苍龙战斧神','山海异兽'],
+[216,'星之旅人','名著先贤','典藏'],
+[217,'永恒玫瑰','名著先贤','典藏'],
+[218,'月光盛典','名著先贤','典藏'],
+[219,'星光花园','名著先贤','典藏']
   ];
   var PT_CODEX_BLESS = {
     '名著先贤': '以先贤为镜，品读文字，读懂人心',
@@ -23731,7 +23735,7 @@ function cwInit(){
       var nn = ('00' + r[0]).slice(-3);
       var d = PetCore.buildPetDef({
         id: 'cx' + nn, name: r[1], series: r[2],
-        archetype: 'object', rarity: '普通', tier: '普通',
+        archetype: 'object', rarity: '普通', tier: r[3] || '普通',
         img: 'codeximg/' + nn + '.png', origin: 'codex', emoji: '📖'
       });
       d.blessing = PT_CODEX_BLESS[r[2]] || '';
@@ -23759,7 +23763,7 @@ function cwInit(){
     var s = ptGet();
     var dirty = false;
     if (!s.petPool.length) { s.petPool = ptBuildSeed(); dirty = true; }
-    /* vT67+ 图鉴种子：按 id 增量补齐 215 只灵杰。老用户强刷后自动追加新增形象，
+    /* vT67+ 图鉴种子：按 id 增量补齐 219 只灵杰。老用户强刷后自动追加新增形象，
        旧种子、老师改过的品级/系列、已收回的条目全部保留；后台「重置灵杰池」可全量重建。 */
     var seedAll = ptBuildCodexSeed();
     var seedHave = {}, seedExcl = {};
@@ -24411,7 +24415,7 @@ function cwInit(){
     rd.readAsText(f);
   }
   function ptResetPool() {
-    if (!confirm('重置灵杰池为图鉴全集（215 只灵杰 + 旧种子）？已有的同学共创投稿会保留。')) return;
+    if (!confirm('重置灵杰池为图鉴全集（219 只灵杰 + 旧种子）？已有的同学共创投稿会保留。')) return;
     var s = ptGet();
     var keep = s.petPool.filter(function (x) { return x.origin === 'student'; });
     s.petPool = ptBuildSeed().concat(ptBuildCodexSeed()).concat(keep);
