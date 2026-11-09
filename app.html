@@ -2694,6 +2694,14 @@ table.paper td.l{text-align:left;font-weight:600}
       #s-pet .cx-own{font-size:11px;color:#76867e;margin-top:2px}
       #s-pet .cx-tier{position:absolute;top:6px;right:6px;font-size:10px;padding:1px 7px;border-radius:8px;color:#fff;z-index:2}
       #s-pet .cx-tier.t0{background:#8a97a3}#s-pet .cx-tier.t1{background:#7c5cff}#s-pet .cx-tier.t2{background:#d8a520}
+      /* vT72 品级快设 + 老师一键看未唤醒原图 */
+      #s-pet .cx-quick{display:flex;gap:3px;justify-content:center;margin-top:6px}
+      #s-pet .cx-q{font-size:10px;line-height:1.5;padding:2px 6px;border:1px solid #d8e3dc;background:#fff;border-radius:6px;color:#4a6156;cursor:pointer}
+      #s-pet .cx-q:hover{border-color:#1f6f4a}
+      #s-pet .cx-q.on{background:#1f6f4a;border-color:#1f6f4a;color:#fff}
+      #s-pet .cx-q[data-t="隐藏"].on{background:#7c5cff;border-color:#7c5cff}
+      #s-pet .cx-q[data-t="典藏"].on{background:#d8a520;border-color:#d8a520}
+      #s-pet.codex-all .cx-card.locked .cx-img img{filter:none;opacity:1}
     </style>
     <h2>📖 班级启灵图鉴 <span style="font-size:12px;color:#76867e;font-weight:400;margin-left:8px" id="petSub">积蓄启灵之力 · 唤醒灵杰 · 收录图鉴</span><span id="petStateTag" class="pet-state s-on">🟢 运行中</span></h2>
     <div class="sub">唤醒灵杰消耗的积分 = 学生「个人累计积分」（作业+小组+奖惩汇总），蓄灵 / 唤醒 / 兑换会写一条「启灵图鉴」奖惩记录，自动进入学生流水与积分榜。在启灵世界里，每一次认真品读、大胆表达、坚持书写、团结协作，都能积蓄启灵之力，唤醒一位灵杰，点亮你的专属图鉴。</div>
@@ -2746,15 +2754,16 @@ table.paper td.l{text-align:left;font-weight:600}
       @keyframes gdTw{0%,100%{opacity:.3;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
     </style>
     <h2>🛡️ 班级守护 <span style="font-size:12px;color:#76867e;font-weight:400;margin-left:8px">玫瑰随班级累计积分慢慢长大 · 狐狸与小王子陪伴</span></h2>
-    <div class="sub">玫瑰读的是全班「个人累计积分」之和（作业 + 小组 + 奖惩）：积分涨、玫瑰就从花苞一点点舒展长大，高分段降下玻璃钟罩、点亮星光。狐狸 / 小王子点按钮切换神态，可投屏到教室当情绪小助手。「启灵图鉴」板块保留在旁边，随时可切回。</div>
+    <div class="sub">玫瑰读的是全班「个人累计积分」之和（作业分 + 手动奖惩分），<b>与小程序 / 教室桌面 / 家长端同一本账</b>：积分涨、玫瑰就从花苞一点点舒展长大，高分段降下玻璃钟罩、点亮星光。每轮云同步后自动重算，也可点「🔄 立即同步并刷新」。狐狸 / 小王子点按钮切换神态，可投屏到教室当情绪小助手。「启灵图鉴」板块保留在旁边，随时可切回。</div>
     <div class="gd-grid">
       <div class="gd-card">
         <h3>🌹 班级玫瑰</h3>
         <div class="gd-rose-wrap"><svg id="gdRose" viewBox="0 0 300 300"></svg></div>
         <div class="gd-stage" id="gdStage">—</div>
         <div class="gd-pts" id="gdPts">班级累计积分 — 分</div>
+        <div id="gdSrc" style="font-size:11.5px;color:#8a9b92;margin-top:4px">口径：正在连接云端…</div>
         <div class="gd-bar"><i id="gdBar" style="width:0%"></i></div>
-        <div class="gd-btns"><button onclick="gdCalibrate()">⚙️ 阈值校准</button></div>
+        <div class="gd-btns"><button onclick="gdCalibrate()">⚙️ 阈值校准</button><button onclick="gdSyncNow()">🔄 立即同步并刷新</button></div>
         <div class="gd-demo">演示：<input type="range" id="gdDemo" min="0" max="3000" value="0" style="width:120px;vertical-align:middle"> <span id="gdDemoV">0</span> 分（拖动预览生长，不影响真实积分）</div>
       </div>
       <div class="gd-card">
@@ -2785,7 +2794,47 @@ table.paper td.l{text-align:left;font-weight:600}
     }catch(e){}
     return [0,300,800,1600,3000];
   }
+  /* vT72 班级守护积分「同账」修复 ----------------------------------------
+     旧：网页工作台只按 stuPoints() 算，数据源是飞书 HW_ROWS(作业) + GA_ROWS(小组)
+         + ST_ROWS(学生档案里的奖惩分值)；
+     小程序 / 教室桌面 / 家长端读的却是 Gitee 云中转的 hw + manual 两张流水表
+         （store.pointsMap / guardcore.js / ptwBuildSnap 的 snap.points）。
+     两本账口径不同，且网页端回写云端时 manual 恒为空（mpFromDeskBuild 注释：
+     「奖惩是小程序独占的表」），手机上加的分永远进不了网页这本账 —— 表现就是
+     「班级守护积分在班主任工作台没同步」。
+     现在每轮同步把云端 hw/manual/students 缓存下来，守护页优先按云端口径算，
+     三端完全一致；刚打开还没拉到云端时才退回本机飞书口径（不会显示 0）。 */
+  var GD_CLOUD_KEY='wb_gd_cloud_v1';
+  function gdCloud(){
+    if(window.__GD_CLOUD__&&(window.__GD_CLOUD__.hw||window.__GD_CLOUD__.manual))return window.__GD_CLOUD__;
+    try{var o=JSON.parse(localStorage.getItem(GD_CLOUD_KEY)||'null');if(o&&(o.hw||o.manual))return(window.__GD_CLOUD__=o)}catch(e){}
+    return null;
+  }
+  function gdCloudCache(tables){
+    try{
+      var c={students:tables.students||[],hw:tables.hw||[],manual:tables.manual||[],at:Date.now()};
+      window.__GD_CLOUD__=c;localStorage.setItem(GD_CLOUD_KEY,JSON.stringify(c));
+    }catch(e){}
+  }
+  function gdCloudPoints(c){
+    var names={},has=false,t=0,n,v,k;
+    (c.students||[]).forEach(function(x){n=String((x&&(x.name||x['姓名']))||'').trim();if(n){names[n]=0;has=true}});
+    (c.hw||[]).forEach(function(x){
+      if(!x)return;v=Number(x.score);
+      if(isNaN(v))v=(typeof HW_SCORE!=='undefined'&&HW_SCORE[x.level]!=null)?HW_SCORE[x.level]:0;
+      n=String(x.name||'').trim();if(!has){t+=v;return}if(n in names)names[n]+=v;
+    });
+    (c.manual||[]).forEach(function(x){
+      if(!x)return;v=Number(x.score)||0;
+      n=String(x.name||'').trim();if(!has){t+=v;return}if(n in names)names[n]+=v;
+    });
+    if(has)for(k in names)t+=names[k];
+    return Math.round(t*10)/10;
+  }
   function gdClassPoints(){
+    var c=gdCloud();
+    if(c&&((c.hw&&c.hw.length)||(c.manual&&c.manual.length))){window.__GD_SRC__='云端';window.__GD_AT__=c.at||0;return gdCloudPoints(c)}
+    window.__GD_SRC__='本机';window.__GD_AT__=0;
     try{
       var p=stuPoints(),ro=stuRoster(),t=0;
       ro.forEach(function(s){var n=fval(s,'姓名');if(n)t+=stuTotal(p,n);});
@@ -2811,6 +2860,11 @@ table.paper td.l{text-align:left;font-weight:600}
     var pt=document.getElementById('gdPts');
     if(pt)pt.textContent=isDemo?('演示预览 '+pts+' 分（非真实积分）'):('班级累计积分 '+pts+' 分');
     var bar=document.getElementById('gdBar');if(bar)bar.style.width=Math.min(100,pts/max*100).toFixed(1)+'%';
+    var src=document.getElementById('gdSrc');
+    if(src){
+      var at=window.__GD_AT__?new Date(window.__GD_AT__).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):'';
+      src.textContent=isDemo?'（拖动预览中，不影响真实积分）':('口径：'+(window.__GD_SRC__==='云端'?'云端流水 · 与小程序 / 教室桌面 / 家长端同账':'本机飞书数据 · 尚未连上云端')+(at?' · 同步于 '+at:''));
+    }
   }
   var gdDemoBound=false;
   function gdRender(){
@@ -2827,6 +2881,18 @@ table.paper td.l{text-align:left;font-weight:600}
     }
     gdSetFox('happy');gdSetPrince('base');
     gdApply(gdClassPoints(),false);
+  }
+  /* vT72：只在守护页可见时才重绘，避免后台空转 */
+  function gdRenderIfVisible(){
+    try{var s=document.getElementById('s-guard');if(s&&s.classList.contains('active'))gdRender()}catch(e){}
+  }
+  function gdSyncNow(){
+    try{
+      if(typeof syncCycle==='function'){
+        toastMsg('☁️ 正在从云端拉取最新积分…');
+        Promise.resolve(syncCycle(false)).then(function(){gdRender()},function(){gdRender()});
+      }else gdRender();
+    }catch(e){gdRender()}
   }
   function gdCalibrate(){
     var cur=gdTh().join(', ');
@@ -17283,6 +17349,8 @@ function syncCycleCore(manual) {
         /* 云端是旧格式/旧构建号的脏标记：不清数据、不刷新，等本页写回时自然纠正 */
       }
       var tables = doc.tables || {};
+      /* vT72：留一份云端积分流水给「班级守护」，与小程序/桌面/家长端同口径 */
+      try { if (typeof gdCloudCache === 'function') gdCloudCache(tables); } catch (_gd) {}
       /* 作业科目隔离：把 Gitee 作业表（每条带科目）留底，供 hwBackfillSubjects 区分
          本机自建的语文本列与科任各科目，避免把道德与法治等并到语文里 */
       try{ HW_GITEE_HW = (tables && tables.hw) ? tables.hw : null; }catch(_g){ HW_GITEE_HW = null; }
@@ -17541,6 +17609,8 @@ function syncCycleCore(manual) {
           }
         } else if (manual) { toastMsg('✅ 云端已是最新（' + remoteN + ' 条）'); }
         try { localStorage.setItem('wb_gitee_last', msg) } catch (e) {}
+        /* vT72：同步完立即重算守护积分，停在守护页也能看到最新分 */
+        try { if (typeof gdRenderIfVisible === 'function') gdRenderIfVisible(); } catch (_gd2) {}
         });
         });
       });
@@ -17662,6 +17732,8 @@ function syncScheduleSoon() {
    配合存储满时（写库静默失败）就是无限刷新；现在启动同步只提示不刷新。 */
 setTimeout(function () { if (mpSyncSettings().gAuto) syncCycle(false) }, 3 * 1000);
 setInterval(function () { if (mpSyncSettings().gAuto) syncCycle() }, 10 * 60 * 1000);
+/* vT72：守护页停在前台时每 30 秒按最新云端缓存重算一次，不再「切走再切回才变」 */
+setInterval(function () { if (document.visibilityState === 'visible') { try { gdRenderIfVisible() } catch (e) {} } }, 30 * 1000);
 /* 2.6.64 页面切到后台/关闭前强制同步一次，防「登记完立刻关页面」漏掉云端备份 */
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'hidden') { try { if (mpSyncSettings().gAuto) syncCycle() } catch (e) {} }
@@ -24283,21 +24355,47 @@ function cwInit(){
   }
   /* ---------------- vT67 启灵图鉴 ---------------- */
   var CODEX_STATE = { series: '*', tier: '*' };
+  /* vT72 图鉴品级快设：老师解锁口令后，可直接在卡片上把灵杰设为 隐藏 / 典藏 / 普通；
+     CODEX_SHOW_ALL 让老师一键看未唤醒灵杰的原图（学生端仍保持灰色悬念）。 */
+  var CODEX_QUICK = false, CODEX_SHOW_ALL = false;
   var PT_CIMG_OBS = null;
   /* vT67 图鉴图片直连线上 Pages 仓库 codeximg/，不依赖 Gitee 令牌（老师端令牌只在浏览器本地）。
      手绘宠物照片仍走 wbPetFetchImg 的 Gitee 通道，两条路互不影响。 */
+  /* vT72 网页端图片也走 vT71 的三级镜像：github.io 走 Fastly CDN，国内经常连不上，
+     之前后台图鉴一片空白/发灰，图片加载失败也是原因之一。 */
   var PT_CODEX_BASE = 'https://purainlone.github.io/workbench-test/';
+  var PT_CODEX_MIRRORS = [
+    'https://testingcf.jsdelivr.net/gh/Purainlone/workbench-test@main/',
+    'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@main/',
+    PT_CODEX_BASE
+  ];
+  var PT_CX_SRCS = {};
+  function ptCodexImgSrcs(rel) {
+    if (!rel) return [];
+    if (/^(https?:|data:)/i.test(rel)) return [rel];
+    if (rel.indexOf('codeximg/') !== 0) return [];
+    return PT_CODEX_MIRRORS.map(function (b) { return b + rel; });
+  }
+  function ptCodexImgErr(im) {
+    try {
+      var a = PT_CX_SRCS[im.getAttribute('data-cxk')] || [];
+      var at = a.indexOf(im.getAttribute('src'));
+      if (at >= 0 && at + 1 < a.length) { im.src = a[at + 1]; return; }
+    } catch (e) {}
+    im.style.visibility = 'hidden';
+  }
   function ptCodexImgUrl(rel) {
-    if (!rel) return '';
-    if (/^(https?:|data:)/i.test(rel)) return rel;
-    if (rel.indexOf('codeximg/') === 0) return PT_CODEX_BASE + rel;
-    return '';
+    var a = ptCodexImgSrcs(rel); return a.length ? a[0] : '';
   }
   function ptCodexImgHtml(p) {
     var rel = p.img || '';
     if (!rel) return '<div class="cx-img">📖</div>';
-    var direct = ptCodexImgUrl(rel);
-    if (direct) return '<div class="cx-img"><img src="' + ptEsc(direct) + '" loading="lazy" alt="' + ptEsc(p.name) + '" onerror="this.style.visibility=\'hidden\'"></div>';
+    var srcs = ptCodexImgSrcs(rel);
+    if (srcs.length) {
+      var key = String(p.id || rel);
+      PT_CX_SRCS[key] = srcs;
+      return '<div class="cx-img"><img src="' + ptEsc(srcs[0]) + '" loading="lazy" alt="' + ptEsc(p.name) + '" data-cxk="' + ptEsc(key) + '" onerror="ptCodexImgErr(this)"></div>';
+    }
     if (PT_IMG_MEM[rel]) return '<div class="cx-img"><img src="' + PT_IMG_MEM[rel] + '" alt="' + ptEsc(p.name) + '"></div>';
     return '<div class="cx-img"><img data-cimg="' + rel + '" alt="' + ptEsc(p.name) + '"></div>';
   }
@@ -24337,20 +24435,34 @@ function cwInit(){
       seriesList.map(function (x) { return '<button class="btn2 sm' + (CODEX_STATE.series === x ? ' primary' : '') + '" onclick="ptCodexFilter(\'series\',\'' + ptEsc(x) + '\')">' + (x === '*' ? '全部' : ptEsc(x)) + '</button>'; }).join('') + '</div>' +
       '<div class="gpset" style="flex-wrap:wrap"><span class="lbl">品级</span>' +
       tiers.map(function (t) { return '<button class="btn2 sm' + (CODEX_STATE.tier === t[0] ? ' primary' : '') + '" onclick="ptCodexFilter(\'tier\',\'' + t[0] + '\')">' + t[1] + '</button>'; }).join('') +
-      '<span class="sctip" id="codexCnt"></span></div>';
+      '<span class="sctip" id="codexCnt"></span>' +
+      '<button class="btn2 sm' + (CODEX_QUICK ? ' primary' : '') + '" onclick="ptCodexQuickToggle()">🏅 ' + (CODEX_QUICK ? '退出品级快设' : '品级快设') + '</button>' +
+      '<button class="btn2 sm" onclick="ptCodexToggleGray()">' + (CODEX_SHOW_ALL ? '🙈 恢复灰色悬念' : '👁 显示未唤醒原图') + '</button></div>';
     var list = pool.filter(function (p) {
       var sr = p.series || '未分系列';
       return (CODEX_STATE.series === '*' || sr === CODEX_STATE.series) && (CODEX_STATE.tier === '*' || (p.tier || '普通') === CODEX_STATE.tier);
     });
+    /* vT72 老师一键去掉「未唤醒」灰卡滤镜；学生端默认仍保留收集悬念 */
+    try { var sec = document.getElementById('s-pet'); if (sec) sec.classList.toggle('codex-all', CODEX_SHOW_ALL); } catch (e) {}
+    var admin = ptAdminUnlocked();
     var ownedN = 0;
     var cards = list.map(function (p) {
       var a = awake[p.id]; if (a) ownedN++;
-      var tierCls = ({ '普通': 't0', '隐藏': 't1', '典藏': 't2' })[p.tier || '普通'] || 't0';
+      var curTier = p.tier || '普通';
+      var tierCls = ({ '普通': 't0', '隐藏': 't1', '典藏': 't2' })[curTier] || 't0';
+      var tierTag = '<span class="cx-tier ' + tierCls + '"' +
+        (admin ? ' title="点一下循环切换 普通 → 隐藏 → 典藏" onclick="ptCodexCycleTier(\'' + ptAt(p.id) + '\')" style="cursor:pointer"' : '') +
+        '>' + ptEsc(curTier) + '</span>';
+      var quick = (CODEX_QUICK && admin) ? '<div class="cx-quick">' +
+        ['普通', '隐藏', '典藏'].map(function (tt) {
+          return '<button class="cx-q' + (curTier === tt ? ' on' : '') + '" data-t="' + tt + '" onclick="ptCodexQuickSet(\'' + ptAt(p.id) + '\',\'' + tt + '\')">' + tt + '</button>';
+        }).join('') + '</div>' : '';
       return '<div class="cx-card' + (a ? ' owned' : ' locked') + '" title="' + ptEsc(p.blessing || '') + '">' +
-        '<span class="cx-tier ' + tierCls + '">' + ptEsc(p.tier || '普通') + '</span>' +
+        tierTag +
         ptCodexImgHtml(p) +
         '<div class="cx-nm">' + ptEsc(p.name) + '</div>' +
         '<div class="cx-own">' + ptEsc(p.series || '') + (a ? ' · 🐾 ' + ptEsc(a.studentName) + ' 已唤醒' : ' · ？？？待唤醒') + '</div>' +
+        quick +
         '</div>';
     }).join('');
     box.innerHTML = chips +
@@ -24380,6 +24492,44 @@ function cwInit(){
     toastMsg('🏅 已保存：' + sp.name + ' → ' + tv + ' / ' + sv);
     ptRenderCodex();
   }
+  /* ---------------- vT72 直接在图鉴卡片上设置 隐藏 / 典藏 ---------------- */
+  function ptCodexQuickToggle() {
+    if (!ptNeedAdmin()) return;
+    CODEX_QUICK = !CODEX_QUICK;
+    ptRenderCodex();
+    toastMsg(CODEX_QUICK ? '🏅 品级快设已开：每张卡片下方可直接点 普通 / 隐藏 / 典藏' : '🏅 已退出品级快设');
+  }
+  function ptCodexToggleGray() {
+    CODEX_SHOW_ALL = !CODEX_SHOW_ALL;
+    ptRenderCodex();
+    toastMsg(CODEX_SHOW_ALL ? '👁 已显示未唤醒灵杰的原图（仅本页，学生端仍是灰色悬念）' : '🙈 未唤醒灵杰恢复灰色');
+  }
+  function ptCodexCycleTier(id) {
+    if (!ptNeedAdmin()) return;
+    var s = ptGet();
+    var sp = (s.petPool || []).filter(function (x) { return x && x.id === id; })[0];
+    if (!sp) return toastMsg('⚠️ 找不到这位灵杰');
+    var order = ['普通', '隐藏', '典藏'];
+    ptCodexQuickSet(id, order[(order.indexOf(sp.tier || '普通') + 1) % order.length]);
+  }
+  function ptCodexQuickSet(id, tier) {
+    if (!ptNeedAdmin()) return;
+    if (['普通', '隐藏', '典藏'].indexOf(tier) < 0) return;
+    var s = ptGet();
+    var sp = (s.petPool || []).filter(function (x) { return x && x.id === id; })[0];
+    if (!sp) return toastMsg('⚠️ 找不到这位灵杰');
+    if ((sp.tier || '普通') === tier) return toastMsg('已经是「' + tier + '」了');
+    sp.tier = tier; sp.updatedAt = Date.now();
+    /* 已发给同学的同一灵杰同步改品级，避免图鉴 / 灵杰墙 / 家长端显示不一致 */
+    (s.pets || []).forEach(function (x) { if (x && x.defId === id) { x.tier = tier; x.updatedAt = Date.now(); } });
+    ptSave(s); PET_DB = s;
+    /* 12s 内发布家长快照；8s 内触发一次主同步，尽量把改动带到其它端 */
+    try { if (typeof ptwSchedule === 'function') ptwSchedule(); } catch (e) {}
+    try { if (typeof syncScheduleSoon === 'function') syncScheduleSoon(); } catch (e) {}
+    ptRenderCodex();
+    toastMsg('🏅 ' + sp.name + ' → ' + tier + (tier === '普通' ? '' : '（不进随机唤醒池，由老师指定发放）'));
+  }
+
   /* vT67 数据迁移：老数据补 tier/updatedAt（防 LWW 合并丢字段），不动任何用户数据 */
   function ptEnsureCodexFields() {
     var s = ptGet(); var dirty = false; var now = Date.now();
@@ -24864,6 +25014,11 @@ function cwInit(){
   window.ptRenderAdmin = ptRenderAdmin;
   /* vT67 启灵图鉴 */
   window.ptRenderCodex = ptRenderCodex;
+  window.ptCodexImgErr = ptCodexImgErr;
+  window.ptCodexQuickSet = ptCodexQuickSet;
+  window.ptCodexCycleTier = ptCodexCycleTier;
+  window.ptCodexQuickToggle = ptCodexQuickToggle;
+  window.ptCodexToggleGray = ptCodexToggleGray;
   window.ptCodexFilter = ptCodexFilter;
   window.ptCodexSetTier = ptCodexSetTier;
   window.ptEnsureCodexFields = ptEnsureCodexFields;
