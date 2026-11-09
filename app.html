@@ -898,6 +898,15 @@ body.rcfull .rcrank{max-height:none}
 table.rc tbody tr.rcflash td.nm{animation:rcFlash 1.3s ease 2}
 @keyframes rcFlash{0%,100%{background:#fff}35%{background:#fde68a}70%{background:#fff}}
 /* 篇目管理面板 */
+/* vT87 不参与名单：默认折叠在表尾，点工具条展开查看 */
+tr.ignrow{display:none}
+body.show-ignore tr.ignrow{display:table-row}
+tr.ignrow td{opacity:.62}
+tr.ignrow td.nm{text-decoration:line-through;text-decoration-color:#b9c3cc}
+.igngrid{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.ignitem{display:flex;align-items:center;gap:5px;border:1px solid #e2ece7;border-radius:9px;padding:7px 10px;font-size:13.5px;cursor:pointer;background:#fbfdfc;user-select:none}
+.ignitem input{width:15px;height:15px;accent-color:#2d8f63}
+.ignbar2{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
 .rcmgr{position:fixed;inset:0;background:rgba(15,25,45,.38);display:flex;align-items:flex-end;justify-content:center;z-index:60}
 .rcmgr .panel{background:#fff;width:min(520px,100%);max-height:86vh;overflow:auto;border-radius:16px 16px 0 0;padding:18px 18px 22px}
 .rcmgr h3{margin:0 0 4px;font-size:16px}
@@ -1458,6 +1467,8 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2" id="rcCompactBtn" onclick="rcToggleCompact()" title="压缩行高列宽，一屏塞下更多人">📐 紧凑</button>
       <button class="btn2" id="rcRankBtn" onclick="rcToggleRank()" title="按完成篇数排名，看谁快谁慢">🏆 排名</button>
       <button class="btn2" id="rcHideFullBtn" onclick="rcToggleHideFull()" title="全班都背完的篇目整列隐藏，表更清爽">🙈 已背完隐藏</button>
+      <button class="btn2 sm ghost" id="rcIgnBtn" onclick="hmToggleIgnoreRows()" title="不参与学习活动的同学：默认折叠、不统计">🙈 不参与名单</button>
+      <button class="btn2 sm ghost" onclick="openIgnorePicker()" title="勾选不参与作业 / 诵读的同学">⚙️ 名单设置</button>
       <button class="btn2" onclick="rcOpenCert()" title="为背完篇目的同学生成精美通关证书，可打印">📜 通关证书</button>
       <button data-page-node-id="G5GdPMfht73z7907cW81gf" class="btn2 ghost" onclick="rcClearAll()"><!--pnid:J35nXVodFWDtyRxsfFvnS2-->🧹 清空本表打卡</button>
       <span data-page-node-id="SKrlV8316R18sUOxbCyWVn" class="rcstat" id="rcStat"></span>
@@ -1729,6 +1740,8 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2 sm primary" id="hwModeBtn" onclick="toggleHWMode()">✍️ 开始登记</button>
       <span class="mt" id="hwModeTip">先选等级，点「开始登记」后点格子才涂色</span>
       <button class="btn2 sm ghost" id="hwAutoBtn" onclick="hwToggleAuto()">🙈 已自动隐藏 0 列 · 显示</button>
+      <button class="btn2 sm ghost" id="hwIgnBtn" onclick="hmToggleIgnoreRows()" title="不参与学习活动的同学：默认折叠、不统计">🙈 不参与名单</button>
+      <button class="btn2 sm ghost" onclick="openIgnorePicker()" title="勾选不参与作业 / 诵读的同学">⚙️ 名单设置</button>
       <button class="btn2 sm danger" onclick="hwMarkAllOverdue()">⏰ 余下记超时未交（−2）</button>
     </div>
     <!-- vT86 批量登记 / 反选：先把整列登记成同一等级，再把没交作业的同学点掉 -->
@@ -11540,7 +11553,7 @@ function rcSaveTitles(){
   try{localStorage.setItem(RC_KEY,JSON.stringify(RC_TITLES))}catch(e){toastMsg('⚠️ 篇目保存失败，浏览器存储不可用')}
 }
 /* 学生名单沿用座位表（含未排座的柯骏豪），按学号排序 */
-function rcStudents(){
+function rcStudentsAll(){
   var seen={},out=[];
   (DATA.seats||[]).forEach(function(s){
     if(!s.姓名||seen[s.姓名])return;
@@ -11548,6 +11561,10 @@ function rcStudents(){
   });
   out.sort(function(a,b){return (parseInt(a.学号,10)||99)-(parseInt(b.学号,10)||99)||a.姓名.localeCompare(b.姓名,'zh')});
   return out;
+}
+/* 参与学习活动的学生（不参与名单里的人不进统计、不参与「全班背完」判定） */
+function rcStudents(){
+  return rcStudentsAll().filter(function(s){return !hmIsIgnored(s.姓名)});
 }
 function rcKey(name,title){return name+'||'+title}
 
@@ -12006,12 +12023,14 @@ function rcFocusStudent(nm){
 function renderRecite(){
   var box=document.getElementById('rcTable');
   if(!box)return;
+  var stuAll=rcStudentsAll();
   var stu=rcStudents();
-  if(!stu.length||!RC_TITLES.length){
+  var ign=stuAll.filter(function(s){return hmIsIgnored(s.姓名)});
+  if(!stuAll.length||!RC_TITLES.length){
     box.textContent='';
     var tb=document.createElement('tbody');
     var tr=document.createElement('tr');
-    var td=el('td','empty-tip',stu.length?'还没有篇目，点「管理篇目」添加':'还没有学生数据');
+    var td=el('td','empty-tip',stuAll.length?'还没有篇目，点「管理篇目」添加':'还没有学生数据');
     td.colSpan=Math.max(2,RC_TITLES.length+2);tr.appendChild(td);tb.appendChild(tr);box.appendChild(tb);
     rcRefreshStat();rcRenderRank();return;
   }
@@ -12064,6 +12083,26 @@ function renderRecite(){
     tr.appendChild(el('td','sum',cnt?String(cnt):'—'));
     tbody.appendChild(tr);
   });
+  /* vT87 不参与名单：排表尾、默认折叠；展开只读，点格子只提示不改数据 */
+  ign.forEach(function(s){
+    var tr=document.createElement('tr');tr.className='ignrow';
+    var nm=el('td','nm');nm.appendChild(document.createTextNode(s.姓名));
+    if(s.学号)nm.appendChild(el('span','sn',s.学号+'号'));
+    tr.appendChild(nm);
+    var cnt=0;
+    RC_TITLES.forEach(function(t){if(RC_MAP[rcKey(s.姓名,rcTName(t))])cnt++});
+    vis.forEach(function(t){
+      var nm2=rcTName(t),isExtra=rcTKind(t)==='extra';
+      var on=!!RC_MAP[rcKey(s.姓名,nm2)];
+      var td=el('td','cell'+(on?' on':'')+(isExtra?' extra':(on?'':' core')));
+      if(on)td.appendChild(el('span','mk','✓'));
+      td.title=s.姓名+' · '+nm2+'（不参与，只读）';
+      td.onclick=function(){rcPeek(s.姓名,nm2,on)};
+      tr.appendChild(td);
+    });
+    tr.appendChild(el('td','sum',cnt?String(cnt):'—'));
+    tbody.appendChild(tr);
+  });
   /* 表尾：每篇完成人数 */
   var tfoot=document.createElement('tfoot');
   var fr=document.createElement('tr');fr.appendChild(el('td','nm','每篇完成人数'));
@@ -12079,6 +12118,7 @@ function renderRecite(){
   rcPaintMode();
   rcRefreshStat();
   rcRenderRank();
+  renderIgnoreBars();
 }
 /* 篇目管理面板：增删 + 上下移 */
 function openRCManager(){
@@ -12930,7 +12970,8 @@ function renderHW(){
   }catch(_wke){}
   var box=document.getElementById('hwTable');
   if(!box)return;
-  /* 作业登记只列参与交作业的学生：柯骏豪、方浩轩 不参与，不进网格、不进未交分母 */
+  /* 作业登记只列参与交作业的学生；不参与名单里的同学折叠在表尾（只读、不计分、不进分母） */
+  var stuAll=stuRoster();
   var stu=hwRoster();
   var m=hwMapRows();
   hwBuildItemsOnRender();
@@ -12991,11 +13032,31 @@ function renderHW(){
     tr.appendChild(el('td','spacer',''));
     tbody.appendChild(tr);
   });
+  /* vT87 不参与名单：排在表尾，默认折叠；展开后只读（点格子不会登记） */
+  stuAll.filter(function(s){return hmIsIgnored(s.姓名)}).forEach(function(s){
+    var tr=document.createElement('tr');tr.className='ignrow';
+    var nm=el('td','nm');nm.appendChild(document.createTextNode(s.姓名));
+    if(s.学号)nm.appendChild(el('span','sn',s.学号+'号'));
+    tr.appendChild(nm);
+    var pts=0;
+    items.forEach(function(it){
+      var rec=m[hwKey(s.姓名,it)],lv=rec?fval(rec,'等级'):'';
+      if(lv)pts+=(HW_SCORE[lv]||0);
+      var td=el('td','cell'+(lv?(' '+HW_CLS[lv]):''));
+      if(lv)td.appendChild(el('span','mk',HW_MARK[lv]));
+      td.title=s.姓名+' · '+it.name+'（不参与，只读）';
+      tr.appendChild(td);
+    });
+    tr.appendChild(el('td','sum',pts?((pts>0?'+':'')+pts):'—'));
+    tr.appendChild(el('td','spacer',''));
+    tbody.appendChild(tr);
+  });
   box.textContent='';
   box.appendChild(thead);box.appendChild(tbody);
   hwPaintMode();
   hwBatchFill();
   hwRenderStat(stu,m,items);
+  renderIgnoreBars();
   try{scnPaintItems();scnPaintList()}catch(e){}
 }
 /* 保留用户刚新建、还没写库的新列 */
@@ -14665,9 +14726,70 @@ function hmWDName(d){
   return w[d.getDay()];
 }
 
-/* ---------- 首页：第几周 + 未交作业（排除指定学生，如柯骏豪） ---------- */
-/* 不参与"未交"统计的学生（长期请假 / 免修等）：把姓名放进来即可 */
-var HM_HW_EXCLUDE={'柯骏豪':1,'方浩轩':1};   /* 不统计、不显示这两人（固定座同学） */
+/* ---------- 首页：第几周 + 未交作业（排除不参与学习活动的学生） ---------- */
+/* vT87 学习活动忽略名单：作业登记、诵读管理、未交统计都不算他们。
+   表格里默认把他们折叠在最后一行，展开后只读查看历史记录（不会误登记）。
+   名单存在本机，可点工具条「🙈 不参与名单」随时勾选。 */
+var HM_IGNORE_KEY='wb_ignore_students_v1';
+var HM_IGNORE=(function(){
+  try{var o=JSON.parse(localStorage.getItem(HM_IGNORE_KEY)||'null');if(o&&typeof o==='object')return o}catch(e){}
+  return {'柯骏豪':1,'方浩轩':1};            /* 默认：这两位同学不参与作业 / 诵读 */
+})();
+var HM_HW_EXCLUDE=HM_IGNORE;
+var HM_SHOW_IGN=false;
+function hmIgnoreNames(){return Object.keys(HM_IGNORE||{}).filter(function(n){return HM_IGNORE[n]})}
+function hmIsIgnored(n){return !!(HM_IGNORE&&HM_IGNORE[n])}
+function hmIgnoreSave(o){
+  HM_IGNORE=o||{};HM_HW_EXCLUDE=HM_IGNORE;
+  try{localStorage.setItem(HM_IGNORE_KEY,JSON.stringify(HM_IGNORE))}catch(e){}
+  try{renderIgnoreBars()}catch(e){}
+  try{renderHW()}catch(e){}
+  try{renderRecite()}catch(e){}
+  try{if(typeof renderHome==='function')renderHome()}catch(e){}
+}
+/* 折叠 / 展开这些同学的行（两个模块共用一个开关，看哪张表都一致） */
+function hmToggleIgnoreRows(){
+  HM_SHOW_IGN=!HM_SHOW_IGN;
+  document.body.classList.toggle('show-ignore',HM_SHOW_IGN);
+  renderIgnoreBars();
+}
+function renderIgnoreBars(){
+  var names=hmIgnoreNames();
+  var txt=names.length?('🙈 不参与 '+names.length+' 人：'+names.join('、')):'🙈 未设置不参与名单';
+  ['hwIgnBtn','rcIgnBtn'].forEach(function(id){
+    var b=document.getElementById(id);if(!b)return;
+    b.textContent=txt+(HM_SHOW_IGN?'（展开中）':(names.length?'（已折叠）':''));
+    b.className='btn2 sm'+(HM_SHOW_IGN?'':' ghost');
+    b.title='点一下展开 / 折叠这些同学的行；他们的作业与诵读不计入完成率、未交统计与「全班背完」判定';
+  });
+}
+/* 名单设置面板：勾选式，不用手打姓名 */
+function openIgnorePicker(){
+  var stu=stuRoster();
+  var mask=el('div','rcmgr'),panel=el('div','panel');
+  panel.appendChild(el('h3',null,'🙈 不参与学习活动的同学'));
+  panel.appendChild(el('div','meta','勾选后：作业登记、诵读管理里他们的行默认折叠，不计入完成率 / 未交统计，也不参与「全班背完」判定。已有的历史记录不会删，展开仍可查看（只读）。'));
+  var grid=el('div','igngrid');
+  stu.forEach(function(s){
+    var lab=el('label','ignitem');
+    var cb=document.createElement('input');cb.type='checkbox';cb.value=s.姓名;cb.checked=hmIsIgnored(s.姓名);
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(s.姓名+(s.学号?('（'+s.学号+'号）'):'')));
+    grid.appendChild(lab);
+  });
+  panel.appendChild(grid);
+  var bar=el('div','ignbar2');
+  var ok=el('button','btn','保存');
+  ok.onclick=function(){
+    var o={};
+    [].forEach.call(grid.querySelectorAll('input'),function(c){if(c.checked)o[c.value]=1});
+    hmIgnoreSave(o);mask.parentNode&&mask.parentNode.removeChild(mask);
+    toastMsg('✅ 已保存：'+Object.keys(o).length+' 位同学不参与作业与诵读');
+  };
+  var cancel=el('button','btn ghost','取消');cancel.onclick=function(){mask.parentNode&&mask.parentNode.removeChild(mask)};
+  bar.appendChild(ok);bar.appendChild(cancel);panel.appendChild(bar);
+  mask.appendChild(panel);document.body.appendChild(mask);
+}
 /* 教室大屏「未交作业」卡可手动收起（点卡上的 × 收起，点已收起条再展开） */
 var HM_HW_HIDDEN=0;try{HM_HW_HIDDEN=localStorage.getItem('hm_hw_hidden')==='1'?1:0}catch(e){}
 function hmToggleHwCard(){HM_HW_HIDDEN=HM_HW_HIDDEN?0:1;try{localStorage.setItem('hm_hw_hidden',HM_HW_HIDDEN?'1':'0')}catch(e){}renderHome();}
@@ -17298,9 +17420,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v86';
-var WB_MY_VER = '优化版 vT86 · 灵杰自管 + 目标加分';
-var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.108';
+var WB_VER_TAG = 'v87';
+var WB_MY_VER = '优化版 vT87 · 不参与名单折叠';
+var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.109';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
