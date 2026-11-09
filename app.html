@@ -10677,6 +10677,8 @@ function rmCreate(d){
     if(d.提醒)row['提醒时间']=d.提醒.toISOString();
     RM_ROWS.unshift(rmRec(row));
     renderMemo();toastMsg('✅ 已添加提醒');
+    /* vT83 新建后立即推快照（同编辑保存，1.2s 等云端表写完） */
+    setTimeout(function(){try{typeof syncCycle==='function'&&syncCycle(false)}catch(e){}},1200);
   }).catch(function(err){
     console.error('[database] 新建提醒失败:',err);
     toastMsg('⚠️ 保存失败，请稍后重试');
@@ -10710,6 +10712,10 @@ function toggleMemo(id,rowEl,checked){
   if(r)r.完成=!!checked;
   renderMemo();
   rmUpdate(id,{'是否完成':{checkbox:!!checked}});
+  /* vT83 勾选后立刻把飞书表的新状态打进 Gitee 快照：
+     以前只有编辑面板才推，勾选只进了表 —— 快照里还是旧状态，
+     小程序/另一台电脑看到的永远是「未勾」，看起来就是勾选被吞了。 */
+  setTimeout(function(){try{typeof syncCycle==='function'&&syncCycle(false)}catch(e){}},1200);
   if(checked)toastMsg('✅ 已完成');
 }
 function delMemo(id){
@@ -10719,6 +10725,8 @@ function delMemo(id){
   db.deleteRecord({databaseId:RM_DB,recordId:id}).then(function(){
     RM_ROWS=RM_ROWS.filter(function(x){return x._id!==id});
     renderMemo();toastMsg('🗑️ 已删除');
+    /* vT83 删除后立即推快照，防止别端把已删的记录又同步回来 */
+    setTimeout(function(){try{typeof syncCycle==='function'&&syncCycle(false)}catch(e){}},1200);
   }).catch(function(err){
     console.error('[database] 删除提醒失败:',err);
     toastMsg('⚠️ 删除失败，请稍后重试');
@@ -16814,9 +16822,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v82';
-var WB_MY_VER = '优化版 vT82 · 图鉴灵杰卡面直显';
-var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.104';
+var WB_VER_TAG = 'v83';
+var WB_MY_VER = '优化版 vT83 · 待办班务双向同步';
+var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.105';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -17559,6 +17567,56 @@ function syncCycleCore(manual) {
             seen[k] = 1; merged.push(m);
           });
           out.tables.memos = merged;
+          /* vT83 反向回写：merged 里远端胜出的记录（手机端勾选/改备注/新增）要写回飞书
+             「工作台备忘录」表，否则电脑端刷新后从表里拉回旧状态——勾掉的又显示出来，
+             下一轮导出又把旧状态推上快照，两端来回打架。
+             飞书表始终是电脑端的真源：快照层的修改必须被表吸收才算数。
+             回写成功后统一重拉一次表（loadMemosFromDB 不触发同步，无循环风险）。 */
+          (function () {
+            if (!merged || !merged.length) return;
+            if (typeof db === 'undefined' || !db) return;
+            var mineById = {};
+            mineMemos.forEach(function (m) { if (m && m.id) mineById[m.id] = m; });
+            var pendingBf = 0, addedKeys = {};
+            function bfDone() { if (pendingBf <= 0) setTimeout(function () { try { loadMemosFromDB() } catch (_e) {} }, 700) }
+            merged.forEach(function (m) {
+              if (!m || !m.id || /^m_/.test(m.id)) return;      /* 无真实记录 id 的不回写 */
+              var loc = mineById[m.id];
+              if (!loc) {
+                /* 手机新增的备忘（表里还没有）→ 新建；按标题去重防重复插入 */
+                var bk = keyOf(m);
+                if (!bk || addedKeys[bk]) return;
+                addedKeys[bk] = 1;
+                try {
+                  var now0 = new Date().toISOString();
+                  var props0 = { '标题': { text: m.text || '' }, '内容': { text: m.text || '' }, '备注': { text: m.note || '' },
+                    '清单': { select: m.list || '工作' }, '是否完成': { checkbox: !!m.done }, '重要': { checkbox: !!m.important },
+                    '更新时间': { date: now0 } };
+                  if (m.due) props0['截止时间'] = { date: m.due };
+                  if (m.remind) props0['提醒时间'] = { date: m.remind };
+                  pendingBf++;
+                  db.addRecord({ databaseId: 'qd0ZfL69wR0A4jjn3NbIUO', properties: props0 })
+                    .then(bfDone, function () { pendingBf--; bfDone() });
+                } catch (_e0) { pendingBf = Math.max(0, pendingBf - 1) }
+                return;
+              }
+              if ((m.ts || 0) <= (wbRecTs(loc) || 0)) return;    /* 本机(表)版本不旧于远端 → 不回写 */
+              var diff = {};
+              if (!!m.done !== !!loc.done) diff['是否完成'] = { checkbox: !!m.done };
+              if (String(m.note || '') !== String(loc.note || '')) diff['备注'] = { text: m.note || '' };
+              if (String(m.list || '') !== String(loc.list || '')) diff['清单'] = { select: m.list || '工作' };
+              if (!!m.important !== !!loc.important) diff['重要'] = { checkbox: !!m.important };
+              if (String(m.due || '') !== String(loc.due || '')) diff['截止时间'] = { date: m.due || null };
+              if (String(m.remind || '') !== String(loc.remind || '')) diff['提醒时间'] = { date: m.remind || null };
+              if (!Object.keys(diff).length) return;
+              diff['更新时间'] = { date: new Date().toISOString() };
+              try {
+                pendingBf++;
+                db.updateRecord({ databaseId: 'qd0ZfL69wR0A4jjn3NbIUO', recordId: m.id, properties: diff })
+                  .then(bfDone, function () { pendingBf--; bfDone() });
+              } catch (_e1) { pendingBf = Math.max(0, pendingBf - 1) }
+            });
+          })();
         })();
         /* 2.6.82 affairs 从「远端无条件透传」改成并集（见下面的 union 列表）：
            透传等于网页里新录的班务永远推不上 Gitee —— 远端那份（哪怕是旧的中文
@@ -17618,7 +17676,7 @@ function syncCycleCore(manual) {
         /* 2.6.12 并集回写：先把远端的记录并进来（同键取本机），再判断有没有真异常。
            顺序很重要 —— 先并集，条数就不会因为"本机少"而误判成残缺。 */
         var unionLog = [];
-        ['students', 'hw', 'hwItems', 'scores', 'rc', 'duty', 'affairs'].forEach(function (k) {
+        ['students', 'hw', 'hwItems', 'scores', 'rc', 'duty'].forEach(function (k) {
           var mineN = (out.tables[k] || []).length;
           var remoteM = Array.isArray(tables[k]) ? tables[k].length : 0;
           if (!remoteM) return;
@@ -17626,6 +17684,90 @@ function syncCycleCore(manual) {
           if (merged.length !== mineN) unionLog.push(k + ' ' + mineN + '∪' + remoteM + '→' + merged.length);
           out.tables[k] = merged;
         });
+        /* vT83 班务记录单独处理：以前 affairs 也在上面的并集里，同键「本机(飞书版)无条件赢」，
+           手机端改的跟进状态/内容/新增记录每轮都被飞书版打回（快照回滚），
+           而飞书表又吸收不到手机的修改 —— 这就是「班务记录不同步」的根因。
+           现在：同键按 wbRecTs 谁新用谁；远端胜出的记录反向回写飞书「班务记录」真表
+           （updateRecord 改字段 / addRecord 新建），让飞书表吸收手机端的修改；
+           回写成功后重拉班务表刷新本机界面。 */
+        (function () {
+          var mineA = out.tables.affairs || [];
+          var remoteA = Array.isArray(tables.affairs) ? tables.affairs : [];
+          if (!remoteA.length) return;
+          var mineByKey = {}, mineOrder = [];
+          mineA.forEach(function (r) { var b = mpBizKey('affairs', r); if (b && !mineByKey[b]) { mineByKey[b] = r; mineOrder.push(b) } });
+          var merged = [], seen = {}, backfill = [];
+          function tsA(r) { return wbRecTs(r) || 0 }
+          mineA.forEach(function (r) {
+            var b = mpBizKey('affairs', r);
+            if (!b) { merged.push(r); return }
+            seen[b] = 1; merged.push(r);
+          });
+          remoteA.forEach(function (r) {
+            if (!r) return;
+            var b = mpBizKey('affairs', r);
+            if (!b) { merged.push(r); return }
+            if (seen[b]) {
+              var loc = mineByKey[b];
+              if (tsA(r) > tsA(loc)) {
+                var i = merged.indexOf(loc);
+                if (i >= 0) { merged[i] = r; backfill.push(r) }
+              }
+              return;
+            }
+            seen[b] = 1; merged.push(r); backfill.push(r);   /* 手机端新增的班务 */
+          });
+          out.tables.affairs = merged;
+          if (!backfill.length) return;
+          if (typeof db === 'undefined' || !db) return;
+          var locById = {};
+          mineA.forEach(function (r) { if (r && r.id) locById[r.id] = r });
+          var addedAff = {}, pendingAff = 0;
+          function affDone() { if (pendingAff <= 0) setTimeout(function () { try { loadAffairFromDB() } catch (_e) {} }, 700) }
+          backfill.forEach(function (a) {
+            var loc = (a.id && locById[a.id]) || null;
+            if (loc) {
+              /* 同一条记录、手机端版本更新 → 把差异字段写回飞书真表 */
+              function s(v) { return String(v == null ? '' : v) }
+              var diff = {};
+              if (s(a.date).slice(0, 10) !== s(loc.date).slice(0, 10)) diff['日期'] = { date: s(a.date).slice(0, 10) };
+              if (s(a.type) !== s(loc.type)) diff['类型'] = { select: s(a.type) || '班级事务' };
+              if (s(a.title) !== s(loc.title)) diff['标题'] = mpTxt(s(a.title));
+              if (s(a.stu) !== s(loc.stu)) diff['学生姓名'] = mpTxt(s(a.stu));
+              if (s(a.body) !== s(loc.body)) diff['内容'] = mpTxt(s(a.body));
+              if (s(a.follow || a.next) !== s(loc.follow)) diff['跟进'] = { select: s(a.follow || a.next) || '无需跟进' };
+              if (s(a.followDate) !== s(loc.followDate)) diff['跟进日期'] = { date: s(a.followDate) || null };
+              if (!Object.keys(diff).length) return;
+              diff['创建时间'] = { date: new Date().toISOString() };
+              try {
+                pendingAff++;
+                db.updateRecord({ databaseId: MP_SYNC.aff.table, recordId: a.id, properties: diff })
+                  .then(affDone, function () { pendingAff--; affDone() });
+              } catch (_ea) { pendingAff = Math.max(0, pendingAff - 1) }
+            } else {
+              /* 手机端新增的班务 → 新建；按业务键去重防重复插入 */
+              var bk = mpBizKey('affairs', a);
+              if (!bk || addedAff[bk]) return;
+              addedAff[bk] = 1;
+              var p = {
+                '日期': { date: String(a.date || '').slice(0, 10) },
+                '类型': { select: String(a.type || '班级事务') },
+                '标题': mpTxt(String(a.title || '')),
+                '学生姓名': mpTxt(String(a.stu || '')),
+                '内容': mpTxt(String(a.body || '')),
+                '跟进': { select: String(a.follow || '无需跟进') },
+                '记录人': mpTxt(String(a.who || '李老师')),
+                '创建时间': { date: (tsA(a) > 0 ? new Date(tsA(a)).toISOString() : new Date().toISOString()) }
+              };
+              if (a.followDate) p['跟进日期'] = { date: String(a.followDate).slice(0, 10) };
+              try {
+                pendingAff++;
+                db.addRecord({ databaseId: MP_SYNC.aff.table, properties: p })
+                  .then(affDone, function () { pendingAff--; affDone() });
+              } catch (_eb) { pendingAff = Math.max(0, pendingAff - 1) }
+            }
+          });
+        })();
         if (unionLog.length) {
           try { console.info('[gitee-sync] 并集回写：' + unionLog.join('；')) } catch (_u) {}
         }
@@ -18357,6 +18499,12 @@ function mpFromDeskBuild(o) {
         stu: String(dv(p, '学生姓名') || ''),
         follow: String(dv(p, '跟进') || '待跟进'),
         followDate: dvDate(dv(p, '跟进日期')),
+        /* vT83 字段别名：小程序班务记录用 next/nextDate，导出时两个名字都给，
+           否则手机端读不到跟进状态（以前只有 follow/followDate）。
+           ts 用「创建时间」——班务合并改按时间戳裁决，没有 ts 的飞书版永远输给手机版。 */
+        next: String(dv(p, '跟进') || '待跟进'),
+        nextDate: dvDate(dv(p, '跟进日期')),
+        ts: (function () { var c = dv(p, '创建时间'); var t = c ? new Date(String(c)) : null; return t && !isNaN(t.getTime()) ? t.getTime() : 0 })(),
         by: String(dv(p, '记录人') || '')
       };
     }).filter(Boolean);
@@ -19646,6 +19794,8 @@ function cwAfterWrite(msg){
   cwRefreshHome();
   loadAffairFromDB();
   toastMsg(msg);
+  /* vT83 班务增改后立即推快照：让小程序/教室端马上看到新记录与新跟进状态 */
+  setTimeout(function(){try{typeof syncCycle==='function'&&syncCycle(false)}catch(e){}},1200);
   var t=document.getElementById('cwTip');
   if(t){t.textContent=msg;setTimeout(function(){if(t.textContent===msg)t.textContent=''},2600)}
 }
@@ -19696,6 +19846,8 @@ function cwDelAsk(id){
     if(CW_EDIT===id)cwClearForm();
     cwRender();cwRefreshHome();
     toastMsg('已删除');
+    /* vT83 删除后立即推快照，别端不再显示已删的班务 */
+    setTimeout(function(){try{typeof syncCycle==='function'&&syncCycle(false)}catch(e){}},1200);
   });
 }
 /* 点跟进标签直接换状态：待跟进 → 已处理 → 无需跟进 */
@@ -19711,6 +19863,8 @@ function cwFlipNext(id){
     if(err){toastMsg('⚠️ 没保存成功，请重试');return}
     r['跟进']=nx;if(nx!=='待跟进')r['跟进日期']='';
     cwRender();cwRefreshHome();
+    /* vT83 跟进状态变化立即推快照 */
+    setTimeout(function(){try{typeof syncCycle==='function'&&syncCycle(false)}catch(e){}},1200);
   });
 }
 
