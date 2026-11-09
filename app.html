@@ -17420,9 +17420,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v87';
-var WB_MY_VER = '优化版 vT87 · 不参与名单折叠';
-var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.109';
+var WB_VER_TAG = 'v88';
+var WB_MY_VER = '优化版 vT88 · 班主任 AI 助手';
+var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.110';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -26298,6 +26298,455 @@ function cwInit(){
   window.ptwSchedule = ptwSchedule;
   window.ptwPublish = ptwPublish;
 })();
+</script>
+<script>
+/* =============== vT88 班主任 AI 助手 ===============
+   对话 / 语音 → 大模型解析成「动作」→ 老师点确认 → 调用本页既有功能执行。
+   只允许四类动作：发通知（含叫人）、登记作业、查缺交 / 查积分、加积分。
+   模型走「本机或自建的 HTTPS 中转」，Key 只保存在这台电脑的浏览器里，不写进代码。 */
+(function () {
+  if (window.__wbAI) return; window.__wbAI = 1;
+
+  var CFG_KEY = 'wb_ai_cfg_v1';
+  var CFG = { base: 'http://127.0.0.1:8787/v1/chat/completions', key: '', model: 'glm-4-flash', tts: true };
+  try { var c0 = JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); if (c0 && typeof c0 === 'object') { for (var k0 in c0) if (c0[k0] !== undefined) CFG[k0] = c0[k0]; } } catch (e) {}
+  function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(CFG)); } catch (e) {} }
+
+  var HIST = [];          /* 最近几轮对话，给模型留上下文 */
+  var BUSY = false;
+
+  /* ---------------- 样式 ---------------- */
+  var css = ''
+    + '#aiFab{position:fixed;right:18px;bottom:22px;z-index:9998;width:56px;height:56px;border-radius:50%;border:0;cursor:pointer;'
+    + 'background:linear-gradient(135deg,#2d8f63,#1f6f4c);color:#fff;font-size:26px;box-shadow:0 8px 22px rgba(24,79,57,.32)}'
+    + '#aiFab:hover{transform:translateY(-2px)}'
+    + '#aiPanel{position:fixed;right:18px;bottom:88px;z-index:9999;width:min(420px,calc(100vw - 24px));height:min(620px,calc(100vh - 120px));'
+    + 'background:#fff;border:1px solid #dbe7e0;border-radius:16px;box-shadow:0 18px 48px rgba(16,42,32,.22);display:none;flex-direction:column;overflow:hidden}'
+    + '#aiPanel.on{display:flex}'
+    + '#aiHead{display:flex;align-items:center;gap:8px;padding:11px 13px;background:#f4faf6;border-bottom:1px solid #e3efe8;font-weight:800;color:#205c44;font-size:14px}'
+    + '#aiHead .st{font-size:11.5px;font-weight:600;color:#7b8f85;margin-left:auto}'
+    + '#aiHead button{border:0;background:transparent;cursor:pointer;font-size:15px;color:#5b7a6b;padding:2px 5px;border-radius:6px}'
+    + '#aiHead button:hover{background:#e3efe8}'
+    + '#aiLog{flex:1;overflow:auto;padding:12px;background:#fbfdfc;display:flex;flex-direction:column;gap:9px}'
+    + '.ai-b{max-width:88%;padding:9px 12px;border-radius:12px;font-size:13.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word}'
+    + '.ai-b.u{align-self:flex-end;background:#2d8f63;color:#fff;border-bottom-right-radius:4px}'
+    + '.ai-b.a{align-self:flex-start;background:#fff;border:1px solid #e3efe8;color:#26332c;border-bottom-left-radius:4px}'
+    + '.ai-b.s{align-self:center;background:#f1f5f2;color:#6d7f75;font-size:12px;max-width:96%;text-align:center;border-radius:8px;padding:6px 10px}'
+    + '.ai-plan{align-self:stretch;background:#fffdf4;border:1px solid #f0e2b6;border-radius:12px;padding:10px 12px;font-size:13px;color:#5a4a16}'
+    + '.ai-plan h4{margin:0 0 6px;font-size:13px;color:#8a6d12}'
+    + '.ai-plan li{margin:3px 0 3px -8px;line-height:1.55}'
+    + '.ai-plan .ops{display:flex;gap:8px;margin-top:9px}'
+    + '.ai-plan button{border:0;border-radius:9px;padding:7px 13px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}'
+    + '.ai-plan .go{background:#2d8f63;color:#fff}.ai-plan .no{background:#eef1ef;color:#5d6b64}'
+    + '#aiBar{display:flex;gap:6px;padding:9px 10px;border-top:1px solid #e8f0eb;background:#fff;align-items:center}'
+    + '#aiInput{flex:1;border:1px solid #dbe7e0;border-radius:10px;padding:9px 11px;font-size:13.5px;font-family:inherit;outline:0}'
+    + '#aiInput:focus{border-color:#2d8f63}'
+    + '#aiMic,#aiSend{border:0;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700;font-size:13px;padding:9px 12px}'
+    + '#aiMic{background:#eef7f2;color:#1f6f4c;font-size:16px;padding:9px 10px}'
+    + '#aiMic.rec{background:#fdecea;color:#c0392b;animation:aipulse 1s infinite}'
+    + '@keyframes aipulse{50%{opacity:.55}}'
+    + '#aiSend{background:#2d8f63;color:#fff}'
+    + '#aiTip{padding:0 12px 9px;font-size:11.5px;color:#8a9a92;background:#fff;line-height:1.5}'
+    + '.ai-cfg{position:fixed;inset:0;z-index:10000;background:rgba(14,28,22,.42);display:flex;align-items:center;justify-content:center;padding:16px}'
+    + '.ai-cfg .box{background:#fff;border-radius:14px;padding:18px;width:min(430px,100%);max-height:90vh;overflow:auto}'
+    + '.ai-cfg h3{margin:0 0 6px;font-size:15px;color:#205c44}'
+    + '.ai-cfg .hint{font-size:12px;color:#7b8f85;line-height:1.65;margin-bottom:10px}'
+    + '.ai-cfg label{display:block;font-size:12.5px;font-weight:700;color:#3c5a4c;margin:10px 0 4px}'
+    + '.ai-cfg input{width:100%;box-sizing:border-box;border:1px solid #dbe7e0;border-radius:9px;padding:9px 10px;font-size:13px;font-family:inherit}'
+    + '.ai-cfg .row{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}'
+    + '.ai-cfg button{border:0;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}'
+    + '.ai-cfg .ok{background:#2d8f63;color:#fff}.ai-cfg .cancel{background:#eef1ef;color:#5d6b64}'
+    + '.ai-cfg .test{background:#eef7f2;color:#1f6f4c;margin-right:auto}';
+
+  var styleEl = document.createElement('style'); styleEl.textContent = css; document.head.appendChild(styleEl);
+
+  /* ---------------- DOM ---------------- */
+  var fab = document.createElement('button');
+  fab.id = 'aiFab'; fab.title = '班主任 AI 助手（说一句话就能发通知、登记作业）'; fab.textContent = '🤖';
+  var panel = document.createElement('div');
+  panel.id = 'aiPanel';
+  panel.innerHTML = ''
+    + '<div id="aiHead">🤖 班主任助手 <span class="st" id="aiState"></span>'
+    + '<button id="aiCfgBtn" title="设置模型与 Key">⚙️</button><button id="aiMinBtn" title="收起">✕</button></div>'
+    + '<div id="aiLog"></div>'
+    + '<div id="aiBar"><button id="aiMic" title="按住说话（Chrome / Edge）">🎤</button>'
+    + '<input id="aiInput" placeholder="例：发通知 明天带跳绳 / 作业 优 全登记 / 谁没交作业">'
+    + '<button id="aiSend">发送</button></div>'
+    + '<div id="aiTip">执行前会先给你看「要做什么」，点确认才动手。语音需 Chrome / Edge。</div>';
+  document.body.appendChild(fab); document.body.appendChild(panel);
+
+  var logEl = panel.querySelector('#aiLog'), inputEl = panel.querySelector('#aiInput'),
+      stateEl = panel.querySelector('#aiState'), micBtn = panel.querySelector('#aiMic');
+
+  function scrollEnd() { logEl.scrollTop = logEl.scrollHeight; }
+  function bubble(cls, text) {
+    var d = document.createElement('div');
+    d.className = 'ai-b ' + cls; d.textContent = text;
+    logEl.appendChild(d); scrollEnd(); return d;
+  }
+  function setState(t) { stateEl.textContent = t || ''; }
+  function cfgReady() { return !!(CFG.key && CFG.base); }
+
+  /* ---------------- 配置面板 ---------------- */
+  function openCfg() {
+    var mask = document.createElement('div'); mask.className = 'ai-cfg';
+    mask.innerHTML = ''
+      + '<div class="box"><h3>⚙️ 助手设置</h3>'
+      + '<div class="hint">默认走本机中转 <b>http://127.0.0.1:8787</b>（工作区里的 zhipu-cors-proxy，双击 start.bat 启动）。<br>'
+      + '也可以填自己搭的 HTTPS 中转地址（Cloudflare Worker）。Key 只存在这台电脑的浏览器里。</div>'
+      + '<label>接口地址（完整 URL）</label><input id="aiCfgBase">'
+      + '<label>智谱 API Key</label><input id="aiCfgKey" type="password" placeholder="粘贴 Key，保存后只在本机生效">'
+      + '<label>模型</label><input id="aiCfgModel" placeholder="glm-4-flash">'
+      + '<div class="row"><button class="test" id="aiCfgTest">测试连接</button>'
+      + '<button class="cancel" id="aiCfgCancel">取消</button><button class="ok" id="aiCfgOk">保存</button></div>'
+      + '<div class="hint" id="aiCfgMsg" style="margin:10px 0 0"></div></div>';
+    document.body.appendChild(mask);
+    var b = mask.querySelector('#aiCfgBase'), k = mask.querySelector('#aiCfgKey'),
+        m = mask.querySelector('#aiCfgModel'), msg = mask.querySelector('#aiCfgMsg');
+    b.value = CFG.base; k.value = CFG.key; m.value = CFG.model;
+    mask.querySelector('#aiCfgCancel').onclick = function () { document.body.removeChild(mask); };
+    mask.querySelector('#aiCfgOk').onclick = function () {
+      CFG.base = b.value.trim(); CFG.key = k.value.trim(); CFG.model = m.value.trim() || 'glm-4-flash';
+      saveCfg(); document.body.removeChild(mask);
+      bubble('s', '✅ 已保存设置' + (cfgReady() ? '' : '（还缺 Key）'));
+    };
+    mask.querySelector('#aiCfgTest').onclick = function () {
+      msg.textContent = '正在连接…';
+      callModel([{ role: 'user', content: '只回复两个字：可用' }], 40).then(function (t) {
+        msg.textContent = '✅ 连通：' + String(t).slice(0, 40);
+      }).catch(function (e) {
+        msg.textContent = '❌ 失败：' + (e && e.message ? e.message : e) + '（检查代理是否启动、Key 是否正确）';
+      });
+    };
+  }
+
+  /* ---------------- 调模型 ---------------- */
+  function callModel(messages, maxTokens) {
+    if (!cfgReady()) return Promise.reject(new Error('还没设置 Key'));
+    var url = CFG.base;
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CFG.key },
+      body: JSON.stringify({
+        model: CFG.model || 'glm-4-flash',
+        temperature: 0.2,
+        max_tokens: Math.min(1024, maxTokens || 800),
+        messages: messages
+      })
+    }).then(function (r) {
+      if (!r.ok) return r.text().then(function (t) { throw new Error('HTTP ' + r.status + ' ' + String(t).slice(0, 120)); });
+      return r.json();
+    }).then(function (j) {
+      var msg = j && j.choices && j.choices[0] && j.choices[0].message;
+      return (msg && msg.content) || '';
+    });
+  }
+
+  function sysPrompt() {
+    var names = (typeof stuRoster === 'function' ? stuRoster() : []).map(function (s) { return s.姓名; }).join('、');
+    var items = (typeof hmHwItemsAll === 'function' ? hmHwItemsAll() : []).slice(0, 8)
+      .map(function (it) { return it.name + '（' + (it.date || '') + '）'; }).join('；');
+    var d = new Date();
+    var wd = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];
+    return [
+      '你是小学班主任的电脑助手。把老师的话转成 JSON 指令，不要输出任何多余文字。',
+      '今天是 ' + d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate() + ' ' + wd + '。',
+      '学生名单：' + (names || '（暂无）'),
+      '最近的作业列：' + (items || '（暂无）'),
+      '输出格式：{"say":"给老师看的一句话","actions":[动作…]}。没有明确要求就 actions 为空，并在 say 里追问。',
+      '动作类型：',
+      '1 发通知/叫人 {"type":"notice","text":"通知内容","student":"要叫的学生姓名(叫人时填)","arrive":"now 或 YYYY-MM-DD HH:MM","prio":"普通|紧急","tts":true}',
+      '2 登记作业 {"type":"homework","item":"作业名，可省略代表最近一列","level":"优|良|中|差|超时未交","scope":"all|missing|students","students":["姓名"],"exclude":["姓名"]}',
+      '   scope=all 表示全班没登记的补登记；exclude 里的同学会被取消登记（用于全部登记后排除没交的人）。',
+      '3 查缺交 {"type":"query_undone"}',
+      '4 查积分 {"type":"query_points","names":["姓名"]}',
+      '5 加/扣积分 {"type":"points","items":[{"name":"姓名","delta":3,"reason":"课堂发言"}]}',
+      '注意：不要编造学生姓名；姓名必须来自上面名单；一次可以有多个动作；数字用阿拉伯数字。'
+    ].join('\n');
+  }
+
+  /* ---------------- 动作执行 ---------------- */
+  function mustStr(x) { return x == null ? '' : String(x); }
+
+  function findItem(name) {
+    var all = (typeof hmHwItemsAll === 'function') ? hmHwItemsAll() : [];
+    if (!all.length && typeof HW_ITEMS !== 'undefined') all = HW_ITEMS.slice();
+    if (!name) return all[0] || null;
+    var q = mustStr(name).replace(/\s+/g, '');
+    for (var i = 0; i < all.length; i++) {
+      if (mustStr(all[i].name).replace(/\s+/g, '').indexOf(q) >= 0) return all[i];
+    }
+    return null;
+  }
+
+  function doNotice(a) {
+    var stu = mustStr(a.student).trim();
+    var isCall = !!stu;
+    var radios = document.querySelectorAll('input[name="ntType"]');
+    [].forEach.call(radios, function (r) { if (r.value === (isCall ? '叫人' : '通知') && r.type === 'radio') r.checked = true; });
+    if (typeof window.noticeTypeChange === 'function') { try { window.noticeTypeChange(); } catch (e) {} }
+    if (isCall) {
+      var sel = document.getElementById('noticeStuSel');
+      if (sel) {
+        var okName = false;
+        [].forEach.call(sel.options, function (o) { if (o.value === stu) okName = true; });
+        if (!okName) return { ok: false, msg: '名单里没有「' + stu + '」，没有发送' };
+        sel.value = stu;
+      }
+      var ex = document.getElementById('noticeCallExtra');
+      if (ex && a.text) ex.value = mustStr(a.text);
+    } else {
+      var ta = document.getElementById('noticeText');
+      if (ta) ta.value = mustStr(a.text);
+    }
+    var arrive = mustStr(a.arrive || 'now');
+    var now = /^now$/i.test(arrive) || !arrive;
+    var cb = document.getElementById('noticeNow');
+    if (cb) cb.checked = now;
+    if (typeof window.noticeWhenChange === 'function') { try { window.noticeWhenChange(); } catch (e) {} }
+    if (!now) {
+      var inp = document.getElementById('noticeArrive');
+      var v = arrive.replace('T', ' ').slice(0, 16);
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(v) && inp) inp.value = v.replace(' ', 'T');
+    }
+    var pri = document.getElementById('noticePri'); if (pri && a.prio) pri.value = (a.prio === '紧急' ? '紧急' : '普通');
+    var tts = document.getElementById('noticeTts'); if (tts) tts.checked = a.tts !== false && CFG.tts !== false;
+    if (typeof window.noticeSend !== 'function') return { ok: false, msg: '通知模块未就绪' };
+    window.noticeSend();
+    return { ok: true, msg: (now ? '已发送：' : '已定时 ' + arrive + '：') + (isCall ? ('叫 ' + stu + ' 到办公室') : mustStr(a.text)) };
+  }
+
+  function doHomework(a) {
+    var it = findItem(a.item);
+    if (!it) return { ok: false, msg: '没找到作业列「' + mustStr(a.item || '最近一列') + '」' };
+    if (typeof dbReady !== 'undefined' && !dbReady) return { ok: false, msg: '数据表还没连上，稍后再试' };
+    var level = mustStr(a.level || '优');
+    if (!HW_SCORE || !(level in HW_SCORE)) return { ok: false, msg: '等级只能是 优 / 良 / 中 / 差 / 超时未交' };
+    HW_LV = level;
+    try { if (typeof hwSetLv === 'function') hwSetLv(level); } catch (e) {}
+    HW_MODE = true;
+    try { hwPersistMode(); hwPaintMode(); } catch (e) {}
+
+    var m = hwMapRows();
+    var roster = (typeof hwRoster === 'function' ? hwRoster() : []).map(function (s) { return s.姓名; });
+    var named = (a.students || []).map(function (x) { return mustStr(x).trim(); }).filter(Boolean);
+    var excl = (a.exclude || []).map(function (x) { return mustStr(x).trim(); }).filter(Boolean);
+    var scope = mustStr(a.scope || (named.length ? 'students' : 'all'));
+
+    var unknown = named.concat(excl).filter(function (n) { return roster.indexOf(n) < 0; });
+    var target = (scope === 'students') ? named.filter(function (n) { return roster.indexOf(n) >= 0 }) : roster.slice();
+    if (scope !== 'students' && excl.length) target = target.filter(function (n) { return excl.indexOf(n) < 0; });
+
+    var plan = [], skipped = [];
+    target.forEach(function (n) {
+      var rec = m[hwKey(n, it)];
+      if (rec) {
+        if (scope === 'students' && fval(rec, '等级') !== level) skipped.push(n);
+        return;                                  /* 已登记（同等级或不是本次要改的）→ 不动 */
+      }
+      plan.push({ name: n, action: 'add' });
+    });
+    if (scope !== 'students') {
+      excl.forEach(function (n) {
+        var rec = m[hwKey(n, it)];
+        if (rec) plan.push({ name: n, action: 'del', rid: recId(rec) });
+      });
+    }
+    if (!plan.length) {
+      return { ok: true, msg: '「' + it.name + '」' + (skipped.length ? ('这几个已经是别的等级：' + skipped.join('、')) : '没有需要登记的同学') };
+    }
+    if (typeof hwBatchRun !== 'function') return { ok: false, msg: '作业模块未就绪' };
+    hwBatchRun(it, plan, '✅ AI 已登记「' + it.name + '」' + plan.length + ' 人（' + level + '）');
+    return {
+      ok: true,
+      msg: '已提交「' + it.name + '」：' + plan.length + ' 人登记为 ' + level +
+        (excl.length ? ('，取消 ' + excl.filter(function (n) { return m[hwKey(n, it)]; }).length + ' 人') : '') +
+        (unknown.length ? ('；名单里没有：' + unknown.join('、')) : '') +
+        (skipped.length ? ('；已是其他等级未改：' + skipped.join('、')) : '') + '（约 1~3 秒写入）'
+    };
+  }
+
+  function doQueryUndone() {
+    if (typeof hmHwUndone !== 'function') return '未交统计还没准备好';
+    var r = hmHwUndone();
+    var out = [];
+    function line(x) {
+      var names = (x.und || []).slice(0, 8).join('、');
+      return '· ' + x.name + '：' + names + ((x.und || []).length > 8 ? ' 等 ' + x.und.length + ' 人' : '');
+    }
+    if (r.week && r.week.length) { out.push('本周未交：'); r.week.forEach(function (x) { out.push(line(x)); }); }
+    else out.push('本周没有未交记录 👍');
+    if (r.over && r.over.length) { out.push('超时未交：'); r.over.slice(0, 5).forEach(function (x) { out.push(line(x)); }); }
+    if (typeof r.pastN === 'number' && r.pastN) out.push('（更早的未交还有 ' + r.pastN + ' 人次，可在作业页查看）');
+    return out.join('\n');
+  }
+
+  function doQueryPoints(a) {
+    if (typeof stuTotal !== 'function' || typeof stuPoints !== 'function') return '积分模块还没准备好';
+    var p = stuPoints();
+    var names = (a.names || []).slice(0, 8);
+    if (!names.length) {
+      var list = (typeof stuRoster === 'function' ? stuRoster() : []).map(function (s) {
+        return { n: s.姓名, v: stuTotal(p, s.姓名) };
+      }).sort(function (x, y) { return y.v - x.v; });
+      return '积分前 8：\n' + list.slice(0, 8).map(function (x, i) { return (i + 1) + '. ' + x.n + ' ' + x.v + ' 分'; }).join('\n');
+    }
+    return names.map(function (n) {
+      var hw = (p.hw && p.hw[n]) || 0, ga = (p.ga && p.ga[n]) || 0, rw = (p.rw && p.rw[n]) || 0;
+      return '· ' + n + '：合计 ' + stuTotal(p, n) + ' 分（作业 ' + hw + ' / 课堂 ' + ga + ' / 奖惩 ' + rw + '）';
+    }).join('\n');
+  }
+
+  function doPoints(a) {
+    var items = (a.items || []).slice(0, 30);
+    if (!items.length) return { ok: false, msg: '没有要加分的学生' };
+    if (typeof stuAddRw !== 'function') return { ok: false, msg: '积分模块未就绪' };
+    var done = [];
+    items.forEach(function (x) {
+      var n = mustStr(x.name).trim(), d = Number(x.delta);
+      if (!n || !isFinite(d) || !d) return;
+      stuAddRw(n, mustStr(x.reason || 'AI 助手登记'), d);
+      done.push(n + (d > 0 ? '+' : '') + d);
+    });
+    return { ok: true, msg: done.length ? ('已写入：' + done.join('、')) : '没有有效的加分项' };
+  }
+
+  /* ---------------- 计划卡片 ---------------- */
+  function labelOf(a) {
+    if (!a || !a.type) return '未知动作';
+    if (a.type === 'notice') return '📢 发通知' + (a.student ? '（叫 ' + a.student + '）' : '') + '：' + mustStr(a.text || '到办公室') + (/^now$/i.test(mustStr(a.arrive || 'now')) ? '（立即）' : ('（' + a.arrive + ' 到达）'));
+    if (a.type === 'homework') return '✍️ 登记作业：' + mustStr(a.item || '最近一列') + ' → ' + mustStr(a.level || '优') +
+      (a.scope === 'students' ? ('，指定 ' + (a.students || []).join('、')) : '，全班未登记的') +
+      ((a.exclude || []).length ? ('，排除 ' + a.exclude.join('、')) : '');
+    if (a.type === 'query_undone') return '🔍 查本周缺交';
+    if (a.type === 'query_points') return '🔍 查积分：' + ((a.names || []).length ? a.names.join('、') : '积分榜前 8');
+    if (a.type === 'points') return '➕ 积分：' + (a.items || []).map(function (x) { return x.name + (Number(x.delta) > 0 ? '+' : '') + x.delta; }).join('、');
+    return '未知动作 ' + a.type;
+  }
+
+  function planCard(say, actions) {
+    var card = document.createElement('div'); card.className = 'ai-plan';
+    var h = document.createElement('h4'); h.textContent = '准备执行'; card.appendChild(h);
+    var ul = document.createElement('ul'); ul.style.margin = '0'; ul.style.paddingLeft = '16px';
+    actions.forEach(function (a) { var li = document.createElement('li'); li.textContent = labelOf(a); ul.appendChild(li); });
+    card.appendChild(ul);
+    var ops = document.createElement('div'); ops.className = 'ops';
+    var go = document.createElement('button'); go.className = 'go'; go.textContent = '✅ 确认执行';
+    var no = document.createElement('button'); no.className = 'no'; no.textContent = '取消';
+    ops.appendChild(go); ops.appendChild(no); card.appendChild(ops);
+    logEl.appendChild(card); scrollEnd();
+
+    no.onclick = function () { go.disabled = no.disabled = true; card.style.opacity = '.6'; bubble('s', '已取消，什么都没改'); };
+    go.onclick = function () {
+      go.disabled = no.disabled = true; card.style.opacity = '.6';
+      var lines = [];
+      actions.forEach(function (a) {
+        try {
+          if (a.type === 'notice') { var r = doNotice(a); lines.push((r.ok ? '✅ ' : '⚠️ ') + r.msg); }
+          else if (a.type === 'homework') { var r2 = doHomework(a); lines.push((r2.ok ? '✅ ' : '⚠️ ') + r2.msg); }
+          else if (a.type === 'query_undone') { lines.push('🔍 ' + doQueryUndone()); }
+          else if (a.type === 'query_points') { lines.push('🔍 ' + doQueryPoints(a)); }
+          else if (a.type === 'points') { var r3 = doPoints(a); lines.push((r3.ok ? '✅ ' : '⚠️ ') + r3.msg); }
+          else lines.push('⚠️ 不认识的动作：' + a.type);
+        } catch (e) { lines.push('⚠️ 执行出错：' + (e && e.message ? e.message : e)); }
+      });
+      bubble('a', lines.join('\n'));
+      /* 执行完顺手把相关页面刷新一下 */
+      try { if (typeof renderHome === 'function') renderHome(); } catch (e) {}
+      try { if (typeof noticeRenderHistory === 'function') noticeRenderHistory(); } catch (e) {}
+    };
+  }
+
+  /* ---------------- 主流程 ---------------- */
+  function ask(text) {
+    text = String(text || '').trim();
+    if (!text || BUSY) return;
+    bubble('u', text);
+    inputEl.value = '';
+    if (!cfgReady()) {
+      bubble('a', '还差一步：点右上角 ⚙️ 填智谱 API Key。填一次就记住，以后直接说话就行。');
+      openCfg(); return;
+    }
+    BUSY = true; setState('思考中…');
+    var thinking = bubble('s', '正在理解你的意思…');
+    var msgs = [{ role: 'system', content: sysPrompt() }];
+    HIST.slice(-6).forEach(function (m) { msgs.push(m); });
+    msgs.push({ role: 'user', content: text });
+
+    callModel(msgs, 900).then(function (raw) {
+      thinking.parentNode && thinking.parentNode.removeChild(thinking);
+      var obj = parseJSON(raw);
+      if (!obj) { bubble('a', '模型返回的内容没看懂，再试一次？\n' + String(raw).slice(0, 200)); return; }
+      if (obj.say) bubble('a', String(obj.say));
+      var acts = Array.isArray(obj.actions) ? obj.actions : [];
+      HIST.push({ role: 'user', content: text });
+      HIST.push({ role: 'assistant', content: JSON.stringify({ say: obj.say || '', actions: acts }) });
+      if (acts.length) planCard(obj.say, acts);
+      else bubble('s', '（没有要执行的动作）');
+    }).catch(function (e) {
+      thinking.parentNode && thinking.parentNode.removeChild(thinking);
+      bubble('a', '❌ 连接失败：' + (e && e.message ? e.message : e) +
+        '\n检查：① 本机中转是否在跑（zhipu-cors-proxy/start.bat）② ⚙️ 里的接口地址与 Key。');
+    }).then(function () { BUSY = false; setState(''); });
+  }
+
+  function parseJSON(raw) {
+    var s = String(raw || '').trim();
+    s = s.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    var i = s.indexOf('{'), j = s.lastIndexOf('}');
+    if (i < 0 || j <= i) return null;
+    try { return JSON.parse(s.slice(i, j + 1)); } catch (e) { return null; }
+  }
+
+  /* ---------------- 语音 ---------------- */
+  var rec = null, listening = false;
+  function initRec() {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return null;
+    var r = new SR();
+    r.lang = 'zh-CN'; r.interimResults = true; r.continuous = false;
+    r.onstart = function () { listening = true; micBtn.classList.add('rec'); setState('正在听…'); };
+    r.onend = function () { listening = false; micBtn.classList.remove('rec'); setState(''); };
+    r.onerror = function (e) { listening = false; micBtn.classList.remove('rec'); setState(''); bubble('s', '语音不可用：' + (e.error || '未知') + '（可改用打字）'); };
+    r.onresult = function (ev) {
+      var txt = '';
+      for (var i = ev.resultIndex; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
+      inputEl.value = txt;
+      if (ev.results[ev.results.length - 1].isFinal) { setTimeout(function () { ask(txt); }, 180); }
+    };
+    return r;
+  }
+  micBtn.onclick = function () {
+    if (!rec) rec = initRec();
+    if (!rec) { bubble('s', '这个浏览器不支持语音识别，请用 Chrome / Edge，或直接打字'); return; }
+    if (listening) { try { rec.stop(); } catch (e) {} return; }
+    try { rec.start(); } catch (e) { bubble('s', '麦克风启动失败：' + (e && e.message ? e.message : e)); }
+  };
+
+  /* ---------------- 事件 ---------------- */
+  fab.onclick = function () { panel.classList.toggle('on'); if (panel.classList.contains('on') && !logEl.childNodes.length) hello(); };
+  panel.querySelector('#aiMinBtn').onclick = function () { panel.classList.remove('on'); };
+  panel.querySelector('#aiCfgBtn').onclick = openCfg;
+  panel.querySelector('#aiSend').onclick = function () { ask(inputEl.value); };
+  inputEl.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(inputEl.value); } });
+
+  function hello() {
+    var tip = [
+      '我可以帮你：',
+      '· 「发通知 明天带跳绳和美术袋」',
+      '· 「叫陈安蕊到办公室」',
+      '· 「古诗三首 全班登记优，没交的排除：周某、李某」',
+      '· 「这周谁没交作业」',
+      '· 「陈安蕊加 3 分，课堂发言」',
+      '执行前我会把要做的事列给你看，你点确认才生效。'
+    ].join('\n');
+    bubble('a', tip + (cfgReady() ? '' : '\n\n⚠️ 还没填 Key：点右上角 ⚙️ 填一次即可。'));
+  }
+
+  /* 给测试脚本留的把手 */
+  window.__wbAIapi = { ask: ask, doNotice: doNotice, doHomework: doHomework, doQueryUndone: doQueryUndone, doQueryPoints: doQueryPoints, doPoints: doPoints, labelOf: labelOf, parseJSON: parseJSON, findItem: findItem, cfg: CFG };
+})();
+
 </script>
 </body>
 </html>
