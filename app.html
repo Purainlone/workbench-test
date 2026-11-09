@@ -2210,7 +2210,11 @@ table.paper td.l{text-align:left;font-weight:600}
         <span>音量
           <select id="deskTtsVol"><option value="40">40%</option><option value="60">60%</option><option value="80" selected>80%</option><option value="100">100%</option></select>
         </span>
+        <span>通知保留
+          <select id="deskNoticeKeep"><option value="30">30 分钟</option><option value="60">1 小时</option><option value="180" selected>3 小时</option><option value="360">6 小时</option><option value="720">12 小时</option></select>
+        </span>
       </div>
+      <div class="sub" style="margin-top:4px">通知保留：小横幅最多显示多久；大字弹窗只对 15 分钟内新到的通知升起，打开桌面不会补弹旧通知。</div>
       <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:8px">
         <span>开学日期（教室桌面显示"第几周"用）
           <input type="date" id="deskTermStart">
@@ -16822,9 +16826,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v83';
-var WB_MY_VER = '优化版 vT83 · 待办班务双向同步';
-var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.105';
+var WB_VER_TAG = 'v84';
+var WB_MY_VER = '优化版 vT84 · 通知按时间过期';
+var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.106';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -21607,6 +21611,7 @@ function cwInit(){
       'TTS开关': document.getElementById('deskTtsOn').checked,
       '语速': parseFloat(document.getElementById('deskTtsRate').value) || 1,
       '音量': parseInt(document.getElementById('deskTtsVol').value, 10) || 80,
+      '通知保留分钟': parseInt((document.getElementById('deskNoticeKeep') || {}).value, 10) || 180,
       '学期开始日期': term,
       '悬浮球位置': old['悬浮球位置'] || '', '窗口模式': old['窗口模式'] || '',
       '更新时间': nowStr(),
@@ -21635,6 +21640,7 @@ function cwInit(){
     var on = document.getElementById('deskTtsOn'); if (on) on.checked = old['TTS开关'] !== false;
     var rate = document.getElementById('deskTtsRate'); if (rate && old['语速']) rate.value = String(old['语速']);
     var vol = document.getElementById('deskTtsVol'); if (vol && old['音量']) vol.value = String(old['音量']);
+    var keep = document.getElementById('deskNoticeKeep'); if (keep) keep.value = String(old['通知保留分钟'] || 180);
     var term = document.getElementById('deskTermStart'); if (term && old['学期开始日期']) term.value = old['学期开始日期'];
   };
   window.deskRenderStatus = function () {
