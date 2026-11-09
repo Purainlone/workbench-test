@@ -16808,6 +16808,14 @@ var WB_VER_TAG = 'v67';
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
 var WB_VER_TAG = 'v67';
+/* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
+   WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
+   WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
+var WB_VER_TAG = 'v67';
+/* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
+   WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
+   WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
+var WB_VER_TAG = 'v67';
 var WB_MY_VER = '优化版 vT67 · 启灵图鉴';
 var WB_BUILD_DATE = '11-06', WB_BUILD_NO = '2.6.101';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
@@ -24438,11 +24446,18 @@ function cwInit(){
     PT_CODEX_BASE
   ];
   var PT_CX_SRCS = {};
-  function ptCodexImgSrcs(rel) {
+  /* vT78 隐藏/典藏卡优先加载动态卡面 codeximg/NNN.gif（vT78 生成的光效版），
+     404 时按候选顺序自动回落静态 png；普通卡不产生多余请求。 */
+  function ptCodexImgSrcs(rel, tier) {
     if (!rel) return [];
     if (/^(https?:|data:)/i.test(rel)) return [rel];
     if (rel.indexOf('codeximg/') !== 0) return [];
-    return PT_CODEX_MIRRORS.map(function (b) { return b + rel; });
+    var out = [];
+    if ((tier === '隐藏' || tier === '典藏') && /\.png$/i.test(rel)) {
+      PT_CODEX_MIRRORS.forEach(function (b) { out.push(b + rel.replace(/\.png$/i, '.gif')); });
+    }
+    PT_CODEX_MIRRORS.forEach(function (b) { out.push(b + rel); });
+    return out;
   }
   function ptCodexImgErr(im) {
     try {
@@ -24458,7 +24473,7 @@ function cwInit(){
   function ptCodexImgHtml(p) {
     var rel = p.img || '';
     if (!rel) return '<div class="cx-img">📖</div>';
-    var srcs = ptCodexImgSrcs(rel);
+    var srcs = ptCodexImgSrcs(rel, p.tier);
     if (srcs.length) {
       var key = String(p.id || rel);
       PT_CX_SRCS[key] = srcs;
