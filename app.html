@@ -1569,6 +1569,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <button data-page-node-id="gdEf1K3p0VOtbL5NK94j69" class="active" data-t="ent" onclick="scTab('ent')"><!--pnid:FqNUaNKKHYJIlaIlyQZLq2-->✍️ 成绩录入</button>
       <button data-page-node-id="mSmCWCv1F7KRSNGGBZVXbX" data-t="an" onclick="scTab('an')"><!--pnid:z3RAVGhq6nZ40k0YPnO9MS-->📈 成绩分析</button>
       <button data-t="mg" onclick="scTab('mg')">🗂 成绩管理</button>
+      <button data-t="bonus" onclick="scTab('bonus')">🏆 目标加分</button>
     </div>
 
     <div data-page-node-id="M4wvQ81PLgL6VNfInhtPc3" class="tabpane active" id="scp-ent">
@@ -1679,6 +1680,44 @@ table.paper td.l{text-align:left;font-weight:600}
       <div id="scMgBox"></div>
     </div>
 
+    <!-- ============ vT86 目标达成加分 ============ -->
+    <div class="tabpane" id="scp-bonus">
+      <style>
+        #scp-bonus .bn-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+        #scp-bonus .bn-bar input[type=number]{width:58px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;font-family:inherit;text-align:center}
+        #scp-bonus table{width:100%;border-collapse:collapse;font-size:13px;background:#fff}
+        #scp-bonus th,#scp-bonus td{border:1px solid #e3e9ef;padding:6px 8px;text-align:center;white-space:nowrap}
+        #scp-bonus thead th{background:#eef4f0;position:sticky;top:0;z-index:2}
+        #scp-bonus td.bnm{text-align:left;font-weight:600;background:#f7faf8}
+        #scp-bonus tr.on td{background:#fffdf3}
+        #scp-bonus .bn-lv{display:inline-block;min-width:52px;padding:1px 8px;border-radius:8px;font-size:12px;font-weight:700}
+        #scp-bonus .bn-lv.l3{background:#f7c7c7;color:#8c2f2f}
+        #scp-bonus .bn-lv.l2{background:#c7ecc9;color:#1f5f2d}
+        #scp-bonus .bn-lv.l1{background:#c7ddf7;color:#1f4a7a}
+        #scp-bonus .bn-lv.l0{background:#eef0f2;color:#8a97a3}
+        #scp-bonus .bn-dup{font-size:11px;color:#b06a00;font-weight:700}
+        #scp-bonus .bn-pts{font-weight:800;color:#b45309}
+        #scp-bonus .na2{color:#b9c3cc}
+      </style>
+      <div class="chartbox">
+        <h3>🏆 目标达成加分</h3>
+        <div class="bn-bar">
+          <span style="font-size:13px;font-weight:700">考试</span>
+          <select id="scBonusExam" onchange="scBonusExamChange()" style="min-width:260px;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:13px;font-family:inherit"></select>
+          <span style="font-size:13px">达目标一 +</span><input id="scBonusP1" type="number" min="0" step="1" value="3" oninput="scBonusSavePts()">
+          <span style="font-size:13px">目标二 +</span><input id="scBonusP2" type="number" min="0" step="1" value="5" oninput="scBonusSavePts()">
+          <span style="font-size:13px">目标三 +</span><input id="scBonusP3" type="number" min="0" step="1" value="8" oninput="scBonusSavePts()">
+        </div>
+        <div class="bn-bar">
+          <button class="btn2 sm" onclick="scBonusSelAll(true)">✅ 全选达成</button>
+          <button class="btn2 sm ghost" onclick="scBonusSelAll(false)">🚫 清空勾选</button>
+          <button class="btn2 primary" onclick="scBonusApply()">🏆 给勾选同学加分</button>
+          <span class="sctip" id="scBonusTip">选一场考试，按学生的目标一 / 二 / 三自动判断谁达标，勾选后一次写入积分</span>
+        </div>
+        <div class="scroll" id="scBonusBox" style="max-height:min(58vh,540px);margin-top:8px"></div>
+      </div>
+    </div>
+
   </section>
 
   <!-- ============ 作业登记 ============ -->
@@ -1691,6 +1730,15 @@ table.paper td.l{text-align:left;font-weight:600}
       <span class="mt" id="hwModeTip">先选等级，点「开始登记」后点格子才涂色</span>
       <button class="btn2 sm ghost" id="hwAutoBtn" onclick="hwToggleAuto()">🙈 已自动隐藏 0 列 · 显示</button>
       <button class="btn2 sm danger" onclick="hwMarkAllOverdue()">⏰ 余下记超时未交（−2）</button>
+    </div>
+    <!-- vT86 批量登记 / 反选：先把整列登记成同一等级，再把没交作业的同学点掉 -->
+    <div class="gpset" id="hwBatchBar" style="align-items:center">
+      <span class="lbl">批量</span>
+      <select id="hwBatchCol" class="search" style="min-width:200px"></select>
+      <button class="btn2 sm primary" onclick="hwBatchAll()">✅ 全登记（当前等级）</button>
+      <button class="btn2 sm" onclick="hwBatchInvert()" title="已登记的取消，未登记的按当前等级登记">⇄ 反选</button>
+      <button class="btn2 sm ghost" onclick="hwBatchClear()">🧹 清空本列</button>
+      <span class="sctip" id="hwBatchTip">全部登记后，还可以再点格子把没交作业的同学取消（同等级再点一次 = 取消）</span>
     </div>
     <div class="gpset">
       <div class="hwlv" id="hwLv">
@@ -2716,6 +2764,12 @@ table.paper td.l{text-align:left;font-weight:600}
       #s-pet .cx-own{font-size:11px;color:#76867e;margin-top:2px}
       #s-pet .cx-tier{position:absolute;top:6px;right:6px;font-size:10px;padding:1px 7px;border-radius:8px;color:#fff;z-index:2}
       #s-pet .cx-tier.t0{background:#8a97a3}#s-pet .cx-tier.t1{background:#7c5cff}#s-pet .cx-tier.t2{background:#d8a520}
+      /* vT86 卡面左上角删除（仅老师解锁后显示），移出图鉴可在回收站恢复 */
+      #s-pet .cx-del{position:absolute;top:6px;left:6px;width:20px;height:20px;line-height:19px;text-align:center;border-radius:50%;
+        background:rgba(255,255,255,.92);border:1px solid #e6b3b3;color:#c0392b;font-size:12px;font-weight:700;cursor:pointer;z-index:3;
+        opacity:0;transition:opacity .12s;user-select:none}
+      #s-pet .cx-card:hover .cx-del{opacity:1}
+      #s-pet .cx-del:hover{background:#c0392b;color:#fff;border-color:#c0392b}
       /* vT72 品级快设 + 老师一键看未唤醒原图 */
       #s-pet .cx-quick{display:flex;gap:3px;justify-content:center;margin-top:6px}
       #s-pet .cx-q{font-size:10px;line-height:1.5;padding:2px 6px;border:1px solid #d8e3dc;background:#fff;border-radius:6px;color:#4a6156;cursor:pointer}
@@ -2739,8 +2793,7 @@ table.paper td.l{text-align:left;font-weight:600}
       </div>
     </div>
     <div class="pet-tabs" id="petTabs">
-      <button class="btn2 sm active" data-pt="inc" onclick="ptTab('inc')">🥚 唤醒台</button>
-      <button class="btn2 sm" data-pt="wall" onclick="ptTab('wall')">🐾 灵杰墙</button>
+      <button class="btn2 sm active" data-pt="wall" onclick="ptTab('wall')">🐾 灵杰墙</button>
       <button class="btn2 sm" data-pt="codex" onclick="ptTab('codex')">📖 启灵图鉴</button>
       <button class="btn2 sm" data-pt="parent" onclick="ptTab('parent')">👪 家长队列<span id="petPQn" class="pet-badge"></span></button>
       <button class="btn2 sm" data-pt="sub" onclick="ptTab('sub')">🎨 学生投稿<span id="petSUBn" class="pet-badge"></span></button>
@@ -2748,8 +2801,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2 sm" data-pt="admin" onclick="ptTab('admin')">⚙️ 后台管理</button>
       <button class="btn2 sm" data-pt="io" onclick="ptTab('io')">📦 导入导出</button>
     </div>
-    <div id="petPanel-inc" class="pet-panel"></div>
-    <div id="petPanel-wall" class="pet-panel" style="display:none"></div>
+    <div id="petPanel-wall" class="pet-panel"></div>
     <div id="petPanel-codex" class="pet-panel" style="display:none"></div>
     <div id="petPanel-parent" class="pet-panel" style="display:none"></div>
     <div id="petPanel-sub" class="pet-panel" style="display:none"></div>
@@ -5470,12 +5522,13 @@ function scRememberSubject(name){
 /* ---------- 页签 ---------- */
 function scTab(t){
   document.querySelectorAll('#scTabs button').forEach(function(b){b.classList.toggle('active',b.dataset.t===t)});
-  ['ent','an','mg'].forEach(function(k){
+  ['ent','an','mg','bonus'].forEach(function(k){
     var p=document.getElementById('scp-'+k);
     if(p)p.classList.toggle('active',k===t);
   });
   if(t==='an')scRenderAn();
   if(t==='mg')scMgRefresh();
+  if(t==='bonus')scBonusRender();
 }
 /* 录入方式切换：手动 / 上传文件 */
 function scMode(m){
@@ -8341,6 +8394,293 @@ function scMgRender(){
   var lg=el('div','legend');
   lg.innerHTML='<b>底色含义</b>：分数 ≥ 目标三 浅红，≥ 目标二 浅绿，≥ 目标一 浅蓝；未达目标一不染色。最右列「学生目标」一/二/三三个框<b>可直接手动修改</b>，改完点「保存修改」即写回（成绩同步云端资料库，目标存于本机）。保存后底色会按新目标重新计算。';
   box.appendChild(lg);
+}
+
+/* ========== vT86 目标达成加分 ==========
+   背景：成绩管理原来只能看「目标线」上色，达标了还得手动一条条去学生页加分。
+   这里做成一个独立页签：选一场考试 → 按 SC_TARGETS（目标一/二/三）判定达成档位
+   → 勾选学生 → 一次写入奖惩积分（默认 达目标一 +3 / 二 +5 / 三 +8，可改）。
+   防重复：同一场考试的同一位同学只会加一次（按奖惩事项前缀识别，已加过的行会标「已加」）。 */
+var SC_BONUS_KEY = 'sc_bonus_pts_v1';
+var SC_BONUS_PTS = { p1: 3, p2: 5, p3: 8 };
+var SC_BONUS_EXAM = '';       /* 当前考试 key：科目｜考试名称 */
+var SC_BONUS_SEL = {};        /* 姓名 → 1（勾选状态） */
+var SC_BONUS_ROWS = [];       /* 当前渲染行缓存：[{name,lv,pts,on,dup}] */
+
+function scBonusLoadPts() {
+  try {
+    var s = localStorage.getItem(SC_BONUS_KEY);
+    if (s) {
+      var o = JSON.parse(s) || {};
+      ['p1', 'p2', 'p3'].forEach(function (k) {
+        var v = Number(o[k]);
+        if (isFinite(v) && v >= 0) SC_BONUS_PTS[k] = v;
+      });
+    }
+  } catch (e) {}
+  ['P1', 'P2', 'P3'].forEach(function (k) {
+    var inp = document.getElementById('scBonus' + k);
+    if (inp) inp.value = SC_BONUS_PTS[k.toLowerCase()];
+  });
+}
+function scBonusSavePts() {
+  ['p1', 'p2', 'p3'].forEach(function (k) {
+    var inp = document.getElementById('scBonus' + k.toUpperCase());
+    var v = inp ? Number(inp.value) : NaN;
+    if (isFinite(v) && v >= 0) SC_BONUS_PTS[k] = Math.round(v);
+  });
+  try { localStorage.setItem(SC_BONUS_KEY, JSON.stringify(SC_BONUS_PTS)) } catch (e) {}
+  scBonusRepaintPts();
+}
+function scBonusPtsOf(lv) {
+  return lv === 3 ? SC_BONUS_PTS.p3 : lv === 2 ? SC_BONUS_PTS.p2 : lv === 1 ? SC_BONUS_PTS.p1 : 0;
+}
+/* 改分值不重绘表格（避免输入框失焦），只把行内「加分」数字换掉 */
+function scBonusRepaintPts() {
+  var box = document.getElementById('scBonusBox'); if (!box) return;
+  [].forEach.call(box.querySelectorAll('tr[data-lv]'), function (tr) {
+    var lv = parseInt(tr.getAttribute('data-lv'), 10) || 0;
+    tr.setAttribute('data-pts', scBonusPtsOf(lv));
+    var b = tr.querySelector('.bn-pts');
+    if (b) b.textContent = lv ? ('+' + scBonusPtsOf(lv)) : '—';
+  });
+  SC_BONUS_ROWS.forEach(function (r) { r.pts = scBonusPtsOf(r.lv); });
+}
+function scBonusExamList() {
+  var out = [], seen = {};
+  (SC_ROWS || []).forEach(function (r) {
+    var s = fval(r, '科目'), e = fval(r, '考试名称');
+    if (!s || !e) return;
+    var k = s + '｜' + e;
+    if (seen[k]) return;
+    seen[k] = 1;
+    out.push({ subj: s, exam: e, date: fval(r, '考试日期') || fval(r, '日期') || '' });
+  });
+  /* 新考试排在前面，老师最常给刚考完的那场加分 */
+  out.sort(function (a, b) {
+    if (a.date && b.date && a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return (a.subj + a.exam).localeCompare(b.subj + b.exam, 'zh');
+  });
+  return out;
+}
+function scBonusFillExams() {
+  var sel = document.getElementById('scBonusExam'); if (!sel) return [];
+  var list = scBonusExamList();
+  var cur = SC_BONUS_EXAM || sel.value || '';
+  sel.innerHTML = '';
+  if (!list.length) {
+    sel.appendChild(el('option', null, '还没有成绩记录'));
+    SC_BONUS_EXAM = '';
+    return [];
+  }
+  list.forEach(function (x) {
+    var k = x.subj + '｜' + x.exam;
+    var o = el('option', null, x.subj + '｜' + x.exam + (x.date ? ('（' + x.date + '）') : ''));
+    o.value = k;
+    sel.appendChild(o);
+  });
+  var hit = list.filter(function (x) { return (x.subj + '｜' + x.exam) === cur })[0];
+  SC_BONUS_EXAM = hit ? cur : (list[0].subj + '｜' + list[0].exam);
+  sel.value = SC_BONUS_EXAM;
+  return list;
+}
+function scBonusExamChange() {
+  var sel = document.getElementById('scBonusExam');
+  SC_BONUS_EXAM = sel ? sel.value : '';
+  SC_BONUS_SEL = {};
+  scBonusRender();
+}
+/* 已加过标记：奖惩事项形如「成绩达标 · 语文 期中检测 · 达目标三」 */
+function scBonusLabel(meta) { return meta.subj + ' ' + meta.exam; }
+function scBonusAwardedSet(meta) {
+  var set = {}, pre = '成绩达标 · ' + scBonusLabel(meta);
+  (ST_ROWS || []).forEach(function (r) {
+    var t = String(fval(r, '奖惩事项') || '');
+    if (t.indexOf(pre) !== 0) return;
+    var n = fval(r, '姓名');
+    if (n) set[n] = 1;
+  });
+  return set;
+}
+function scBonusRender(opts) {
+  opts = opts || {};
+  var box = document.getElementById('scBonusBox'); if (!box) return;
+  var list = scBonusFillExams();
+  var key = SC_BONUS_EXAM;
+  var meta = list.filter(function (x) { return (x.subj + '｜' + x.exam) === key })[0];
+  var tip = document.getElementById('scBonusTip');
+  fill(box);
+  if (!meta) {
+    box.appendChild(el('div', 'empty', '还没有成绩记录。先到「✍️ 成绩录入」登记一场考试吧。'));
+    if (tip) tip.textContent = '';
+    SC_BONUS_ROWS = [];
+    return;
+  }
+  /* 本场分数 */
+  var score = {};
+  (SC_ROWS || []).forEach(function (r) {
+    if (fval(r, '科目') !== meta.subj || fval(r, '考试名称') !== meta.exam) return;
+    var n = fval(r, '学生姓名'); if (!n) return;
+    var v = fnum(r, '分数');
+    if (v != null && (score[n] == null || v > score[n])) score[n] = v;
+  });
+  var awarded = scBonusAwardedSet(meta);
+  var names = (SC_NAMES || []).slice().sort(function (a, b) {
+    var na = (SC_TARGETS[a] && SC_TARGETS[a].no) || 9999, nb = (SC_TARGETS[b] && SC_TARGETS[b].no) || 9999;
+    if (na !== nb) return na - nb;
+    return a.localeCompare(b, 'zh');
+  });
+  if (!names.length) {
+    box.appendChild(el('div', 'note', '还没有学生名单，请先在「学生管理」里录入。'));
+    return;
+  }
+  var tb = el('table');
+  var thead = el('thead'), trh = el('tr');
+  trh.appendChild(el('th', null, '选'));
+  trh.appendChild(el('th', null, '姓名'));
+  trh.appendChild(el('th', null, '分数'));
+  trh.appendChild(el('th', null, '目标一'));
+  trh.appendChild(el('th', null, '目标二'));
+  trh.appendChild(el('th', null, '目标三'));
+  trh.appendChild(el('th', null, '达成'));
+  trh.appendChild(el('th', null, '加分'));
+  thead.appendChild(trh); tb.appendChild(thead);
+
+  var tbody = el('tbody');
+  SC_BONUS_ROWS = [];
+  var hitN = 0, checkedN = 0;
+  names.forEach(function (nm) {
+    var v = score[nm];
+    var tg = scTargetOf(nm);
+    var lv = 0, th = null;
+    if (v != null && tg) {
+      if (tg.t3 != null && v >= tg.t3) { lv = 3; th = tg.t3; }
+      else if (tg.t2 != null && v >= tg.t2) { lv = 2; th = tg.t2; }
+      else if (tg.t1 != null && v >= tg.t1) { lv = 1; th = tg.t1; }
+    }
+    var dup = !!awarded[nm];
+    var can = (v != null && tg && lv > 0 && !dup);
+    if (lv > 0) hitN++;
+    var on = !!SC_BONUS_SEL[nm] && can;
+    if (on) checkedN++;
+
+    var tr = el('tr');
+    if (on) tr.className = 'on';
+    tr.setAttribute('data-lv', String(lv));
+    tr.setAttribute('data-pts', String(scBonusPtsOf(lv)));
+
+    var td0 = el('td');
+    var cb = el('input');
+    cb.type = 'checkbox';
+    cb.checked = on;
+    cb.disabled = !can;
+    if (can) {
+      cb.onchange = function () {
+        if (this.checked) SC_BONUS_SEL[nm] = 1; else delete SC_BONUS_SEL[nm];
+        tr.classList.toggle('on', !!this.checked);
+        scBonusCount();
+      };
+    }
+    td0.appendChild(cb);
+    tr.appendChild(td0);
+
+    tr.appendChild(el('td', 'bnm', nm));
+    tr.appendChild(el('td', null, v != null ? String(v) : '—'));
+    tr.appendChild(el('td', 'na2', tg && tg.t1 != null ? String(tg.t1) : '—'));
+    tr.appendChild(el('td', 'na2', tg && tg.t2 != null ? String(tg.t2) : '—'));
+    tr.appendChild(el('td', 'na2', tg && tg.t3 != null ? String(tg.t3) : '—'));
+
+    var tdLv = el('td');
+    var lvName = ['未达标', '达目标一', '达目标二', '达目标三'][lv];
+    var bd = el('span', 'bn-lv l' + lv, v == null ? '缺考' : (tg ? lvName : '未设目标'));
+    tdLv.appendChild(bd);
+    if (dup) tdLv.appendChild(el('span', 'bn-dup', ' · 已加'));
+    tr.appendChild(tdLv);
+
+    var tdP = el('td');
+    tdP.appendChild(el('b', 'bn-pts', lv ? ('+' + scBonusPtsOf(lv)) : '—'));
+    tr.appendChild(tdP);
+
+    tbody.appendChild(tr);
+    SC_BONUS_ROWS.push({ name: nm, lv: lv, pts: scBonusPtsOf(lv), on: on, dup: dup, can: can, score: v, target: th });
+  });
+  tb.appendChild(tbody);
+  box.appendChild(tb);
+
+  if (tip) {
+    tip.textContent = scBonusLabel(meta) + ' · 共 ' + names.length + ' 人，达标 ' + hitN + ' 人，已勾选 ' + checkedN + ' 人（加分写进「学生积分 · 奖惩」流水）';
+  }
+  SC_BONUS_SEL = {};
+  SC_BONUS_ROWS.forEach(function (r) { if (r.on) SC_BONUS_SEL[r.name] = 1; });
+  if (!opts.keepPts) scBonusLoadPts();
+}
+function scBonusCount() {
+  var n = 0;
+  SC_BONUS_ROWS.forEach(function (r) { if (SC_BONUS_SEL[r.name] && r.can) n++; });
+  var tip = document.getElementById('scBonusTip');
+  if (tip) {
+    var meta = scBonusExamList().filter(function (x) { return (x.subj + '｜' + x.exam) === SC_BONUS_EXAM })[0];
+    if (meta) tip.textContent = scBonusLabel(meta) + ' · 已勾选 ' + n + ' 人（加分写进「学生积分 · 奖惩」流水）';
+  }
+}
+function scBonusSelAll(on) {
+  SC_BONUS_SEL = {};
+  var box = document.getElementById('scBonusBox');
+  if (on) {
+    SC_BONUS_ROWS.forEach(function (r) { if (r.can) SC_BONUS_SEL[r.name] = 1; });
+  }
+  if (box) {
+    var trs = box.querySelectorAll('tbody tr');
+    [].forEach.call(trs, function (tr, i) {
+      var r = SC_BONUS_ROWS[i]; if (!r) return;
+      var cb = tr.querySelector('input[type=checkbox]');
+      var want = !!SC_BONUS_SEL[r.name];
+      if (cb && !cb.disabled) { cb.checked = want; tr.classList.toggle('on', want); }
+    });
+  }
+  scBonusCount();
+}
+function scBonusApply() {
+  var meta = scBonusExamList().filter(function (x) { return (x.subj + '｜' + x.exam) === SC_BONUS_EXAM })[0];
+  if (!meta) return toastMsg('请先选择一场考试');
+  var picks = SC_BONUS_ROWS.filter(function (r) { return r.can && SC_BONUS_SEL[r.name] && r.lv > 0; });
+  if (!picks.length) return toastMsg('还没有勾选任何达标的同学');
+  if (!dbReady) { toastMsg('⚠️ 未连接数据表'); return; }
+  var sum = 0, lines = picks.map(function (r) {
+    sum += r.pts;
+    return '· ' + r.name + '　' + r.score + ' 分 · 达目标' + ['', '一', '二', '三'][r.lv] + '　+' + r.pts;
+  });
+  if (!confirm('给下面 ' + picks.length + ' 位同学写入「目标达成」加分（合计 +' + sum + '）？\n\n' + lines.join('\n') +
+    '\n\n写入位置：学生积分 → 奖惩流水（事项：「成绩达标 · ' + scBonusLabel(meta) + ' · 达目标X」）')) return;
+  var lbl = scBonusLabel(meta);
+  var roster = (typeof stuRoster === 'function') ? stuRoster() : [];
+  toastMsg('⏳ 正在写入 ' + picks.length + ' 条加分…');
+  var jobs = picks.map(function (r) {
+    var stu = roster.filter(function (x) { return x.姓名 === r.name })[0] || { 学号: '', 组别: '', 职务: '' };
+    return db.addRecord({ databaseId: ST_DB, properties: {
+      '学号': { text: stu.学号 || '' }, '姓名': { text: r.name },
+      '组别': { text: stu.组别 || '' }, '职务': { text: stu.职务 || '' },
+      '奖惩事项': { text: '成绩达标 · ' + lbl + ' · 达目标' + ['', '一', '二', '三'][r.lv] },
+      '奖惩分值': { number: r.pts },
+      '日期': { date: ymd(new Date()) },
+      '备注': { text: '成绩 ' + r.score + ' 分，目标线 ' + (r.target != null ? r.target : '—') + '（成绩管理自动加分）' }
+    } }).then(function (res) {
+      if (!(res && res.id)) throw new Error('addRecord 未返回 id');
+      return true;
+    });
+  });
+  Promise.all(jobs).then(function () {
+    return loadST();
+  }).then(function () {
+    renderStu(); renderHome && renderHome();
+    picks.forEach(function (r) { SC_BONUS_SEL[r.name] = 1; });
+    scBonusRender({ keepPts: true });
+    toastMsg('✅ 已加分：' + picks.length + ' 人 · 合计 +' + sum + ' 分');
+  }).catch(function (err) {
+    console.error('[成绩] 目标加分写入失败', err);
+    toastMsg('⚠️ 部分没保存成功，请重试');
+    try { loadST().then(function () { scBonusRender({ keepPts: true }) }) } catch (e) {}
+  });
 }
 
 /* ========== vT49 成绩管理：点击考试名称即可改名 ==========
@@ -12251,6 +12591,107 @@ function hwMarkAllOverdue(){
   });
 }
 function hwItemLabel(r){return (fval(r,'作业名称')||'')+' ('+(fval(r,'日期')||'')+')'}
+
+/* ========== vT86 作业批量：全登记 / 反选 / 清空本列 ==========
+   典型用法：一摞作业收上来 → 选「优」→「✅ 全登记」→ 再把没交的几个同学
+   直接点格子取消（同等级再点一次 = 取消，沿用 hwToggleCell 的老逻辑）。
+   批量写入与单格登记共用同一套规则：
+   · 新增 → addRecord；取消 → 先写记录级墓碑再 deleteRecord
+     （只删不写墓碑，下一轮同步会把上一份快照里的记录重新插回来）； */
+var HW_BATCH_BUSY=false;
+function hwBatchItems(){
+  var split=hwAutoSplit(),items=HW_SHOW_AUTO?HW_ITEMS:split.vis;
+  return (items||[]).filter(function(it){return hwSubjOf(it)==='语文'});
+}
+function hwBatchCurItem(){
+  var items=hwBatchItems(); if(!items.length)return null;
+  var sel=document.getElementById('hwBatchCol');
+  var idx=sel?parseInt(sel.value,10):-1;
+  return (idx>=0&&idx<items.length)?items[idx]:items[items.length-1];
+}
+function hwBatchFill(){
+  var sel=document.getElementById('hwBatchCol'); if(!sel)return;
+  var items=hwBatchItems(), cur=sel.value;
+  sel.innerHTML='';
+  if(!items.length){sel.appendChild(el('option',null,'还没有作业列'));return}
+  items.forEach(function(it,i){
+    var o=el('option',null,it.name+(it.date?('（'+it.date+'）'):''));
+    o.value=String(i);sel.appendChild(o);
+  });
+  var keep=parseInt(cur,10);
+  if(isFinite(keep)&&keep>=0&&keep<items.length)sel.value=String(keep);
+}
+function hwBatchRun(item,plan,okMsg){
+  if(!HW_MODE){toastMsg('👀 现在不是登记模式，先点「✍️ 开始登记」');return}
+  if(!dbReady){toastMsg('⚠️ 未连接数据表');return}
+  if(!item)return toastMsg('还没有作业列');
+  if(!plan.length)return toastMsg('没有需要处理的同学');
+  if(HW_BATCH_BUSY)return toastMsg('⏳ 上一批还在写入，请稍等');
+  HW_BATCH_BUSY=true;
+  toastMsg('⏳ 正在写入 '+plan.length+' 条…');
+  var jobs=plan.map(function(x){
+    if(x.action==='del'){
+      hwTomAddRec(x.name,item.name,item.date);
+      return db.deleteRecord({databaseId:'fCfl0cuMIVzFDi0iDuAEv2',recordId:x.rid}).then(function(){
+        HW_ROWS=HW_ROWS.filter(function(r){return recId(r)!==x.rid});
+      });
+    }
+    return db.addRecord({databaseId:'fCfl0cuMIVzFDi0iDuAEv2',properties:{
+      '日期':{date:hwDateOnly(item.date)||ymd(new Date())},
+      '作业名称':{text:item.name},
+      '学生姓名':{text:x.name},
+      '等级':{select:HW_LV},
+      '分值':{number:HW_SCORE[HW_LV]},
+      '备注':{text:''}
+    }}).then(function(r){
+      if(!(r&&r.id))throw new Error('addRecord 未返回 id');
+      HW_ROWS.push({id:r.id,'日期':item.date,'作业名称':item.name,'学生姓名':x.name,'等级':HW_LV,'分值':HW_SCORE[HW_LV]});
+      hwSubjSet(item.name,item.date,item.subject||'语文');
+      hwTomDropRec(x.name,item.name,item.date);
+    });
+  });
+  Promise.all(jobs).then(function(){
+    HW_BATCH_BUSY=false;
+    renderHW();renderStu();setTimeout(function(){try{renderHome()}catch(e){}},0);
+    toastMsg(okMsg);
+  }).catch(function(err){
+    HW_BATCH_BUSY=false;
+    console.error('[作业] 批量登记失败',err);
+    renderHW();renderStu();
+    toastMsg('⚠️ 部分没保存成功，请重试');
+  });
+}
+function hwBatchAll(){
+  var it=hwBatchCurItem(); if(!it)return toastMsg('还没有作业列');
+  var m=hwMapRows(), stu=hwRoster();
+  var todo=stu.filter(function(s){return !m[hwKey(s.姓名,it)]});
+  if(!todo.length)return toastMsg('「'+it.name+'」已经全部登记了');
+  if(!confirm('把「'+it.name+'」里还没登记的 '+todo.length+' 名同学全部登记为「'+HW_LV+'」？\n\n登记完还可以再点格子，把没交作业的同学取消。'))return;
+  hwBatchRun(it,todo.map(function(s){return {name:s.姓名,action:'add'}}),'✅ 已登记 '+todo.length+' 人（'+HW_LV+'）');
+}
+function hwBatchInvert(){
+  var it=hwBatchCurItem(); if(!it)return toastMsg('还没有作业列');
+  var m=hwMapRows(), stu=hwRoster();
+  var plan=stu.map(function(s){
+    var rec=m[hwKey(s.姓名,it)];
+    return rec?{name:s.姓名,action:'del',rid:recId(rec)}:{name:s.姓名,action:'add'};
+  });
+  var del=plan.filter(function(x){return x.action==='del'}).length;
+  var add=plan.length-del;
+  if(!del&&!add)return toastMsg('这一列没有学生');
+  if(!confirm('反选「'+it.name+'」：\n· 已登记 '+del+' 人 → 取消登记\n· 未登记 '+add+' 人 → 登记为「'+HW_LV+'」\n\n继续？'))return;
+  hwBatchRun(it,plan,'⇄ 反选完成：取消 '+del+' 人、登记 '+add+' 人');
+}
+function hwBatchClear(){
+  var it=hwBatchCurItem(); if(!it)return toastMsg('还没有作业列');
+  var m=hwMapRows(), stu=hwRoster();
+  var plan=stu.filter(function(s){return !!m[hwKey(s.姓名,it)]}).map(function(s){
+    return {name:s.姓名,action:'del',rid:recId(m[hwKey(s.姓名,it)])};
+  });
+  if(!plan.length)return toastMsg('「'+it.name+'」这一列还没有登记记录');
+  if(!confirm('清空「'+it.name+'」这一列的全部登记（'+plan.length+' 条）？\n积分会随之清零，可用「↩️ 撤回清空」恢复。'))return;
+  hwBatchRun(it,plan,'🧹 已清空「'+it.name+'」'+plan.length+' 条');
+}
 function hwBuildItems(){
   var seen={},out=[];
   /* vT28 被删除的整列（墓碑标记）不再在本机显示，也不再参与登记表渲染 ——
@@ -12552,6 +12993,7 @@ function renderHW(){
   box.textContent='';
   box.appendChild(thead);box.appendChild(tbody);
   hwPaintMode();
+  hwBatchFill();
   hwRenderStat(stu,m,items);
   try{scnPaintItems();scnPaintList()}catch(e){}
 }
@@ -16855,9 +17297,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v85';
-var WB_MY_VER = '优化版 vT85 · 待办重复自愈';
-var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.107';
+var WB_VER_TAG = 'v86';
+var WB_MY_VER = '优化版 vT86 · 灵杰自管 + 目标加分';
+var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.108';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -23335,7 +23777,13 @@ function cwInit(){
   /* 照片型宠物：学生的手绘作品直接当形象，不走 SVG */
   /* vT82 图鉴灵杰的 img 指向线上卡面 codeximg/，不是手绘作品 —— 排除之，
      否则墙上/小程序会把图鉴灵杰误判成手绘，去 Gitee 同步仓库拉图必然 404。 */
-  function isPhotoDef(def) { var im = def && def.img ? String(def.img) : ''; return !!(def && ((im && im.indexOf('codeximg/') !== 0) || def.photo)); }
+  function isPhotoDef(def) {
+    /* vT86：图鉴卡面可能是 codeximg/ 路径、http(s) 链接或本地导入的 data URI，
+       这三种都不是手绘作品，不能走 Gitee 手绘取图通道。 */
+    var im = def && def.img ? String(def.img) : '';
+    var isCodexPic = !!im && (im.indexOf('codeximg/') === 0 || /^(https?:|data:)/i.test(im));
+    return !!(def && ((im && !isCodexPic) || def.photo));
+  }
 
   /* 品种配色：不套 petSkin 的随机色偏 —— 英短必须是灰蓝，不能被偏移成绿的 */
   function breedColors(br, o) {
@@ -23978,8 +24426,9 @@ function cwInit(){
   function ptCard(pet) {
     var def = ptPetDefOf(pet);
     var isPhoto = PetCore.isPhotoDef(pet);
-    /* vT82 图鉴灵杰：img 指向 codeximg/ 卡面，直接显示线上卡面（含 gif 动效回退链） */
-    var isCxPic = !isPhoto && pet.img && String(pet.img).indexOf('codeximg/') === 0;
+    /* vT82 图鉴灵杰：img 指向 codeximg/ 卡面，直接显示线上卡面（含 gif 动效回退链）
+       vT86：本地导入的 data: / https: 卡面也走同一条展示通道 */
+    var isCxPic = !isPhoto && pet.img && /^(codeximg\/|https?:|data:)/i.test(String(pet.img));
     var stage = PetCore.stageOf(pet.level, pet.graduated, ptStageCfg());
     var svg = isPhoto ? (ptPetPhotoHtml(pet, 'pet-photo', stage) || '<div class="pet-photo" style="display:flex;align-items:center;justify-content:center">🖼️</div>')
                       : isCxPic ? ptCodexPetPicHtml(pet, 'pet-photo')
@@ -24002,31 +24451,9 @@ function cwInit(){
   function ptRenderWall() {
     var box = document.getElementById('petPanel-wall'); if (!box) return;
     var s = ptGet(); var list = ptPets();
-    var html = list.length ? list.map(ptCard).join('') : '<div class="pet-empty">还没有灵杰，去「🥚 唤醒台」给同学唤醒一只吧～</div>';
+    /* vT86 唤醒台已移除：灵杰统一在「📖 启灵图鉴」里点卡发放 / 批量发放 */
+    var html = list.length ? list.map(ptCard).join('') : '<div class="pet-empty">还没有灵杰。到「📖 启灵图鉴」点卡面发放，或在图鉴管理里批量发放吧～</div>';
     box.innerHTML = '<div class="pet-grid">' + html + '</div>';
-  }
-  function ptRenderIncubator() {
-    var box = document.getElementById('petPanel-inc'); if (!box) return;
-    var s = ptGet();
-    var opts = ptNames().map(function (n) { return '<option value="' + ptEsc(n) + '">' + ptEsc(n) + '</option>'; }).join('');
-    var pool = s.petPool.map(function (sp) {
-      var isPhoto = PetCore.isPhotoDef(sp);
-      /* vT82 图鉴灵杰在池子里也直接显示卡面（不再误走手绘通道） */
-      var isCxPic = !isPhoto && sp.img && String(sp.img).indexOf('codeximg/') === 0;
-      /* vT37 池子里的宠物一律以「蛋」呈现 —— 发放那一刻才孵化，惊喜感留给学生 */
-      var pic = isPhoto ? ptPetPhotoHtml(sp, 'pet-photo', 'egg')
-              : isCxPic ? ptCodexPetPicHtml(sp, 'pet-photo')
-              : PetCore.renderPet(sp, { seed: sp.id, egg: true });
-      var kind = (sp.origin === 'student') ? ' <span class="pet-stu">同学共创</span>' : '';
-      return '<div class="pet-card" style="cursor:pointer" onclick="ptHatchFromSel(\'' + sp.id + '\')">' + pic +
-        '<div class="pet-nm">' + ptEsc(sp.name) + ' <span class="pet-rare r-' + ptRarClass(sp.rarity) + '">' + ptEsc(sp.rarity) + '</span>' + kind + '</div>' +
-        '<div class="pet-own">' + ptEsc(sp.series || '') + ' · ' + (isPhoto ? '手绘作品' : (PT_ARC_NAME[sp.archetype] || ptBreedDisp(sp) || sp.archetype)) + '</div>' +
-        '<div class="pet-lv">' + (ptPlayable() ? '🥚 点击唤醒，发放给上方所选学生' : '⏸ 模块已暂停，暂不可唤醒') + '</div></div>';
-    }).join('');
-    box.innerHTML = '<div class="gpset"><span class="lbl">发放给：</span><select id="petStuSel" class="search">' + opts + '</select>' +
-      '<button class="btn2 primary" onclick="ptHatchSel()">🥚 整批唤醒（随机一只给所选学生）</button>' +
-      '<span class="sctip" id="petIncTip"></span></div>' +
-      '<div class="pet-grid">' + pool + '</div>';
   }
   function ptRenderParent() {
     var box = document.getElementById('petPanel-parent'); if (!box) return;
@@ -24446,28 +24873,11 @@ function cwInit(){
     var a = document.getElementById('petPQn'); if (a) a.textContent = n1 ? (' ' + n1) : '';
     var b = document.getElementById('petSUBn'); if (b) b.textContent = n2 ? (' ' + n2) : '';
   }
-  function ptRenderAll() { ptRenderIncubator(); ptRenderWall(); ptRenderCodex(); ptRenderParent(); ptRenderSub(); ptRenderGrad(); ptRenderAdmin(); ptRenderIO(); }
+  function ptRenderAll() { ptRenderWall(); ptRenderCodex(); ptRenderParent(); ptRenderSub(); ptRenderGrad(); ptRenderAdmin(); ptRenderIO(); }
 
   /* ---------------- 行为 ---------------- */
-  function ptHatch(studentName, poolId) {
-    if (!ptPlayable()) return toastMsg('⏸ 图鉴模块已暂停 / 关停，暂不能唤醒');
-    var s = ptGet();
-    var sp = s.petPool.filter(function (x) { return x.id === poolId; })[0];
-    if (!sp) return;
-    if (!studentName) return toastMsg('⚠️ 请先选择学生');
-    s.pets.push(ptMkPet(studentName, sp));
-    ptSave(s); PET_DB = s;
-    ptKickSync();
-    toastMsg('🐾 已唤醒「' + sp.name + '」授予 ' + studentName);
-    ptRenderWall(); ptRenderIncubator();
-  }
-  function ptHatchFromSel(poolId) { var sel = document.getElementById('petStuSel'); if (!sel || !sel.value) return toastMsg('请先选择学生'); ptHatch(sel.value, poolId); }
-  function ptHatchSel() {
-    var sel = document.getElementById('petStuSel'); if (!sel || !sel.value) return toastMsg('请先选择学生');
-    var s = ptGet(); var drawPool = codexDrawPool(s); if (!drawPool.length) return toastMsg('灵杰池为空');
-    var sp = drawPool[Math.floor(Math.random() * drawPool.length)];
-    ptHatch(sel.value, sp.id);
-  }
+  /* vT86 唤醒台（🥚 孵蛋台）已整体移除：老师不再从「随机灵杰池」里挑蛋，
+     所有发放统一走「📖 启灵图鉴」的点卡发放 / 按系列批量发放。 */
   /* vT65 误发收回：打 deleted 标记（不真删，便于反悔恢复，且同步不会被云端旧数据复活） */
   function ptRevoke(petId) {
     if (!ptNeedAdmin()) return;
@@ -24588,7 +24998,7 @@ function cwInit(){
     }
     s.petPool.push(def);
     x.status = 'approved';
-    ptSave(s); PET_DB = s; toastMsg('✅ 已入池（同学共创）'); ptRenderSub(); ptRenderIncubator();
+    ptSave(s); PET_DB = s; toastMsg('✅ 已入池（同学共创）'); ptRenderSub(); ptRenderCodex();
   }
   function ptRejectSub(id) {
     var s = ptGet(); var x = s.petSubmissions.filter(function (y) { return y.id === id; })[0]; if (!x) return;
@@ -24621,7 +25031,7 @@ function cwInit(){
     var s = ptGet();
     var keep = s.petPool.filter(function (x) { return x.origin === 'student'; });
     s.petPool = ptBuildSeed().concat(ptBuildCodexSeed()).concat(keep);
-    ptSave(s); PET_DB = s; toastMsg('🌱 已重置灵杰池'); ptRenderIncubator();
+    ptSave(s); PET_DB = s; toastMsg('🌱 已重置灵杰池'); ptRenderCodex();
   }
   /* ---------------- vT67 启灵图鉴 ---------------- */
   var CODEX_STATE = { series: '*', tier: '*' };
@@ -24718,6 +25128,10 @@ function cwInit(){
       '<span class="sctip" id="codexCnt"></span>' +
       '<button class="btn2 sm' + (CODEX_QUICK ? ' primary' : '') + '" onclick="ptCodexQuickToggle()">🏅 ' + (CODEX_QUICK ? '退出品级快设' : '品级快设') + '</button>' +
       (admin ? '<button class="btn2 sm' + (CODEX_GRANT ? ' primary' : '') + '" onclick="ptCodexGrantToggle()" title="开启后点任意卡面即可直接发放给同学">🎁 ' + (CODEX_GRANT ? '退出点卡发放' : '点卡发放') + '</button>' : '') +
+      /* vT86 老师自带灵杰：本地图片批量导入（自动压缩后存进图鉴，全端可见） */
+      (admin ? '<input class="search" id="cxImportSeries" placeholder="导入系列（默认：我导入的）" style="width:150px">' +
+        '<button class="btn2 sm" onclick="ptCodexImportPickImg()" title="选多张 png / jpg / gif，按文件名当灵杰名字，自动压缩">📥 导入灵杰图片</button>' +
+        '<input type="file" id="cxImgFile" accept="image/*" multiple style="display:none" onchange="ptCodexImportImages(event)">' : '') +
       '<button class="btn2 sm" onclick="ptCodexToggleGray()">' + (CODEX_SHOW_ALL ? '🙈 恢复灰色悬念' : '👁 显示未唤醒原图') + '</button></div>' +
       (admin && CODEX_GRANT ? '<div class="sub" style="margin:-4px 0 6px;color:#b06a00">🎁 点卡发放模式：直接点下面的卡面 → 选学生 → 确认发放（可发给全班每人一份）。</div>' : '');
     var list = pool.filter(function (p) {
@@ -24739,11 +25153,14 @@ function cwInit(){
         ['普通', '隐藏', '典藏'].map(function (tt) {
           return '<button class="cx-q' + (curTier === tt ? ' on' : '') + '" data-t="' + tt + '" onclick="' + (grantable ? 'event.stopPropagation();' : '') + 'ptCodexQuickSet(\'' + ptAt(p.id) + '\',\'' + tt + '\')">' + tt + '</button>';
         }).join('') + '</div>' : '';
+      /* vT86 卡面左上角 ✕：解锁口令后可直接把这一条移出图鉴（软删，回收站可恢复） */
+      var delBtn = admin ? '<span class="cx-del" title="把「' + ptEsc(p.name) + '」移出图鉴（回收站可恢复）" onclick="' + (grantable ? 'event.stopPropagation();' : '') + 'ptCodexCardRemove(\'' + ptAt(p.id) + '\')">✕</span>' : '';
       /* vT80 点卡发放模式：整张卡可点，点卡即弹出发放对话框 */
       return '<div class="cx-card' + (a ? ' owned' : ' locked') + (grantable ? ' grantable' : '') + '"' +
         (grantable
           ? ' title="🎁 点击这张卡直接发放给同学（' + ptEsc(p.name) + '）" onclick="ptCodexGrantPick(\'' + ptAt(p.id) + '\')" style="cursor:pointer"'
           : ' title="' + ptEsc(p.blessing || '') + '"') + '>' +
+        delBtn +
         tierTag +
         ptCodexImgHtml(p) +
         '<div class="cx-nm">' + ptEsc(p.name) + '</div>' +
@@ -24814,6 +25231,115 @@ function cwInit(){
     try { if (typeof syncScheduleSoon === 'function') syncScheduleSoon(); } catch (e) {}
     ptRenderCodex();
     toastMsg('🏅 ' + sp.name + ' → ' + tier + (tier === '普通' ? '' : '（不进随机唤醒池，由老师指定发放）'));
+  }
+
+  /* ---------------- vT86 老师自己的灵杰：卡面删除 + 本地图片导入 ----------------
+     ① 卡面左上角 ✕：口令解锁后出现，软删（deleted 标记），回收站可恢复；
+     ② 导入图片：一次可选多张 png/jpg/gif，文件名即灵杰名字；
+        大于 180KB 的自动缩到 320px 内、转 JPEG(0.82) 存成 data URI ——
+        不依赖图床/仓库，网页、教室桌面、小程序三端都能直接显示。
+     数据仍然写进 petPool（origin=codex），所以同步、发放、图鉴计数全部照旧。 */
+  function ptCodexCardRemove(id) {
+    if (!ptNeedAdmin()) return;
+    var s = ptGet();
+    var p = (s.petPool || []).filter(function (x) { return x && x.id === id && !x.purged; })[0];
+    if (!p) return toastMsg('⚠️ 找不到这位灵杰');
+    if (p.deleted) return toastMsg('这条已经在回收站里了');
+    if (!confirm('把「' + p.name + '」移出图鉴？\n\n· 只是从图鉴里隐藏，已发给同学的灵杰不受影响\n· 可在「♻️ 回收站」恢复')) return;
+    p.deleted = true; p.deletedAt = Date.now(); p.updatedAt = Date.now();
+    ptSave(s); PET_DB = s;
+    try { if (typeof ptwSchedule === 'function') ptwSchedule(); } catch (e) {}
+    try { if (typeof syncScheduleSoon === 'function') syncScheduleSoon(); } catch (e) {}
+    toastMsg('🗑 已移出图鉴：' + p.name + '（回收站可恢复）');
+    ptRenderCodex(); ptRenderWall();
+  }
+  function ptCodexImportPickImg() {
+    if (!ptNeedAdmin()) return;
+    var f = document.getElementById('cxImgFile'); if (f) f.click();
+  }
+  /* 本地图片 → ≤320px 的 data URI；小图 / GIF 原样保留（保住动效） */
+  function ptShrinkImg(file, max, q) {
+    return new Promise(function (res, rej) {
+      var rd = new FileReader();
+      rd.onload = function () {
+        var raw = String(rd.result || '');
+        if (!raw) { rej(new Error('空文件')); return; }
+        if (file.size <= 180 * 1024) { res(raw); return; }
+        var im = new Image();
+        im.onload = function () {
+          try {
+            var w = im.width || 320, h = im.height || 320;
+            var sc = Math.min(1, (max || 320) / Math.max(w, h));
+            var cw = Math.max(1, Math.round(w * sc)), ch = Math.max(1, Math.round(h * sc));
+            var cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+            var cx = cv.getContext('2d');
+            cx.fillStyle = '#fff'; cx.fillRect(0, 0, cw, ch);   /* 透明底铺白，防 JPEG 变黑 */
+            cx.drawImage(im, 0, 0, cw, ch);
+            res(cv.toDataURL('image/jpeg', q || 0.82));
+          } catch (e) { res(raw); }
+        };
+        im.onerror = function () { res(raw); };
+        im.src = raw;
+      };
+      rd.onerror = function () { rej(new Error('读取失败')); };
+      rd.readAsDataURL(file);
+    });
+  }
+  function ptCodexImportImages(ev) {
+    var fs = (ev && ev.target && ev.target.files) ? [].slice.call(ev.target.files) : [];
+    try { ev.target.value = ''; } catch (e) {}
+    if (!fs.length) return;
+    if (!ptNeedAdmin()) return;
+    var seriesIn = (document.getElementById('cxImportSeries') || {}).value || '';
+    var series = String(seriesIn).trim() || '我导入的';
+    var s = ptGet();
+    var taken = {};
+    (s.petPool || []).forEach(function (p) { if (p && p.name) taken[String(p.name).trim()] = 1; });
+    /* 编号从现有最大数字 +1 起，避开 197~219 的种子号段 */
+    var no = 0;
+    (s.petPool || []).forEach(function (p) {
+      var m = /^cx(\d+)/.exec(String((p && p.id) || ''));
+      if (m) no = Math.max(no, parseInt(m[1], 10) || 0);
+    });
+    if (no < 219) no = 219;
+    toastMsg('⏳ 正在处理 ' + fs.length + ' 张图片…');
+    var jobs = fs.map(function (f, idx) {
+      var nm = String(f.name || '').replace(/\.[^.]+$/, '').trim() || ('灵杰' + (idx + 1));
+      return ptShrinkImg(f, 320, 0.82).then(function (uri) {
+        return { name: nm, uri: uri, size: Math.round(uri.length * 0.75) };
+      }).catch(function () { return null; });
+    });
+    Promise.all(jobs).then(function (list) {
+      var added = 0, skipped = 0, bytes = 0, names = [];
+      list.forEach(function (it) {
+        if (!it || !it.uri) { skipped++; return; }
+        if (taken[it.name]) { skipped++; return; }
+        taken[it.name] = 1;
+        no += 1;
+        s.petPool.push({
+          id: 'cx' + ('00' + no).slice(-3) + '_' + Date.now().toString(36),
+          name: it.name, series: series, tier: '普通',
+          img: it.uri, blessing: PT_CODEX_BLESS[series] || '',
+          archetype: 'object', rarity: '普通', origin: 'codex', emoji: '📖',
+          imported: true, deleted: false, updatedAt: Date.now()
+        });
+        added++; bytes += it.size; names.push(it.name);
+      });
+      if (!added) {
+        toastMsg('⚠️ 没有新增（同名已存在或读取失败 ' + skipped + ' 张）');
+        return;
+      }
+      ptSave(s); PET_DB = s;
+      try { if (typeof ptwSchedule === 'function') ptwSchedule(); } catch (e) {}
+      try { if (typeof syncScheduleSoon === 'function') syncScheduleSoon(); } catch (e) {}
+      CODEX_STATE.series = series; CODEX_STATE.tier = '*';
+      ptRenderCodex(); ptRenderWall();
+      toastMsg('✅ 已导入 ' + added + ' 位灵杰（约 ' + Math.max(1, Math.round(bytes / 1024)) + 'KB）' + (skipped ? '，跳过 ' + skipped + ' 张' : ''));
+      if (confirm('导入完成：' + names.slice(0, 5).join('、') + (names.length > 5 ? ' 等 ' + names.length + ' 位' : '') +
+        '\n\n现在就打开「点卡发放」，把它们发给同学吗？\n（点取消则稍后在图鉴里自己点卡发放）')) {
+        CODEX_GRANT = true; ptRenderCodex();
+      }
+    });
   }
 
   /* vT67 数据迁移：老数据补 tier/updatedAt（防 LWW 合并丢字段），不动任何用户数据 */
@@ -24967,12 +25493,14 @@ function cwInit(){
       '<button class="btn2 sm" onclick="ptCodexExportCsv(\'def\')">📦 导出图鉴清单 CSV</button>' +
       '<button class="btn2 sm" onclick="ptCodexExportCsv(\'pet\')">📦 导出宠物记录 CSV</button>' +
       '<button class="btn2 sm" onclick="ptCodexImportPick(\'def\')">📥 导入图鉴灵杰</button>' +
+      '<button class="btn2 sm" onclick="ptCodexImportPickImg()">🖼 导入本地图片（png/jpg/gif）</button>' +
       '<button class="btn2 sm" onclick="ptCodexImportPick(\'pet\')">📥 导入宠物记录</button>' +
       '<button class="btn2 sm" onclick="ptImport()">📥 导入完整备份 JSON</button>' +
       '<button class="btn2 sm" onclick="ptExport()">📦 导出完整备份 JSON</button>' +
       '<input type="file" id="cxImportFile" style="display:none" accept=".csv,.json,.txt" onchange="ptCodexImportFile(event)"></div>' +
       '<div class="sub" style="line-height:1.9">' +
       '<b>图鉴灵杰</b>支持 CSV / JSON，列名：编号、名字、系列、品级(普通/隐藏/典藏)、图片(codeximg/197.png 或完整网址)、寄语；同名跳过，编号留空自动排。<br>' +
+      '<b>本地图片</b>一次可选多张 png / jpg / gif，<b>文件名就是灵杰名字</b>；大于 180KB 的会自动缩到 320px 内再存，不占图床、也不依赖网络，网页 / 教室桌面 / 小程序都能显示。想改系列名，在卡片上方「导入系列」框里先填再点导入。<br>' +
       '<b>宠物记录</b>支持 CSV / JSON，列名：学生姓名、灵杰名字、定义编号(可空，按名字匹配)；按图鉴定义生成该同学的已唤醒灵杰。<br>' +
       '<b>完整备份 JSON</b>为八张表整体覆盖导入，用于换机 / 恢复，导入前请先导出备份。<br>' +
       '建议流程：先「导出图鉴清单 CSV」→ 在 Excel 里改名字 / 系列 / 品级 → 删掉原有行只留要新增的行 →「导入图鉴灵杰」。</div></div>' +
@@ -25275,12 +25803,11 @@ function cwInit(){
     toastMsg('📦 已导出 ' + lines.length + ' 行');
   }
   function ptTab(name) {
-    ['inc', 'wall', 'codex', 'parent', 'sub', 'grad', 'admin', 'io'].forEach(function (t) {
+    ['wall', 'codex', 'parent', 'sub', 'grad', 'admin', 'io'].forEach(function (t) {
       var b = document.querySelector('#petTabs [data-pt="' + t + '"]'); if (b) b.classList.toggle('active', t === name);
       var p = document.getElementById('petPanel-' + t); if (p) p.style.display = (t === name) ? 'block' : 'none';
     });
-    if (name === 'inc') ptRenderIncubator();
-    else if (name === 'wall') ptRenderWall();
+    if (name === 'wall') ptRenderWall();
     else if (name === 'codex') ptRenderCodex();
     else if (name === 'parent') ptRenderParent();
     else if (name === 'sub') ptRenderSub();
@@ -25305,9 +25832,6 @@ function cwInit(){
   window.wbPetRender = wbPetRender;
   window.wbPetInit = wbPetInit;
   window.ptTab = ptTab;
-  window.ptHatch = ptHatch;
-  window.ptHatchFromSel = ptHatchFromSel;
-  window.ptHatchSel = ptHatchSel;
   window.ptFeed = ptFeed;
   window.ptDraw = ptDraw;
   window.ptRedeem = ptRedeem;
@@ -25325,7 +25849,6 @@ function cwInit(){
   /* vT67 修复：误发收回 / 反悔恢复漏挂全局，卡片上的 onclick 会报 ReferenceError（内联事件只在全局作用域找函数） */
   window.ptRevoke = ptRevoke;
   window.ptRevive = ptRevive;
-  window.ptRenderIncubator = ptRenderIncubator;
   window.ptRenderParent = ptRenderParent;
   window.ptRenderSub = ptRenderSub;
   window.ptRenderGrad = ptRenderGrad;
@@ -25366,6 +25889,10 @@ function cwInit(){
   window.ptCodexRestore = ptCodexRestore;
   window.ptPurgeEmpty = ptPurgeEmpty;
   window.ptCodexImportPick = ptCodexImportPick;
+  /* vT86 卡面删除 + 本地图片导入 */
+  window.ptCodexCardRemove = ptCodexCardRemove;
+  window.ptCodexImportPickImg = ptCodexImportPickImg;
+  window.ptCodexImportImages = ptCodexImportImages;
   window.ptCodexImportFile = ptCodexImportFile;
   window.ptCodexExportCsv = ptCodexExportCsv;
   /* 定价 / 折扣 / 开关：供测试与其它端复用 */
