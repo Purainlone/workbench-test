@@ -16814,9 +16814,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v80';
-var WB_MY_VER = '优化版 vT80 · 铺满窗口与点卡发放';
-var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.102';
+var WB_VER_TAG = 'v81';
+var WB_MY_VER = '优化版 vT81 · 通知置顶与祝贺可见';
+var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.103';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -23296,6 +23296,17 @@ function cwInit(){
     return PET_DB;
   }
   function ptSave(s) { try { localStorage.setItem(PET_KEY, JSON.stringify(s || PET_DB)); } catch (e) { console.error('[pet] 存盘失败', e); } }
+  /* vT81 图鉴写操作后立刻推云：以前要等下一轮自动同步（最长 10 分钟），
+     教室桌面迟迟收不到新灵杰，祝贺弹窗自然不出现。这里 1.2 秒防抖后触发一次同步。 */
+  function ptKickSync() {
+    try {
+      if (window.__ptSyncTimer) clearTimeout(window.__ptSyncTimer);
+      window.__ptSyncTimer = setTimeout(function () {
+        window.__ptSyncTimer = null;
+        try { if (typeof syncCycle === 'function') syncCycle(1); } catch (e) {}
+      }, 1200);
+    } catch (e) {}
+  }
   var PET_DB = null;
   PET_DB = ptGet();
 
@@ -24263,6 +24274,7 @@ function cwInit(){
     if (!studentName) return toastMsg('⚠️ 请先选择学生');
     s.pets.push(ptMkPet(studentName, sp));
     ptSave(s); PET_DB = s;
+    ptKickSync();
     toastMsg('🐾 已唤醒「' + sp.name + '」授予 ' + studentName);
     ptRenderWall(); ptRenderIncubator();
   }
@@ -24321,7 +24333,7 @@ function cwInit(){
       var drawPool = codexDrawPool(s); if (!drawPool.length) return toastMsg('灵杰池为空');
       var sp = drawPool[Math.floor(Math.random() * drawPool.length)];
       var np = ptMkPet(pet.studentName, sp); s.pets.push(np); pet.drawCntToday = (pet.drawCntToday || 0) + 1; pet.updatedAt = Date.now();
-      ptSave(s); PET_DB = s; toastMsg('🎲 唤醒了「' + sp.name + '」！'); ptRenderWall();
+      ptSave(s); PET_DB = s; ptKickSync(); toastMsg('🎲 唤醒了「' + sp.name + '」！'); ptRenderWall();
     }).catch(function () {});
   }
   function ptRedeem(petId) {
@@ -24802,6 +24814,7 @@ function cwInit(){
     });
     ptSave(s); PET_DB = s;
     toastMsg('🎁 已发放「' + def.name + '」给 ' + targets.length + ' 位同学');
+    ptKickSync();
     ptRenderAll();
   }
   function ptCodexGrant() {
@@ -24883,6 +24896,7 @@ function cwInit(){
     });
     ptSave(s); PET_DB = s;
     toastMsg('📦 已发放 ' + (targets.length * per) + ' 位灵杰给 ' + targets.length + ' 位同学');
+    ptKickSync();
     ptRenderAll();
   }
 
