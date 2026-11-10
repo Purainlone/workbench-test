@@ -26656,9 +26656,20 @@ function cwInit(){
   function callModel(messages, maxTokens) {
     if (!cfgReady()) return Promise.reject(new Error('还没设置 Key'));
     var url = CFG.base || AI_ZHIPU_DIRECT;
+    function netOf(e2) {
+      return e2 && (e2.name === 'TypeError' || /Failed to fetch|NetworkError|load failed/i.test(String(e2 && e2.message || e2)));
+    }
     return aiRawCall(url, messages, maxTokens).catch(function (e) {
-      var netErr = e && (e.name === 'TypeError' || /Failed to fetch|NetworkError|load failed/i.test(String(e && e.message || e)));
-      if (netErr && url !== AI_RELAY_LOCAL) return aiRawCall(AI_RELAY_LOCAL, messages, maxTokens);
+      if (netOf(e) && url !== AI_RELAY_LOCAL) {
+        /* vT90 直连被浏览器跨域拦截 → 自动改走本机中转；
+           中转也不可达时把「怎么解决」说清楚（而不是笼统的 Failed to fetch） */
+        return aiRawCall(AI_RELAY_LOCAL, messages, maxTokens).catch(function (e2) {
+          if (netOf(e2)) {
+            throw new Error('本机中转（127.0.0.1:8787）没有启动：请在这台电脑上打开工作区 zhipu-cors-proxy 文件夹，双击 start.bat，保持窗口开着再点测试连接');
+          }
+          throw e2;
+        });
+      }
       throw e;
     });
   }
