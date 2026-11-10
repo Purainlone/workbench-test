@@ -2808,7 +2808,6 @@ table.paper td.l{text-align:left;font-weight:600}
     <div class="pet-tabs" id="petTabs">
       <button class="btn2 sm active" data-pt="wall" onclick="ptTab('wall')">🐾 灵杰墙</button>
       <button class="btn2 sm" data-pt="codex" onclick="ptTab('codex')">📖 启灵图鉴</button>
-      <button class="btn2 sm" data-pt="parent" onclick="ptTab('parent')">👪 家长队列<span id="petPQn" class="pet-badge"></span></button>
       <button class="btn2 sm" data-pt="sub" onclick="ptTab('sub')">🎨 学生投稿<span id="petSUBn" class="pet-badge"></span></button>
       <button class="btn2 sm" data-pt="grad" onclick="ptTab('grad')">🎓 毕业审批</button>
       <button class="btn2 sm" data-pt="admin" onclick="ptTab('admin')">⚙️ 后台管理</button>
@@ -2816,7 +2815,6 @@ table.paper td.l{text-align:left;font-weight:600}
     </div>
     <div id="petPanel-wall" class="pet-panel"></div>
     <div id="petPanel-codex" class="pet-panel" style="display:none"></div>
-    <div id="petPanel-parent" class="pet-panel" style="display:none"></div>
     <div id="petPanel-sub" class="pet-panel" style="display:none"></div>
     <div id="petPanel-grad" class="pet-panel" style="display:none"></div>
     <div id="petPanel-admin" class="pet-panel" style="display:none"></div>
@@ -12761,20 +12759,28 @@ function hwBuildItems(){
   out.sort(function(a,b){return String(a.date).localeCompare(String(b.date))||String(a.name).localeCompare(String(b.name))});
   HW_ITEMS=out.slice(-12);
 }
-function hwAddItem(){
-  var name=(document.getElementById('hwName').value||'').trim();
-  if(!name){toastMsg('先填作业名称');return}
-  var date=hwDateOnly(document.getElementById('hwDate').value)||ymd(new Date());
+/* vT89 抽出可编程版：AI 助手布置作业也走这里（UI 与 AI 同一条路，行为一致） */
+function hwCreateItem(name,date,subject){
+  name=(name||'').trim();
+  if(!name)return {ok:false,msg:'先填作业名称'};
+  date=hwDateOnly(date)||ymd(new Date());
   var dup=HW_ITEMS.some(function(x){return x.name===name&&x.date===date});
-  if(dup){toastMsg('这次作业已经建过了');return}
-  HW_ITEMS.push({name:name,date:date,subject:'语文',pending:true});   /* 班主任兼语文：新建作业列自动归入语文 */
-  hwSubjSet(name,date,'语文');   /* 记住这一列是语文，工作台主页/桌面标签只显示语文 */
-  document.getElementById('hwName').value='';
+  if(dup)return {ok:false,msg:'「'+name+'」（'+date+'）已经建过了'};
+  subject=subject||'语文';
+  HW_ITEMS.push({name:name,date:date,subject:subject,pending:true});   /* 新建作业列默认归入该科目 */
+  hwSubjSet(name,date,subject);   /* 记住这一列的科目，工作台主页/桌面标签按科目显示 */
   renderHW();
   setTimeout(function(){try{renderHome()}catch(e){}},0);
   /* 刚建完就把「拍照登记」的目标作业切到这一列，免得扫完写进上一次的作业 */
   try{scnSelectItem(name,date)}catch(e){}
-  toastMsg('已新建「'+name+'」，去拍几本就登记好了');
+  return {ok:true,msg:'已新建「'+name+'」（'+date+' · '+subject+'）'};
+}
+window.aiHwCreate=function(name,date,subject){ return hwCreateItem(name,date,subject); };
+function hwAddItem(){
+  var r=hwCreateItem((document.getElementById('hwName').value||''),(document.getElementById('hwDate').value||''),'');
+  if(!r.ok){toastMsg(r.msg);return}
+  document.getElementById('hwName').value='';
+  toastMsg(r.msg+'，去拍几本就登记好了');
 }
 /* 删除一整列作业（含该列所有学生的登记记录）。仅删本机数据表记录，
    其它端会在下一轮同步按墓碑清掉；科目映射里这一列也一并移除。 */
@@ -17420,9 +17426,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v88';
-var WB_MY_VER = '优化版 vT88 · 班主任 AI 助手';
-var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.110';
+var WB_VER_TAG = 'v89';
+var WB_MY_VER = '优化版 vT89 · AI扩动作 + 投稿改造';
+var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.111';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -21468,6 +21474,31 @@ function cwInit(){
     ntChanged(); dtDetainRender();
     toastMsg(n ? '💾 已保存，教室大屏与家长端约 3~20 秒同步' : '名单没有变化');
   };
+  /* vT89 AI 助手用的留堂名单接口：mode=add 在当天名单上追加；set 覆盖；clear 清空 */
+  window.aiDetainApply = function (names, date, mode) {
+    var roster = stuRoster();
+    var bad = (names || []).filter(function (n) { return !roster.some(function (s) { return s.姓名 === n; }); });
+    if (bad.length) return { ok: false, msg: '名单里没有：' + bad.join('、') + '，没有保存' };
+    var d = hwDateOnly(date) || new Date().toISOString().slice(0, 10);
+    var dEl = document.getElementById('dtDate'); if (dEl) dEl.value = d;
+    var cur = {};
+    if (mode !== 'set' && mode !== 'clear') {
+      ntRows('s-detain').forEach(function (r) {
+        if (r && !r.deleted && String(r.date || '').slice(0, 10) === d && r.name) cur[r.name] = 1;
+      });
+    }
+    dtDetainSel = {};
+    if (mode !== 'clear') {
+      Object.keys(cur).forEach(function (n) { dtDetainSel[n] = 1; });
+      (names || []).forEach(function (n) { dtDetainSel[n] = 1; });
+    }
+    dtDetainAuto = true;
+    dtDetainRender();
+    dtDetainSave();
+    var finalNames = [];
+    ntRows('s-detain').forEach(function (r) { if (r && !r.deleted && String(r.date || '').slice(0, 10) === d && r.name && finalNames.indexOf(r.name) < 0) finalNames.push(r.name); });
+    return { ok: true, msg: d + ' 留堂名单已保存（' + finalNames.length + ' 人）：' + finalNames.join('、') };
+  };
   function clRender() {
     var list = document.getElementById('clList'); if (!list) return;
     var tf = document.getElementById('clThemeFilter');
@@ -24011,7 +24042,7 @@ function cwInit(){
   }
   function ptDefaultCfg() {
     return {
-      id: 'cfg', enabled: 'on',
+      id: 'cfg', enabled: 'on', subEnabled: 'on',   /* vT89 学生投稿独立开关 */
       costs: { feed: DEF_COST.feed, draw: DEF_COST.draw, redeem: DEF_COST.redeem },
       gradLevel: GRAD_LEVEL, saleOff: 100, shopSeeded: false,
       updatedAt: Date.now(), updatedBy: 'web'
@@ -24089,6 +24120,11 @@ function cwInit(){
         if (!ex) { local.push(r); byId[r.id] = r; changed = true; }
         else {
           var ru = r.updatedAt || 0, eu = ex.updatedAt || 0;
+          /* vT89 投稿/家长队列审批状态保护：本机已审（approved/rejected/done）的记录，
+             不允许被远端较旧的 pending 覆盖回去（驳回失效的根因之一） */
+          var reviewed = { approved: 1, rejected: 1, done: 1 };
+          if ((k === 'petSubmissions' || k === 'parentQueue') &&
+              reviewed[ex.status || 'pending'] && (r.status || 'pending') === 'pending' && ru <= eu) return;
           if (ru >= eu) { for (var f in r) { if (r.hasOwnProperty(f)) ex[f] = r[f]; } changed = true; }
         }
       });
@@ -24580,20 +24616,7 @@ function cwInit(){
     var html = list.length ? list.map(ptCard).join('') : '<div class="pet-empty">还没有灵杰。到「📖 启灵图鉴」点卡面发放，或在图鉴管理里批量发放吧～</div>';
     box.innerHTML = '<div class="pet-grid">' + html + '</div>';
   }
-  function ptRenderParent() {
-    var box = document.getElementById('petPanel-parent'); if (!box) return;
-    var s = ptGet();
-    var q = s.parentQueue.filter(function (x) { return (x.status || 'pending') === 'pending'; });
-    var html = q.length ? q.map(function (x) {
-      var act = (x.action === 'feed') ? '蓄灵' : (x.action === 'draw') ? '唤醒' : (x.action === 'redeem') ? '兑换' : x.action;
-      return '<div class="pet-row"><span>👪 ' + ptEsc(x.studentId || x.studentName || '') + ' · ' + act + (x.item ? (' · ' + ptEsc(x.item)) : '') + '</span>' +
-        '<span class="pet-acts"><button class="btn2 sm primary" onclick="ptApproveParent(\'' + x.id + '\')">✅ 批准</button>' +
-        '<button class="btn2 sm" onclick="ptRejectParent(\'' + x.id + '\')">❌ 驳回</button></span></div>';
-    }).join('') : '<div class="pet-empty">暂无待处理的家长蓄灵提案</div>';
-    box.innerHTML = '<div class="sub">家长在小程序端提交的蓄灵 / 唤醒 / 兑换提案，老师批准后才真正入账（扣学生积分 + 改灵杰状态）。' +
-      (ptPlayable() ? '' : ' <b style="color:#c33">⏸ 模块暂停中，批准后也不会消耗积分，建议先驳回或启用模块。</b>') + '</div>' + html;
-    ptBadges();
-  }
+  /* vT89 家长队列已移除：小程序家长端早已不再提交蓄灵提案，页面无需保留 */
   /* 手绘作品的网页端取图：本地缓存优先，没有就异步经 contents API 拉一次 */
   var PT_IMG_MEM = {};   /* relPath -> dataURI（本次会话内存缓存） */
   function wbPetFetchImg(rel) {
@@ -24643,7 +24666,9 @@ function cwInit(){
     return box('', 'data-pimg="' + rel + '"');
   }
   function ptSubPhotoHtml(x, cls) {
-    var rel = x.img || (x.def && x.def.img) || '';
+    var rel = x.proc || x.img || (x.def && x.def.img) || '';
+    /* vT89 老师端抠图美化后的成品 / 学生端处理稿（data URI）直接显示 */
+    if (/^(data:|https?:)/i.test(rel)) return '<img class="' + cls + '" src="' + rel + '" alt="手绘作品">';
     if (!rel) return '';
     var cached = PT_IMG_MEM[rel];
     if (cached) return '<img class="' + cls + '" src="' + cached + '" alt="手绘作品">';
@@ -24657,22 +24682,61 @@ function cwInit(){
     } catch (e) {}
     return '<img class="' + cls + '" data-pimg="' + rel + '" src="" alt="手绘作品加载中">';
   }
+  /* vT89 一次性把历史「装配器」投稿标记为已驳回（装配器入口已下线） */
+  function ptSubPurgeBuilders() {
+    try {
+      if (localStorage.getItem('pt_builder_purged_v1')) return;
+      var s = ptGet(); var n = 0;
+      s.petSubmissions.forEach(function (x) {
+        if (x && (x.status || 'pending') === 'pending' && x.kind !== 'photo' && x.kind !== 'freehand') {
+          x.status = 'rejected'; x.note = '装配器投稿已停用'; x.updatedAt = Date.now(); n++;
+        }
+      });
+      if (n) { ptSave(s); PET_DB = s; }
+      localStorage.setItem('pt_builder_purged_v1', '1');
+    } catch (e) {}
+  }
   function ptRenderSub() {
     var box = document.getElementById('petPanel-sub'); if (!box) return;
+    ptSubPurgeBuilders();
     var s = ptGet();
+    var on = (ptCfg().subEnabled || 'on') === 'on';
+    var head = '<div class="sub">学生用手机拍下自己画的作品上传（小程序端自动抠图 + 美化），老师批准后进入灵杰池（标注同学共创），全班可唤醒。' +
+      (on ? '' : ' <b style="color:#c33">⛔ 投稿入口已关闭：学生不能再提交新作品，已有投稿仍可审批。</b>') +
+      ' <button class="btn2 sm" onclick="ptSubSwitch()">' + (on ? '⛔ 关闭学生投稿' : '▶ 开启学生投稿') + '</button></div>';
+    if (!on && !s.petSubmissions.filter(function (x) { return (x.status || 'pending') === 'pending'; }).length) {
+      box.innerHTML = head + '<div class="pet-empty">投稿入口已关闭，暂无待审作品</div>';
+      ptBadges(); return;
+    }
     var q = s.petSubmissions.filter(function (x) { return (x.status || 'pending') === 'pending'; });
     var html = q.length ? q.map(function (x) {
       var isPhoto = PetCore.isPhotoDef(x.def) || x.kind === 'photo' || !!x.img;
-      var kind = (x.kind === 'photo') ? '手绘作品' : (x.kind === 'freehand') ? '自由涂鸦' : '装配器';
+      var kind = (x.kind === 'freehand') ? '自由涂鸦' : '手绘作品';
       var pic = isPhoto ? ptSubPhotoHtml(x, 'pet-photo') : PetCore.renderPet(x.def, { seed: x.id });
+      var procTag = (x.kind === 'photo')
+        ? (x.processed ? '<span class="pet-stu">🪄 已抠图美化</span>'
+          : '<span style="color:#c0392b;font-weight:700">⚠️ 未抠图美化，暂不能入池</span>')
+        : '';
+      var magic = (x.kind === 'photo' && !x.processed && (x.img || (x.def && x.def.img)))
+        ? '<button class="btn2 sm" onclick="ptSubProcess(\'' + x.id + '\')" title="老师端代为抠图 + 美化">🪄 抠图美化</button>' : '';
       return '<div class="pet-card">' + pic +
         '<div class="pet-nm">' + ptEsc((x.def && x.def.name) || '未命名') + '</div>' +
-        '<div class="pet-own">作者：' + ptEsc(x.studentId || '') + ' · ' + kind + '</div>' +
+        '<div class="pet-own">作者：' + ptEsc(x.studentId || '') + ' · ' + kind + ' ' + procTag + '</div>' +
         '<div class="pet-acts"><button class="btn2 sm primary" onclick="ptApproveSub(\'' + x.id + '\')">✅ 入池</button>' +
-        '<button class="btn2 sm" onclick="ptRejectSub(\'' + x.id + '\')">❌ 驳回</button></div></div>';
+        '<button class="btn2 sm" onclick="ptRejectSub(\'' + x.id + '\')">❌ 驳回</button>' + magic + '</div></div>';
     }).join('') : '<div class="pet-empty">暂无学生投稿</div>';
-    box.innerHTML = '<div class="sub">学生用「装配器 / 手绘作品」造出的灵杰，老师批准后进入灵杰池（标注同学共创），全班可唤醒。</div><div class="pet-grid">' + html + '</div>';
+    box.innerHTML = head + '<div class="pet-grid">' + html + '</div>';
     ptBadges();
+  }
+  /* vT89 学生投稿独立开关（不影响整个图鉴模块的启停） */
+  function ptSubSwitch() {
+    if (!ptNeedAdmin()) return;
+    var s = ptGet(); var c = ptCfg();
+    c.subEnabled = ((c.subEnabled || 'on') === 'on') ? 'off' : 'on';
+    c.updatedAt = Date.now(); c.updatedBy = 'web';
+    ptSave(s); PET_DB = s; ptKickSync();
+    toastMsg(c.subEnabled === 'on' ? '▶ 学生投稿已开启' : '⛔ 学生投稿已关闭（小程序端同步生效）');
+    ptRenderSub();
   }
   function ptRenderGrad() {
     var box = document.getElementById('petPanel-grad'); if (!box) return;
@@ -24993,12 +25057,11 @@ function cwInit(){
   }
   function ptBadges() {
     var s = ptGet();
-    var n1 = s.parentQueue.filter(function (x) { return (x.status || 'pending') === 'pending'; }).length;
+    /* vT89 家长队列已移除，只剩投稿徽标 */
     var n2 = s.petSubmissions.filter(function (x) { return (x.status || 'pending') === 'pending'; }).length;
-    var a = document.getElementById('petPQn'); if (a) a.textContent = n1 ? (' ' + n1) : '';
     var b = document.getElementById('petSUBn'); if (b) b.textContent = n2 ? (' ' + n2) : '';
   }
-  function ptRenderAll() { ptRenderWall(); ptRenderCodex(); ptRenderParent(); ptRenderSub(); ptRenderGrad(); ptRenderAdmin(); ptRenderIO(); }
+  function ptRenderAll() { ptRenderWall(); ptRenderCodex(); ptRenderSub(); ptRenderGrad(); ptRenderAdmin(); ptRenderIO(); }
 
   /* ---------------- 行为 ---------------- */
   /* vT86 唤醒台（🥚 孵蛋台）已整体移除：老师不再从「随机灵杰池」里挑蛋，
@@ -25073,34 +25136,17 @@ function cwInit(){
     p.updatedAt = Date.now();
     ptSave(s); PET_DB = s; toastMsg('🎓 毕业卡号：' + p.gradCode); ptRenderGrad(); ptRenderWall();
   }
-  function ptApproveParent(id) {
-    if (!ptPlayable()) return toastMsg('⏸ 模块暂停 / 关停中，不能批准消耗类提案');
-    var s = ptGet(); var it = s.parentQueue.filter(function (x) { return x.id === id; })[0]; if (!it) return;
-    var who = it.studentName || it.studentId;
-    var pet = s.pets.filter(function (p) { return (p.studentId || p.studentName) === who && !p.deleted; })[0];
-    var cost = (it.action === 'draw') ? ptCost('draw') : (it.action === 'redeem') ? ptCost('redeem') : ptCost('feed');
-    var actName = (it.action === 'feed') ? '蓄灵' : (it.action === 'draw') ? '唤醒' : (it.action === 'redeem') ? '兑换' : '蓄灵';
-    ptAddManual(who, '启灵图鉴 · 家长' + actName, -cost).then(function () {
-      if (pet) {
-        if (it.action === 'feed') { pet.exp = (pet.exp || 0) + 10; pet.hunger = Math.min(100, (pet.hunger || 0) + 20); }
-        else if (it.action === 'draw') { var dPool = codexDrawPool(s); if (dPool.length) { var sp = dPool[Math.floor(Math.random() * dPool.length)]; s.pets.push(ptMkPet(who, sp)); } }
-        else if (it.action === 'redeem') { pet.ownedItems = (pet.ownedItems || []).concat([it.item || '配饰']); }
-        ptLevelUp(pet); pet.updatedAt = Date.now();
-      }
-      it.status = 'done';
-      ptSave(s); PET_DB = s; toastMsg('✅ 已批准家长提案'); ptRenderParent(); ptRenderWall();
-    }).catch(function () {});
-  }
-  function ptRejectParent(id) {
-    var s = ptGet(); var it = s.parentQueue.filter(function (x) { return x.id === id; })[0]; if (!it) return;
-    it.status = 'rejected'; ptSave(s); PET_DB = s; toastMsg('❌ 已驳回'); ptRenderParent();
-  }
+  /* vT89 家长队列已移除，ptApproveParent / ptRejectParent 一并下线（队列数据仍随导出保留） */
   function ptApproveSub(id) {
     var s = ptGet(); var x = s.petSubmissions.filter(function (y) { return y.id === id; })[0]; if (!x) return;
+    /* vT89 手绘作品必须先抠图美化才能入池（学生端或老师端处理过都算） */
+    if (x.kind === 'photo' && !x.processed) {
+      return toastMsg('⚠️ 这张还没抠图美化：点卡片上的「🪄 抠图美化」处理后再入池');
+    }
     var def;
-    var imgRel = x.img || (x.def && x.def.img) || '';
+    var imgRel = x.proc || x.img || (x.def && x.def.img) || '';
     if (imgRel) {
-      /* 手绘作品：img 路径是作品的唯一形象，走 buildPetDef 但 img 必须带上 */
+      /* 手绘作品：img 是作品的唯一形象，走 buildPetDef 但 img 必须带上 */
       def = PetCore.buildPetDef(Object.assign({}, x.def, { origin: 'student', approved: true, img: imgRel }));
       def.id = 'sp_' + PetCore.hashStr((x.def && x.def.name || 's') + Date.now());
       def.authorStudentId = x.studentId;
@@ -25122,12 +25168,120 @@ function cwInit(){
       def.authorStudentId = x.studentId;
     }
     s.petPool.push(def);
-    x.status = 'approved';
-    ptSave(s); PET_DB = s; toastMsg('✅ 已入池（同学共创）'); ptRenderSub(); ptRenderCodex();
+    x.status = 'approved'; x.updatedAt = Date.now();   /* vT89 驳回/入池都要更新时间戳，否则同步会被远端 pending 覆盖 */
+    ptSave(s); PET_DB = s; toastMsg('✅ 已入池（同学共创）'); ptRenderSub(); ptRenderCodex(); ptKickSync();
   }
   function ptRejectSub(id) {
     var s = ptGet(); var x = s.petSubmissions.filter(function (y) { return y.id === id; })[0]; if (!x) return;
-    x.status = 'rejected'; ptSave(s); PET_DB = s; toastMsg('❌ 已驳回'); ptRenderSub();
+    /* vT89 驳回失效根因：只改 status 不更新 updatedAt，同步按「远端较新者优先」
+       又把学生端的 pending 覆盖回来。现在驳回/入池都打上最新时间戳；
+       合并侧（wbPetMergeRemote）也不允许把已审稿件降级回 pending。 */
+    x.status = 'rejected'; x.updatedAt = Date.now(); x.note = '老师驳回';
+    ptSave(s); PET_DB = s; toastMsg('❌ 已驳回（学生端会显示「未通过」）'); ptRenderSub(); ptKickSync();
+  }
+  /* vT89 老师端补抠图 + 美化：拉取作品图 → 去纸底（边缘泛洪） → 自动裁剪 → 提亮提饱和 → data URI 存稿 */
+  function ptSubProcess(id) {
+    var s = ptGet(); var x = s.petSubmissions.filter(function (y) { return y.id === id; })[0]; if (!x) return;
+    var rel = x.img || (x.def && x.def.img) || '';
+    if (!rel) return toastMsg('⚠️ 这条投稿没有图片');
+    toastMsg('🪄 正在抠图美化…');
+    Promise.resolve(rel.indexOf('data:') === 0 ? rel : wbPetFetchImg(rel)).then(function (src) {
+      return ptBeautyFromSrc(src);
+    }).then(function (uri) {
+      x.proc = uri; x.processed = true; x.updatedAt = Date.now();
+      ptSave(s); PET_DB = s;
+      toastMsg('🪄 已抠图美化，可以入池了');
+      ptRenderSub(); ptKickSync();
+    }).catch(function (e) {
+      toastMsg('⚠️ 处理失败：' + ((e && e.message) || '图片取不到') + '（可让学生重新提交）');
+    });
+  }
+  /* 抠图 + 美化核心：src 可以是 data URI / https（同源或无 CORS 限制的源） */
+  function ptBeautyFromSrc(src, maxSide) {
+    maxSide = maxSide || 480;
+    return new Promise(function (res, rej) {
+      var im = new Image();
+      im.onload = function () {
+        try {
+          var scale = Math.min(maxSide / im.width, maxSide / im.height, 1);
+          var w = Math.max(1, Math.round(im.width * scale)), h = Math.max(1, Math.round(im.height * scale));
+          var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+          var cx = cv.getContext('2d', { willReadFrequently: true });
+          cx.drawImage(im, 0, 0, w, h);
+          var imd = cx.getImageData(0, 0, w, h), dd = imd.data;
+          /* ① 采样四角 + 边框中点的纸底色 */
+          var px = function (i) { return [dd[i], dd[i + 1], dd[i + 2]]; };
+          var samples = [px(0), px((w - 1) * 4), px((w * (h - 1)) * 4), px((w * h - 1) * 4),
+            px((Math.floor(w / 2)) * 4), px((w * Math.floor(h / 2)) * 4)];
+          var bg = [0, 0, 0];
+          samples.forEach(function (sp) { bg[0] += sp[0]; bg[1] += sp[1]; bg[2] += sp[2]; });
+          bg = [bg[0] / samples.length, bg[1] / samples.length, bg[2] / samples.length];
+          /* ② 从边缘泛洪：与纸底色相近的连通区域 → 透明（只清边缘连通，不误伤画面内部的浅色） */
+          var TOL = 42, SOFT = 26;
+          var vis = new Uint8Array(w * h), stack = [];
+          for (var xx = 0; xx < w; xx++) { stack.push(xx, 0, xx, h - 1); }
+          for (var yy = 0; yy < h; yy++) { stack.push(0, yy, w - 1, yy); }
+          function near(p) {
+            var d0 = p[0] - bg[0], d1 = p[1] - bg[1], d2 = p[2] - bg[2];
+            return Math.sqrt(d0 * d0 + d1 * d1 + d2 * d2);
+          }
+          while (stack.length) {
+            var cy = stack.pop(), cx2 = stack.pop();
+            if (cx2 < 0 || cy < 0 || cx2 >= w || cy >= h) continue;
+            var idx = cy * w + cx2; if (vis[idx]) continue;
+            var i4 = idx * 4;
+            if (dd[i4 + 3] === 0) { vis[idx] = 1; }
+            else {
+              var dist = near([dd[i4], dd[i4 + 1], dd[i4 + 2]]);
+              if (dist > TOL + SOFT) continue;
+              vis[idx] = 1;
+              if (dist > TOL) { dd[i4 + 3] = Math.round(255 * (dist - TOL) / SOFT); }
+              else { dd[i4 + 3] = 0; }
+              stack.push(cx2 + 1, cy, cx2 - 1, cy, cx2, cy + 1, cx2, cy - 1);
+            }
+          }
+          /* ③ 内容包围盒裁剪（留 6% 边距） */
+          var minX = w, minY = h, maxX = -1, maxY = -1;
+          for (var yy2 = 0; yy2 < h; yy2++) for (var xx3 = 0; xx3 < w; xx3++) {
+            if (dd[(yy2 * w + xx3) * 4 + 3] > 24) { if (xx3 < minX) minX = xx3; if (xx3 > maxX) maxX = xx3; if (yy2 < minY) minY = yy2; if (yy2 > maxY) maxY = yy2; }
+          }
+          if (maxX < 0) { minX = 0; minY = 0; maxX = w - 1; maxY = h - 1; }
+          var padX = Math.round((maxX - minX) * 0.06) + 2, padY = Math.round((maxY - minY) * 0.06) + 2;
+          minX = Math.max(0, minX - padX); minY = Math.max(0, minY - padY);
+          maxX = Math.min(w - 1, maxX + padX); maxY = Math.min(h - 1, maxY + padY);
+          var cw = maxX - minX + 1, ch2 = maxY - minY + 1;
+          /* ④ 美化：对比度 +14%、饱和度 +12%、亮度 +4%（逐像素） */
+          var ct = 1.14, sat = 1.12, br = 1.04;
+          for (var i5 = 0; i5 < dd.length; i5 += 4) {
+            if (!dd[i5 + 3]) continue;
+            for (var ch3 = 0; ch3 < 3; ch3++) {
+              var v = dd[i5 + ch3];
+              v = (v - 128) * ct + 128;         /* 对比度 */
+              v *= br;                           /* 亮度 */
+              dd[i5 + ch3] = Math.max(0, Math.min(255, Math.round(v)));
+            }
+            var avg = (dd[i5] + dd[i5 + 1] + dd[i5 + 2]) / 3;
+            for (var ch4 = 0; ch4 < 3; ch4++) {
+              dd[i5 + ch4] = Math.max(0, Math.min(255, Math.round(avg + (dd[i5 + ch4] - avg) * sat)));
+            }
+          }
+          var out = document.createElement('canvas'); out.width = cw; out.height = ch2;
+          /* 逐行拷贝裁剪区 */
+          var octx = out.getContext('2d'), oim = octx.createImageData(cw, ch2);
+          for (var ry = 0; ry < ch2; ry++) {
+            oim.data.set(dd.subarray(((minY + ry) * w + minX) * 4, ((minY + ry) * w + minX) * 4 + cw * 4), ry * cw * 4);
+          }
+          octx.putImageData(oim, 0, 0);
+          var uri = out.toDataURL('image/png');
+          if (uri.length > 190000) {          /* 太大 → 缩到 360 再来一遍 */
+            if (maxSide > 360) { res(ptBeautyFromSrc(src, 360)); return; }
+          }
+          res(uri);
+        } catch (e2) { rej(e2); }
+      };
+      im.onerror = function () { rej(new Error('图片加载失败')); };
+      im.src = src;
+    });
   }
   function ptExport() {
     var s = ptGet();
@@ -25672,6 +25826,31 @@ function cwInit(){
     var g = function (id) { return ((document.getElementById(id) || {}).value || ''); };
     ptCodexGrantDo(g('cxGrantDef'), g('cxGrantWho') || '*', g('cxGrantNote').trim());
   }
+  /* vT89 AI 助手发放图鉴：按名字找图鉴灵杰（精确优先，其次包含），免弹窗直接执行 */
+  window.aiCodexGrant = function (name, whos) {
+    if (!ptAdminUnlocked()) return { ok: false, msg: '需要班主任口令：请先到「📖 启灵图鉴 → ⚙️ 后台管理」输一次口令，再说一遍' };
+    var s = ptGet();
+    var q = String(name || '').replace(/\s+/g, '');
+    if (!q) return { ok: false, msg: '要发放哪只灵杰？请说出它的名字' };
+    var defs = ptCodexDefs(s).filter(function (d) { return (d.name || '').indexOf(q) >= 0; });
+    var exact = defs.filter(function (d) { return (d.name || '') === q; });
+    if (exact.length) defs = exact;
+    if (!defs.length) return { ok: false, msg: '图鉴里没有找到「' + name + '」' };
+    if (defs.length > 1) return { ok: false, msg: '匹配到 ' + defs.length + ' 只灵杰：' + defs.slice(0, 6).map(function (d) { return d.name; }).join('、') + '，请说全名' };
+    var def = defs[0];
+    var targets = (Array.isArray(whos) && whos.length) ? whos.map(function (n) { return String(n).trim(); }).filter(Boolean) : ptNames();
+    if (!targets.length) return { ok: false, msg: '没有指定学生' };
+    var roster = ptNames();
+    var bad = targets.filter(function (n) { return roster.indexOf(n) < 0; });
+    if (bad.length) return { ok: false, msg: '班级名单里没有：' + bad.join('、') + '，没有发放' };
+    var atText = ptYmd(new Date());
+    targets.forEach(function (n) {
+      var np = ptMkPet(n, def); np.fromGrant = true; s.pets.push(np);
+      s.petGift.push({ id: ptNewId('gf'), studentName: n, kind: 'grant', item: '图鉴灵杰：' + def.name, qty: 1, at: Date.now(), atText: atText, note: 'AI 助手发放' });
+    });
+    ptSave(s); PET_DB = s; ptKickSync(); ptRenderAll();
+    return { ok: true, msg: '已发放「' + def.name + '」（' + (def.tier || '普通') + '）给 ' + targets.length + ' 位同学' + (targets.length > 6 ? ('：' + targets.slice(0, 6).join('、') + ' 等') : ('：' + targets.join('、'))) };
+  };
   /* vT80 点卡发放：开启后点图鉴卡面直接弹发放对话框 */
   function ptCodexGrantToggle() {
     if (!ptNeedAdmin()) return;
@@ -25942,13 +26121,12 @@ function cwInit(){
     toastMsg('📦 已导出 ' + lines.length + ' 行');
   }
   function ptTab(name) {
-    ['wall', 'codex', 'parent', 'sub', 'grad', 'admin', 'io'].forEach(function (t) {
+    ['wall', 'codex', 'sub', 'grad', 'admin', 'io'].forEach(function (t) {
       var b = document.querySelector('#petTabs [data-pt="' + t + '"]'); if (b) b.classList.toggle('active', t === name);
       var p = document.getElementById('petPanel-' + t); if (p) p.style.display = (t === name) ? 'block' : 'none';
     });
     if (name === 'wall') ptRenderWall();
     else if (name === 'codex') ptRenderCodex();
-    else if (name === 'parent') ptRenderParent();
     else if (name === 'sub') ptRenderSub();
     else if (name === 'grad') ptRenderGrad();
     else if (name === 'admin') ptRenderAdmin();
@@ -25976,10 +26154,11 @@ function cwInit(){
   window.ptRedeem = ptRedeem;
   window.ptGradReq = ptGradReq;
   window.ptGradApprove = ptGradApprove;
-  window.ptApproveParent = ptApproveParent;
-  window.ptRejectParent = ptRejectParent;
   window.ptApproveSub = ptApproveSub;
   window.ptRejectSub = ptRejectSub;
+  window.ptSubProcess = ptSubProcess;
+  window.ptSubSwitch = ptSubSwitch;
+  window.ptBeautyFromSrc = ptBeautyFromSrc;
   window.ptExport = ptExport;
   window.ptImport = ptImport;
   window.ptImportFile = ptImportFile;
@@ -25988,7 +26167,6 @@ function cwInit(){
   /* vT67 修复：误发收回 / 反悔恢复漏挂全局，卡片上的 onclick 会报 ReferenceError（内联事件只在全局作用域找函数） */
   window.ptRevoke = ptRevoke;
   window.ptRevive = ptRevive;
-  window.ptRenderParent = ptRenderParent;
   window.ptRenderSub = ptRenderSub;
   window.ptRenderGrad = ptRenderGrad;
   /* 后台管理 */
@@ -26300,9 +26478,10 @@ function cwInit(){
 })();
 </script>
 <script>
-/* =============== vT88 班主任 AI 助手 ===============
+/* =============== vT88/vT89 班主任 AI 助手 ===============
    对话 / 语音 → 大模型解析成「动作」→ 老师点确认 → 调用本页既有功能执行。
-   只允许四类动作：发通知（含叫人）、登记作业、查缺交 / 查积分、加积分。
+   只允许八类动作：发通知（含叫人）、登记作业、布置作业、查缺交 / 查积分、
+   加积分、发放图鉴灵杰、留堂名单。
    模型走「本机或自建的 HTTPS 中转」，Key 只保存在这台电脑的浏览器里，不写进代码。 */
 (function () {
   if (window.__wbAI) return; window.__wbAI = 1;
@@ -26446,6 +26625,12 @@ function cwInit(){
     var names = (typeof stuRoster === 'function' ? stuRoster() : []).map(function (s) { return s.姓名; }).join('、');
     var items = (typeof hmHwItemsAll === 'function' ? hmHwItemsAll() : []).slice(0, 8)
       .map(function (it) { return it.name + '（' + (it.date || '') + '）'; }).join('；');
+    var codex = '';
+    try {
+      if (typeof ptCodexDefs === 'function' && typeof ptGet === 'function') {
+        codex = ptCodexDefs(ptGet()).map(function (d) { return d.name; }).slice(0, 220).join('、');
+      }
+    } catch (e) {}
     var d = new Date();
     var wd = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];
     return [
@@ -26453,6 +26638,7 @@ function cwInit(){
       '今天是 ' + d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate() + ' ' + wd + '。',
       '学生名单：' + (names || '（暂无）'),
       '最近的作业列：' + (items || '（暂无）'),
+      '图鉴灵杰名录（发放图鉴时 name 必须来自这里）：' + (codex ? codex.slice(0, 1500) : '（暂无）'),
       '输出格式：{"say":"给老师看的一句话","actions":[动作…]}。没有明确要求就 actions 为空，并在 say 里追问。',
       '动作类型：',
       '1 发通知/叫人 {"type":"notice","text":"通知内容","student":"要叫的学生姓名(叫人时填)","arrive":"now 或 YYYY-MM-DD HH:MM","prio":"普通|紧急","tts":true}',
@@ -26461,6 +26647,9 @@ function cwInit(){
       '3 查缺交 {"type":"query_undone"}',
       '4 查积分 {"type":"query_points","names":["姓名"]}',
       '5 加/扣积分 {"type":"points","items":[{"name":"姓名","delta":3,"reason":"课堂发言"}]}',
+      '6 布置新作业 {"type":"homework_new","item":"作业名称","date":"YYYY-MM-DD 可省略默认今天","subject":"语文|数学|英语…可省略默认语文"}',
+      '7 发放图鉴 {"type":"codex_grant","codex":"灵杰名字(必须来自上面的名录)","students":["姓名"]；students 省略表示全班每人一份}',
+      '8 留堂名单 {"type":"detain","students":["姓名"],"date":"YYYY-MM-DD 可省略默认今天","mode":"add|set|clear"；mode 省略=add 在当天名单上追加}',
       '注意：不要编造学生姓名；姓名必须来自上面名单；一次可以有多个动作；数字用阿拉伯数字。'
     ].join('\n');
   }
@@ -26611,6 +26800,24 @@ function cwInit(){
     return { ok: true, msg: done.length ? ('已写入：' + done.join('、')) : '没有有效的加分项' };
   }
 
+  /* vT89 布置新作业 */
+  function doHwNew(a) {
+    if (typeof window.aiHwCreate !== 'function') return { ok: false, msg: '作业模块未就绪' };
+    return window.aiHwCreate(mustStr(a.item), mustStr(a.date || ''), mustStr(a.subject || ''));
+  }
+
+  /* vT89 发放图鉴灵杰 */
+  function doCodexGrant(a) {
+    if (typeof window.aiCodexGrant !== 'function') return { ok: false, msg: '图鉴模块未就绪' };
+    return window.aiCodexGrant(mustStr(a.codex), a.students || null);
+  }
+
+  /* vT89 留堂名单 */
+  function doDetain(a) {
+    if (typeof window.aiDetainApply !== 'function') return { ok: false, msg: '留堂模块未就绪' };
+    return window.aiDetainApply(a.students || [], mustStr(a.date || ''), mustStr(a.mode || 'add'));
+  }
+
   /* ---------------- 计划卡片 ---------------- */
   function labelOf(a) {
     if (!a || !a.type) return '未知动作';
@@ -26621,6 +26828,10 @@ function cwInit(){
     if (a.type === 'query_undone') return '🔍 查本周缺交';
     if (a.type === 'query_points') return '🔍 查积分：' + ((a.names || []).length ? a.names.join('、') : '积分榜前 8');
     if (a.type === 'points') return '➕ 积分：' + (a.items || []).map(function (x) { return x.name + (Number(x.delta) > 0 ? '+' : '') + x.delta; }).join('、');
+    if (a.type === 'homework_new') return '📝 布置作业：' + mustStr(a.item) + '（' + (a.date || '今天') + (a.subject ? ' · ' + a.subject : '') + '）';
+    if (a.type === 'codex_grant') return '🎁 发放图鉴「' + mustStr(a.codex) + '」' + ((a.students || []).length ? ('给 ' + a.students.join('、')) : '（全班每人一份）');
+    if (a.type === 'detain') return '⏰ 留堂名单' + (a.date ? '（' + a.date + '）' : '（今天）') + '：' +
+      (a.mode === 'set' ? '覆盖为 ' : (a.mode === 'clear' ? '清空' : '追加 ')) + (a.students || []).join('、');
     return '未知动作 ' + a.type;
   }
 
@@ -26647,6 +26858,9 @@ function cwInit(){
           else if (a.type === 'query_undone') { lines.push('🔍 ' + doQueryUndone()); }
           else if (a.type === 'query_points') { lines.push('🔍 ' + doQueryPoints(a)); }
           else if (a.type === 'points') { var r3 = doPoints(a); lines.push((r3.ok ? '✅ ' : '⚠️ ') + r3.msg); }
+          else if (a.type === 'homework_new') { var r4 = doHwNew(a); lines.push((r4.ok ? '✅ ' : '⚠️ ') + r4.msg); }
+          else if (a.type === 'codex_grant') { var r5 = doCodexGrant(a); lines.push((r5.ok ? '✅ ' : '⚠️ ') + r5.msg); }
+          else if (a.type === 'detain') { var r6 = doDetain(a); lines.push((r6.ok ? '✅ ' : '⚠️ ') + r6.msg); }
           else lines.push('⚠️ 不认识的动作：' + a.type);
         } catch (e) { lines.push('⚠️ 执行出错：' + (e && e.message ? e.message : e)); }
       });
@@ -26654,6 +26868,7 @@ function cwInit(){
       /* 执行完顺手把相关页面刷新一下 */
       try { if (typeof renderHome === 'function') renderHome(); } catch (e) {}
       try { if (typeof noticeRenderHistory === 'function') noticeRenderHistory(); } catch (e) {}
+      try { if (typeof dtDetainRender === 'function') dtDetainRender(); } catch (e) {}
     };
   }
 
@@ -26736,6 +26951,9 @@ function cwInit(){
       '· 「发通知 明天带跳绳和美术袋」',
       '· 「叫陈安蕊到办公室」',
       '· 「古诗三首 全班登记优，没交的排除：周某、李某」',
+      '· 「布置作业 口算天天练，数学，明天交」',
+      '· 「把小青龙发给陈安蕊、李某」或「给全班每人发一张雪灵」',
+      '· 「今天留堂：周某、李某」或「清空今天留堂名单」',
       '· 「这周谁没交作业」',
       '· 「陈安蕊加 3 分，课堂发言」',
       '执行前我会把要做的事列给你看，你点确认才生效。'
@@ -26744,7 +26962,7 @@ function cwInit(){
   }
 
   /* 给测试脚本留的把手 */
-  window.__wbAIapi = { ask: ask, doNotice: doNotice, doHomework: doHomework, doQueryUndone: doQueryUndone, doQueryPoints: doQueryPoints, doPoints: doPoints, labelOf: labelOf, parseJSON: parseJSON, findItem: findItem, cfg: CFG };
+  window.__wbAIapi = { ask: ask, doNotice: doNotice, doHomework: doHomework, doQueryUndone: doQueryUndone, doQueryPoints: doQueryPoints, doPoints: doPoints, doHwNew: doHwNew, doCodexGrant: doCodexGrant, doDetain: doDetain, labelOf: labelOf, parseJSON: parseJSON, findItem: findItem, cfg: CFG };
 })();
 
 </script>
