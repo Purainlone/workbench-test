@@ -12723,7 +12723,7 @@ function hwMarkAllOverdue(){
   if(!items.length){toastMsg('还没有作业列');return}
   var it=items[items.length-1];   /* 最新（最右侧）一列 */
   var m=hwMapRows();
-  var roster=hwRoster();   /* 只算参与交作业的学生：柯骏豪、方浩轩 不会被一键记成超时未交 */
+  var roster=hwRoster().filter(function(s){return !hwNotCounted(s.姓名)});   /* vT97 一键超时未交不碰未交统计排除的人（网格里仍可手动登记他们） */
   var remain=roster.filter(function(s){return !m[hwKey(s.姓名,it)]});
   if(!remain.length){toastMsg('「'+it.name+'」都已登记，没有可标记的');return}
   if(!confirm('把「'+it.name+'」剩下 '+remain.length+' 名未登记学生记为超时未交（每人扣 2 分）？'))return;
@@ -14858,6 +14858,26 @@ var HM_IGNORE=(function(){
   return def;
 })();
 var HM_SHOW_IGN=false;
+/* vT97 未交统计排除名单：这些人仍出现在作业登记网格里（照常可登记），
+   但不进未交统计、教室大屏未交卡、AI 查缺交、一键超时未交、播报未交——
+   默认方浩轩、柯骏豪（长期不交作业的两位），避免未交名单永远挂着他们。
+   与诵读忽略名单（HM_IGNORE）相互独立，可在「⚙️ 名单设置」里勾选调整。 */
+var HW_UNDONE_EX_KEY='wb_hw_undone_exclude_v1';
+var HW_UNDONE_EX=(function(){
+  var def={'方浩轩':1,'柯骏豪':1};   /* vT97 默认：这两位不进未交统计（仍可登记） */
+  try{
+    var raw=localStorage.getItem(HW_UNDONE_EX_KEY),o=raw?JSON.parse(raw):null;
+    if(o&&typeof o==='object')return o;
+  }catch(e){}
+  return def;
+})();
+function hwNotCounted(n){return !!(HW_UNDONE_EX&&HW_UNDONE_EX[n])}
+function hwUndoneExSave(o){
+  HW_UNDONE_EX=o||{};
+  try{localStorage.setItem(HW_UNDONE_EX_KEY,JSON.stringify(HW_UNDONE_EX))}catch(e){}
+  try{renderHW()}catch(e){}
+  try{renderHome()}catch(e){}
+}
 function hmIgnoreNames(){return Object.keys(HM_IGNORE||{}).filter(function(n){return HM_IGNORE[n]})}
 function hmIsIgnored(n){return !!(HM_IGNORE&&HM_IGNORE[n])}
 function hmIgnoreSave(o){
@@ -14884,12 +14904,12 @@ function renderIgnoreBars(){
     b.title='点一下展开 / 折叠这些同学的行；他们的诵读不计入完成率与「全班背完」判定（作业登记全员照常，不受影响）';
   });
 }
-/* 名单设置面板：勾选式，不用手打姓名 */
+/* 名单设置面板：勾选式，不用手打姓名（vT97 双区：诵读忽略 + 未交统计排除） */
 function openIgnorePicker(){
   var stu=stuRoster();
   var mask=el('div','rcmgr'),panel=el('div','panel');
-  panel.appendChild(el('h3',null,'🙈 不参与诵读的同学'));
-  panel.appendChild(el('div','meta','勾选后：诵读管理里他们的行默认折叠，不计入完成率，也不参与「全班背完」判定。已有的历史记录不会删，展开仍可查看（只读）。作业登记全员照常，不受这份名单影响。'));
+  panel.appendChild(el('h3',null,'🙈 名单设置'));
+  panel.appendChild(el('div','meta','【不参与诵读】勾选后：诵读管理里他们的行默认折叠，不计入完成率，也不参与「全班背完」判定。已有的历史记录不会删，展开仍可查看（只读）。作业登记不受这份名单影响。'));
   var grid=el('div','igngrid');
   stu.forEach(function(s){
     var lab=el('label','ignitem');
@@ -14899,13 +14919,25 @@ function openIgnorePicker(){
     grid.appendChild(lab);
   });
   panel.appendChild(grid);
+  panel.appendChild(el('div','meta','【不进未交统计】勾选后：他们仍出现在作业登记网格里（照常可登记），但不进未交统计、教室大屏未交卡、AI 查缺交、一键超时未交和播报未交。'));
+  var grid2=el('div','igngrid');
+  stu.forEach(function(s){
+    var lab=el('label','ignitem');
+    var cb=document.createElement('input');cb.type='checkbox';cb.value=s.姓名;cb.checked=hwNotCounted(s.姓名);
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(s.姓名+(s.学号?('（'+s.学号+'号）'):'')));
+    grid2.appendChild(lab);
+  });
+  panel.appendChild(grid2);
   var bar=el('div','ignbar2');
   var ok=el('button','btn','保存');
   ok.onclick=function(){
-    var o={};
+    var o={},o2={};
     [].forEach.call(grid.querySelectorAll('input'),function(c){if(c.checked)o[c.value]=1});
-    hmIgnoreSave(o);mask.parentNode&&mask.parentNode.removeChild(mask);
-    toastMsg('✅ 已保存：'+Object.keys(o).length+' 位同学不参与诵读（作业登记不受影响）');
+    [].forEach.call(grid2.querySelectorAll('input'),function(c){if(c.checked)o2[c.value]=1});
+    hmIgnoreSave(o);hwUndoneExSave(o2);
+    mask.parentNode&&mask.parentNode.removeChild(mask);
+    toastMsg('✅ 已保存：'+Object.keys(o).length+' 人不参与诵读，'+Object.keys(o2).length+' 人不进未交统计');
   };
   var cancel=el('button','btn ghost','取消');cancel.onclick=function(){mask.parentNode&&mask.parentNode.removeChild(mask)};
   bar.appendChild(ok);bar.appendChild(cancel);panel.appendChild(bar);
@@ -14973,8 +15005,9 @@ function hmHwItemsAll(){
    每项 = {name,date,und:[未交学生姓名...]}；"未交"= 该作业无等级记录 */
 function hmHwUndone(){
   var stuAll=stuRoster();
-  var stu=stuAll.slice();          /* vT96 全员参与作业登记，不再排除忽略名单 */
-  var total=stuAll.length, exN=0;
+  /* vT97 登记全员（hwRoster 不排除），但未交统计排除方浩轩/柯骏豪（可在名单设置里调） */
+  var stu=stuAll.filter(function(s){return !hwNotCounted(s.姓名)});
+  var total=stuAll.length, exN=stuAll.length-stu.length;
   if(!stu.length)return {week:[],past:[],weekN:0,pastN:0,total:total,exN:exN};
   var m=hwMapRows();
   var ws=hmWeekStart(new Date()),we=new Date(ws);we.setDate(we.getDate()+7);
@@ -17547,9 +17580,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v96';
-var WB_MY_VER = '优化版 vT96 · 作业全员登记+AI 自动建列';
-var WB_BUILD_DATE = '11-10', WB_BUILD_NO = '2.6.118';
+var WB_VER_TAG = 'v97';
+var WB_MY_VER = '优化版 vT97 · 未交统计可排除';
+var WB_BUILD_DATE = '11-10', WB_BUILD_NO = '2.6.119';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -23157,7 +23190,7 @@ function cwInit(){
     if (!item) { box.value = '（还没有作业列，先在「作业」里建一次作业）'; return }
     var done = {};
     tcHwRows().forEach(function (r) { if (r.item === item && r.date === date && r.name) done[r.name] = 1 });
-    var all = tcStuRows().map(function (s) { return s.name });   /* vT96 全员参与，不再排除忽略名单 */
+    var all = tcStuRows().map(function (s) { return s.name }).filter(function (n) { return !hwNotCounted(n) });   /* vT97 播报未交排除未交统计名单 */
     var undone = all.filter(function (n) { return !done[n] });
     var maxN = Number(val('tcSpkMax')) || 0;
     var text;
