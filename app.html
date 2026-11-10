@@ -17580,9 +17580,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v98';
-var WB_MY_VER = '优化版 vT98 · 图鉴新增37只（256）';
-var WB_BUILD_DATE = '11-10', WB_BUILD_NO = '2.6.120';
+var WB_VER_TAG = 'v99';
+var WB_MY_VER = '优化版 vT99 · 图鉴补齐261只';
+var WB_BUILD_DATE = '11-10', WB_BUILD_NO = '2.6.121';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24439,7 +24439,7 @@ function cwInit(){
     });
     return list;
   }
-  /* ---------------- vT67+ 启灵图鉴种子：256 只灵杰（追加不删，老师可在后台改品级/系列） ---------------- */
+  /* ---------------- vT67+ 启灵图鉴种子：261 只灵杰（追加不删，老师可在后台改品级/系列） ---------------- */
   var PT_CODEX_ROWS = [
 [1,'焰角小白羊','萌宠灵物'],
 [2,'抱晶小精','精灵星座'],
@@ -24696,7 +24696,12 @@ function cwInit(){
 [253,'紫雷麒麟','山海异兽'],
 [254,'碧晶天马','山海异兽'],
 [255,'寿纹龙龟','山海异兽'],
-[256,'云泽仙麟','山海异兽']
+[256,'云泽仙麟','山海异兽'],
+[257,'星澜水母','萌宠灵物'],
+[258,'捧果小熊猫','萌宠灵物'],
+[259,'萤林花鹿','萌宠灵物'],
+[260,'珠链海豹','萌宠灵物'],
+[261,'蓝钻浣熊','萌宠灵物']
   ];
   var PT_CODEX_BLESS = {
     '名著先贤': '以先贤为镜，品读文字，读懂人心',
@@ -24738,7 +24743,7 @@ function cwInit(){
     var s = ptGet();
     var dirty = false;
     if (!s.petPool.length) { s.petPool = ptBuildSeed(); dirty = true; }
-    /* vT67+ 图鉴种子：按 id 增量补齐 256 只灵杰。老用户强刷后自动追加新增形象，
+    /* vT67+ 图鉴种子：按 id 增量补齐 261 只灵杰。老用户强刷后自动追加新增形象，
        旧种子、老师改过的品级/系列、已收回的条目全部保留；后台「重置灵杰池」可全量重建。 */
     var seedAll = ptBuildCodexSeed();
     var seedHave = {}, seedExcl = {};
@@ -25409,7 +25414,7 @@ function cwInit(){
     rd.readAsText(f);
   }
   function ptResetPool() {
-    if (!confirm('重置灵杰池为图鉴全集（256 只灵杰 + 旧种子）？已有的同学共创投稿会保留。')) return;
+    if (!confirm('重置灵杰池为图鉴全集（261 只灵杰 + 旧种子）？已有的同学共创投稿会保留。')) return;
     var s = ptGet();
     var keep = s.petPool.filter(function (x) { return x.origin === 'student'; });
     s.petPool = ptBuildSeed().concat(ptBuildCodexSeed()).concat(keep);
