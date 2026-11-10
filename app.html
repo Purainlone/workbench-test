@@ -1475,7 +1475,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2" id="rcCompactBtn" onclick="rcToggleCompact()" title="压缩行高列宽，一屏塞下更多人">📐 紧凑</button>
       <button class="btn2" id="rcRankBtn" onclick="rcToggleRank()" title="按完成篇数排名，看谁快谁慢">🏆 排名</button>
       <button class="btn2" id="rcHideFullBtn" onclick="rcToggleHideFull()" title="全班都背完的篇目整列隐藏，表更清爽">🙈 已背完隐藏</button>
-      <button class="btn2 sm ghost" id="rcIgnBtn" onclick="hmToggleIgnoreRows()" title="不参与学习活动的同学：默认折叠、不统计">🙈 不参与名单</button>
+      <button class="btn2 sm ghost" id="rcIgnBtn" onclick="hmToggleIgnoreRows()" title="不参与诵读的同学：默认折叠、不统计（作业登记不受影响，全员照常登记）">🙈 不参与名单</button>
       <button class="btn2 sm ghost" onclick="openIgnorePicker()" title="勾选不参与作业 / 诵读的同学">⚙️ 名单设置</button>
       <button class="btn2" onclick="rcOpenCert()" title="为背完篇目的同学生成精美通关证书，可打印">📜 通关证书</button>
       <button data-page-node-id="G5GdPMfht73z7907cW81gf" class="btn2 ghost" onclick="rcClearAll()"><!--pnid:J35nXVodFWDtyRxsfFvnS2-->🧹 清空本表打卡</button>
@@ -1748,8 +1748,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2 sm primary" id="hwModeBtn" onclick="toggleHWMode()">✍️ 开始登记</button>
       <span class="mt" id="hwModeTip">先选等级，点「开始登记」后点格子才涂色</span>
       <button class="btn2 sm ghost" id="hwAutoBtn" onclick="hwToggleAuto()">🙈 已自动隐藏 0 列 · 显示</button>
-      <button class="btn2 sm ghost" id="hwIgnBtn" onclick="hmToggleIgnoreRows()" title="不参与学习活动的同学：默认折叠、不统计">🙈 不参与名单</button>
-      <button class="btn2 sm ghost" onclick="openIgnorePicker()" title="勾选不参与作业 / 诵读的同学">⚙️ 名单设置</button>
+      <button class="btn2 sm ghost" onclick="openIgnorePicker()" title="勾选不参与诵读的同学（作业登记不受影响，全员照常登记）">⚙️ 名单设置</button>
       <button class="btn2 sm danger" onclick="hwMarkAllOverdue()">⏰ 余下记超时未交（−2）</button>
     </div>
     <!-- vT86 批量登记 / 反选：先把整列登记成同一等级，再把没交作业的同学点掉 -->
@@ -12602,13 +12601,11 @@ function stuRoster(){
   });
   return out;
 }
-/* 参与作业登记的学生（名单去掉不交作业的人：柯骏豪、方浩轩，固定座、不参与交作业）。
-   与小程序 store.hwStudents()、科任端 SUBJ_HW_EXCLUDE 同一口径。
-   作业登记网格、待登记/未交统计、一键超时未交 都用它，让他们不出现在作业登记里、也不占未交分母。
-   他们仍正常保留在名单、积分、成绩、座位等其它模块。 */
+/* vT96 作业登记全员参与：忽略名单（柯骏豪/方浩轩/徐曼桦）不再排除作业登记，
+   他们照常出现在登记网格、未交统计里，老师可以直接登记。
+   忽略名单只继续作用于诵读管理（折叠、不进「全班背完」判定）。 */
 function hwRoster(){
-  var ex=HM_HW_EXCLUDE||{};
-  return stuRoster().filter(function(s){return !ex[s.姓名]});
+  return stuRoster();
 }
 /* 小组清单：按档案表里的组别聚合 */
 function groupList(){
@@ -13099,7 +13096,7 @@ function renderHW(){
   }catch(_wke){}
   var box=document.getElementById('hwTable');
   if(!box)return;
-  /* 作业登记只列参与交作业的学生；不参与名单里的同学折叠在表尾（只读、不计分、不进分母） */
+  /* vT96 作业登记全员参与：忽略名单不再折叠/排除，所有人都是正常可登记的行 */
   var stuAll=stuRoster();
   var stu=hwRoster();
   var m=hwMapRows();
@@ -13161,25 +13158,7 @@ function renderHW(){
     tr.appendChild(el('td','spacer',''));
     tbody.appendChild(tr);
   });
-  /* vT87 不参与名单：排在表尾，默认折叠；展开后只读（点格子不会登记） */
-  stuAll.filter(function(s){return hmIsIgnored(s.姓名)}).forEach(function(s){
-    var tr=document.createElement('tr');tr.className='ignrow';
-    var nm=el('td','nm');nm.appendChild(document.createTextNode(s.姓名));
-    if(s.学号)nm.appendChild(el('span','sn',s.学号+'号'));
-    tr.appendChild(nm);
-    var pts=0;
-    items.forEach(function(it){
-      var rec=m[hwKey(s.姓名,it)],lv=rec?fval(rec,'等级'):'';
-      if(lv)pts+=(HW_SCORE[lv]||0);
-      var td=el('td','cell'+(lv?(' '+HW_CLS[lv]):''));
-      if(lv)td.appendChild(el('span','mk',HW_MARK[lv]));
-      td.title=s.姓名+' · '+it.name+'（不参与，只读）';
-      tr.appendChild(td);
-    });
-    tr.appendChild(el('td','sum',pts?((pts>0?'+':'')+pts):'—'));
-    tr.appendChild(el('td','spacer',''));
-    tbody.appendChild(tr);
-  });
+  /* vT96 原来的「不参与名单折叠表尾」已移除：全员照常登记 */
   box.textContent='';
   box.appendChild(thead);box.appendChild(tbody);
   hwPaintMode();
@@ -14855,13 +14834,14 @@ function hmWDName(d){
   return w[d.getDay()];
 }
 
-/* ---------- 首页：第几周 + 未交作业（排除不参与学习活动的学生） ---------- */
-/* vT87 学习活动忽略名单：作业登记、诵读管理、未交统计都不算他们。
-   表格里默认把他们折叠在最后一行，展开后只读查看历史记录（不会误登记）。
-   名单存在本机，可点工具条「🙈 不参与名单」随时勾选。 */
+/* ---------- 首页：第几周 + 未交作业 ---------- */
+/* 诵读管理忽略名单（vT96 起只作用于诵读）：
+   默认折叠他们的行，不进完成率与「全班背完」判定。
+   作业登记不受影响——全员照常登记、照常进未交统计（vT96 解耦）。
+   名单存在本机，可点诵读页签「🙈 不参与名单」随时勾选。 */
 var HM_IGNORE_KEY='wb_ignore_students_v1';
 var HM_IGNORE=(function(){
-  var def={'柯骏豪':1,'方浩轩':1,'徐曼桦':1};   /* vT90 默认：这三位同学不参与作业 / 诵读 */
+  var def={'柯骏豪':1,'方浩轩':1,'徐曼桦':1};   /* 这三位同学诵读默认折叠 */
   try{
     var raw=localStorage.getItem(HM_IGNORE_KEY),o=raw?JSON.parse(raw):null;
     if(o&&typeof o==='object'){
@@ -14877,12 +14857,11 @@ var HM_IGNORE=(function(){
   }catch(e){}
   return def;
 })();
-var HM_HW_EXCLUDE=HM_IGNORE;
 var HM_SHOW_IGN=false;
 function hmIgnoreNames(){return Object.keys(HM_IGNORE||{}).filter(function(n){return HM_IGNORE[n]})}
 function hmIsIgnored(n){return !!(HM_IGNORE&&HM_IGNORE[n])}
 function hmIgnoreSave(o){
-  HM_IGNORE=o||{};HM_HW_EXCLUDE=HM_IGNORE;
+  HM_IGNORE=o||{};
   try{localStorage.setItem(HM_IGNORE_KEY,JSON.stringify(HM_IGNORE))}catch(e){}
   try{renderIgnoreBars()}catch(e){}
   try{renderHW()}catch(e){}
@@ -14898,19 +14877,19 @@ function hmToggleIgnoreRows(){
 function renderIgnoreBars(){
   var names=hmIgnoreNames();
   var txt=names.length?('🙈 不参与 '+names.length+' 人：'+names.join('、')):'🙈 未设置不参与名单';
-  ['hwIgnBtn','rcIgnBtn'].forEach(function(id){
+  ['rcIgnBtn'].forEach(function(id){
     var b=document.getElementById(id);if(!b)return;
     b.textContent=txt+(HM_SHOW_IGN?'（展开中）':(names.length?'（已折叠）':''));
     b.className='btn2 sm'+(HM_SHOW_IGN?'':' ghost');
-    b.title='点一下展开 / 折叠这些同学的行；他们的作业与诵读不计入完成率、未交统计与「全班背完」判定';
+    b.title='点一下展开 / 折叠这些同学的行；他们的诵读不计入完成率与「全班背完」判定（作业登记全员照常，不受影响）';
   });
 }
 /* 名单设置面板：勾选式，不用手打姓名 */
 function openIgnorePicker(){
   var stu=stuRoster();
   var mask=el('div','rcmgr'),panel=el('div','panel');
-  panel.appendChild(el('h3',null,'🙈 不参与学习活动的同学'));
-  panel.appendChild(el('div','meta','勾选后：作业登记、诵读管理里他们的行默认折叠，不计入完成率 / 未交统计，也不参与「全班背完」判定。已有的历史记录不会删，展开仍可查看（只读）。'));
+  panel.appendChild(el('h3',null,'🙈 不参与诵读的同学'));
+  panel.appendChild(el('div','meta','勾选后：诵读管理里他们的行默认折叠，不计入完成率，也不参与「全班背完」判定。已有的历史记录不会删，展开仍可查看（只读）。作业登记全员照常，不受这份名单影响。'));
   var grid=el('div','igngrid');
   stu.forEach(function(s){
     var lab=el('label','ignitem');
@@ -14926,7 +14905,7 @@ function openIgnorePicker(){
     var o={};
     [].forEach.call(grid.querySelectorAll('input'),function(c){if(c.checked)o[c.value]=1});
     hmIgnoreSave(o);mask.parentNode&&mask.parentNode.removeChild(mask);
-    toastMsg('✅ 已保存：'+Object.keys(o).length+' 位同学不参与作业与诵读');
+    toastMsg('✅ 已保存：'+Object.keys(o).length+' 位同学不参与诵读（作业登记不受影响）');
   };
   var cancel=el('button','btn ghost','取消');cancel.onclick=function(){mask.parentNode&&mask.parentNode.removeChild(mask)};
   bar.appendChild(ok);bar.appendChild(cancel);panel.appendChild(bar);
@@ -14994,9 +14973,8 @@ function hmHwItemsAll(){
    每项 = {name,date,und:[未交学生姓名...]}；"未交"= 该作业无等级记录 */
 function hmHwUndone(){
   var stuAll=stuRoster();
-  var exSet=HM_HW_EXCLUDE||{};
-  var stu=stuAll.filter(function(s){return !exSet[s.姓名]});
-  var total=stuAll.length, exN=stuAll.length-stu.length;
+  var stu=stuAll.slice();          /* vT96 全员参与作业登记，不再排除忽略名单 */
+  var total=stuAll.length, exN=0;
   if(!stu.length)return {week:[],past:[],weekN:0,pastN:0,total:total,exN:exN};
   var m=hwMapRows();
   var ws=hmWeekStart(new Date()),we=new Date(ws);we.setDate(we.getDate()+7);
@@ -17569,9 +17547,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v95';
-var WB_MY_VER = '优化版 vT95 · 课程表临时调课';
-var WB_BUILD_DATE = '11-10', WB_BUILD_NO = '2.6.117';
+var WB_VER_TAG = 'v96';
+var WB_MY_VER = '优化版 vT96 · 作业全员登记+AI 自动建列';
+var WB_BUILD_DATE = '11-10', WB_BUILD_NO = '2.6.118';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -23179,8 +23157,7 @@ function cwInit(){
     if (!item) { box.value = '（还没有作业列，先在「作业」里建一次作业）'; return }
     var done = {};
     tcHwRows().forEach(function (r) { if (r.item === item && r.date === date && r.name) done[r.name] = 1 });
-    var ex = HM_HW_EXCLUDE || {};
-    var all = tcStuRows().map(function (s) { return s.name }).filter(function (n) { return !ex[n] });
+    var all = tcStuRows().map(function (s) { return s.name });   /* vT96 全员参与，不再排除忽略名单 */
     var undone = all.filter(function (n) { return !done[n] });
     var maxN = Number(val('tcSpkMax')) || 0;
     var text;
@@ -26621,16 +26598,17 @@ function cwInit(){
 })();
 </script>
 <script>
-/* =============== vT88/vT89/vT92/vT94 班主任 AI 助手 ===============
+/* =============== vT88/vT89/vT92/vT94/vT96 班主任 AI 助手 ===============
    对话 / 语音 → 大模型解析成「动作」→ 老师点确认 → 调用本页既有功能执行。
    只允许八类动作：发通知（含叫人）、登记作业、布置作业、查缺交 / 查积分、
    加积分、发放图鉴灵杰、留堂名单。
    vT92 默认走老师自建的 Cloudflare Pages 公网中转（zhipu-relay.pages.dev）；
    中转连不上自动回落本机 8787。Key 只保存在这台电脑的浏览器里，不写进代码。
    vT94：① 作业列模糊匹配（列名↔提问双向包含，取最像的一列）；
-         ② 登记/布置时可让 AI 自己新建作业列（homework_new 或 homework.create=true）；
+         ② 登记/布置时可让 AI 自己新建作业列（homework_new）；
          ③ 设置里可填「备用接口」，智谱主接口失效自动切换到备用 OpenAI 兼容服务；
-         ④ AI 悬浮球（猫图标）也可自由拖动并记忆位置。 */
+         ④ AI 悬浮球（猫图标）也可自由拖动并记忆位置。
+   vT96：登记作业的列不存在时默认自动新建，不再报「没找到作业列」卡住。 */
 (function () {
   if (window.__wbAI) return; window.__wbAI = 1;
 
@@ -26850,7 +26828,8 @@ function cwInit(){
       '输出格式：{"say":"给老师看的一句话","actions":[动作…]}。没有明确要求就 actions 为空，并在 say 里追问。',
       '动作类型：',
       '1 发通知/叫人 {"type":"notice","text":"通知内容","student":"要叫的学生姓名(叫人时填)","arrive":"now 或 YYYY-MM-DD HH:MM","prio":"普通|紧急","tts":true}',
-      '2 登记作业 {"type":"homework","item":"作业名，可省略代表最近一列","level":"优|良|中|差|超时未交","scope":"all|missing|students","students":["姓名"],"exclude":["姓名"],"create":"true 可选：作业列不存在就自动新建"}',
+      '2 登记作业 {"type":"homework","item":"作业名，可省略代表最近一列","level":"优|良|中|差|超时未交","scope":"all|missing|students","students":["姓名"],"exclude":["姓名"]}',
+      '   作业列不存在时系统会自动新建这一列再登记，不用先问老师、也不需要额外参数；登记前确认卡上会注明。',
       '   scope=all 表示全班没登记的补登记；exclude 里的同学会被取消登记（用于全部登记后排除没交的人）。',
       '   作业列名会模糊匹配（老师说「第四单元作文上交情况」也能匹配到「第四单元作文」列）；拿不准就输出最接近的名字。',
       '3 查缺交 {"type":"query_undone"}',
@@ -26858,7 +26837,7 @@ function cwInit(){
       '5 加/扣积分 {"type":"points","items":[{"name":"姓名","delta":3,"reason":"课堂发言"}]}',
       '6 新建作业列/布置新作业 {"type":"homework_new","item":"作业名称","date":"YYYY-MM-DD 可省略默认今天","subject":"语文|数学|英语…可省略默认语文"}',
       '   你完全可以自己新建作业列！老师说「新建作业列 ××」「加一列 ××」「布置作业 ××」都直接输出这个动作，不要说做不到或让老师手动建。',
-      '   要「先建列再登记」：可以只输出一个 homework 动作并带 "create":"true"，或按顺序输出 homework_new + homework 两个动作。',
+      '   要「先建列再登记」：直接输出一个 homework 动作即可——列不存在系统会自动新建（create 参数已不需要，带上也兼容）。',
       '7 发放图鉴 {"type":"codex_grant","codex":"灵杰名字(必须来自上面的名录)","students":["姓名"]；students 省略表示全班每人一份}',
       '8 留堂名单 {"type":"detain","students":["姓名"],"date":"YYYY-MM-DD 可省略默认今天","mode":"add|set|clear"；mode 省略=add 在当天名单上追加}',
       '注意：不要编造学生姓名；姓名必须来自上面名单；一次可以有多个动作；数字用阿拉伯数字。'
@@ -26930,8 +26909,10 @@ function cwInit(){
 
   function doHomework(a) {
     var it = findItem(a.item);
-    /* vT94 create=true：列不存在就自动新建（老师说「新建作业列X并登记」一条搞定） */
-    if (!it && a.create && mustStr(a.item).trim()) {
+    /* vT96 列不存在默认自动新建（不再要求模型带 create 参数）：
+       老师说「第四单元作文 全班登记中」而列没建过 → 确认执行时直接建列再登记，
+       不再报「没找到作业列」卡住。a.create 参数保留兼容。 */
+    if (!it && mustStr(a.item).trim()) {
       if (typeof window.aiHwCreate !== 'function') return { ok: false, msg: '作业模块未就绪' };
       var cr = window.aiHwCreate(mustStr(a.item), '', mustStr(a.subject || ''));
       if (!cr.ok) return { ok: false, msg: '想自动新建作业列但失败：' + cr.msg };
@@ -26940,8 +26921,8 @@ function cwInit(){
     if (!it) {
       var names = (typeof hmHwItemsAll === 'function' ? hmHwItemsAll() : []).slice(0, 10)
         .map(function (x) { return x.name; });
-      return { ok: false, msg: '没找到作业列「' + mustStr(a.item || '最近一列') + '」' +
-        (names.length ? '。现有作业列：' + names.join('、') + '（要新建的话说「新建作业列 ×××」）' : '') };
+      return { ok: false, msg: '没找到作业列（要新建的话说「新建作业列 ×××」）' +
+        (names.length ? '。现有作业列：' + names.join('、') : '') };
     }
     if (typeof dbReady !== 'undefined' && !dbReady) return { ok: false, msg: '数据表还没连上，稍后再试' };
     var level = mustStr(a.level || '优');
@@ -27060,7 +27041,7 @@ function cwInit(){
     if (a.type === 'homework') return '✍️ 登记作业：' + mustStr(a.item || '最近一列') + ' → ' + mustStr(a.level || '优') +
       (a.scope === 'students' ? ('，指定 ' + (a.students || []).join('、')) : '，全班未登记的') +
       ((a.exclude || []).length ? ('，排除 ' + a.exclude.join('、')) : '') +
-      (a.create ? '（列不存在会自动新建）' : '');
+      '（列不存在会自动新建）';
     if (a.type === 'query_undone') return '🔍 查本周缺交';
     if (a.type === 'query_points') return '🔍 查积分：' + ((a.names || []).length ? a.names.join('、') : '积分榜前 8');
     if (a.type === 'points') return '➕ 积分：' + (a.items || []).map(function (x) { return x.name + (Number(x.delta) > 0 ? '+' : '') + x.delta; }).join('、');
