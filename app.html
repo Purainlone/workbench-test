@@ -174,6 +174,13 @@ table.tt td.editable:after{content:"";position:absolute;right:3px;top:3px;width:
 table.tt td.editable:hover{outline:2px solid #9ec9ae;outline-offset:-2px}
 table.tt td.changed{background:#fff8e8;box-shadow:inset 0 0 0 1px #f0cf94}
 table.tt td.changed.mine{background:#e4f5ec;box-shadow:inset 0 0 0 1px #9ed4b6}
+/* vT95 临时调课（拖动 / 点选对换） */
+table.tt td.swapc{cursor:grab;user-select:none;-webkit-user-select:none}
+table.tt td.swapc:active{cursor:grabbing}
+table.tt td.swapc:hover{outline:2px solid #9ec9ae;outline-offset:-2px}
+table.tt td.picked{outline:2px dashed #3aaa77;outline-offset:-2px;background:#e9f9f0!important;box-shadow:none}
+table.tt td.droptgt{outline:2px solid #3aaa77;outline-offset:-2px;background:#e9f9f0!important}
+table.tt td.dragging{opacity:.45}
 /* 早读 / 午读：浅色标识 */
 table.tt td.read{background:#f4f8fc;color:#5b7fa6;font-style:italic}
 table.tt th.tt-read{background:#eef5fb;color:#5b7fa6}
@@ -1318,9 +1325,10 @@ table.paper td.l{text-align:left;font-weight:600}
   </section>
 
   <section data-page-node-id="m6S9DjU7grlvWPPi0Qc3HN" class="section" id="s-tt">
-    <h2 data-page-node-id="NwGH4CtSwTgcwhyRObd6K9"><!--pnid:Zx31MGYX3fOmUJDmXpvftT-->课程表</h2><div data-page-node-id="WO06BD4J4OVQrHeGubDCMk" class="sub"><!--pnid:Fsdy4oHQBMlKoessDnbfcZ-->六（3）班 · 六年级上学期 · 绿色底为我任课 · 点格子可临时调课，下周一自动恢复（周一阳光体育延至 16:45）</div>
+    <h2 data-page-node-id="NwGH4CtSwTgcwhyRObd6K9"><!--pnid:Zx31MGYX3fOmUJDmXpvftT-->课程表</h2><div data-page-node-id="WO06BD4J4OVQrHeGubDCMk" class="sub"><!--pnid:Fsdy4oHQBMlKoessDnbfcZ-->六（3）班 · 六年级上学期 · 绿色底为我任课 · 开「🔁 临时调课」后拖格子或点两格即可对换，也可点格子细改，下周一自动恢复（周一阳光体育延至 16:45）</div>
     <div data-page-node-id="zQSFnvqKdB8FmoA8Yj96jg" class="ttctl" id="ttCtl">
       <button data-page-node-id="5Cf6vFuUiosyrN4H0T1kLN" class="btn2" id="btnTTEdit" onclick="toggleTTEdit()"><!--pnid:iL5Bjl3eIskXioVIR5vZTZ-->✏️ 编辑课表</button>
+      <button class="btn2" id="btnTTSwap" onclick="toggleTTSwap()" title="拖一格到另一格，或点两格对换；改动下周一自动恢复">🔁 临时调课</button>
       <button class="btn2" onclick="ttUndo()" title="撤回上一次调课">↩️ 撤回</button>
       <button class="btn2" onclick="ttRedo()" title="重做被撤回的调课">↪️ 重做</button>
       <button data-page-node-id="Gf5bm709y7hAyO0qf8Qjd8" class="btn2 ghost" id="btnTTRestore" onclick="ttRestore()"><!--pnid:ECEWHxnPyBIneiGJTmZtze-->↩️ 恢复原始课表</button>
@@ -3353,6 +3361,8 @@ const TT_BASE=(function(){var m={};DATA.schedule.forEach(function(r){m[r.星期+
 const TT_KEY='tt_over_v1';          /* {weekStart:'YYYY-MM-DD', cells:{'周五_3':{科目,任课教师,是…}}} */
 var TT_OVER={weekStart:'',cells:{}};
 var TT_EDIT=false;
+var TT_SWAP=false;              /* vT95 临时调课模式：拖动 / 点选对换 */
+var TT_PICK=null;               /* 点选对换：已选中的第一格 */
 var WD_ALL=WD;
 
 /* 本周一 00:00 的日期字符串 */
@@ -3424,13 +3434,16 @@ function renderTT(){
       else if(r.是否我上)cls.push('mine');
       if(r&&r.changed)cls.push('changed');
       if(TT_EDIT)cls.push('editable');
+      if(TT_SWAP)cls.push('swapc');
       var td=el('td',cls.join(' '),(r&&r.科目)||'—');
       if(TT_EDIT){td.title='点这里调整这一节';td.onclick=function(){openTTEditor(w,p.n)}}
+      if(TT_SWAP){td.dataset.tw=w;td.dataset.tn=String(p.n);td.title='拖到另一格，或点两格对换'}
       tr.appendChild(td);
     });
     table.appendChild(tr);
   });
   fill(document.getElementById('ttBox'),table);
+  TT_PICK=null;   /* 重渲染后点选状态作废 */
   renderTTTag();
 }
 function renderTTTag(){
@@ -3443,6 +3456,12 @@ function renderTTTag(){
 }
 function toggleTTEdit(){
   TT_EDIT=!TT_EDIT;
+  if(TT_EDIT&&TT_SWAP){                     /* vT95 调课模式让位 */
+    TT_SWAP=false;
+    var sb=document.getElementById('btnTTSwap');
+    if(sb){sb.className='btn2';sb.textContent='🔁 临时调课'}
+    TT_PICK=null;
+  }
   var b=document.getElementById('btnTTEdit');
   if(b){b.className='btn2'+(TT_EDIT?' on':'');b.textContent=TT_EDIT?'✅ 完成编辑':'✏️ 编辑课表'}
   renderTT();
@@ -3514,6 +3533,107 @@ function ttRestore(){
   renderTT();
   toastMsg('↩️ 已恢复为原始课表（点「↩️ 撤回」可恢复调课）');
 }
+
+/* ---------- vT95 临时调课：拖一格到另一格，或点两格对换 ----------
+   复用本周调课记录 TT_OVER（下周一自动恢复）与 2.0.15 撤销栈。
+   与「✏️ 编辑课表」互斥：开一个自动关另一个。 */
+function toggleTTSwap(){
+  TT_SWAP=!TT_SWAP;
+  if(TT_SWAP&&TT_EDIT){                     /* 编辑模式让位 */
+    TT_EDIT=false;
+    var eb=document.getElementById('btnTTEdit');
+    if(eb){eb.className='btn2';eb.textContent='✏️ 编辑课表'}
+  }
+  var b=document.getElementById('btnTTSwap');
+  if(b){b.className='btn2'+(TT_SWAP?' on':'');b.textContent=TT_SWAP?'✅ 完成调课':'🔁 临时调课'}
+  TT_PICK=null;
+  renderTT();
+  if(TT_SWAP)toastMsg('🔁 调课模式：拖一格到另一格，或先点一格再点另一格对换；下周一自动恢复');
+}
+function ttCellVal(w,n){
+  var r=ttMerged(w,n);
+  return r?{科目:r.科目,任课教师:r.任课教师,是否我上:r.是否我上}:null;
+}
+/* 覆写一格：与标准课表一致就清掉记录（保持「已调课 N 处」准确） */
+function ttSetCell(k,val){
+  var b=TT_BASE[k];
+  var base=b?{科目:b.科目||'',任课教师:b.任课教师||'',是否我上:!!b.是否我上}:null;
+  var same=base&&val&&base.科目===val.科目&&base.任课教师===val.任课教师&&base.是否我上===!!val.是否我上;
+  if(same||!val)delete TT_OVER.cells[k];
+  else TT_OVER.cells[k]={科目:val.科目,任课教师:val.任课教师,是否我上:!!val.是否我上,备注:''};
+}
+function ttKeyLabel(k){var a=k.split('_');return a[0]+'第'+a[1]+'节'}
+function ttSwap(a,b){
+  var ka=a.w+'_'+a.n,kb=b.w+'_'+b.n;
+  if(ka===kb)return;
+  var va=ttCellVal(a.w,a.n),vb=ttCellVal(b.w,b.n);
+  var eq=va===vb||(va&&vb&&va.科目===vb.科目&&va.任课教师===vb.任课教师&&!!va.是否我上===!!vb.是否我上);
+  if(eq){toastMsg('两格内容相同，无需对换');return}
+  ttPush();                                  /* 撤销栈快照 */
+  ttSetCell(ka,vb);ttSetCell(kb,va);
+  if(!TT_OVER.weekStart)TT_OVER.weekStart=ymd(mondayOf(new Date()));
+  saveTT();renderTT();
+  toastMsg('✅ 已对换 '+ttKeyLabel(ka)+' ↔ '+ttKeyLabel(kb)+'，下周一自动恢复');
+}
+/* 拖动 / 点选事件委托：绑在 #ttBox 上一次即可（renderTT 重建格子也不受影响） */
+(function(){
+  if(window.__ttSwapBound)return;window.__ttSwapBound=1;
+  var box=document.getElementById('ttBox');
+  var drag=null,dropEl=null;
+  function cellOf(t){
+    var td=t&&t.closest?t.closest('td.swapc'):null;
+    return td;
+  }
+  function keyOf(td){return {w:td.dataset.tw,n:Number(td.dataset.tn)}}
+  function pt(e){return e.touches?e.touches[0]:e}
+  function clearDrop(){if(dropEl){dropEl.classList.remove('droptgt');dropEl=null}}
+  function down(e){
+    if(!TT_SWAP)return;
+    var td=cellOf(e.target);if(!td)return;
+    var t=pt(e);
+    drag={td:td,sx:t.clientX,sy:t.clientY,moved:false};
+    if(e.cancelable)e.preventDefault();
+  }
+  function move(e){
+    if(!drag)return;
+    var t=pt(e);
+    if(!drag.moved&&Math.abs(t.clientX-drag.sx)+Math.abs(t.clientY-drag.sy)>8){
+      drag.moved=true;drag.td.classList.add('dragging');
+    }
+    if(drag.moved){
+      if(e.cancelable)e.preventDefault();
+      var td=cellOf(document.elementFromPoint(t.clientX,t.clientY));
+      if(td!==dropEl){
+        clearDrop();
+        if(td&&td!==drag.td){td.classList.add('droptgt');dropEl=td}
+      }
+    }
+  }
+  function up(e){
+    if(!drag)return;
+    var d=drag;drag=null;
+    clearDrop();
+    d.td.classList.remove('dragging');
+    var t=e.changedTouches?e.changedTouches[0]:e;
+    if(d.moved){                            /* 拖动 → 落点对换 */
+      var td=cellOf(document.elementFromPoint(t.clientX,t.clientY));
+      if(td&&td!==d.td)ttSwap(keyOf(d.td),keyOf(td));
+    }else{                                  /* 原地点一下 → 点选对换 */
+      if(!TT_PICK){TT_PICK=d.td;TT_PICK.classList.add('picked')}
+      else if(TT_PICK===d.td){TT_PICK.classList.remove('picked');TT_PICK=null}
+      else{
+        var p=TT_PICK;p.classList.remove('picked');TT_PICK=null;
+        ttSwap(keyOf(p),keyOf(d.td));
+      }
+    }
+  }
+  box.addEventListener('mousedown',down);
+  window.addEventListener('mousemove',move);
+  window.addEventListener('mouseup',up);
+  box.addEventListener('touchstart',down,{passive:false});
+  window.addEventListener('touchmove',move,{passive:false});
+  window.addEventListener('touchend',up);
+})();
 
 /* ---------- 2.0.15 通用撤销/重做栈（座位表 / 课程表 / 小组分组共用） ---------- */
 function mkHist(){
@@ -17449,9 +17569,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v94';
-var WB_MY_VER = '优化版 vT94 · AI 会建作业列+备用接口';
-var WB_BUILD_DATE = '11-10', WB_BUILD_NO = '2.6.116';
+var WB_VER_TAG = 'v95';
+var WB_MY_VER = '优化版 vT95 · 课程表临时调课';
+var WB_BUILD_DATE = '11-10', WB_BUILD_NO = '2.6.117';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
