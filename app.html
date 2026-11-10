@@ -11184,8 +11184,11 @@ function loadMemosFromDB(){
         var old=byT[k];
         if(!old){byT[k]=x;return}
         var ta=Date.parse(x.更新||'')||0,tb=Date.parse(old.更新||'')||0;
-        var loser=(ta>tb)?old:x;
-        byT[k]=(ta>tb)?x:old;
+        /* vT90 时间打平时优先保留「已完成」的那行：旧数据勾完成不盖更新时间，
+           两行时间相同的情况下保错行就会把完成状态吞掉（换台电脑又弹出来）。 */
+        var aWin=(ta>tb)||((ta===tb)&&(!!x.完成&&!old.完成));
+        var loser=aWin?old:x;
+        byT[k]=aWin?x:old;
         if(loser._id)memDels.push(loser._id);
       });
       RM_ROWS=Object.keys(byT).map(function(k){return byT[k]});
@@ -14738,8 +14741,21 @@ function hmWDName(d){
    名单存在本机，可点工具条「🙈 不参与名单」随时勾选。 */
 var HM_IGNORE_KEY='wb_ignore_students_v1';
 var HM_IGNORE=(function(){
-  try{var o=JSON.parse(localStorage.getItem(HM_IGNORE_KEY)||'null');if(o&&typeof o==='object')return o}catch(e){}
-  return {'柯骏豪':1,'方浩轩':1};            /* 默认：这两位同学不参与作业 / 诵读 */
+  var def={'柯骏豪':1,'方浩轩':1,'徐曼桦':1};   /* vT90 默认：这三位同学不参与作业 / 诵读 */
+  try{
+    var raw=localStorage.getItem(HM_IGNORE_KEY),o=raw?JSON.parse(raw):null;
+    if(o&&typeof o==='object'){
+      /* vT90 迁移：本机存的是旧默认名单（只有柯骏豪/方浩轩两人）→ 自动补上徐曼桦。
+         老师自己改过的名单（人数不是 2 或勾选与旧默认不符）不动。 */
+      var ks=Object.keys(o);
+      if(ks.length===2&&o['柯骏豪']===1&&o['方浩轩']===1){
+        o['徐曼桦']=1;
+        try{localStorage.setItem(HM_IGNORE_KEY,JSON.stringify(o))}catch(e){}
+      }
+      return o;
+    }
+  }catch(e){}
+  return def;
 })();
 var HM_HW_EXCLUDE=HM_IGNORE;
 var HM_SHOW_IGN=false;
@@ -15763,9 +15779,16 @@ function hmDoneMemo(r){
   r.完成=true;
   HM_JUST_DONE={id:r._id,标题:r.标题};
   if(dbReady&&db){
-    db.updateRecord({databaseId:RM_DB,recordId:r._id,properties:{'是否完成':{checkbox:true}}})
+    /* vT90 修复「在这台电脑点了完成，换台电脑还是显示未完成」：
+       这里以前只写「是否完成」，不写「更新时间」——而 LWW 合并和 vT85 去重都按
+       更新时间裁决，完成的那行时间戳停在旧值：同标题有历史重复行时，
+       去重会把未完成的那行留下、把已完成的那行删掉，完成状态就"被吞"了。
+       现在勾选同时盖「更新时间」（与备忘页签的 toggleMemo 同口径），并立刻推快照。 */
+    db.updateRecord({databaseId:RM_DB,recordId:r._id,properties:{
+      '是否完成':{checkbox:true},'更新时间':{date:new Date().toISOString()}}})
       .then(function(){toastMsg('✅ 完成：'+(r.标题||''))})
       .catch(function(e){console.error(e);toastMsg('⚠️ 云端没同步上')});
+    setTimeout(function(){try{typeof syncCycle==='function'&&syncCycle(false)}catch(e){}},1200);
   }
   setTimeout(function(){HM_JUST_DONE=null;renderHome()},1600);
 }
@@ -17426,9 +17449,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v89';
-var WB_MY_VER = '优化版 vT89 · AI扩动作 + 投稿改造';
-var WB_BUILD_DATE = '11-09', WB_BUILD_NO = '2.6.111';
+var WB_VER_TAG = 'v90';
+var WB_MY_VER = '优化版 vT90 · AI直连免中转 + 待办同步修复';
+var WB_BUILD_DATE = '11-10', WB_BUILD_NO = '2.6.112';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -26478,17 +26501,25 @@ function cwInit(){
 })();
 </script>
 <script>
-/* =============== vT88/vT89 班主任 AI 助手 ===============
+/* =============== vT88/vT89/vT90 班主任 AI 助手 ===============
    对话 / 语音 → 大模型解析成「动作」→ 老师点确认 → 调用本页既有功能执行。
    只允许八类动作：发通知（含叫人）、登记作业、布置作业、查缺交 / 查积分、
    加积分、发放图鉴灵杰、留堂名单。
-   模型走「本机或自建的 HTTPS 中转」，Key 只保存在这台电脑的浏览器里，不写进代码。 */
+   vT90 默认直连智谱官方接口（免中转）；被浏览器跨域拦截时自动回落本机中转。
+   Key 只保存在这台电脑的浏览器里，不写进代码。 */
 (function () {
   if (window.__wbAI) return; window.__wbAI = 1;
 
   var CFG_KEY = 'wb_ai_cfg_v1';
-  var CFG = { base: 'http://127.0.0.1:8787/v1/chat/completions', key: '', model: 'glm-4-flash', tts: true };
+  /* vT90 免中转：默认直连智谱官方接口。
+     浏览器有可能拦截跨域（智谱不保证给网页发 CORS 头）——
+     直连失败时自动改走本机中转 127.0.0.1:8787，无需手动切换。 */
+  var AI_ZHIPU_DIRECT = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+  var AI_RELAY_LOCAL = 'http://127.0.0.1:8787/v1/chat/completions';
+  var CFG = { base: AI_ZHIPU_DIRECT, key: '', model: 'glm-4-flash', tts: true };
   try { var c0 = JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); if (c0 && typeof c0 === 'object') { for (var k0 in c0) if (c0[k0] !== undefined) CFG[k0] = c0[k0]; } } catch (e) {}
+  /* vT90 迁移：旧版默认值是本机中转地址 → 清掉，回到「直连优先」的新默认 */
+  if (CFG.base === 'http://127.0.0.1:8787/v1/chat/completions') { CFG.base = AI_ZHIPU_DIRECT; saveCfg(); }
   function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(CFG)); } catch (e) {} }
 
   var HIST = [];          /* 最近几轮对话，给模型留上下文 */
@@ -26497,8 +26528,9 @@ function cwInit(){
   /* ---------------- 样式 ---------------- */
   var css = ''
     + '#aiFab{position:fixed;right:18px;bottom:22px;z-index:9998;width:56px;height:56px;border-radius:50%;border:0;cursor:pointer;'
-    + 'background:linear-gradient(135deg,#2d8f63,#1f6f4c);color:#fff;font-size:26px;box-shadow:0 8px 22px rgba(24,79,57,.32)}'
-    + '#aiFab:hover{transform:translateY(-2px)}'
+    + 'background:linear-gradient(135deg,#7c5cff,#3f8bff);color:#fff;font-size:26px;box-shadow:0 8px 22px rgba(84,74,214,.35);'
+    + 'display:flex;align-items:center;justify-content:center;padding:0}'
+    + '#aiFab:hover{transform:translateY(-2px) scale(1.04)}'
     + '#aiPanel{position:fixed;right:18px;bottom:88px;z-index:9999;width:min(420px,calc(100vw - 24px));height:min(620px,calc(100vh - 120px));'
     + 'background:#fff;border:1px solid #dbe7e0;border-radius:16px;box-shadow:0 18px 48px rgba(16,42,32,.22);display:none;flex-direction:column;overflow:hidden}'
     + '#aiPanel.on{display:flex}'
@@ -26541,11 +26573,11 @@ function cwInit(){
 
   /* ---------------- DOM ---------------- */
   var fab = document.createElement('button');
-  fab.id = 'aiFab'; fab.title = '班主任 AI 助手（说一句话就能发通知、登记作业）'; fab.textContent = '🤖';
+  fab.id = 'aiFab'; fab.title = '班主任 AI 助手（说一句话就能发通知、登记作业）'; fab.textContent = '✨';
   var panel = document.createElement('div');
   panel.id = 'aiPanel';
   panel.innerHTML = ''
-    + '<div id="aiHead">🤖 班主任助手 <span class="st" id="aiState"></span>'
+    + '<div id="aiHead">✨ 班主任助手 <span class="st" id="aiState"></span>'
     + '<button id="aiCfgBtn" title="设置模型与 Key">⚙️</button><button id="aiMinBtn" title="收起">✕</button></div>'
     + '<div id="aiLog"></div>'
     + '<div id="aiBar"><button id="aiMic" title="按住说话（Chrome / Edge）">🎤</button>'
@@ -26571,8 +26603,9 @@ function cwInit(){
     var mask = document.createElement('div'); mask.className = 'ai-cfg';
     mask.innerHTML = ''
       + '<div class="box"><h3>⚙️ 助手设置</h3>'
-      + '<div class="hint">默认走本机中转 <b>http://127.0.0.1:8787</b>（工作区里的 zhipu-cors-proxy，双击 start.bat 启动）。<br>'
-      + '也可以填自己搭的 HTTPS 中转地址（Cloudflare Worker）。Key 只存在这台电脑的浏览器里。</div>'
+      + '<div class="hint">默认<b>直连智谱官方接口</b>，不用中转。若浏览器跨域拦截，会自动改走本机中转 '
+      + '<b>http://127.0.0.1:8787</b>（工作区里的 zhipu-cors-proxy，双击 start.bat 启动）。<br>'
+      + '也可以填自己搭的 HTTPS 中转地址（Cloudflare Worker 免费部署一次，全端可用）。Key 只存在这台电脑的浏览器里。</div>'
       + '<label>接口地址（完整 URL）</label><input id="aiCfgBase">'
       + '<label>智谱 API Key</label><input id="aiCfgKey" type="password" placeholder="粘贴 Key，保存后只在本机生效">'
       + '<label>模型</label><input id="aiCfgModel" placeholder="glm-4-flash">'
@@ -26594,15 +26627,15 @@ function cwInit(){
       callModel([{ role: 'user', content: '只回复两个字：可用' }], 40).then(function (t) {
         msg.textContent = '✅ 连通：' + String(t).slice(0, 40);
       }).catch(function (e) {
-        msg.textContent = '❌ 失败：' + (e && e.message ? e.message : e) + '（检查代理是否启动、Key 是否正确）';
+        msg.textContent = '❌ 失败：' + (e && e.message ? e.message : e) + '（直连与中转都不通：检查 Key、网络，或启动本机中转）';
       });
     };
   }
 
-  /* ---------------- 调模型 ---------------- */
-  function callModel(messages, maxTokens) {
-    if (!cfgReady()) return Promise.reject(new Error('还没设置 Key'));
-    var url = CFG.base;
+  /* ---------------- 调模型 ----------------
+     vT90 免中转：默认直连智谱官方接口；若浏览器跨域拦截（TypeError / Failed to fetch），
+     自动改走本机中转再试一次，两条路都不用老师手动切换。 */
+  function aiRawCall(url, messages, maxTokens) {
     return fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CFG.key },
@@ -26618,6 +26651,15 @@ function cwInit(){
     }).then(function (j) {
       var msg = j && j.choices && j.choices[0] && j.choices[0].message;
       return (msg && msg.content) || '';
+    });
+  }
+  function callModel(messages, maxTokens) {
+    if (!cfgReady()) return Promise.reject(new Error('还没设置 Key'));
+    var url = CFG.base || AI_ZHIPU_DIRECT;
+    return aiRawCall(url, messages, maxTokens).catch(function (e) {
+      var netErr = e && (e.name === 'TypeError' || /Failed to fetch|NetworkError|load failed/i.test(String(e && e.message || e)));
+      if (netErr && url !== AI_RELAY_LOCAL) return aiRawCall(AI_RELAY_LOCAL, messages, maxTokens);
+      throw e;
     });
   }
 
