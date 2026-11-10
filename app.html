@@ -17580,9 +17580,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v97';
-var WB_MY_VER = '优化版 vT97 · 未交统计可排除';
-var WB_BUILD_DATE = '11-10', WB_BUILD_NO = '2.6.119';
+var WB_VER_TAG = 'v98';
+var WB_MY_VER = '优化版 vT98 · 图鉴新增37只（256）';
+var WB_BUILD_DATE = '11-10', WB_BUILD_NO = '2.6.120';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24195,7 +24195,7 @@ function cwInit(){
   }
   function ptDefaultCfg() {
     return {
-      id: 'cfg', enabled: 'on', subEnabled: 'on',   /* vT89 学生投稿独立开关 */
+      id: 'cfg', enabled: 'on',
       costs: { feed: DEF_COST.feed, draw: DEF_COST.draw, redeem: DEF_COST.redeem },
       gradLevel: GRAD_LEVEL, saleOff: 100, shopSeeded: false,
       updatedAt: Date.now(), updatedBy: 'web'
@@ -24273,11 +24273,6 @@ function cwInit(){
         if (!ex) { local.push(r); byId[r.id] = r; changed = true; }
         else {
           var ru = r.updatedAt || 0, eu = ex.updatedAt || 0;
-          /* vT89 投稿/家长队列审批状态保护：本机已审（approved/rejected/done）的记录，
-             不允许被远端较旧的 pending 覆盖回去（驳回失效的根因之一） */
-          var reviewed = { approved: 1, rejected: 1, done: 1 };
-          if ((k === 'petSubmissions' || k === 'parentQueue') &&
-              reviewed[ex.status || 'pending'] && (r.status || 'pending') === 'pending' && ru <= eu) return;
           if (ru >= eu) { for (var f in r) { if (r.hasOwnProperty(f)) ex[f] = r[f]; } changed = true; }
         }
       });
@@ -24416,9 +24411,7 @@ function cwInit(){
      需要反悔时可在「赠送记录」里一键恢复。所有展示/统计都走 ptPets()。 */
   function ptPets() { return ptGet().pets.filter(function (p) { return p && !p.deleted; }); }
   /* vT67 品级闸门：积分可抽取的池只含普通灵杰（隐藏/典藏只能老师授予） */
-  /* vT86 唤醒台移除后，随机唤醒只从《启灵图鉴》的普通灵杰里抽，
-     不再混入旧版自动生成的宠物（老师对这些形象不满意，已整体下架）。 */
-  function codexDrawPool(s) { return (s.petPool || []).filter(function (p) { return p && !p.deleted && p.origin === 'codex' && (p.tier || '普通') === '普通'; }); }
+  function codexDrawPool(s) { return (s.petPool || []).filter(function (p) { return p && !p.deleted && (p.tier || '普通') === '普通'; }); }
 
   /* ---------------- 种子：宠物池 + 商城 ---------------- */
   function ptBuildSeed() {
@@ -24446,7 +24439,7 @@ function cwInit(){
     });
     return list;
   }
-  /* ---------------- vT67+ 启灵图鉴种子：219 只灵杰（追加不删，老师可在后台改品级/系列） ---------------- */
+  /* ---------------- vT67+ 启灵图鉴种子：256 只灵杰（追加不删，老师可在后台改品级/系列） ---------------- */
   var PT_CODEX_ROWS = [
 [1,'焰角小白羊','萌宠灵物'],
 [2,'抱晶小精','精灵星座'],
@@ -24666,7 +24659,44 @@ function cwInit(){
 [216,'星之旅人','名著先贤','典藏'],
 [217,'永恒玫瑰','名著先贤','典藏'],
 [218,'月光盛典','名著先贤','典藏'],
-[219,'星光花园','名著先贤','典藏']
+[219,'星光花园','名著先贤','典藏'],
+[220,'雪璃白狐','萌宠灵物'],
+[221,'焰珠火凰','萌宠灵物'],
+[222,'捧星小猬','萌宠灵物'],
+[223,'泡泡蓝鲸','萌宠灵物'],
+[224,'虹翼独角','萌宠灵物'],
+[225,'浮冰白豹','萌宠灵物'],
+[226,'抱珠浣熊','萌宠灵物'],
+[227,'蝠翼紫狐','萌宠灵物'],
+[228,'云绒白狮','萌宠灵物'],
+[229,'红结赤狐','萌宠灵物'],
+[230,'冠月白猫','萌宠灵物'],
+[231,'星眸紫蝶','萌宠灵物'],
+[232,'薄荷青鸟','萌宠灵物'],
+[233,'爱心柯基','萌宠灵物'],
+[234,'笑颜柴犬','萌宠灵物'],
+[235,'粉结贵宾','萌宠灵物'],
+[236,'星叶边牧','萌宠灵物'],
+[237,'格巾吉娃','萌宠灵物'],
+[238,'花星金毛','萌宠灵物'],
+[239,'抱星白兔','萌宠灵物'],
+[240,'金瓜仓鼠','萌宠灵物'],
+[241,'青角云鹿','山海异兽'],
+[242,'金穗瑞豕','山海异兽'],
+[243,'玄翼斧虎','山海异兽'],
+[244,'焰鬃飞马','山海异兽'],
+[245,'金翼灵狐','山海异兽'],
+[246,'云雨羚羊','山海异兽'],
+[247,'赤焰雏凤','山海异兽'],
+[248,'玄甲黑虎','山海异兽'],
+[249,'月杖玉兔','山海异兽'],
+[250,'金轮神鹰','山海异兽'],
+[251,'青焰九尾','山海异兽'],
+[252,'蟠桃灵猴','山海异兽'],
+[253,'紫雷麒麟','山海异兽'],
+[254,'碧晶天马','山海异兽'],
+[255,'寿纹龙龟','山海异兽'],
+[256,'云泽仙麟','山海异兽']
   ];
   var PT_CODEX_BLESS = {
     '名著先贤': '以先贤为镜，品读文字，读懂人心',
@@ -24708,7 +24738,7 @@ function cwInit(){
     var s = ptGet();
     var dirty = false;
     if (!s.petPool.length) { s.petPool = ptBuildSeed(); dirty = true; }
-    /* vT67+ 图鉴种子：按 id 增量补齐 219 只灵杰。老用户强刷后自动追加新增形象，
+    /* vT67+ 图鉴种子：按 id 增量补齐 256 只灵杰。老用户强刷后自动追加新增形象，
        旧种子、老师改过的品级/系列、已收回的条目全部保留；后台「重置灵杰池」可全量重建。 */
     var seedAll = ptBuildCodexSeed();
     var seedHave = {}, seedExcl = {};
@@ -24740,9 +24770,8 @@ function cwInit(){
   function ptCard(pet) {
     var def = ptPetDefOf(pet);
     var isPhoto = PetCore.isPhotoDef(pet);
-    /* vT82 图鉴灵杰：img 指向 codeximg/ 卡面，直接显示线上卡面（含 gif 动效回退链）
-       vT86：本地导入的 data: / https: 卡面也走同一条展示通道 */
-    var isCxPic = !isPhoto && pet.img && /^(codeximg\/|https?:|data:)/i.test(String(pet.img));
+    /* vT82 图鉴灵杰：img 指向 codeximg/ 卡面，直接显示线上卡面（含 gif 动效回退链） */
+    var isCxPic = !isPhoto && pet.img && String(pet.img).indexOf('codeximg/') === 0;
     var stage = PetCore.stageOf(pet.level, pet.graduated, ptStageCfg());
     var svg = isPhoto ? (ptPetPhotoHtml(pet, 'pet-photo', stage) || '<div class="pet-photo" style="display:flex;align-items:center;justify-content:center">🖼️</div>')
                       : isCxPic ? ptCodexPetPicHtml(pet, 'pet-photo')
@@ -24765,11 +24794,46 @@ function cwInit(){
   function ptRenderWall() {
     var box = document.getElementById('petPanel-wall'); if (!box) return;
     var s = ptGet(); var list = ptPets();
-    /* vT86 唤醒台已移除：灵杰统一在「📖 启灵图鉴」里点卡发放 / 批量发放 */
-    var html = list.length ? list.map(ptCard).join('') : '<div class="pet-empty">还没有灵杰。到「📖 启灵图鉴」点卡面发放，或在图鉴管理里批量发放吧～</div>';
+    var html = list.length ? list.map(ptCard).join('') : '<div class="pet-empty">还没有灵杰，去「🥚 唤醒台」给同学唤醒一只吧～</div>';
     box.innerHTML = '<div class="pet-grid">' + html + '</div>';
   }
-  /* vT89 家长队列已移除：小程序家长端早已不再提交蓄灵提案，页面无需保留 */
+  function ptRenderIncubator() {
+    var box = document.getElementById('petPanel-inc'); if (!box) return;
+    var s = ptGet();
+    var opts = ptNames().map(function (n) { return '<option value="' + ptEsc(n) + '">' + ptEsc(n) + '</option>'; }).join('');
+    var pool = s.petPool.map(function (sp) {
+      var isPhoto = PetCore.isPhotoDef(sp);
+      /* vT82 图鉴灵杰在池子里也直接显示卡面（不再误走手绘通道） */
+      var isCxPic = !isPhoto && sp.img && String(sp.img).indexOf('codeximg/') === 0;
+      /* vT37 池子里的宠物一律以「蛋」呈现 —— 发放那一刻才孵化，惊喜感留给学生 */
+      var pic = isPhoto ? ptPetPhotoHtml(sp, 'pet-photo', 'egg')
+              : isCxPic ? ptCodexPetPicHtml(sp, 'pet-photo')
+              : PetCore.renderPet(sp, { seed: sp.id, egg: true });
+      var kind = (sp.origin === 'student') ? ' <span class="pet-stu">同学共创</span>' : '';
+      return '<div class="pet-card" style="cursor:pointer" onclick="ptHatchFromSel(\'' + sp.id + '\')">' + pic +
+        '<div class="pet-nm">' + ptEsc(sp.name) + ' <span class="pet-rare r-' + ptRarClass(sp.rarity) + '">' + ptEsc(sp.rarity) + '</span>' + kind + '</div>' +
+        '<div class="pet-own">' + ptEsc(sp.series || '') + ' · ' + (isPhoto ? '手绘作品' : (PT_ARC_NAME[sp.archetype] || ptBreedDisp(sp) || sp.archetype)) + '</div>' +
+        '<div class="pet-lv">' + (ptPlayable() ? '🥚 点击唤醒，发放给上方所选学生' : '⏸ 模块已暂停，暂不可唤醒') + '</div></div>';
+    }).join('');
+    box.innerHTML = '<div class="gpset"><span class="lbl">发放给：</span><select id="petStuSel" class="search">' + opts + '</select>' +
+      '<button class="btn2 primary" onclick="ptHatchSel()">🥚 整批唤醒（随机一只给所选学生）</button>' +
+      '<span class="sctip" id="petIncTip"></span></div>' +
+      '<div class="pet-grid">' + pool + '</div>';
+  }
+  function ptRenderParent() {
+    var box = document.getElementById('petPanel-parent'); if (!box) return;
+    var s = ptGet();
+    var q = s.parentQueue.filter(function (x) { return (x.status || 'pending') === 'pending'; });
+    var html = q.length ? q.map(function (x) {
+      var act = (x.action === 'feed') ? '蓄灵' : (x.action === 'draw') ? '唤醒' : (x.action === 'redeem') ? '兑换' : x.action;
+      return '<div class="pet-row"><span>👪 ' + ptEsc(x.studentId || x.studentName || '') + ' · ' + act + (x.item ? (' · ' + ptEsc(x.item)) : '') + '</span>' +
+        '<span class="pet-acts"><button class="btn2 sm primary" onclick="ptApproveParent(\'' + x.id + '\')">✅ 批准</button>' +
+        '<button class="btn2 sm" onclick="ptRejectParent(\'' + x.id + '\')">❌ 驳回</button></span></div>';
+    }).join('') : '<div class="pet-empty">暂无待处理的家长蓄灵提案</div>';
+    box.innerHTML = '<div class="sub">家长在小程序端提交的蓄灵 / 唤醒 / 兑换提案，老师批准后才真正入账（扣学生积分 + 改灵杰状态）。' +
+      (ptPlayable() ? '' : ' <b style="color:#c33">⏸ 模块暂停中，批准后也不会消耗积分，建议先驳回或启用模块。</b>') + '</div>' + html;
+    ptBadges();
+  }
   /* 手绘作品的网页端取图：本地缓存优先，没有就异步经 contents API 拉一次 */
   var PT_IMG_MEM = {};   /* relPath -> dataURI（本次会话内存缓存） */
   function wbPetFetchImg(rel) {
@@ -24819,9 +24883,7 @@ function cwInit(){
     return box('', 'data-pimg="' + rel + '"');
   }
   function ptSubPhotoHtml(x, cls) {
-    var rel = x.proc || x.img || (x.def && x.def.img) || '';
-    /* vT89 老师端抠图美化后的成品 / 学生端处理稿（data URI）直接显示 */
-    if (/^(data:|https?:)/i.test(rel)) return '<img class="' + cls + '" src="' + rel + '" alt="手绘作品">';
+    var rel = x.img || (x.def && x.def.img) || '';
     if (!rel) return '';
     var cached = PT_IMG_MEM[rel];
     if (cached) return '<img class="' + cls + '" src="' + cached + '" alt="手绘作品">';
@@ -24835,61 +24897,22 @@ function cwInit(){
     } catch (e) {}
     return '<img class="' + cls + '" data-pimg="' + rel + '" src="" alt="手绘作品加载中">';
   }
-  /* vT89 一次性把历史「装配器」投稿标记为已驳回（装配器入口已下线） */
-  function ptSubPurgeBuilders() {
-    try {
-      if (localStorage.getItem('pt_builder_purged_v1')) return;
-      var s = ptGet(); var n = 0;
-      s.petSubmissions.forEach(function (x) {
-        if (x && (x.status || 'pending') === 'pending' && x.kind !== 'photo' && x.kind !== 'freehand') {
-          x.status = 'rejected'; x.note = '装配器投稿已停用'; x.updatedAt = Date.now(); n++;
-        }
-      });
-      if (n) { ptSave(s); PET_DB = s; }
-      localStorage.setItem('pt_builder_purged_v1', '1');
-    } catch (e) {}
-  }
   function ptRenderSub() {
     var box = document.getElementById('petPanel-sub'); if (!box) return;
-    ptSubPurgeBuilders();
     var s = ptGet();
-    var on = (ptCfg().subEnabled || 'on') === 'on';
-    var head = '<div class="sub">学生用手机拍下自己画的作品上传（小程序端自动抠图 + 美化），老师批准后进入灵杰池（标注同学共创），全班可唤醒。' +
-      (on ? '' : ' <b style="color:#c33">⛔ 投稿入口已关闭：学生不能再提交新作品，已有投稿仍可审批。</b>') +
-      ' <button class="btn2 sm" onclick="ptSubSwitch()">' + (on ? '⛔ 关闭学生投稿' : '▶ 开启学生投稿') + '</button></div>';
-    if (!on && !s.petSubmissions.filter(function (x) { return (x.status || 'pending') === 'pending'; }).length) {
-      box.innerHTML = head + '<div class="pet-empty">投稿入口已关闭，暂无待审作品</div>';
-      ptBadges(); return;
-    }
     var q = s.petSubmissions.filter(function (x) { return (x.status || 'pending') === 'pending'; });
     var html = q.length ? q.map(function (x) {
       var isPhoto = PetCore.isPhotoDef(x.def) || x.kind === 'photo' || !!x.img;
-      var kind = (x.kind === 'freehand') ? '自由涂鸦' : '手绘作品';
+      var kind = (x.kind === 'photo') ? '手绘作品' : (x.kind === 'freehand') ? '自由涂鸦' : '装配器';
       var pic = isPhoto ? ptSubPhotoHtml(x, 'pet-photo') : PetCore.renderPet(x.def, { seed: x.id });
-      var procTag = (x.kind === 'photo')
-        ? (x.processed ? '<span class="pet-stu">🪄 已抠图美化</span>'
-          : '<span style="color:#c0392b;font-weight:700">⚠️ 未抠图美化，暂不能入池</span>')
-        : '';
-      var magic = (x.kind === 'photo' && !x.processed && (x.img || (x.def && x.def.img)))
-        ? '<button class="btn2 sm" onclick="ptSubProcess(\'' + x.id + '\')" title="老师端代为抠图 + 美化">🪄 抠图美化</button>' : '';
       return '<div class="pet-card">' + pic +
         '<div class="pet-nm">' + ptEsc((x.def && x.def.name) || '未命名') + '</div>' +
-        '<div class="pet-own">作者：' + ptEsc(x.studentId || '') + ' · ' + kind + ' ' + procTag + '</div>' +
+        '<div class="pet-own">作者：' + ptEsc(x.studentId || '') + ' · ' + kind + '</div>' +
         '<div class="pet-acts"><button class="btn2 sm primary" onclick="ptApproveSub(\'' + x.id + '\')">✅ 入池</button>' +
-        '<button class="btn2 sm" onclick="ptRejectSub(\'' + x.id + '\')">❌ 驳回</button>' + magic + '</div></div>';
+        '<button class="btn2 sm" onclick="ptRejectSub(\'' + x.id + '\')">❌ 驳回</button></div></div>';
     }).join('') : '<div class="pet-empty">暂无学生投稿</div>';
-    box.innerHTML = head + '<div class="pet-grid">' + html + '</div>';
+    box.innerHTML = '<div class="sub">学生用「装配器 / 手绘作品」造出的灵杰，老师批准后进入灵杰池（标注同学共创），全班可唤醒。</div><div class="pet-grid">' + html + '</div>';
     ptBadges();
-  }
-  /* vT89 学生投稿独立开关（不影响整个图鉴模块的启停） */
-  function ptSubSwitch() {
-    if (!ptNeedAdmin()) return;
-    var s = ptGet(); var c = ptCfg();
-    c.subEnabled = ((c.subEnabled || 'on') === 'on') ? 'off' : 'on';
-    c.updatedAt = Date.now(); c.updatedBy = 'web';
-    ptSave(s); PET_DB = s; ptKickSync();
-    toastMsg(c.subEnabled === 'on' ? '▶ 学生投稿已开启' : '⛔ 学生投稿已关闭（小程序端同步生效）');
-    ptRenderSub();
   }
   function ptRenderGrad() {
     var box = document.getElementById('petPanel-grad'); if (!box) return;
@@ -25210,15 +25233,33 @@ function cwInit(){
   }
   function ptBadges() {
     var s = ptGet();
-    /* vT89 家长队列已移除，只剩投稿徽标 */
+    var n1 = s.parentQueue.filter(function (x) { return (x.status || 'pending') === 'pending'; }).length;
     var n2 = s.petSubmissions.filter(function (x) { return (x.status || 'pending') === 'pending'; }).length;
+    var a = document.getElementById('petPQn'); if (a) a.textContent = n1 ? (' ' + n1) : '';
     var b = document.getElementById('petSUBn'); if (b) b.textContent = n2 ? (' ' + n2) : '';
   }
-  function ptRenderAll() { ptRenderWall(); ptRenderCodex(); ptRenderSub(); ptRenderGrad(); ptRenderAdmin(); ptRenderIO(); }
+  function ptRenderAll() { ptRenderIncubator(); ptRenderWall(); ptRenderCodex(); ptRenderParent(); ptRenderSub(); ptRenderGrad(); ptRenderAdmin(); ptRenderIO(); }
 
   /* ---------------- 行为 ---------------- */
-  /* vT86 唤醒台（🥚 孵蛋台）已整体移除：老师不再从「随机灵杰池」里挑蛋，
-     所有发放统一走「📖 启灵图鉴」的点卡发放 / 按系列批量发放。 */
+  function ptHatch(studentName, poolId) {
+    if (!ptPlayable()) return toastMsg('⏸ 图鉴模块已暂停 / 关停，暂不能唤醒');
+    var s = ptGet();
+    var sp = s.petPool.filter(function (x) { return x.id === poolId; })[0];
+    if (!sp) return;
+    if (!studentName) return toastMsg('⚠️ 请先选择学生');
+    s.pets.push(ptMkPet(studentName, sp));
+    ptSave(s); PET_DB = s;
+    ptKickSync();
+    toastMsg('🐾 已唤醒「' + sp.name + '」授予 ' + studentName);
+    ptRenderWall(); ptRenderIncubator();
+  }
+  function ptHatchFromSel(poolId) { var sel = document.getElementById('petStuSel'); if (!sel || !sel.value) return toastMsg('请先选择学生'); ptHatch(sel.value, poolId); }
+  function ptHatchSel() {
+    var sel = document.getElementById('petStuSel'); if (!sel || !sel.value) return toastMsg('请先选择学生');
+    var s = ptGet(); var drawPool = codexDrawPool(s); if (!drawPool.length) return toastMsg('灵杰池为空');
+    var sp = drawPool[Math.floor(Math.random() * drawPool.length)];
+    ptHatch(sel.value, sp.id);
+  }
   /* vT65 误发收回：打 deleted 标记（不真删，便于反悔恢复，且同步不会被云端旧数据复活） */
   function ptRevoke(petId) {
     if (!ptNeedAdmin()) return;
@@ -25289,17 +25330,34 @@ function cwInit(){
     p.updatedAt = Date.now();
     ptSave(s); PET_DB = s; toastMsg('🎓 毕业卡号：' + p.gradCode); ptRenderGrad(); ptRenderWall();
   }
-  /* vT89 家长队列已移除，ptApproveParent / ptRejectParent 一并下线（队列数据仍随导出保留） */
+  function ptApproveParent(id) {
+    if (!ptPlayable()) return toastMsg('⏸ 模块暂停 / 关停中，不能批准消耗类提案');
+    var s = ptGet(); var it = s.parentQueue.filter(function (x) { return x.id === id; })[0]; if (!it) return;
+    var who = it.studentName || it.studentId;
+    var pet = s.pets.filter(function (p) { return (p.studentId || p.studentName) === who && !p.deleted; })[0];
+    var cost = (it.action === 'draw') ? ptCost('draw') : (it.action === 'redeem') ? ptCost('redeem') : ptCost('feed');
+    var actName = (it.action === 'feed') ? '蓄灵' : (it.action === 'draw') ? '唤醒' : (it.action === 'redeem') ? '兑换' : '蓄灵';
+    ptAddManual(who, '启灵图鉴 · 家长' + actName, -cost).then(function () {
+      if (pet) {
+        if (it.action === 'feed') { pet.exp = (pet.exp || 0) + 10; pet.hunger = Math.min(100, (pet.hunger || 0) + 20); }
+        else if (it.action === 'draw') { var dPool = codexDrawPool(s); if (dPool.length) { var sp = dPool[Math.floor(Math.random() * dPool.length)]; s.pets.push(ptMkPet(who, sp)); } }
+        else if (it.action === 'redeem') { pet.ownedItems = (pet.ownedItems || []).concat([it.item || '配饰']); }
+        ptLevelUp(pet); pet.updatedAt = Date.now();
+      }
+      it.status = 'done';
+      ptSave(s); PET_DB = s; toastMsg('✅ 已批准家长提案'); ptRenderParent(); ptRenderWall();
+    }).catch(function () {});
+  }
+  function ptRejectParent(id) {
+    var s = ptGet(); var it = s.parentQueue.filter(function (x) { return x.id === id; })[0]; if (!it) return;
+    it.status = 'rejected'; ptSave(s); PET_DB = s; toastMsg('❌ 已驳回'); ptRenderParent();
+  }
   function ptApproveSub(id) {
     var s = ptGet(); var x = s.petSubmissions.filter(function (y) { return y.id === id; })[0]; if (!x) return;
-    /* vT89 手绘作品必须先抠图美化才能入池（学生端或老师端处理过都算） */
-    if (x.kind === 'photo' && !x.processed) {
-      return toastMsg('⚠️ 这张还没抠图美化：点卡片上的「🪄 抠图美化」处理后再入池');
-    }
     var def;
-    var imgRel = x.proc || x.img || (x.def && x.def.img) || '';
+    var imgRel = x.img || (x.def && x.def.img) || '';
     if (imgRel) {
-      /* 手绘作品：img 是作品的唯一形象，走 buildPetDef 但 img 必须带上 */
+      /* 手绘作品：img 路径是作品的唯一形象，走 buildPetDef 但 img 必须带上 */
       def = PetCore.buildPetDef(Object.assign({}, x.def, { origin: 'student', approved: true, img: imgRel }));
       def.id = 'sp_' + PetCore.hashStr((x.def && x.def.name || 's') + Date.now());
       def.authorStudentId = x.studentId;
@@ -25321,120 +25379,12 @@ function cwInit(){
       def.authorStudentId = x.studentId;
     }
     s.petPool.push(def);
-    x.status = 'approved'; x.updatedAt = Date.now();   /* vT89 驳回/入池都要更新时间戳，否则同步会被远端 pending 覆盖 */
-    ptSave(s); PET_DB = s; toastMsg('✅ 已入池（同学共创）'); ptRenderSub(); ptRenderCodex(); ptKickSync();
+    x.status = 'approved';
+    ptSave(s); PET_DB = s; toastMsg('✅ 已入池（同学共创）'); ptRenderSub(); ptRenderIncubator();
   }
   function ptRejectSub(id) {
     var s = ptGet(); var x = s.petSubmissions.filter(function (y) { return y.id === id; })[0]; if (!x) return;
-    /* vT89 驳回失效根因：只改 status 不更新 updatedAt，同步按「远端较新者优先」
-       又把学生端的 pending 覆盖回来。现在驳回/入池都打上最新时间戳；
-       合并侧（wbPetMergeRemote）也不允许把已审稿件降级回 pending。 */
-    x.status = 'rejected'; x.updatedAt = Date.now(); x.note = '老师驳回';
-    ptSave(s); PET_DB = s; toastMsg('❌ 已驳回（学生端会显示「未通过」）'); ptRenderSub(); ptKickSync();
-  }
-  /* vT89 老师端补抠图 + 美化：拉取作品图 → 去纸底（边缘泛洪） → 自动裁剪 → 提亮提饱和 → data URI 存稿 */
-  function ptSubProcess(id) {
-    var s = ptGet(); var x = s.petSubmissions.filter(function (y) { return y.id === id; })[0]; if (!x) return;
-    var rel = x.img || (x.def && x.def.img) || '';
-    if (!rel) return toastMsg('⚠️ 这条投稿没有图片');
-    toastMsg('🪄 正在抠图美化…');
-    Promise.resolve(rel.indexOf('data:') === 0 ? rel : wbPetFetchImg(rel)).then(function (src) {
-      return ptBeautyFromSrc(src);
-    }).then(function (uri) {
-      x.proc = uri; x.processed = true; x.updatedAt = Date.now();
-      ptSave(s); PET_DB = s;
-      toastMsg('🪄 已抠图美化，可以入池了');
-      ptRenderSub(); ptKickSync();
-    }).catch(function (e) {
-      toastMsg('⚠️ 处理失败：' + ((e && e.message) || '图片取不到') + '（可让学生重新提交）');
-    });
-  }
-  /* 抠图 + 美化核心：src 可以是 data URI / https（同源或无 CORS 限制的源） */
-  function ptBeautyFromSrc(src, maxSide) {
-    maxSide = maxSide || 480;
-    return new Promise(function (res, rej) {
-      var im = new Image();
-      im.onload = function () {
-        try {
-          var scale = Math.min(maxSide / im.width, maxSide / im.height, 1);
-          var w = Math.max(1, Math.round(im.width * scale)), h = Math.max(1, Math.round(im.height * scale));
-          var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-          var cx = cv.getContext('2d', { willReadFrequently: true });
-          cx.drawImage(im, 0, 0, w, h);
-          var imd = cx.getImageData(0, 0, w, h), dd = imd.data;
-          /* ① 采样四角 + 边框中点的纸底色 */
-          var px = function (i) { return [dd[i], dd[i + 1], dd[i + 2]]; };
-          var samples = [px(0), px((w - 1) * 4), px((w * (h - 1)) * 4), px((w * h - 1) * 4),
-            px((Math.floor(w / 2)) * 4), px((w * Math.floor(h / 2)) * 4)];
-          var bg = [0, 0, 0];
-          samples.forEach(function (sp) { bg[0] += sp[0]; bg[1] += sp[1]; bg[2] += sp[2]; });
-          bg = [bg[0] / samples.length, bg[1] / samples.length, bg[2] / samples.length];
-          /* ② 从边缘泛洪：与纸底色相近的连通区域 → 透明（只清边缘连通，不误伤画面内部的浅色） */
-          var TOL = 42, SOFT = 26;
-          var vis = new Uint8Array(w * h), stack = [];
-          for (var xx = 0; xx < w; xx++) { stack.push(xx, 0, xx, h - 1); }
-          for (var yy = 0; yy < h; yy++) { stack.push(0, yy, w - 1, yy); }
-          function near(p) {
-            var d0 = p[0] - bg[0], d1 = p[1] - bg[1], d2 = p[2] - bg[2];
-            return Math.sqrt(d0 * d0 + d1 * d1 + d2 * d2);
-          }
-          while (stack.length) {
-            var cy = stack.pop(), cx2 = stack.pop();
-            if (cx2 < 0 || cy < 0 || cx2 >= w || cy >= h) continue;
-            var idx = cy * w + cx2; if (vis[idx]) continue;
-            var i4 = idx * 4;
-            if (dd[i4 + 3] === 0) { vis[idx] = 1; }
-            else {
-              var dist = near([dd[i4], dd[i4 + 1], dd[i4 + 2]]);
-              if (dist > TOL + SOFT) continue;
-              vis[idx] = 1;
-              if (dist > TOL) { dd[i4 + 3] = Math.round(255 * (dist - TOL) / SOFT); }
-              else { dd[i4 + 3] = 0; }
-              stack.push(cx2 + 1, cy, cx2 - 1, cy, cx2, cy + 1, cx2, cy - 1);
-            }
-          }
-          /* ③ 内容包围盒裁剪（留 6% 边距） */
-          var minX = w, minY = h, maxX = -1, maxY = -1;
-          for (var yy2 = 0; yy2 < h; yy2++) for (var xx3 = 0; xx3 < w; xx3++) {
-            if (dd[(yy2 * w + xx3) * 4 + 3] > 24) { if (xx3 < minX) minX = xx3; if (xx3 > maxX) maxX = xx3; if (yy2 < minY) minY = yy2; if (yy2 > maxY) maxY = yy2; }
-          }
-          if (maxX < 0) { minX = 0; minY = 0; maxX = w - 1; maxY = h - 1; }
-          var padX = Math.round((maxX - minX) * 0.06) + 2, padY = Math.round((maxY - minY) * 0.06) + 2;
-          minX = Math.max(0, minX - padX); minY = Math.max(0, minY - padY);
-          maxX = Math.min(w - 1, maxX + padX); maxY = Math.min(h - 1, maxY + padY);
-          var cw = maxX - minX + 1, ch2 = maxY - minY + 1;
-          /* ④ 美化：对比度 +14%、饱和度 +12%、亮度 +4%（逐像素） */
-          var ct = 1.14, sat = 1.12, br = 1.04;
-          for (var i5 = 0; i5 < dd.length; i5 += 4) {
-            if (!dd[i5 + 3]) continue;
-            for (var ch3 = 0; ch3 < 3; ch3++) {
-              var v = dd[i5 + ch3];
-              v = (v - 128) * ct + 128;         /* 对比度 */
-              v *= br;                           /* 亮度 */
-              dd[i5 + ch3] = Math.max(0, Math.min(255, Math.round(v)));
-            }
-            var avg = (dd[i5] + dd[i5 + 1] + dd[i5 + 2]) / 3;
-            for (var ch4 = 0; ch4 < 3; ch4++) {
-              dd[i5 + ch4] = Math.max(0, Math.min(255, Math.round(avg + (dd[i5 + ch4] - avg) * sat)));
-            }
-          }
-          var out = document.createElement('canvas'); out.width = cw; out.height = ch2;
-          /* 逐行拷贝裁剪区 */
-          var octx = out.getContext('2d'), oim = octx.createImageData(cw, ch2);
-          for (var ry = 0; ry < ch2; ry++) {
-            oim.data.set(dd.subarray(((minY + ry) * w + minX) * 4, ((minY + ry) * w + minX) * 4 + cw * 4), ry * cw * 4);
-          }
-          octx.putImageData(oim, 0, 0);
-          var uri = out.toDataURL('image/png');
-          if (uri.length > 190000) {          /* 太大 → 缩到 360 再来一遍 */
-            if (maxSide > 360) { res(ptBeautyFromSrc(src, 360)); return; }
-          }
-          res(uri);
-        } catch (e2) { rej(e2); }
-      };
-      im.onerror = function () { rej(new Error('图片加载失败')); };
-      im.src = src;
-    });
+    x.status = 'rejected'; ptSave(s); PET_DB = s; toastMsg('❌ 已驳回'); ptRenderSub();
   }
   function ptExport() {
     var s = ptGet();
@@ -25459,11 +25409,11 @@ function cwInit(){
     rd.readAsText(f);
   }
   function ptResetPool() {
-    if (!confirm('重置灵杰池为图鉴全集（219 只灵杰 + 旧种子）？已有的同学共创投稿会保留。')) return;
+    if (!confirm('重置灵杰池为图鉴全集（256 只灵杰 + 旧种子）？已有的同学共创投稿会保留。')) return;
     var s = ptGet();
     var keep = s.petPool.filter(function (x) { return x.origin === 'student'; });
     s.petPool = ptBuildSeed().concat(ptBuildCodexSeed()).concat(keep);
-    ptSave(s); PET_DB = s; toastMsg('🌱 已重置灵杰池'); ptRenderCodex();
+    ptSave(s); PET_DB = s; toastMsg('🌱 已重置灵杰池'); ptRenderIncubator();
   }
   /* ---------------- vT67 启灵图鉴 ---------------- */
   var CODEX_STATE = { series: '*', tier: '*' };
@@ -25560,10 +25510,6 @@ function cwInit(){
       '<span class="sctip" id="codexCnt"></span>' +
       '<button class="btn2 sm' + (CODEX_QUICK ? ' primary' : '') + '" onclick="ptCodexQuickToggle()">🏅 ' + (CODEX_QUICK ? '退出品级快设' : '品级快设') + '</button>' +
       (admin ? '<button class="btn2 sm' + (CODEX_GRANT ? ' primary' : '') + '" onclick="ptCodexGrantToggle()" title="开启后点任意卡面即可直接发放给同学">🎁 ' + (CODEX_GRANT ? '退出点卡发放' : '点卡发放') + '</button>' : '') +
-      /* vT86 老师自带灵杰：本地图片批量导入（自动压缩后存进图鉴，全端可见） */
-      (admin ? '<input class="search" id="cxImportSeries" placeholder="导入系列（默认：我导入的）" style="width:150px">' +
-        '<button class="btn2 sm" onclick="ptCodexImportPickImg()" title="选多张 png / jpg / gif，按文件名当灵杰名字，自动压缩">📥 导入灵杰图片</button>' +
-        '<input type="file" id="cxImgFile" accept="image/*" multiple style="display:none" onchange="ptCodexImportImages(event)">' : '') +
       '<button class="btn2 sm" onclick="ptCodexToggleGray()">' + (CODEX_SHOW_ALL ? '🙈 恢复灰色悬念' : '👁 显示未唤醒原图') + '</button></div>' +
       (admin && CODEX_GRANT ? '<div class="sub" style="margin:-4px 0 6px;color:#b06a00">🎁 点卡发放模式：直接点下面的卡面 → 选学生 → 确认发放（可发给全班每人一份）。</div>' : '');
     var list = pool.filter(function (p) {
@@ -25585,14 +25531,11 @@ function cwInit(){
         ['普通', '隐藏', '典藏'].map(function (tt) {
           return '<button class="cx-q' + (curTier === tt ? ' on' : '') + '" data-t="' + tt + '" onclick="' + (grantable ? 'event.stopPropagation();' : '') + 'ptCodexQuickSet(\'' + ptAt(p.id) + '\',\'' + tt + '\')">' + tt + '</button>';
         }).join('') + '</div>' : '';
-      /* vT86 卡面左上角 ✕：解锁口令后可直接把这一条移出图鉴（软删，回收站可恢复） */
-      var delBtn = admin ? '<span class="cx-del" title="把「' + ptEsc(p.name) + '」移出图鉴（回收站可恢复）" onclick="' + (grantable ? 'event.stopPropagation();' : '') + 'ptCodexCardRemove(\'' + ptAt(p.id) + '\')">✕</span>' : '';
       /* vT80 点卡发放模式：整张卡可点，点卡即弹出发放对话框 */
       return '<div class="cx-card' + (a ? ' owned' : ' locked') + (grantable ? ' grantable' : '') + '"' +
         (grantable
           ? ' title="🎁 点击这张卡直接发放给同学（' + ptEsc(p.name) + '）" onclick="ptCodexGrantPick(\'' + ptAt(p.id) + '\')" style="cursor:pointer"'
           : ' title="' + ptEsc(p.blessing || '') + '"') + '>' +
-        delBtn +
         tierTag +
         ptCodexImgHtml(p) +
         '<div class="cx-nm">' + ptEsc(p.name) + '</div>' +
@@ -25663,129 +25606,6 @@ function cwInit(){
     try { if (typeof syncScheduleSoon === 'function') syncScheduleSoon(); } catch (e) {}
     ptRenderCodex();
     toastMsg('🏅 ' + sp.name + ' → ' + tier + (tier === '普通' ? '' : '（不进随机唤醒池，由老师指定发放）'));
-  }
-
-  /* ---------------- vT86 老师自己的灵杰：卡面删除 + 本地图片导入 ----------------
-     ① 卡面左上角 ✕：口令解锁后出现，软删（deleted 标记），回收站可恢复；
-     ② 导入图片：一次可选多张 png/jpg/gif，文件名即灵杰名字；
-        大于 180KB 的自动缩到 320px 内、转 JPEG(0.82) 存成 data URI ——
-        不依赖图床/仓库，网页、教室桌面、小程序三端都能直接显示。
-     数据仍然写进 petPool（origin=codex），所以同步、发放、图鉴计数全部照旧。 */
-  function ptCodexCardRemove(id) {
-    if (!ptNeedAdmin()) return;
-    var s = ptGet();
-    var p = (s.petPool || []).filter(function (x) { return x && x.id === id && !x.purged; })[0];
-    if (!p) return toastMsg('⚠️ 找不到这位灵杰');
-    if (p.deleted) return toastMsg('这条已经在回收站里了');
-    if (!confirm('把「' + p.name + '」移出图鉴？\n\n· 只是从图鉴里隐藏，已发给同学的灵杰不受影响\n· 可在「♻️ 回收站」恢复')) return;
-    p.deleted = true; p.deletedAt = Date.now(); p.updatedAt = Date.now();
-    ptSave(s); PET_DB = s;
-    try { if (typeof ptwSchedule === 'function') ptwSchedule(); } catch (e) {}
-    try { if (typeof syncScheduleSoon === 'function') syncScheduleSoon(); } catch (e) {}
-    toastMsg('🗑 已移出图鉴：' + p.name + '（回收站可恢复）');
-    ptRenderCodex(); ptRenderWall();
-  }
-  function ptCodexImportPickImg() {
-    if (!ptNeedAdmin()) return;
-    var f = document.getElementById('cxImgFile'); if (f) f.click();
-  }
-  /* 本地图片 → ≤320px 的 data URI；小图 / GIF 原样保留（保住动效） */
-  function ptShrinkImg(file, max, q) {
-    return new Promise(function (res, rej) {
-      var rd = new FileReader();
-      rd.onload = function () {
-        var raw = String(rd.result || '');
-        if (!raw) { rej(new Error('空文件')); return; }
-        if (file.size <= 180 * 1024) { res(raw); return; }
-        var im = new Image();
-        im.onload = function () {
-          try {
-            var w = im.width || 320, h = im.height || 320;
-            var sc = Math.min(1, (max || 320) / Math.max(w, h));
-            var cw = Math.max(1, Math.round(w * sc)), ch = Math.max(1, Math.round(h * sc));
-            var cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
-            var cx = cv.getContext('2d');
-            cx.fillStyle = '#fff'; cx.fillRect(0, 0, cw, ch);   /* 透明底铺白，防 JPEG 变黑 */
-            cx.drawImage(im, 0, 0, cw, ch);
-            var uri = cv.toDataURL('image/jpeg', q || 0.82);
-            /* 二次压缩：超过 ~52KB 的再缩到 70% 边长、质量 0.62，
-               避免一次导入十几张就把同步快照撑大 */
-            if (uri.length > 72000) {
-              try {
-                var cw2 = Math.max(1, Math.round(cw * 0.7)), ch2 = Math.max(1, Math.round(ch * 0.7));
-                cv.width = cw2; cv.height = ch2;
-                var c2 = cv.getContext('2d');
-                c2.fillStyle = '#fff'; c2.fillRect(0, 0, cw2, ch2);
-                c2.drawImage(im, 0, 0, cw2, ch2);
-                uri = cv.toDataURL('image/jpeg', 0.62);
-              } catch (e2) {}
-            }
-            res(uri);
-          } catch (e) { res(raw); }
-        };
-        im.onerror = function () { res(raw); };
-        im.src = raw;
-      };
-      rd.onerror = function () { rej(new Error('读取失败')); };
-      rd.readAsDataURL(file);
-    });
-  }
-  function ptCodexImportImages(ev) {
-    var fs = (ev && ev.target && ev.target.files) ? [].slice.call(ev.target.files) : [];
-    try { ev.target.value = ''; } catch (e) {}
-    if (!fs.length) return;
-    if (!ptNeedAdmin()) return;
-    var seriesIn = (document.getElementById('cxImportSeries') || {}).value || '';
-    var series = String(seriesIn).trim() || '我导入的';
-    var s = ptGet();
-    var taken = {};
-    (s.petPool || []).forEach(function (p) { if (p && p.name) taken[String(p.name).trim()] = 1; });
-    /* 编号从现有最大数字 +1 起，避开 197~219 的种子号段 */
-    var no = 0;
-    (s.petPool || []).forEach(function (p) {
-      var m = /^cx(\d+)/.exec(String((p && p.id) || ''));
-      if (m) no = Math.max(no, parseInt(m[1], 10) || 0);
-    });
-    if (no < 219) no = 219;
-    toastMsg('⏳ 正在处理 ' + fs.length + ' 张图片…');
-    var jobs = fs.map(function (f, idx) {
-      var nm = String(f.name || '').replace(/\.[^.]+$/, '').trim() || ('灵杰' + (idx + 1));
-      return ptShrinkImg(f, 320, 0.82).then(function (uri) {
-        return { name: nm, uri: uri, size: Math.round(uri.length * 0.75) };
-      }).catch(function () { return null; });
-    });
-    Promise.all(jobs).then(function (list) {
-      var added = 0, skipped = 0, bytes = 0, names = [];
-      list.forEach(function (it) {
-        if (!it || !it.uri) { skipped++; return; }
-        if (taken[it.name]) { skipped++; return; }
-        taken[it.name] = 1;
-        no += 1;
-        s.petPool.push({
-          id: 'cx' + ('00' + no).slice(-3) + '_' + Date.now().toString(36),
-          name: it.name, series: series, tier: '普通',
-          img: it.uri, blessing: PT_CODEX_BLESS[series] || '',
-          archetype: 'object', rarity: '普通', origin: 'codex', emoji: '📖',
-          imported: true, deleted: false, updatedAt: Date.now()
-        });
-        added++; bytes += it.size; names.push(it.name);
-      });
-      if (!added) {
-        toastMsg('⚠️ 没有新增（同名已存在或读取失败 ' + skipped + ' 张）');
-        return;
-      }
-      ptSave(s); PET_DB = s;
-      try { if (typeof ptwSchedule === 'function') ptwSchedule(); } catch (e) {}
-      try { if (typeof syncScheduleSoon === 'function') syncScheduleSoon(); } catch (e) {}
-      CODEX_STATE.series = series; CODEX_STATE.tier = '*';
-      ptRenderCodex(); ptRenderWall();
-      toastMsg('✅ 已导入 ' + added + ' 位灵杰（约 ' + Math.max(1, Math.round(bytes / 1024)) + 'KB）' + (skipped ? '，跳过 ' + skipped + ' 张' : ''));
-      if (confirm('导入完成：' + names.slice(0, 5).join('、') + (names.length > 5 ? ' 等 ' + names.length + ' 位' : '') +
-        (bytes > 800 * 1024 ? ('\n\n提示：本次图片合计约 ' + Math.round(bytes / 1024) + 'KB（已自动压缩）。一次导入很多张会让同步稍慢，建议分两三次。') : '') +
-        '\n\n现在就打开「点卡发放」，把它们发给同学吗？\n（点取消则稍后在图鉴里自己点卡发放）')) {
-        CODEX_GRANT = true; ptRenderCodex();
-      }
-    });
   }
 
   /* vT67 数据迁移：老数据补 tier/updatedAt（防 LWW 合并丢字段），不动任何用户数据 */
@@ -25939,14 +25759,12 @@ function cwInit(){
       '<button class="btn2 sm" onclick="ptCodexExportCsv(\'def\')">📦 导出图鉴清单 CSV</button>' +
       '<button class="btn2 sm" onclick="ptCodexExportCsv(\'pet\')">📦 导出宠物记录 CSV</button>' +
       '<button class="btn2 sm" onclick="ptCodexImportPick(\'def\')">📥 导入图鉴灵杰</button>' +
-      '<button class="btn2 sm" onclick="ptCodexImportPickImg()">🖼 导入本地图片（png/jpg/gif）</button>' +
       '<button class="btn2 sm" onclick="ptCodexImportPick(\'pet\')">📥 导入宠物记录</button>' +
       '<button class="btn2 sm" onclick="ptImport()">📥 导入完整备份 JSON</button>' +
       '<button class="btn2 sm" onclick="ptExport()">📦 导出完整备份 JSON</button>' +
       '<input type="file" id="cxImportFile" style="display:none" accept=".csv,.json,.txt" onchange="ptCodexImportFile(event)"></div>' +
       '<div class="sub" style="line-height:1.9">' +
       '<b>图鉴灵杰</b>支持 CSV / JSON，列名：编号、名字、系列、品级(普通/隐藏/典藏)、图片(codeximg/197.png 或完整网址)、寄语；同名跳过，编号留空自动排。<br>' +
-      '<b>本地图片</b>一次可选多张 png / jpg / gif，<b>文件名就是灵杰名字</b>；大于 180KB 的会自动缩到 320px 内再存，不占图床、也不依赖网络，网页 / 教室桌面 / 小程序都能显示。想改系列名，在卡片上方「导入系列」框里先填再点导入。<br>' +
       '<b>宠物记录</b>支持 CSV / JSON，列名：学生姓名、灵杰名字、定义编号(可空，按名字匹配)；按图鉴定义生成该同学的已唤醒灵杰。<br>' +
       '<b>完整备份 JSON</b>为八张表整体覆盖导入，用于换机 / 恢复，导入前请先导出备份。<br>' +
       '建议流程：先「导出图鉴清单 CSV」→ 在 Excel 里改名字 / 系列 / 品级 → 删掉原有行只留要新增的行 →「导入图鉴灵杰」。</div></div>' +
@@ -25979,31 +25797,6 @@ function cwInit(){
     var g = function (id) { return ((document.getElementById(id) || {}).value || ''); };
     ptCodexGrantDo(g('cxGrantDef'), g('cxGrantWho') || '*', g('cxGrantNote').trim());
   }
-  /* vT89 AI 助手发放图鉴：按名字找图鉴灵杰（精确优先，其次包含），免弹窗直接执行 */
-  window.aiCodexGrant = function (name, whos) {
-    if (!ptAdminUnlocked()) return { ok: false, msg: '需要班主任口令：请先到「📖 启灵图鉴 → ⚙️ 后台管理」输一次口令，再说一遍' };
-    var s = ptGet();
-    var q = String(name || '').replace(/\s+/g, '');
-    if (!q) return { ok: false, msg: '要发放哪只灵杰？请说出它的名字' };
-    var defs = ptCodexDefs(s).filter(function (d) { return (d.name || '').indexOf(q) >= 0; });
-    var exact = defs.filter(function (d) { return (d.name || '') === q; });
-    if (exact.length) defs = exact;
-    if (!defs.length) return { ok: false, msg: '图鉴里没有找到「' + name + '」' };
-    if (defs.length > 1) return { ok: false, msg: '匹配到 ' + defs.length + ' 只灵杰：' + defs.slice(0, 6).map(function (d) { return d.name; }).join('、') + '，请说全名' };
-    var def = defs[0];
-    var targets = (Array.isArray(whos) && whos.length) ? whos.map(function (n) { return String(n).trim(); }).filter(Boolean) : ptNames();
-    if (!targets.length) return { ok: false, msg: '没有指定学生' };
-    var roster = ptNames();
-    var bad = targets.filter(function (n) { return roster.indexOf(n) < 0; });
-    if (bad.length) return { ok: false, msg: '班级名单里没有：' + bad.join('、') + '，没有发放' };
-    var atText = ptYmd(new Date());
-    targets.forEach(function (n) {
-      var np = ptMkPet(n, def); np.fromGrant = true; s.pets.push(np);
-      s.petGift.push({ id: ptNewId('gf'), studentName: n, kind: 'grant', item: '图鉴灵杰：' + def.name, qty: 1, at: Date.now(), atText: atText, note: 'AI 助手发放' });
-    });
-    ptSave(s); PET_DB = s; ptKickSync(); ptRenderAll();
-    return { ok: true, msg: '已发放「' + def.name + '」（' + (def.tier || '普通') + '）给 ' + targets.length + ' 位同学' + (targets.length > 6 ? ('：' + targets.slice(0, 6).join('、') + ' 等') : ('：' + targets.join('、'))) };
-  };
   /* vT80 点卡发放：开启后点图鉴卡面直接弹发放对话框 */
   function ptCodexGrantToggle() {
     if (!ptNeedAdmin()) return;
@@ -26274,12 +26067,14 @@ function cwInit(){
     toastMsg('📦 已导出 ' + lines.length + ' 行');
   }
   function ptTab(name) {
-    ['wall', 'codex', 'sub', 'grad', 'admin', 'io'].forEach(function (t) {
+    ['inc', 'wall', 'codex', 'parent', 'sub', 'grad', 'admin', 'io'].forEach(function (t) {
       var b = document.querySelector('#petTabs [data-pt="' + t + '"]'); if (b) b.classList.toggle('active', t === name);
       var p = document.getElementById('petPanel-' + t); if (p) p.style.display = (t === name) ? 'block' : 'none';
     });
-    if (name === 'wall') ptRenderWall();
+    if (name === 'inc') ptRenderIncubator();
+    else if (name === 'wall') ptRenderWall();
     else if (name === 'codex') ptRenderCodex();
+    else if (name === 'parent') ptRenderParent();
     else if (name === 'sub') ptRenderSub();
     else if (name === 'grad') ptRenderGrad();
     else if (name === 'admin') ptRenderAdmin();
@@ -26302,16 +26097,18 @@ function cwInit(){
   window.wbPetRender = wbPetRender;
   window.wbPetInit = wbPetInit;
   window.ptTab = ptTab;
+  window.ptHatch = ptHatch;
+  window.ptHatchFromSel = ptHatchFromSel;
+  window.ptHatchSel = ptHatchSel;
   window.ptFeed = ptFeed;
   window.ptDraw = ptDraw;
   window.ptRedeem = ptRedeem;
   window.ptGradReq = ptGradReq;
   window.ptGradApprove = ptGradApprove;
+  window.ptApproveParent = ptApproveParent;
+  window.ptRejectParent = ptRejectParent;
   window.ptApproveSub = ptApproveSub;
   window.ptRejectSub = ptRejectSub;
-  window.ptSubProcess = ptSubProcess;
-  window.ptSubSwitch = ptSubSwitch;
-  window.ptBeautyFromSrc = ptBeautyFromSrc;
   window.ptExport = ptExport;
   window.ptImport = ptImport;
   window.ptImportFile = ptImportFile;
@@ -26320,6 +26117,8 @@ function cwInit(){
   /* vT67 修复：误发收回 / 反悔恢复漏挂全局，卡片上的 onclick 会报 ReferenceError（内联事件只在全局作用域找函数） */
   window.ptRevoke = ptRevoke;
   window.ptRevive = ptRevive;
+  window.ptRenderIncubator = ptRenderIncubator;
+  window.ptRenderParent = ptRenderParent;
   window.ptRenderSub = ptRenderSub;
   window.ptRenderGrad = ptRenderGrad;
   /* 后台管理 */
@@ -26359,10 +26158,6 @@ function cwInit(){
   window.ptCodexRestore = ptCodexRestore;
   window.ptPurgeEmpty = ptPurgeEmpty;
   window.ptCodexImportPick = ptCodexImportPick;
-  /* vT86 卡面删除 + 本地图片导入 */
-  window.ptCodexCardRemove = ptCodexCardRemove;
-  window.ptCodexImportPickImg = ptCodexImportPickImg;
-  window.ptCodexImportImages = ptCodexImportImages;
   window.ptCodexImportFile = ptCodexImportFile;
   window.ptCodexExportCsv = ptCodexExportCsv;
   /* 定价 / 折扣 / 开关：供测试与其它端复用 */
