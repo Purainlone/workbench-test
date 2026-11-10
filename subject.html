@@ -344,7 +344,8 @@ var ME = null, DOC = null, SHA = '', BRANCH = '';
 var STU = [], HWI = [], HW = [], SC = [], SA = [];   /* SA = s-assign 布置作业 */
 /* 不参与作业登记的同学（固定座、不交作业）：科任作业网格、未交名单、一键超时未交 都排除他们，
    但仍保留在名单 / 成绩里。与网页 app.html 的 HM_HW_EXCLUDE、小程序 store.hwStudents 同一口径。 */
-var SUBJ_HW_EXCLUDE = { '柯骏豪': 1, '方浩轩': 1 };
+/* vT96 作业登记全员参与：不再排除任何学生（与网页端 hwRoster、小程序 hwStudents 同口径） */
+var SUBJ_HW_EXCLUDE = {};
 function hwStu() { return (STU || []).filter(function (s) { return !SUBJ_HW_EXCLUDE[s.name]; }); }
 var LV_SCORE = { '优': 2, '良': 1, '中': 0, '差': -1, '超时未交': -2 };
 var dirtyHw = {}, flushTimer = null, curLv = '优';
