@@ -347,6 +347,10 @@ var STU = [], HWI = [], HW = [], SC = [], SA = [];   /* SA = s-assign 布置作�
 /* vT96 作业登记全员参与：不再排除任何学生（与网页端 hwRoster、小程序 hwStudents 同口径） */
 var SUBJ_HW_EXCLUDE = {};
 function hwStu() { return (STU || []).filter(function (s) { return !SUBJ_HW_EXCLUDE[s.name]; }); }
+/* vT97 未交统计排除：这些人仍出现在作业网格里（照常可登记），
+   但不进未交名单 / 统计 / 一键超时未交 / 播报未交。与网页 app.html 的 HW_UNDONE_EX 同一口径。 */
+var SUBJ_STAT_EXCLUDE = { '方浩轩': 1, '柯骏豪': 1 };
+function hwStatStu() { return hwStu().filter(function (s) { return !SUBJ_STAT_EXCLUDE[s.name]; }); }
 var LV_SCORE = { '优': 2, '良': 1, '中': 0, '差': -1, '超时未交': -2 };
 var dirtyHw = {}, flushTimer = null, curLv = '优';
 /* vT5 表格视图状态 */
@@ -571,7 +575,7 @@ function renderHwTab() {
     var d = Date.parse(String(x.date || '').slice(0, 10) + 'T00:00:00');
     if (!isNaN(d) && d < lim) return false;
     var done = hwDoneMap(String(x.item) + '|' + String(x.date || '').slice(0, 10));
-    return !hwStu().length || hwStu().some(function (s) { return !(s.name in done); });
+    return !hwStatStu().length || hwStatStu().some(function (s) { return !(s.name in done); });
   });
   COLS = mine.slice(-12).map(function (x) {
     return { key: hwItemKey(x), item: x.item, date: String(x.date || '').slice(0, 10) };
@@ -639,13 +643,13 @@ function renderHwTable() {
   }).join('');
   tb.innerHTML = '<thead>' + head + '</thead><tbody>' + body + '</tbody>';
 
-  /* 统计：以最新一列为准（分母只算参与作业登记的学生） */
+  /* 统计：以最新一列为准（分母只算参与未交统计的学生；方浩轩/柯骏豪仍可在网格登记） */
   var last = COLS[COLS.length - 1];
   var lm = maps[last.key];
-  var doneN = hwStu().filter(function (s) { return lm[s.name] }).length;
-  var overN = hwStu().filter(function (s) { return lm[s.name] === '超时未交' }).length;
-  var miss = hwStu().filter(function (s) { return !lm[s.name] }).map(function (s) { return s.name });
-  $('hwStat').innerHTML = '最新列「' + esc(last.item) + '」已登记 <b>' + doneN + '</b> / ' + hwStu().length + ' 人' +
+  var doneN = hwStatStu().filter(function (s) { return lm[s.name] }).length;
+  var overN = hwStatStu().filter(function (s) { return lm[s.name] === '超时未交' }).length;
+  var miss = hwStatStu().filter(function (s) { return !lm[s.name] }).map(function (s) { return s.name });
+  $('hwStat').innerHTML = '最新列「' + esc(last.item) + '」已登记 <b>' + doneN + '</b> / ' + hwStatStu().length + ' 人' +
     (overN ? ' · <span style="color:#dc2626">超时未交 ' + overN + ' 人</span>' : '') +
     (miss.length ? ' · 未交：<span style="color:#a04a32">' + esc(miss.join('、')) + '</span>' : ' · 全部交齐 🎉') +
     ' ｜ 全班作业积分合计 <b>' + (clsSum > 0 ? '+' + clsSum : clsSum) + '</b>';
@@ -665,7 +669,7 @@ function renderHwCards() {
       done++;
       if (lv === '优') you++; else if (lv === '良') liang++; else if (lv === '中') zhong++; else if (lv === '差') cha++; else if (lv === '超时未交') over++;
     });
-    var und = hwStu().length - done;
+    var und = hwStatStu().filter(function (s) { return !m[s.name] }).length;
     return '<div class="hwcard' + (i === COLS.length - 1 ? ' on' : '') + '">' +
       '<div class="hwc-name">' + esc(c.item) + '</div>' +
       '<div class="hwc-date">' + esc(String(c.date).slice(5)) + '</div>' +
@@ -746,7 +750,7 @@ function markAllOverdue() {
   var c = COLS[COLS.length - 1], key = c.key, p = key.split('|');
   var it = { item: p[0], date: p.slice(1).join('|') || today() };
   var m = hwDoneMap(key);
-  var remain = hwStu().filter(function (s) { return !m[s.name]; });   /* 只算参与作业登记的学生 */
+  var remain = hwStatStu().filter(function (s) { return !m[s.name]; });   /* vT97 一键超时未交不碰未交统计排除的人 */
   if (!remain.length) { $('hwMsg').textContent = '这一列都已登记，没有可标记的'; return; }
   if (!confirm('把剩下 ' + remain.length + ' 名未登记学生标记为「超时未交」（每人扣 2 分）？')) return;
   remain.forEach(function (s) {
@@ -1209,7 +1213,7 @@ function undoneOf(it) {
   HW.forEach(function (r) {
     if (r && r.item === it.item && String(r.date).slice(0, 10) === it.date && r.name) done[r.name] = 1;
   });
-  return hwStu().filter(function (s) { return !done[s.name] }).map(function (s) { return s.name });   /* 不交作业的同学不进未交名单 */
+  return hwStatStu().filter(function (s) { return !done[s.name] }).map(function (s) { return s.name });   /* vT97 未交统计排除的人不进未交名单 */
 }
 function buildSpeak() {
   var sel = $('spkSel');
