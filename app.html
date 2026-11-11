@@ -1810,7 +1810,7 @@ table.paper td.l{text-align:left;font-weight:600}
   <!-- ============ 经典内容管理（每日一句 / 古诗词 / 小古文，教师自选 + 每日安排） ============ -->
   <section class="section" id="s-classic">
     <h2>经典内容管理 <span style="font-size:13px;font-weight:400;color:#2d8f63;background:#e8f4ee;border-radius:8px;padding:2px 10px;vertical-align:middle">每日一句 · 古诗词 · 小古文</span></h2>
-    <div class="sub">在这里设置<b>教室大屏每天展示</b>的「每日一句 / 古诗词 / 小古文」。可自建内容并打<b>主题</b>标签（不限于毛主席诗词），还能按日期指定某天显示哪一篇；没指定的日子走内置轮换。改动约 3~20 秒同步到教室大屏。</div>
+    <div class="sub">在这里设置<b>教室大屏每天展示</b>的「每日一句 / 古诗词 / 小古文」。可自建内容并打<b>主题</b>标签（不限于毛主席诗词），还能按日期指定某天显示哪一篇；没指定的日子走内置轮换。改动约 2~5 秒同步到教室大屏。</div>
 
     <div class="tabs" id="clTabs" style="display:flex;gap:6px;margin:10px 0">
       <button class="btn2 sm on" data-t="quote" onclick="clTab('quote')">🌅 每日一句</button>
@@ -1846,7 +1846,7 @@ table.paper td.l{text-align:left;font-weight:600}
   <!-- ============ 今日留堂（作业未完成默认选中，同步教室大屏/家长端） ============ -->
   <section class="section" id="s-detain">
     <h2>今日留堂 <span style="font-size:13px;font-weight:400;color:#c2410c;background:#fdeee8;border-radius:8px;padding:2px 10px;vertical-align:middle">作业未完成默认选中</span></h2>
-    <div class="sub">勾选今天需要留堂的学生（打开本页默认按<b>今日作业未完成</b>预选，可手动增减）· 保存后约 3~20 秒同步到教室大屏，<b>每天 16:05 大屏放大提醒并语音播报</b>，同时推送到家长端。</div>
+    <div class="sub">勾选今天需要留堂的学生（打开本页默认按<b>今日作业未完成</b>预选，可手动增减）· 保存后约 2~5 秒同步到教室大屏，<b>每天 16:05 大屏放大提醒并语音播报</b>，同时推送到家长端。</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0">
       <input id="dtDate" type="date" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
       <button class="btn2 sm primary" onclick="dtDetainPreselect()">📥 按今日作业未完成预选</button>
@@ -17644,9 +17644,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v102';
-var WB_MY_VER = '优化版 vT102 · 图鉴管理升级 · 同步与备忘修复';
-var WB_BUILD_DATE = '11-11', WB_BUILD_NO = '2.6.124';
+var WB_VER_TAG = 'v103';
+var WB_MY_VER = '优化版 vT103 · 通知秒级到达';
+var WB_BUILD_DATE = '11-11', WB_BUILD_NO = '2.6.125';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -18735,6 +18735,28 @@ function syncScheduleSoon() {
   if (GITEE_DEBOUNCE) clearTimeout(GITEE_DEBOUNCE);
   /* 2.6.64 写入后 8 秒即备份（原为 60 秒，关页面常被打断导致漏同步） */
   GITEE_DEBOUNCE = setTimeout(function () { GITEE_DEBOUNCE = null; syncCycle() }, 8 * 1000);
+}
+/* vT103 通知即时下发：以前 ntChanged 是「先发 MQTT 信号、数据却要等 8 秒防抖才推云端」——
+   教室端收到信号立刻拉云端，拉到的还是旧数据，只能等 15 秒轮询兜底，体感 10~20 秒。
+   现在改为：教室相关改动先立即推送云端（越过 8s 防抖），推送完成后再发 MQTT 信号，
+   教室端信号拉取必定拿到新数据，通知延迟从 10~20 秒降到 2~5 秒；
+   MQTT 断开时教室端仍按 15 秒轮询兜底，行为不变。 */
+function ntNotifyDesks() {
+  var fire = function () { try { mqttPublishSignal() } catch (e) {} };
+  try {
+    var g = giteeCfg();
+    if (mpSyncSettings().mode === 'gitee' && mpSyncSettings().gAuto && (g.owner || '').trim() && (g.repo || '').trim()) {
+      if (GITEE_BUSY) {   /* 已有一轮同步在跑：本轮会带上新数据，保住防抖推送并延迟补发信号兜底 */
+        try { syncScheduleSoon() } catch (e0) {}
+        setTimeout(fire, 12000);
+        return;
+      }
+      if (GITEE_DEBOUNCE) { clearTimeout(GITEE_DEBOUNCE); GITEE_DEBOUNCE = null; }
+      Promise.resolve(syncCycle()).then(fire, fire);
+      return;
+    }
+  } catch (e) {}
+  fire();
 }
 /* 2.6.64 启动 3 秒后即从云端恢复（打开即同步），不再等 30 秒 */
 /* v133：启动这轮不算「手动」—— 以前传 true，开机自动同步一旦并入数据就刷新页面，
@@ -20991,7 +21013,7 @@ function cwInit(){
   function pad2(n) { return (n < 10 ? '0' : '') + n }
   function dstr(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) }
   function nowStr() { var d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) }
-  function ntChanged() { try { syncScheduleSoon() } catch (e) {} try { mqttPublishSignal() } catch (e) {} try { if (typeof ptwSchedule === 'function') ptwSchedule(); } catch (e) {} }
+  function ntChanged() { try { ntNotifyDesks() } catch (e) { try { syncScheduleSoon() } catch (e2) {} try { mqttPublishSignal() } catch (e3) {} } try { if (typeof ptwSchedule === 'function') ptwSchedule(); } catch (e) {} }
   function ntSha256Hex(s) {
     function sha1free(str) { /* crypto.subtle 不可用时的兜底（非加密级，仅用于口令哈希防窥视） */
       var h = 5381, i = str.length;
@@ -21368,7 +21390,7 @@ function cwInit(){
     document.getElementById('noticeText').value = '';
     if ((document.getElementById('noticeCallExtra'))) document.getElementById('noticeCallExtra').value = '';
     noticeRenderHistory(); ntChanged();
-    toastMsg(now ? '📤 已发送，教室端约 3~20 秒内显示' + (rec['是否播报'] ? '并播报' : '') : '🕒 定时通知已排入，到点教室端自动展示');
+    toastMsg(now ? '📤 已发送，教室端约 2~5 秒内显示' + (rec['是否播报'] ? '并播报' : '') : '🕒 定时通知已排入，到点教室端自动展示');
   };
   window.noticeRevoke = function (id) {
     var rec = ntGet('s-notice', id); if (!rec) return;
@@ -21463,7 +21485,7 @@ function cwInit(){
     ntUpsert('s-assign', rec);
     document.getElementById('asText').value = '';
     asRender(); ntChanged();
-    toastMsg('📢 已布置，教室大屏「今日作业」约 3~20 秒内显示');
+    toastMsg('📢 已布置，教室大屏「今日作业」约 2~5 秒内显示');
   };
   window.asDel = function (id) {
     if (!confirm('删除这条布置？教室大屏将不再显示')) return;
@@ -21690,7 +21712,7 @@ function cwInit(){
       }
     });
     ntChanged(); dtDetainRender();
-    toastMsg(n ? '💾 已保存，教室大屏与家长端约 3~20 秒同步' : '名单没有变化');
+    toastMsg(n ? '💾 已保存，教室大屏与家长端约 2~5 秒同步' : '名单没有变化');
   };
   /* vT89 AI 助手用的留堂名单接口：mode=add 在当天名单上追加；set 覆盖；clear 清空 */
   window.aiDetainApply = function (names, date, mode) {
@@ -21790,7 +21812,7 @@ function cwInit(){
     rec.deleted = false; rec.ts = Date.now(); rec.updatedAt = new Date().toISOString(); rec.updatedBy = 'teacher';
     ntUpsert('s-classic', rec);
     clCloseForm(); clRender(); ntChanged();
-    toastMsg('已保存，约 3~20 秒同步到教室大屏');
+    toastMsg('已保存，约 2~5 秒同步到教室大屏');
   }
   function clDel(id) {
     if (!confirm('删除这条内容？若教室大屏当天正显示它，会回退到内置轮换。')) return;
@@ -21848,7 +21870,7 @@ function cwInit(){
     });
     sch.deleted = false; sch.ts = Date.now(); sch.updatedAt = new Date().toISOString();
     ntUpsert('s-csched', sch); csRender(); ntChanged();
-    toastMsg('已保存 ' + d + ' 的安排，约 3~20 秒同步到教室大屏');
+    toastMsg('已保存 ' + d + ' 的安排，约 2~5 秒同步到教室大屏');
   }
   function csDel(id) {
     if (!confirm('删除这一天的安排？该日将回退到内置轮换。')) return;
@@ -22770,7 +22792,7 @@ function cwInit(){
     (Array.isArray(remote) ? remote : []).forEach(put);
     return order.map(function (k) { return out[k] });
   }
-  function tcChanged() { try { syncScheduleSoon() } catch (e) {} try { if (window.mqttPublishSignal) window.mqttPublishSignal() } catch (e) {} }
+  function tcChanged() { try { ntNotifyDesks() } catch (e) { try { syncScheduleSoon() } catch (e2) {} try { if (window.mqttPublishSignal) window.mqttPublishSignal() } catch (e3) {} } }
 
   /* 快照：学生名单 / 作业 / 成绩（直接来自同步文档，最实时） */
   function tcSnap(key) { var db = tcLoad(); return Array.isArray(db['snap_' + key]) ? db['snap_' + key] : [] }
