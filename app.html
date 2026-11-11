@@ -17644,9 +17644,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v101';
-var WB_MY_VER = '优化版 vT101 · 诵读名单三层解耦';
-var WB_BUILD_DATE = '11-11', WB_BUILD_NO = '2.6.123';
+var WB_VER_TAG = 'v102';
+var WB_MY_VER = '优化版 vT102 · 图鉴管理升级 · 同步与备忘修复';
+var WB_BUILD_DATE = '11-11', WB_BUILD_NO = '2.6.124';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24322,6 +24322,22 @@ function cwInit(){
   }
 
   /* 同步：远端宠物表按 id 合并进本地（远端较新者优先） */
+  /* vT102 一键全端校准：立刻同步一轮（拉云端 → 合并 → 写回），然后刷新面板 */
+  function ptForceSync() {
+    toastMsg('🔄 正在同步…');
+    var done = function (ok) {
+      try { if (typeof syncCycle === 'function') syncCycle(1); } catch (e) {}
+      setTimeout(function () {
+        try { ptRenderAll(); ptBadges(); } catch (e) {}
+        toastMsg(ok ? '✅ 已与云端对齐' : '✅ 已提交同步，几秒后完成');
+      }, ok ? 200 : 1600);
+    };
+    try {
+      if (typeof syncCycle === 'function') { syncCycle(1); done(true); return; }
+    } catch (e) {}
+    done(false);
+  }
+
   function wbPetMergeRemote(remoteTables) {
     if (!remoteTables || typeof remoteTables !== 'object') return;
     var changed = false;
@@ -24337,7 +24353,8 @@ function cwInit(){
         if (!ex) { local.push(r); byId[r.id] = r; changed = true; }
         else {
           var ru = r.updatedAt || 0, eu = ex.updatedAt || 0;
-          if (ru >= eu) { for (var f in r) { if (r.hasOwnProperty(f)) ex[f] = r[f]; } changed = true; }
+          /* vT102 平局（ru === eu）保留本机，避免两端时间戳相同却内容不同时反复互盖 */
+          if (ru > eu) { for (var f in r) { if (r.hasOwnProperty(f)) ex[f] = r[f]; } changed = true; }
         }
       });
       PET_DB[k] = local;
@@ -24841,6 +24858,42 @@ function cwInit(){
     if (dirty) { ptSave(s); PET_DB = s; }
   }
 
+  /* ---------------- vT102 旧宠物数据清理 ----------------
+   ｜老版「积分养宠物」按 archetype 生成的旧宠物（pets 里 origin 既不是 codex 也不是 student）
+   ｜在启灵图鉴上线后已经没有入口在用，但会一直混在灵杰墙 / 导出清单里。
+   ｜这里统一打软删除（deleted 标记，可在 ♻️ 回收站恢复），不物理抹数据。 */
+  function ptIsLegacyPet(p) {
+    if (!p || typeof p !== 'object') return false;
+    var o = p.origin;
+    if (o === 'codex' || o === 'student') return false;
+    /* 有 defId 且能对上图鉴定义的，视为图鉴灵杰（老记录可能没写 origin） */
+    if (p.defId && (PET_DB.petPool || []).some(function (d) { return d && d.id === p.defId && d.origin === 'codex'; })) return false;
+    return true;
+  }
+  function ptCleanLegacy(silent) {
+    var s = ptGet(), nPet = 0, nDef = 0, now = Date.now();
+    (s.pets || []).forEach(function (p) {
+      if (ptIsLegacyPet(p) && !p.deleted && !p.purged) {
+        p.deleted = true; p.deletedAt = now; p.updatedAt = now; p.deletedReason = 'legacy-clean'; nPet++;
+      }
+    });
+    (s.petPool || []).forEach(function (d) {
+      if (d && !d.deleted && !d.purged && d.origin !== 'codex' && d.origin !== 'student' && d.archetype) {
+        d.deleted = true; d.deletedAt = now; d.updatedAt = now; d.deletedReason = 'legacy-clean'; nDef++;
+      }
+    });
+    var c = (s.petCfg || []).filter(function (x) { return x && x.id === 'cfg'; })[0];
+    if (c) { c.legacyCleaned = 1; c.legacyCleanedAt = now; }
+    if (nPet || nDef) { ptSave(s); PET_DB = s; ptKickSync(); }
+    if (!silent) {
+      toastMsg((nPet || nDef)
+        ? ('🧹 已清理旧宠物：记录 ' + nPet + ' 条 · 旧形象 ' + nDef + ' 个（♻️ 回收站可恢复）')
+        : '✅ 没有需要清理的旧宠物数据');
+      if (nPet || nDef) ptRenderAll();
+    }
+    return { pet: nPet, def: nDef };
+  }
+
   /* ---------------- 渲染 ---------------- */
   function ptBreedDisp(sp) {
     try { var sb = PetCore.resolveBreed(sp); return (sb && sb.breed && sb.breed.n) || ''; } catch (e) { return ''; }
@@ -24874,12 +24927,13 @@ function cwInit(){
       '<button class="btn2 sm" onclick="ptRedeem(\'' + pet.id + '\')"' + dis + '>🎁 兑换(-' + r + ')</button>' +
       (pet.graduated ? '' : '<button class="btn2 sm" onclick="ptGradReq(\'' + pet.id + '\')">🎓 申请毕业</button>') +
       '<button class="btn2 sm" onclick="ptRevoke(\'' + pet.id + '\')" title="误发了可以收回（可在后台赠送记录里恢复）">↩ 收回</button>' +
+      (ptAdminUnlocked() ? '<button class="btn2 sm" onclick="ptPetRemove(false,\'' + pet.id + '\')" title="删除这条已发放记录（回收站可恢复）">🗑 删除</button>' : '') +
       '</div>' + grad + '</div>';
   }
   function ptRenderWall() {
     var box = document.getElementById('petPanel-wall'); if (!box) return;
     var s = ptGet(); var list = ptPets();
-    var html = list.length ? list.map(ptCard).join('') : '<div class="pet-empty">还没有灵杰，去「🥚 唤醒台」给同学唤醒一只吧～</div>';
+    var html = list.length ? list.map(ptCard).join('') : '<div class="pet-empty">还没有灵杰：去「🛠 后台管理 → 🎁 灵杰发放」给同学发一只，或在「📖 启灵图鉴」用「🎁 点卡发放」直接点卡授予～</div>';
     box.innerHTML = '<div class="pet-grid">' + html + '</div>';
   }
   function ptRenderIncubator() {
@@ -25631,7 +25685,8 @@ function cwInit(){
           ? ' title="🎁 点击这张卡直接发放给同学（' + ptEsc(p.name) + '）" onclick="ptCodexGrantPick(\'' + ptAt(p.id) + '\')" style="cursor:pointer"'
           : ' title="' + ptEsc(p.blessing || '') + '"') + '>' +
         tierTag +
-        (admin ? '<button type="button" title="✏️ 编辑这只灵杰的资料" style="position:absolute;right:6px;top:6px;z-index:4;border:1px solid #e3e8ee;background:rgba(255,255,255,.92);border-radius:8px;font-size:12px;line-height:1.5;padding:2px 6px;cursor:pointer" onclick="event.stopPropagation();ptDefEditPick(\'' + ptAt(p.id) + '\')">✏️</button>' : '') +
+        (admin ? '<button type="button" title="✏️ 编辑这只灵杰的资料" style="position:absolute;right:6px;top:6px;z-index:4;border:1px solid #e3e8ee;background:rgba(255,255,255,.92);border-radius:8px;font-size:12px;line-height:1.5;padding:2px 6px;cursor:pointer" onclick="event.stopPropagation();ptDefEditPick(\'' + ptAt(p.id) + '\')">✏️</button>' +
+        '<button type="button" title="🗑 移出图鉴（回收站可恢复，已发给同学的不受影响）" style="position:absolute;right:40px;top:6px;z-index:4;border:1px solid #f0dcdc;background:rgba(255,255,255,.92);border-radius:8px;font-size:12px;line-height:1.5;padding:2px 6px;cursor:pointer" onclick="event.stopPropagation();ptDefRemove(false,\'' + ptAt(p.id) + '\')">🗑</button>' : '') +
         ptCodexImgHtml(p) +
         '<div class="cx-nm">' + ptEsc(p.name) + '</div>' +
         '<div class="cx-own">' + ptEsc(p.series || '') + (a ? ' · 🐾 ' + ptEsc(a.studentName) + ' 已唤醒' : ' · ？？？待唤醒') + '</div>' +
@@ -25706,6 +25761,14 @@ function cwInit(){
   /* vT67 数据迁移：老数据补 tier/updatedAt（防 LWW 合并丢字段），不动任何用户数据 */
   function ptEnsureCodexFields() {
     var s = ptGet(); var dirty = false; var now = Date.now();
+    /* vT102 首次打开自动清一次旧宠物（软删除，可在回收站恢复） */
+    try {
+      var _cc = (s.petCfg || []).filter(function (x) { return x && x.id === 'cfg'; })[0];
+      if (_cc && !_cc.legacyCleaned) {
+        if (!PET_DB) PET_DB = s;
+        ptCleanLegacy(true); s = ptGet(); dirty = true;
+      }
+    } catch (e) {}
     (s.petPool || []).forEach(function (p) {
       if (p && (!p.tier || !p.updatedAt)) { p.tier = p.tier || '普通'; p.updatedAt = p.updatedAt || now; dirty = true; }
     });
@@ -25864,6 +25927,15 @@ function cwInit(){
       '<button class="btn2 sm" onclick="ptCodexRestore()">↩️ 恢复选中</button>' +
       '<button class="btn2 sm" onclick="ptPurgeEmpty()">🧹 清空回收站</button></div>' +
       '<div class="sub">清空回收站会真正抹掉数据，不可恢复；被清空的图鉴编号会记入排除名单，不会被图鉴种子自动补回。</div></div>' +
+
+      /* ⑤-b vT102 旧数据清理 + 全端校准 */
+      '<div class="pet-sec"><h3>🧹 旧数据清理 · 🔄 全端校准</h3>' +
+      '<div class="gpset">' +
+      '<button class="btn2" onclick="ptCleanLegacy(false)">🧹 清理旧宠物数据</button>' +
+      '<button class="btn2" onclick="ptForceSync()">🔄 全端立即同步</button>' +
+      '<span class="sctip">旧宠物不会物理删除，移入 ♻️ 回收站可随时恢复</span></div>' +
+      '<div class="sub">「旧宠物」指启灵图鉴上线前按旧版模板生成的宠物（不带图鉴编号、来源既不是图鉴也不是学生共创）。清理后灵杰墙、孵化区、导出清单只保留图鉴灵杰与同学共创，界面更干净。' +
+      '<br>「全端立即同步」= 立刻拉云端最新 + 把本机改动写回，网页 / 手机 / 桌面不一致时点一下即可对齐（正常同步也会在编辑后几秒自动进行）。</div></div>' +
 
       /* ⑥ 导入导出 */
       '<div class="pet-sec"><h3>📥 导入 / 📦 导出（手动维护）</h3>' +
@@ -26036,9 +26108,10 @@ function cwInit(){
     t.deleted = true; t.purged = true; t.purgedAt = Date.now(); t.updatedAt = Date.now();
     return t;
   }
-  function ptDefRemove(permanent) {
+  /* vT102 支持直接传 id（卡面快捷操作），不传则读下拉框 */
+  function ptDefRemove(permanent, idArg) {
     if (!ptNeedAdmin()) return;
-    var id = (document.getElementById('cxDefSel') || {}).value || '';
+    var id = idArg || (document.getElementById('cxDefSel') || {}).value || '';
     var s = ptGet();
     var p = (s.petPool || []).filter(function (x) { return x && x.id === id && !x.purged; })[0];
     if (!p) return toastMsg('⚠️ 请先选择图鉴条目');
@@ -26053,9 +26126,10 @@ function cwInit(){
     ptSave(s); PET_DB = s; toastMsg(permanent ? '☠ 已永久删除（回收站可恢复）' : '🗑 已移出图鉴');
     ptRenderAll();
   }
-  function ptPetRemove(permanent) {
+  /* vT102 支持直接传 id（卡片快捷操作），不传则读下拉框 */
+  function ptPetRemove(permanent, idArg) {
     if (!ptNeedAdmin()) return;
-    var id = (document.getElementById('cxPetSel') || {}).value || '';
+    var id = idArg || (document.getElementById('cxPetSel') || {}).value || '';
     var s = ptGet();
     var p = (s.pets || []).filter(function (x) { return x && x.id === id && !x.purged; })[0];
     if (!p) return toastMsg('⚠️ 请先选择宠物记录');
@@ -26317,6 +26391,8 @@ function cwInit(){
   window.ptCodexGrantPick = ptCodexGrantPick;
   window.ptDefRemove = ptDefRemove;
   window.ptPetRemove = ptPetRemove;
+  window.ptCleanLegacy = ptCleanLegacy;   /* vT102 旧宠物数据清理 */
+  window.ptForceSync = ptForceSync;       /* vT102 全端立即同步 */
   window.ptCodexRestore = ptCodexRestore;
   window.ptPurgeEmpty = ptPurgeEmpty;
   window.ptCodexImportPick = ptCodexImportPick;
