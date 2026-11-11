@@ -9185,13 +9185,29 @@ function dbFail(where,err){
 /* 2.0：云端模式下连续读取失败 → 顶部黄条提示网络问题（只提示，不打断） */
 function wbOfflineBanner(where){
   if(window.__WB_OFFLINE__)return;
-  var host=window.chrome&&window.chrome.webview;
   var isCloud=window.WB2&&WB2.cloud;
   if(!isCloud)return;   /* 本地模式维持原有 toast 即可 */
+  /* vT100：以前这条黄条没有关闭按钮，云端一时读不到就长期挂在顶部。
+     现在加 ✕，并把「本机 24 小时内不再提示」记住（到期自动恢复提示，不会永久屏蔽故障）。 */
+  try{
+    var hiddenAt=Number(localStorage.getItem('wb_offline_banner_hidden')||0);
+    if(hiddenAt&&Date.now()-hiddenAt<24*3600000)return;
+  }catch(e){}
   window.__WB_OFFLINE__=true;
   var bar=document.createElement('div');
-  bar.style.cssText='position:sticky;top:0;z-index:9999;background:#fdf6e3;border-bottom:1px solid #f3e6c4;color:#8a6d3b;font:13px/1.6 sans-serif;padding:8px 14px;text-align:center';
-  bar.textContent='⚠️ 网络不可用或登录已过期，云端数据读不到（'+where+' 等）。检查网络后刷新页面；若一直提示，重新登录 WorkBuddy。';
+  bar.id='wbOfflineBar';
+  bar.style.cssText='position:sticky;top:0;z-index:9999;background:#fdf6e3;border-bottom:1px solid #f3e6c4;color:#8a6d3b;font:13px/1.6 sans-serif;padding:8px 14px;text-align:center;display:flex;align-items:center;justify-content:center;gap:12px';
+  var txt=document.createElement('span');
+  txt.textContent='⚠️ 网络不可用或登录已过期，云端数据读不到（'+where+' 等）。检查网络后刷新页面；若一直提示，重新登录 WorkBuddy。';
+  var btn=document.createElement('button');
+  btn.type='button';btn.textContent='✕ 关闭';
+  btn.title='关闭这条提示（本机 24 小时内不再提示）';
+  btn.style.cssText='border:1px solid #e0cf9e;background:#fffdf5;color:#8a6d3b;border-radius:8px;padding:2px 10px;cursor:pointer;font:13px sans-serif;white-space:nowrap';
+  btn.onclick=function(){
+    try{localStorage.setItem('wb_offline_banner_hidden',String(Date.now()))}catch(e){}
+    if(bar.parentNode)bar.parentNode.removeChild(bar);
+  };
+  bar.appendChild(txt);bar.appendChild(btn);
   document.body.insertBefore(bar,document.body.firstChild);
 }
 
@@ -12601,11 +12617,11 @@ function stuRoster(){
   });
   return out;
 }
-/* vT96 作业登记全员参与：忽略名单（柯骏豪/方浩轩/徐曼桦）不再排除作业登记，
-   他们照常出现在登记网格、未交统计里，老师可以直接登记。
-   忽略名单只继续作用于诵读管理（折叠、不进「全班背完」判定）。 */
+/* vT100 作业登记名单：方浩轩、柯骏豪不参与作业登记（也不进未交统计），
+   徐曼桦及其余同学照常登记。名单与「不进未交统计」共用一份（⚙️ 名单设置里勾选），
+   诵读忽略名单（HM_IGNORE）只管诵读折叠，与作业无关。历史登记记录不删除。 */
 function hwRoster(){
-  return stuRoster();
+  return stuRoster().filter(function(s){return !hwNotCounted(s.姓名)});
 }
 /* 小组清单：按档案表里的组别聚合 */
 function groupList(){
@@ -12723,7 +12739,7 @@ function hwMarkAllOverdue(){
   if(!items.length){toastMsg('还没有作业列');return}
   var it=items[items.length-1];   /* 最新（最右侧）一列 */
   var m=hwMapRows();
-  var roster=hwRoster().filter(function(s){return !hwNotCounted(s.姓名)});   /* vT97 一键超时未交不碰未交统计排除的人（网格里仍可手动登记他们） */
+  var roster=hwRoster();   /* vT100 登记名单已排除方浩轩/柯骏豪，一键超时未交自然也不会碰他们 */
   var remain=roster.filter(function(s){return !m[hwKey(s.姓名,it)]});
   if(!remain.length){toastMsg('「'+it.name+'」都已登记，没有可标记的');return}
   if(!confirm('把「'+it.name+'」剩下 '+remain.length+' 名未登记学生记为超时未交（每人扣 2 分）？'))return;
@@ -14858,13 +14874,13 @@ var HM_IGNORE=(function(){
   return def;
 })();
 var HM_SHOW_IGN=false;
-/* vT97 未交统计排除名单：这些人仍出现在作业登记网格里（照常可登记），
-   但不进未交统计、教室大屏未交卡、AI 查缺交、一键超时未交、播报未交——
-   默认方浩轩、柯骏豪（长期不交作业的两位），避免未交名单永远挂着他们。
+/* vT100 不参与作业登记 / 未交统计名单：他们不出现在作业登记网格，也不进
+   未交统计、教室大屏未交卡、AI 查缺交、一键超时未交、播报未交——
+   默认方浩轩、柯骏豪（长期不交作业的两位），徐曼桦照常登记与统计。
    与诵读忽略名单（HM_IGNORE）相互独立，可在「⚙️ 名单设置」里勾选调整。 */
 var HW_UNDONE_EX_KEY='wb_hw_undone_exclude_v1';
 var HW_UNDONE_EX=(function(){
-  var def={'方浩轩':1,'柯骏豪':1};   /* vT97 默认：这两位不进未交统计（仍可登记） */
+  var def={'方浩轩':1,'柯骏豪':1};   /* vT100 默认：这两位不参与作业登记与未交统计 */
   try{
     var raw=localStorage.getItem(HW_UNDONE_EX_KEY),o=raw?JSON.parse(raw):null;
     if(o&&typeof o==='object')return o;
@@ -14901,7 +14917,7 @@ function renderIgnoreBars(){
     var b=document.getElementById(id);if(!b)return;
     b.textContent=txt+(HM_SHOW_IGN?'（展开中）':(names.length?'（已折叠）':''));
     b.className='btn2 sm'+(HM_SHOW_IGN?'':' ghost');
-    b.title='点一下展开 / 折叠这些同学的行；他们的诵读不计入完成率与「全班背完」判定（作业登记全员照常，不受影响）';
+    b.title='点一下展开 / 折叠这些同学的行；他们的诵读不计入完成率与「全班背完」判定（作业登记名单在下面那组单独设置）';
   });
 }
 /* 名单设置面板：勾选式，不用手打姓名（vT97 双区：诵读忽略 + 未交统计排除） */
@@ -14909,7 +14925,7 @@ function openIgnorePicker(){
   var stu=stuRoster();
   var mask=el('div','rcmgr'),panel=el('div','panel');
   panel.appendChild(el('h3',null,'🙈 名单设置'));
-  panel.appendChild(el('div','meta','【不参与诵读】勾选后：诵读管理里他们的行默认折叠，不计入完成率，也不参与「全班背完」判定。已有的历史记录不会删，展开仍可查看（只读）。作业登记不受这份名单影响。'));
+  panel.appendChild(el('div','meta','【不参与诵读】勾选后：诵读管理里他们的行默认折叠，不计入完成率，也不参与「全班背完」判定。已有的历史记录不会删，展开仍可查看（只读）。这份名单不影响作业登记。'));
   var grid=el('div','igngrid');
   stu.forEach(function(s){
     var lab=el('label','ignitem');
@@ -14919,7 +14935,7 @@ function openIgnorePicker(){
     grid.appendChild(lab);
   });
   panel.appendChild(grid);
-  panel.appendChild(el('div','meta','【不进未交统计】勾选后：他们仍出现在作业登记网格里（照常可登记），但不进未交统计、教室大屏未交卡、AI 查缺交、一键超时未交和播报未交。'));
+  panel.appendChild(el('div','meta','【不参与作业登记 / 未交统计】勾选后：他们不再出现在作业登记网格，也不计入未交统计、教室大屏未交卡、AI 查缺交、一键超时未交和播报未交；已有的历史登记记录会保留。默认方浩轩、柯骏豪，徐曼桦照常登记。'));
   var grid2=el('div','igngrid');
   stu.forEach(function(s){
     var lab=el('label','ignitem');
@@ -14937,7 +14953,7 @@ function openIgnorePicker(){
     [].forEach.call(grid2.querySelectorAll('input'),function(c){if(c.checked)o2[c.value]=1});
     hmIgnoreSave(o);hwUndoneExSave(o2);
     mask.parentNode&&mask.parentNode.removeChild(mask);
-    toastMsg('✅ 已保存：'+Object.keys(o).length+' 人不参与诵读，'+Object.keys(o2).length+' 人不进未交统计');
+    toastMsg('✅ 已保存：'+Object.keys(o).length+' 人不参与诵读，'+Object.keys(o2).length+' 人不参与作业登记 / 未交统计');
   };
   var cancel=el('button','btn ghost','取消');cancel.onclick=function(){mask.parentNode&&mask.parentNode.removeChild(mask)};
   bar.appendChild(ok);bar.appendChild(cancel);panel.appendChild(bar);
@@ -15001,11 +15017,22 @@ function hmHwItemsAll(){
   out.sort(function(a,b){return String(b.date).localeCompare(String(a.date))||String(b.name).localeCompare(String(b.name))});
   return out;
 }
+/* vT100：未交 / 超时未交只统计最近 14 天的作业列，更早的不再堆在首页卡、
+   桌面标签、AI 查缺交和播报里；历史登记记录本身不删除，作业登记网格仍能看到全部列。 */
+var HW_UNDONE_KEEP_DAYS=14;
+function hwUndoneCutoff(){
+  var d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-HW_UNDONE_KEEP_DAYS);
+  return ymd(d);
+}
+function hwItemTooOld(it){
+  var d=String(it&&it.date||'').slice(0,10);
+  return !!d&&d<hwUndoneCutoff();
+}
 /* 计算未交：返回 {week:[...],past:[...],weekN,pastN,total,exN}
    每项 = {name,date,und:[未交学生姓名...]}；"未交"= 该作业无等级记录 */
 function hmHwUndone(){
   var stuAll=stuRoster();
-  /* vT97 登记全员（hwRoster 不排除），但未交统计排除方浩轩/柯骏豪（可在名单设置里调） */
+  /* vT100 作业登记与未交统计共用同一份排除名单（默认方浩轩/柯骏豪，可在名单设置里调） */
   var stu=stuAll.filter(function(s){return !hwNotCounted(s.姓名)});
   var total=stuAll.length, exN=stuAll.length-stu.length;
   if(!stu.length)return {week:[],past:[],weekN:0,pastN:0,total:total,exN:exN};
@@ -15013,6 +15040,7 @@ function hmHwUndone(){
   var ws=hmWeekStart(new Date()),we=new Date(ws);we.setDate(we.getDate()+7);
   var byItem={},overByItem={};
   hmHwItemsAll().forEach(function(it){
+    if(hwItemTooOld(it))return;   /* vT100 超过两周的作业列不再显示未交 / 超时未交 */
     var und=[],over=[];
     stu.forEach(function(s){
       var r=m[hwKey(s.姓名,it)];
@@ -15259,7 +15287,7 @@ function renderHome(){
       cHw.style.boxShadow='0 2px 12px rgba(240,162,60,.18)';
       var hdHw=el('div','hm-hd');
       var hHw=el('h4');
-      hHw.appendChild(document.createTextNode('📝 未交作业'));
+      hHw.appendChild(document.createTextNode('📝 未交作业（仅最近两周）'));
       if(hwU.exN)hHw.appendChild(el('span','hm-hwex','（已排除 '+hwU.exN+' 人不统计）'));
       hdHw.appendChild(hHw);
       var hwRight=el('div');hwRight.style.cssText='display:flex;gap:8px;align-items:center';
@@ -17580,9 +17608,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v99';
-var WB_MY_VER = '优化版 vT99 · 图鉴补齐261只';
-var WB_BUILD_DATE = '11-10', WB_BUILD_NO = '2.6.121';
+var WB_VER_TAG = 'v100';
+var WB_MY_VER = '优化版 vT100 · 作业与图鉴修复';
+var WB_BUILD_DATE = '11-11', WB_BUILD_NO = '2.6.122';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24195,7 +24223,7 @@ function cwInit(){
   }
   function ptDefaultCfg() {
     return {
-      id: 'cfg', enabled: 'on',
+      id: 'cfg', enabled: 'on', subEnabled: 'on',
       costs: { feed: DEF_COST.feed, draw: DEF_COST.draw, redeem: DEF_COST.redeem },
       gradLevel: GRAD_LEVEL, saleOff: 100, shopSeeded: false,
       updatedAt: Date.now(), updatedBy: 'web'
@@ -24351,6 +24379,22 @@ function cwInit(){
     toastMsg(v === 'on' ? '✅ 宠物模块已启用' : (v === 'paused' ? '⏸ 已暂停：学生端停止消耗，老师仍可管理' : '⛔ 已关停：入口隐藏，数据保留'));
     ptRenderAdmin();
   }
+  /* vT100 学生投稿独立开关：写进 petCfg.subEnabled，随同步下发小程序。
+     与模块总开关相互独立 —— 关投稿不影响蓄灵 / 唤醒 / 兑换；关模块则投稿自然也不可用。 */
+  function ptSubEnabled() {
+    var c = ptCfg();
+    return (c && c.subEnabled) || 'on';
+  }
+  function ptSetSubEnabled(v) {
+    if (!ptAdminUnlocked()) { ptAdminUnlock(); return; }
+    var s = ptGet(); var c = s.petCfg.filter(function (x) { return x.id === 'cfg'; })[0] || ptCfg();
+    c.subEnabled = (v === 'off' ? 'off' : 'on'); c.updatedAt = Date.now(); c.updatedBy = 'web';
+    ptSave(s); PET_DB = s;
+    toastMsg(c.subEnabled === 'on' ? '✅ 学生投稿已开放' : '⛔ 学生投稿已关闭（蓄灵 / 唤醒 / 兑换照常）');
+    ptRenderAdmin();
+  }
+  /* vT89 起这个开关叫 ptSubSwitch，保留同名入口：旧书签 / 旧代码调用不会失效 */
+  function ptSubSwitch(v) { ptSetSubEnabled(v === 'off' || v === false ? 'off' : 'on'); }
 
   /* ---------------- 工具 ---------------- */
   function ptYmd(d) { d = d || new Date(); function p(n) { return ('0' + n).slice(-2); } return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
@@ -24949,6 +24993,11 @@ function cwInit(){
       var lb = ({ on: '✅ 启用', paused: '⏸ 暂停', off: '⛔ 关停' })[v];
       return '<button class="btn2 ' + (st === v ? 'primary' : '') + '" onclick="ptSetEnabled(\'' + v + '\')">' + lb + '</button>';
     }).join('');
+    /* vT100 学生投稿开关状态 */
+    var subSt = ptSubEnabled();
+    var subSw = [['on', '✅ 开放投稿'], ['off', '⛔ 关闭学生投稿']].map(function (t) {
+      return '<button class="btn2 ' + (subSt === t[0] ? 'primary' : '') + '" onclick="ptSetSubEnabled(\'' + t[0] + '\')">' + t[1] + '</button>';
+    }).join('');
 
     /* 商城行 */
     var typeOpts = function (cur) {
@@ -25005,7 +25054,11 @@ function cwInit(){
       /* ---- 1 模块开关 ---- */
       '<div class="pet-sec"><h3>🔌 模块开关</h3>' +
       '<div class="pet-row"><span><b>当前状态：' + stName + '</b><br><span class="pet-own">' + stDesc + '</span></span></div>' +
-      '<div class="gpset">' + sw + '<span class="sctip">开关随同步下发到小程序 / 桌面端</span></div></div>' +
+      '<div class="gpset">' + sw + '<span class="sctip">开关随同步下发到小程序 / 桌面端</span></div>' +
+      '<div class="pet-row"><span><b>🎨 学生投稿：' + (subSt === 'off' ? '⛔ 已关闭' : '✅ 已开放') + '</b><br><span class="pet-own">' +
+      (subSt === 'off' ? '学生端不能再「共创一位」提交新作品，蓄灵 / 唤醒 / 兑换照常；已投稿的作品仍可在「🎨 学生投稿」里审批。'
+                       : '学生可在小程序「共创一位」投稿，老师在「🎨 学生投稿」里审批入池。') + '</span></span></div>' +
+      '<div class="gpset">' + subSw + '<span class="sctip">独立于上面的模块总开关；改动随同步下发到小程序</span></div></div>' +
 
       /* ---- 2 定价与折扣 ---- */
       '<div class="pet-sec"><h3>💰 定价与折扣</h3>' +
@@ -25542,6 +25595,7 @@ function cwInit(){
           ? ' title="🎁 点击这张卡直接发放给同学（' + ptEsc(p.name) + '）" onclick="ptCodexGrantPick(\'' + ptAt(p.id) + '\')" style="cursor:pointer"'
           : ' title="' + ptEsc(p.blessing || '') + '"') + '>' +
         tierTag +
+        (admin ? '<button type="button" title="✏️ 编辑这只灵杰的资料" style="position:absolute;right:6px;top:6px;z-index:4;border:1px solid #e3e8ee;background:rgba(255,255,255,.92);border-radius:8px;font-size:12px;line-height:1.5;padding:2px 6px;cursor:pointer" onclick="event.stopPropagation();ptDefEditPick(\'' + ptAt(p.id) + '\')">✏️</button>' : '') +
         ptCodexImgHtml(p) +
         '<div class="cx-nm">' + ptEsc(p.name) + '</div>' +
         '<div class="cx-own">' + ptEsc(p.series || '') + (a ? ' · 🐾 ' + ptEsc(a.studentName) + ' 已唤醒' : ' · ？？？待唤醒') + '</div>' +
@@ -25735,6 +25789,23 @@ function cwInit(){
       '</select><button class="btn2 primary" onclick="ptCodexSetTier()">💾 保存品级/系列</button></div>' +
       '<div class="sub">隐藏 / 典藏灵杰不会进入随机唤醒与灵杰蛋，只能由老师在这里改品级后从上方「🎁 灵杰发放」指定授予。隐藏灵杰解锁途径：整本书阅读汇报、辩论赛、课本剧、跨学科实践、创意写作；典藏灵杰授予优秀小组与重大挑战完成者。</div></div>' +
 
+      /* ②-b vT100 编辑单只灵杰资料（名字 / 系列 / 品级 / 图片 / 寄语） */
+      '<div class="pet-sec"><h3>✏️ 编辑灵杰资料</h3>' +
+      '<div class="gpset"><span class="lbl">选择灵杰</span><select class="search" id="cxEditSel" style="min-width:230px" onchange="ptDefEditLoad()">' +
+      (tierOpts || '<option value="">（暂无图鉴灵杰）</option>') + '</select>' +
+      '<button class="btn2 sm" onclick="ptDefEditLoad()">↻ 读取资料</button>' +
+      '<span class="sctip">也可以直接点上方卡面右上角的 ✏️</span></div>' +
+      '<div class="gpset" style="flex-wrap:wrap">' +
+      '<span class="lbl">名字</span><input class="search" id="cxEditName" style="width:120px" placeholder="灵杰名字">' +
+      '<span class="lbl">系列</span><select class="search" id="cxEditSeries">' +
+      ['名著先贤', '江湖侠客', '山海异兽', '精灵星座', '萌宠灵物', '同学共创'].map(function (x) { return '<option>' + x + '</option>'; }).join('') + '</select>' +
+      '<span class="lbl">品级</span><select class="search" id="cxEditTier"><option>普通</option><option>隐藏</option><option>典藏</option></select>' +
+      '<span class="lbl">图片</span><input class="search" id="cxEditImg" style="width:190px" placeholder="codeximg/257.png 或完整网址">' +
+      '</div>' +
+      '<div class="gpset" style="flex-wrap:wrap"><span class="lbl">寄语</span><input class="search" id="cxEditBless" style="width:400px" placeholder="解锁寄语（可留空）">' +
+      '<button class="btn2 primary" onclick="ptDefEditSave()">💾 保存修改</button></div>' +
+      '<div class="sub">只改这一只灵杰的图鉴定义；已发给同学的同一只灵杰会同步显示新名字 / 图片。图片留空表示沿用原图，历史发放记录不会丢。</div></div>' +
+
       /* ③ 图鉴条目删除 */
       '<div class="pet-sec"><h3>🗑 图鉴条目管理（灵杰池）</h3>' +
       '<div class="gpset"><select class="search" id="cxDefSel" style="min-width:230px">' + (defOpts || '<option value="">（灵杰池为空）</option>') + '</select>' +
@@ -25776,6 +25847,49 @@ function cwInit(){
 
       '<div class="gpset"><button class="btn2" onclick="ptAdminLock()">🔒 退出图鉴管理</button>' +
       '<span class="sctip">管理权限只在当前标签页有效，关掉标签页自动失效</span></div>';
+  }
+
+  /* ---------------- vT100 编辑单只灵杰资料 ---------------- */
+  function ptDefEditFind(id) {
+    var s = ptGet();
+    return s.petPool.filter(function (x) { return x && x.id === id && !x.purged; })[0] || null;
+  }
+  function ptDefEditLoad() {
+    var sel = document.getElementById('cxEditSel'); if (!sel) return;
+    var d = ptDefEditFind(sel.value); if (!d) return;
+    function set(id, v) { var e = document.getElementById(id); if (e) e.value = v == null ? '' : v; }
+    set('cxEditName', d.name); set('cxEditSeries', d.series || '萌宠灵物');
+    set('cxEditTier', d.tier || '普通'); set('cxEditImg', d.img || ''); set('cxEditBless', d.blessing || '');
+  }
+  function ptDefEditPick(id) {
+    if (!ptNeedAdmin()) return;
+    var sel = document.getElementById('cxEditSel');
+    if (sel) { sel.value = id; ptDefEditLoad(); }
+    var box = document.getElementById('codexAdminBox');
+    if (box && box.scrollIntoView) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    toastMsg('✏️ 已选中灵杰，在「编辑灵杰资料」里改完点「💾 保存修改」');
+  }
+  function ptDefEditSave() {
+    if (!ptNeedAdmin()) return;
+    var sel = document.getElementById('cxEditSel'); var id = sel && sel.value;
+    if (!id) return toastMsg('⚠️ 先选一只灵杰');
+    var s = ptGet(); var d = ptDefEditFind(id);
+    if (!d) return toastMsg('⚠️ 没找到这只灵杰');
+    function g(k) { var e = document.getElementById(k); return e ? String(e.value || '').trim() : ''; }
+    var nm = g('cxEditName'); if (!nm) return toastMsg('⚠️ 名字不能为空');
+    d.name = nm;
+    d.series = g('cxEditSeries') || d.series;
+    d.tier = g('cxEditTier') || d.tier;
+    var im = g('cxEditImg'); if (im) d.img = im;
+    d.blessing = g('cxEditBless');
+    d.updatedAt = Date.now(); d.updatedBy = 'web';
+    (s.pets || []).forEach(function (p) {
+      if (p && p.defId === d.id) { p.name = nm; if (im) p.img = im; p.updatedAt = Date.now(); }
+    });
+    ptSave(s); PET_DB = s;
+    toastMsg('✅ 已保存「' + nm + '」的资料');
+    ptRenderCodex();
+    try { ptRenderWall(); } catch (e) {}
   }
 
   /* ---------------- 发放 ---------------- */
@@ -26153,6 +26267,13 @@ function cwInit(){
   window.ptEnsureCodexFields = ptEnsureCodexFields;
   /* vT68 图鉴管理：发放 / 删除 / 恢复 / 导入导出 */
   window.ptRenderCodexAdmin = ptRenderCodexAdmin;
+  /* vT100 投稿开关 / 编辑灵杰 */
+  window.ptSubEnabled = ptSubEnabled;
+  window.ptSetSubEnabled = ptSetSubEnabled;
+  window.ptSubSwitch = ptSubSwitch;
+  window.ptDefEditLoad = ptDefEditLoad;
+  window.ptDefEditPick = ptDefEditPick;
+  window.ptDefEditSave = ptDefEditSave;
   window.ptCodexGrant = ptCodexGrant;
   window.ptCodexGrantBatch = ptCodexGrantBatch;
   /* vT80 点卡发放 */
