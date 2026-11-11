@@ -7905,7 +7905,7 @@ function scWordPanel(){
   if(!d.exam)d.exam=exams[0];
   d.sub=sub;SC_WORD=d;
   var wrap=el('div','chartbox');
-  wrap.appendChild(el('h3',null,'📄 导出成绩统计表（Word · 按学校模板）'));
+  wrap.appendChild(el('h3',null,'📄 导出成绩统计表（Word 按学校模板 · 📊 Excel 明细）'));
   var line=el('div','mapline');
   line.appendChild(el('span',null,'选择考试'));
   var ss=el('select');
@@ -7923,8 +7923,12 @@ function scWordPanel(){
   var gb=el('button','btn2 primary','⬇️ 生成并下载');
   gb.onclick=scWordDownload;
   line.appendChild(gb);
+  var eb=el('button','btn2','📊 导出 Excel');
+  eb.title='导出同口径的 Excel 明细（含汇总与分档），方便二次编辑或上报';
+  eb.onclick=scExcelDownload;
+  line.appendChild(eb);
   wrap.appendChild(line);
-  wrap.appendChild(el('div','maphint','汇总行按 100 分制折算分六档（31-59 / 60-69 / 70-79 / 80-89 / 90-99 / 100），30 分以下不计档；优秀率按 ≥90 分、及格率按 ≥60 分计。明细为三栏并排，按班级名单排序。'));
+  wrap.appendChild(el('div','maphint','Word 按学校模板生成；Excel 含汇总行、六档人数与逐人明细（分数 / 折算 / 档位）。汇总按 100 分制折算分六档（31-59 / 60-69 / 70-79 / 80-89 / 90-99 / 100），30 分以下不计档；优秀率按 ≥90 分、及格率按 ≥60 分计。明细为三栏并排，按班级名单排序。'));
   fill(box,wrap);
 }
 
@@ -8156,13 +8160,15 @@ function wbExportDocx(opt) {
 }
 
 /* ---------- 导出 Excel ---------- */
-/* opt: {head:[...], rows:[[...]], fileName} */
+/* opt: {head:[...], rows:[[...]], fileName} 或 {aoa:[[...]], sheet, fileName} */
 function wbExportXlsx(opt) {
   return wbLoadLib('xlsx').then(function (XLSX) {
-    var ws = XLSX.utils.aoa_to_sheet([opt.head].concat(opt.rows));
-    ws['!cols'] = opt.head.map(function (h) { return { wch: Math.max(10, String(h).length * 2 + 2) }; });
+    var aoa = opt.aoa || [opt.head].concat(opt.rows);
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    var wc = opt.aoa ? (aoa[1] || aoa[0] || []) : opt.head;
+    ws['!cols'] = wc.map(function (h) { return { wch: Math.max(10, String(h == null ? '' : h).length * 2 + 2) }; });
     var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '成绩');
+    XLSX.utils.book_append_sheet(wb, ws, opt.sheet || '成绩');
     XLSX.writeFile(wb, opt.fileName, { bookType: 'xlsx' });
     return opt.fileName;
   });
@@ -8393,6 +8399,41 @@ function scWordDownload() {
     subject: d.sub, cls: d.cls || '', date: d.date || '', full: 100,
     students: students
   }).then(function (n) { toastMsg('✅ 已生成 ' + n); })
+    .catch(function (e) { toastMsg('❌ 生成失败：' + e.message); });
+}
+
+/* ---------- vT106 导出同口径 Excel 统计表（汇总 + 六档 + 逐人明细） ---------- */
+function scExcelDownload() {
+  if (!SC_WORD) { toastMsg('请先选择考试'); return; }
+  var d = SC_WORD, st = scWordData();
+  if (!d.date) {
+    var hit = SC_ROWS.filter(function (r) { return fval(r, '科目') === d.sub && fval(r, '考试名称') === d.exam; })[0];
+    d.date = hit ? (fval(hit, '考试日期') || fval(hit, '日期') || '') : '';
+  }
+  function segOf(x) {
+    if (x.v == null) return '';
+    var r = x.v / x.fu * 100;
+    if (r < 30) return '30分以下（不计档）';
+    for (var i = 0; i < SC_WORD_SEG.length; i++) if (r >= SC_WORD_SEG[i][1] && r < SC_WORD_SEG[i][2]) return SC_WORD_SEG[i][0];
+    return '';
+  }
+  var aoa = [];
+  aoa.push(['成绩统计表 · ' + (d.cls || '') + ' · ' + d.sub]);
+  aoa.push(['学科', d.sub, '考试', d.exam, '班级', d.cls || '', '日期', d.date || '']);
+  aoa.push(['参考人数', st.n, '总分', st.n ? st.sum : '', '平均分', st.n ? (Math.round(st.avg * 10) / 10) : '',
+            '及格率', st.n ? Math.round(st.passRate) + '%' : '', '优秀率', st.n ? Math.round(st.excRate) + '%' : '']);
+  aoa.push(['分档（100分制）'].concat(SC_WORD_SEG.map(function (s) { return s[0]; })).concat(['30分以下']));
+  aoa.push(['人数'].concat(st.segs.map(function (s) { return s.n; })).concat([st.below]));
+  aoa.push([]);
+  aoa.push(['序号', '姓名', '分数', '折算（100分制）', '档位']);
+  st.list.forEach(function (x, i) {
+    aoa.push([i + 1, x.name, x.v == null ? '' : x.v,
+              x.v == null ? '' : Math.round(x.v / x.fu * 1000) / 10, segOf(x)]);
+  });
+  var fname = (d.cls || '班级') + '_' + d.sub + '_' + d.exam + '_成绩统计表.xlsx';
+  toastMsg('正在生成 Excel…');
+  wbExportXlsx({ aoa: aoa, sheet: '成绩统计表', fileName: fname })
+    .then(function (n) { toastMsg('✅ 已生成 ' + n); })
     .catch(function (e) { toastMsg('❌ 生成失败：' + e.message); });
 }
 
@@ -17648,9 +17689,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v105';
-var WB_MY_VER = '优化版 vT105 · 图鉴卡面优化';
-var WB_BUILD_DATE = '11-11', WB_BUILD_NO = '2.6.127';
+var WB_VER_TAG = 'v106';
+var WB_MY_VER = '优化版 vT106 · 成绩导出Excel';
+var WB_BUILD_DATE = '11-11', WB_BUILD_NO = '2.6.128';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
