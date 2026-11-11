@@ -24866,8 +24866,10 @@ function cwInit(){
     if (!p || typeof p !== 'object') return false;
     var o = p.origin;
     if (o === 'codex' || o === 'student') return false;
-    /* 有 defId 且能对上图鉴定义的，视为图鉴灵杰（老记录可能没写 origin） */
-    if (p.defId && (PET_DB.petPool || []).some(function (d) { return d && d.id === p.defId && d.origin === 'codex'; })) return false;
+    /* 有图鉴编号的一律保留（发放记录不写 origin，不能误伤） */
+    if (p.defId) return false;
+    /* 手绘 / 拍照 / 自定义涂鸦作品保留 */
+    if (p.img || p.customSvg) return false;
     return true;
   }
   function ptCleanLegacy(silent) {
@@ -24878,7 +24880,7 @@ function cwInit(){
       }
     });
     (s.petPool || []).forEach(function (d) {
-      if (d && !d.deleted && !d.purged && d.origin !== 'codex' && d.origin !== 'student' && d.archetype) {
+      if (d && !d.deleted && !d.purged && d.origin !== 'codex' && d.origin !== 'student' && d.archetype && !d.img && !d.customSvg) {
         d.deleted = true; d.deletedAt = now; d.updatedAt = now; d.deletedReason = 'legacy-clean'; nDef++;
       }
     });
