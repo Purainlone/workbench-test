@@ -1474,9 +1474,9 @@ table.paper td.l{text-align:left;font-weight:600}
       </div>
       <button class="btn2" id="rcCompactBtn" onclick="rcToggleCompact()" title="压缩行高列宽，一屏塞下更多人">📐 紧凑</button>
       <button class="btn2" id="rcRankBtn" onclick="rcToggleRank()" title="按完成篇数排名，看谁快谁慢">🏆 排名</button>
-      <button class="btn2" id="rcHideFullBtn" onclick="rcToggleHideFull()" title="全班都背完的篇目整列隐藏，表更清爽">🙈 已背完隐藏</button>
-      <button class="btn2 sm ghost" id="rcIgnBtn" onclick="hmToggleIgnoreRows()" title="不参与诵读的同学：默认折叠、不统计（作业登记不受影响，全员照常登记）">🙈 不参与名单</button>
-      <button class="btn2 sm ghost" onclick="openIgnorePicker()" title="勾选不参与作业 / 诵读的同学">⚙️ 名单设置</button>
+      <button class="btn2" id="rcHideFullBtn" onclick="rcToggleHideFull()" title="计入判定的同学都背完的篇目整列隐藏；徐曼桦、方浩轩可涂色但不计入该判定">🙈 已背完隐藏</button>
+      <button class="btn2 sm ghost" id="rcIgnBtn" onclick="hmToggleIgnoreRows()" title="不参加诵读的同学（默认柯骏豪）：折叠、只读。徐曼桦、方浩轩已恢复参加诵读，可在名单设置里调整">🙈 不参与名单</button>
+      <button class="btn2 sm ghost" onclick="openIgnorePicker()" title="三份名单：不参加诵读 / 不计入已背完判定 / 不参与作业登记">⚙️ 名单设置</button>
       <button class="btn2" onclick="rcOpenCert()" title="为背完篇目的同学生成精美通关证书，可打印">📜 通关证书</button>
       <button data-page-node-id="G5GdPMfht73z7907cW81gf" class="btn2 ghost" onclick="rcClearAll()"><!--pnid:J35nXVodFWDtyRxsfFvnS2-->🧹 清空本表打卡</button>
       <span data-page-node-id="SKrlV8316R18sUOxbCyWVn" class="rcstat" id="rcStat"></span>
@@ -1748,7 +1748,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2 sm primary" id="hwModeBtn" onclick="toggleHWMode()">✍️ 开始登记</button>
       <span class="mt" id="hwModeTip">先选等级，点「开始登记」后点格子才涂色</span>
       <button class="btn2 sm ghost" id="hwAutoBtn" onclick="hwToggleAuto()">🙈 已自动隐藏 0 列 · 显示</button>
-      <button class="btn2 sm ghost" onclick="openIgnorePicker()" title="勾选不参与诵读的同学（作业登记不受影响，全员照常登记）">⚙️ 名单设置</button>
+      <button class="btn2 sm ghost" onclick="openIgnorePicker()" title="三份名单：不参加诵读 / 不计入已背完判定 / 不参与作业登记">⚙️ 名单设置</button>
       <button class="btn2 sm danger" onclick="hwMarkAllOverdue()">⏰ 余下记超时未交（−2）</button>
     </div>
     <!-- vT86 批量登记 / 反选：先把整列登记成同一等级，再把没交作业的同学点掉 -->
@@ -11698,9 +11698,31 @@ function rcStudentsAll(){
   out.sort(function(a,b){return (parseInt(a.学号,10)||99)-(parseInt(b.学号,10)||99)||a.姓名.localeCompare(b.姓名,'zh')});
   return out;
 }
-/* 参与学习活动的学生（不参与名单里的人不进统计、不参与「全班背完」判定） */
+/* 参加诵读的学生：只有 HM_IGNORE 里的同学折叠只读，其余（含徐曼桦、方浩轩）都能涂色 */
 function rcStudents(){
   return rcStudentsAll().filter(function(s){return !hmIsIgnored(s.姓名)});
+}
+/* vT101 「已背完隐藏」判定专用名单：徐曼桦、方浩轩恢复参加诵读、可以涂色，
+   但不计入「全班是否都背完」——否则他们没背完时，篇目会一直无法自动隐藏。
+   完成率、每篇完成人数、排名、证书仍按 rcStudents()（含这两位）如实统计。 */
+var RC_STAT_EX_KEY='wb_rc_stat_exclude_v1';
+var RC_STAT_EX=(function(){
+  var def={'徐曼桦':1,'方浩轩':1};
+  try{
+    var raw=localStorage.getItem(RC_STAT_EX_KEY),o=raw?JSON.parse(raw):null;
+    if(o&&typeof o==='object')return o;
+  }catch(e){}
+  return def;
+})();
+function rcStatExcluded(n){return !!(RC_STAT_EX&&RC_STAT_EX[n])}
+function rcStatStudents(){
+  var a=rcStudents().filter(function(s){return !rcStatExcluded(s.姓名)});
+  return a.length?a:rcStudents();
+}
+function rcStatExSave(o){
+  RC_STAT_EX=o||{};
+  try{localStorage.setItem(RC_STAT_EX_KEY,JSON.stringify(RC_STAT_EX))}catch(e){}
+  try{renderRecite()}catch(e){}
 }
 function rcKey(name,title){return name+'||'+title}
 
@@ -11779,7 +11801,7 @@ function rcCelebrate(name,grand){
     card.appendChild(el('div','halo'));
     card.appendChild(el('div','cup','🏆'));
     card.appendChild(el('div','txt','全班背完！'));
-    card.appendChild(el('div','sub','全班 '+rcStudents().length+' 人 · '+RC_TITLES.length+' 篇 全部通过 · 太厉害了'));
+    card.appendChild(el('div','sub','全班 '+rcStatStudents().length+' 人 · '+RC_TITLES.length+' 篇 全部通过 · 太厉害了'));
     g.appendChild(card);
     document.body.appendChild(g);
     /* 两波撒花，第二波延迟一点更像烟花 */
@@ -11806,7 +11828,7 @@ function rcCheckCelebrate(name,prevDone,prevAllDone){
   if(full&&!prevAllDone){
     /* 全班是否刚好也全齐 */
     var everyone=true;
-    var stu=rcStudents();
+    var stu=rcStatStudents();   /* vT101 与「已背完隐藏」同口径 */
     for(var i=0;i<stu.length;i++){
       var st=stu[i].姓名,okAll=true;
       for(var j=0;j<RC_TITLES.length;j++){if(!RC_MAP[rcKey(st,rcTName(RC_TITLES[j]))]){okAll=false;break}}
@@ -12012,7 +12034,7 @@ function rcToggleHideFull(){
   try{localStorage.setItem(RC_HIDE_KEY,RC_HIDE_FULL?'1':'0')}catch(e){}
   rcPaintViewPrefs();
   renderRecite();
-  toastMsg(RC_HIDE_FULL?'全班都背完的篇目已自动隐藏':'已显示全部篇目');
+  toastMsg(RC_HIDE_FULL?'计入判定的同学都背完的篇目已自动隐藏（徐曼桦、方浩轩不计入）':'已显示全部篇目');
 }
 function rcSetZoom(v){
   var z=parseInt(v,10);
@@ -12170,10 +12192,12 @@ function renderRecite(){
     td.colSpan=Math.max(2,RC_TITLES.length+2);tr.appendChild(td);tb.appendChild(tr);box.appendChild(tb);
     rcRefreshStat();rcRenderRank();return;
   }
-  /* 全班都背完的篇目默认自动隐藏（可点工具条按钮切回显示） */
+  /* vT101 全班都背完的篇目默认自动隐藏：分母只算「计入已背完判定」的同学。
+     徐曼桦、方浩轩参加诵读、能涂色，但不会因为他们没背完而拖住自动隐藏。 */
+  var statStu=rcStatStudents();
   var vis=RC_TITLES.filter(function(t){
     if(!RC_HIDE_FULL)return true;
-    return stu.some(function(s){return !RC_MAP[rcKey(s.姓名,rcTName(t))]});
+    return statStu.some(function(s){return !RC_MAP[rcKey(s.姓名,rcTName(t))]});
   });
   /* 表头 */
   var thead=document.createElement('thead');
@@ -12196,6 +12220,7 @@ function renderRecite(){
     var nm=el('td','nm');
     nm.appendChild(document.createTextNode(s.姓名));
     if(s.学号)nm.appendChild(el('span','sn',s.学号+'号'));
+    if(rcStatExcluded(s.姓名))nm.title='参加诵读、可以涂色；不计入「已背完隐藏」的全班背完判定';
     tr.appendChild(nm);
     var cnt=0;
     RC_TITLES.forEach(function(t){if(RC_MAP[rcKey(s.姓名,rcTName(t))])cnt++});
@@ -12619,7 +12644,7 @@ function stuRoster(){
 }
 /* vT100 作业登记名单：方浩轩、柯骏豪不参与作业登记（也不进未交统计），
    徐曼桦及其余同学照常登记。名单与「不进未交统计」共用一份（⚙️ 名单设置里勾选），
-   诵读忽略名单（HM_IGNORE）只管诵读折叠，与作业无关。历史登记记录不删除。 */
+   诵读名单（HM_IGNORE 折叠 / RC_STAT_EX 已背完判定）只管诵读，与作业无关。历史登记记录不删除。 */
 function hwRoster(){
   return stuRoster().filter(function(s){return !hwNotCounted(s.姓名)});
 }
@@ -14851,23 +14876,23 @@ function hmWDName(d){
 }
 
 /* ---------- 首页：第几周 + 未交作业 ---------- */
-/* 诵读管理忽略名单（vT96 起只作用于诵读）：
-   默认折叠他们的行，不进完成率与「全班背完」判定。
-   作业登记不受影响——全员照常登记、照常进未交统计（vT96 解耦）。
-   名单存在本机，可点诵读页签「🙈 不参与名单」随时勾选。 */
+/* 诵读名单（vT101 起三层解耦，各自独立存储，均在「⚙️ 名单设置」里勾选）：
+   ① HM_IGNORE    不参加诵读：行默认折叠、只读，不计完成率；默认柯骏豪。
+   ② RC_STAT_EX   参加诵读、可涂色、进完成率与排名，但不计入「全班是否都背完」
+                  判定（「🙈 已背完隐藏」按其余同学算）；默认徐曼桦、方浩轩。
+   ③ HW_UNDONE_EX 不参与作业登记 / 未交统计（vT100 起，与诵读完全无关）。 */
 var HM_IGNORE_KEY='wb_ignore_students_v1';
 var HM_IGNORE=(function(){
-  var def={'柯骏豪':1,'方浩轩':1,'徐曼桦':1};   /* 这三位同学诵读默认折叠 */
+  var def={'柯骏豪':1};   /* vT101 默认：只有柯骏豪不参加诵读 */
   try{
     var raw=localStorage.getItem(HM_IGNORE_KEY),o=raw?JSON.parse(raw):null;
     if(o&&typeof o==='object'){
-      /* vT90 迁移：本机存的是旧默认名单（只有柯骏豪/方浩轩两人）→ 自动补上徐曼桦。
-         老师自己改过的名单（人数不是 2 或勾选与旧默认不符）不动。 */
-      var ks=Object.keys(o);
-      if(ks.length===2&&o['柯骏豪']===1&&o['方浩轩']===1){
-        o['徐曼桦']=1;
-        try{localStorage.setItem(HM_IGNORE_KEY,JSON.stringify(o))}catch(e){}
-      }
+      /* vT101 迁移：徐曼桦、方浩轩恢复参加诵读 —— 从本机旧名单里移除，
+         落到「不计入已背完判定」名单（RC_STAT_EX 默认值）。其他勾选原样保留。 */
+      var ch=0;
+      if(o['徐曼桦']){delete o['徐曼桦'];ch=1}
+      if(o['方浩轩']){delete o['方浩轩'];ch=1}
+      if(ch){try{localStorage.setItem(HM_IGNORE_KEY,JSON.stringify(o))}catch(e){}}
       return o;
     }
   }catch(e){}
@@ -14917,7 +14942,7 @@ function renderIgnoreBars(){
     var b=document.getElementById(id);if(!b)return;
     b.textContent=txt+(HM_SHOW_IGN?'（展开中）':(names.length?'（已折叠）':''));
     b.className='btn2 sm'+(HM_SHOW_IGN?'':' ghost');
-    b.title='点一下展开 / 折叠这些同学的行；他们的诵读不计入完成率与「全班背完」判定（作业登记名单在下面那组单独设置）';
+    b.title='点一下展开 / 折叠不参加诵读的同学（只读）；徐曼桦、方浩轩已恢复参加诵读，三份名单都在「⚙️ 名单设置」里调整';
   });
 }
 /* 名单设置面板：勾选式，不用手打姓名（vT97 双区：诵读忽略 + 未交统计排除） */
@@ -14925,7 +14950,7 @@ function openIgnorePicker(){
   var stu=stuRoster();
   var mask=el('div','rcmgr'),panel=el('div','panel');
   panel.appendChild(el('h3',null,'🙈 名单设置'));
-  panel.appendChild(el('div','meta','【不参与诵读】勾选后：诵读管理里他们的行默认折叠，不计入完成率，也不参与「全班背完」判定。已有的历史记录不会删，展开仍可查看（只读）。这份名单不影响作业登记。'));
+  panel.appendChild(el('div','meta','【① 不参加诵读】勾选后：诵读管理里他们的行默认折叠、只读（不能涂色），不计入完成率；历史记录不删，展开仍可查看。默认柯骏豪。这份名单不影响作业登记。'));
   var grid=el('div','igngrid');
   stu.forEach(function(s){
     var lab=el('label','ignitem');
@@ -14935,7 +14960,17 @@ function openIgnorePicker(){
     grid.appendChild(lab);
   });
   panel.appendChild(grid);
-  panel.appendChild(el('div','meta','【不参与作业登记 / 未交统计】勾选后：他们不再出现在作业登记网格，也不计入未交统计、教室大屏未交卡、AI 查缺交、一键超时未交和播报未交；已有的历史登记记录会保留。默认方浩轩、柯骏豪，徐曼桦照常登记。'));
+  panel.appendChild(el('div','meta','【② 参加诵读、可涂色，但不计入「已背完隐藏」】勾选后：他们正常显示、能涂色，也照常进完成率与排名；但「全班是否都背完」按其余同学计算，不会因为他们没背完而让篇目一直显示。默认徐曼桦、方浩轩。'));
+  var gridR=el('div','igngrid');
+  stu.forEach(function(s){
+    var lab=el('label','ignitem');
+    var cb=document.createElement('input');cb.type='checkbox';cb.value=s.姓名;cb.checked=rcStatExcluded(s.姓名);
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(s.姓名+(s.学号?('（'+s.学号+'号）'):'')));
+    gridR.appendChild(lab);
+  });
+  panel.appendChild(gridR);
+  panel.appendChild(el('div','meta','【③ 不参与作业登记 / 未交统计】勾选后：他们不再出现在作业登记网格，也不计入未交统计、教室大屏未交卡、AI 查缺交、一键超时未交和播报未交；已有的历史登记记录会保留。默认方浩轩、柯骏豪，徐曼桦照常登记。'));
   var grid2=el('div','igngrid');
   stu.forEach(function(s){
     var lab=el('label','ignitem');
@@ -14948,12 +14983,13 @@ function openIgnorePicker(){
   var bar=el('div','ignbar2');
   var ok=el('button','btn','保存');
   ok.onclick=function(){
-    var o={},o2={};
+    var o={},oR={},o2={};
     [].forEach.call(grid.querySelectorAll('input'),function(c){if(c.checked)o[c.value]=1});
+    [].forEach.call(gridR.querySelectorAll('input'),function(c){if(c.checked)oR[c.value]=1});
     [].forEach.call(grid2.querySelectorAll('input'),function(c){if(c.checked)o2[c.value]=1});
-    hmIgnoreSave(o);hwUndoneExSave(o2);
+    hmIgnoreSave(o);rcStatExSave(oR);hwUndoneExSave(o2);
     mask.parentNode&&mask.parentNode.removeChild(mask);
-    toastMsg('✅ 已保存：'+Object.keys(o).length+' 人不参与诵读，'+Object.keys(o2).length+' 人不参与作业登记 / 未交统计');
+    toastMsg('✅ 已保存：'+Object.keys(o).length+' 人不参加诵读，'+Object.keys(oR).length+' 人不计入已背完判定，'+Object.keys(o2).length+' 人不参与作业登记 / 未交统计');
   };
   var cancel=el('button','btn ghost','取消');cancel.onclick=function(){mask.parentNode&&mask.parentNode.removeChild(mask)};
   bar.appendChild(ok);bar.appendChild(cancel);panel.appendChild(bar);
@@ -17608,9 +17644,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v100';
-var WB_MY_VER = '优化版 vT100 · 作业与图鉴修复';
-var WB_BUILD_DATE = '11-11', WB_BUILD_NO = '2.6.122';
+var WB_VER_TAG = 'v101';
+var WB_MY_VER = '优化版 vT101 · 诵读名单三层解耦';
+var WB_BUILD_DATE = '11-11', WB_BUILD_NO = '2.6.123';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
