@@ -342,13 +342,11 @@ code { background:#eef6f0; border-radius:5px; padding:1px 6px; font-size:12px; }
 
 var ME = null, DOC = null, SHA = '', BRANCH = '';
 var STU = [], HWI = [], HW = [], SC = [], SA = [];   /* SA = s-assign 布置作业 */
-/* 不参与作业登记的同学（固定座、不交作业）：科任作业网格、未交名单、一键超时未交 都排除他们，
-   但仍保留在名单 / 成绩里。与网页 app.html 的 HM_HW_EXCLUDE、小程序 store.hwStudents 同一口径。 */
-/* vT96 作业登记全员参与：不再排除任何学生（与网页端 hwRoster、小程序 hwStudents 同口径） */
-var SUBJ_HW_EXCLUDE = {};
+/* vT100 作业登记名单：方浩轩、柯骏豪不进入科任作业网格与未交统计，
+   徐曼桦及其余同学照常登记。与网页 app.html 的 hwRoster、小程序 store.hwStudents 同一口径。 */
+var SUBJ_HW_EXCLUDE = { '方浩轩': 1, '柯骏豪': 1 };
 function hwStu() { return (STU || []).filter(function (s) { return !SUBJ_HW_EXCLUDE[s.name]; }); }
-/* vT97 未交统计排除：这些人仍出现在作业网格里（照常可登记），
-   但不进未交名单 / 统计 / 一键超时未交 / 播报未交。与网页 app.html 的 HW_UNDONE_EX 同一口径。 */
+/* 未交统计再过一遍同一份名单（防御：将来两份名单若分开配置也不会漏）。 */
 var SUBJ_STAT_EXCLUDE = { '方浩轩': 1, '柯骏豪': 1 };
 function hwStatStu() { return hwStu().filter(function (s) { return !SUBJ_STAT_EXCLUDE[s.name]; }); }
 var LV_SCORE = { '优': 2, '良': 1, '中': 0, '差': -1, '超时未交': -2 };
@@ -531,6 +529,12 @@ async function pull(showMsg) {
 function renderAll() {
   renderHwTab(); renderScList(); renderSpkSel(); buildSpeak(); renderAssign(); renderHome();
 }
+/* vT100：未交作业只认最近两周的作业列（与网页端 hmHwUndone 同口径） */
+function hwRecentCut() {
+  var d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - 14);
+  var p = function (n) { return ('0' + n).slice(-2); };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
 /* ---------- 主页：未交作业 / 今日留堂 / 布置作业 聚合 ---------- */
 function renderHome() {
   var home = $('tabHome'); if (!home) return;
@@ -540,7 +544,11 @@ function renderHome() {
   /* 1. 未交作业（最近 5 个本科目作业列） */
   var mine = (HWI || []).filter(function (x) { return (x.subject || '') === subj; });
   mine.sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')) || String(b.item).localeCompare(String(a.item)); });
-  var recent = mine.slice(0, 5);
+  var cutYmd = hwRecentCut();
+  var recent = mine.filter(function (x) {
+    var d = String(x.date || '').slice(0, 10);
+    return !d || d >= cutYmd;
+  }).slice(0, 5);
   var hwBox = $('homeHw'); if (!hwBox) return;
   if (!recent.length) {
     hwBox.innerHTML = '<div class="sub">还没有本科目作业列</div>';
