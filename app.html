@@ -2798,6 +2798,10 @@ table.paper td.l{text-align:left;font-weight:600}
       #s-pet .cx-q[data-t="隐藏"].on{background:#7c5cff;border-color:#7c5cff}
       #s-pet .cx-q[data-t="典藏"].on{background:#d8a520;border-color:#d8a520}
       #s-pet.codex-all .cx-card.locked .cx-img img{filter:none;opacity:1}
+      /* vT105 管理员操作按钮移到卡面右下角（原先右上角压图和品级徽章），底部留白防压字 */
+      #s-pet .cx-card.cx-admin{padding-bottom:30px}
+      #s-pet .cx-op{position:absolute;bottom:4px;z-index:4;border:1px solid #e3e8ee;background:rgba(255,255,255,.92);border-radius:8px;font-size:12px;line-height:1.5;padding:2px 6px;cursor:pointer}
+      #s-pet .cx-op:hover{border-color:#1f6f4a;background:#fff}
       /* vT80 点卡发放模式：卡面可点、悬停金框提示 */
       #s-pet .cx-card.grantable:hover{border-color:#d8a520;box-shadow:0 3px 14px rgba(216,165,32,.45);transform:translateY(-2px);transition:all .12s}
       #s-pet .cx-card.grantable::after{content:'🎁 点击发放';position:absolute;left:50%;bottom:26px;transform:translateX(-50%);font-size:10px;line-height:1.6;padding:1px 8px;border-radius:8px;background:rgba(216,165,32,.92);color:#fff;opacity:0;pointer-events:none;transition:opacity .12s;z-index:3;white-space:nowrap}
@@ -17644,9 +17648,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v104';
-var WB_MY_VER = '优化版 vT104 · 通知语音修复';
-var WB_BUILD_DATE = '11-11', WB_BUILD_NO = '2.6.126';
+var WB_VER_TAG = 'v105';
+var WB_MY_VER = '优化版 vT105 · 图鉴卡面优化';
+var WB_BUILD_DATE = '11-11', WB_BUILD_NO = '2.6.127';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24251,8 +24255,7 @@ function cwInit(){
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
 
 </script>
-<script id="petapp">
-/* ============================================================================
+<script id="petapp">/* ============================================================================
  * 积分养宠物 · Web 老师端逻辑（内联进 app.html 的 <script id="petapp"> 块）
  * 依赖：window.PetCore（petcore.js 已先加载）；复用现有 加减分 写路径（db.addRecord）。
  * 数据：本地库 wb_pet_db_v1 存八张表：
@@ -25704,16 +25707,16 @@ function cwInit(){
           return '<button class="cx-q' + (curTier === tt ? ' on' : '') + '" data-t="' + tt + '" onclick="' + (grantable ? 'event.stopPropagation();' : '') + 'ptCodexQuickSet(\'' + ptAt(p.id) + '\',\'' + tt + '\')">' + tt + '</button>';
         }).join('') + '</div>' : '';
       /* vT80 点卡发放模式：整张卡可点，点卡即弹出发放对话框 */
-      return '<div class="cx-card' + (a ? ' owned' : ' locked') + (grantable ? ' grantable' : '') + '"' +
+      return '<div class="cx-card' + (a ? ' owned' : ' locked') + (grantable ? ' grantable' : '') + (admin ? ' cx-admin' : '') + '"' +
         (grantable
           ? ' title="🎁 点击这张卡直接发放给同学（' + ptEsc(p.name) + '）" onclick="ptCodexGrantPick(\'' + ptAt(p.id) + '\')" style="cursor:pointer"'
           : ' title="' + ptEsc(p.blessing || '') + '"') + '>' +
         tierTag +
-        (admin ? '<button type="button" title="✏️ 编辑这只灵杰的资料" style="position:absolute;right:6px;top:6px;z-index:4;border:1px solid #e3e8ee;background:rgba(255,255,255,.92);border-radius:8px;font-size:12px;line-height:1.5;padding:2px 6px;cursor:pointer" onclick="event.stopPropagation();ptDefEditPick(\'' + ptAt(p.id) + '\')">✏️</button>' +
-        '<button type="button" title="🗑 移出图鉴（回收站可恢复，已发给同学的不受影响）" style="position:absolute;right:40px;top:6px;z-index:4;border:1px solid #f0dcdc;background:rgba(255,255,255,.92);border-radius:8px;font-size:12px;line-height:1.5;padding:2px 6px;cursor:pointer" onclick="event.stopPropagation();ptDefRemove(false,\'' + ptAt(p.id) + '\')">🗑</button>' : '') +
+        (admin ? '<button type="button" title="✏️ 编辑这只灵杰的资料" class="cx-op" style="right:4px" onclick="event.stopPropagation();ptDefEditPick(\'' + ptAt(p.id) + '\')">✏️</button>' +
+        '<button type="button" title="🗑 移出图鉴（回收站可恢复，已发给同学的不受影响）" class="cx-op" style="right:32px" onclick="event.stopPropagation();ptDefRemove(false,\'' + ptAt(p.id) + '\')">🗑</button>' : '') +
         ptCodexImgHtml(p) +
         '<div class="cx-nm">' + ptEsc(p.name) + '</div>' +
-        '<div class="cx-own">' + ptEsc(p.series || '') + (a ? ' · 🐾 ' + ptEsc(a.studentName) + ' 已唤醒' : ' · ？？？待唤醒') + '</div>' +
+        '<div class="cx-own">' + ptEsc(p.series || '') + (a ? ' · 🐾 ' + ptEsc(a.studentName) + ' 已唤醒' : ' · 🥚 待唤醒') + '</div>' +
         quick +
         '</div>';
     }).join('');
@@ -26434,7 +26437,6 @@ function cwInit(){
   /* 页面加载即初始化（种子池 + 徽标 + 开关状态），不依赖打开标签页 */
   try { if (typeof document !== 'undefined') { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wbPetInit); else wbPetInit(); } } catch (e) {}
 })();
-
 </script>
 
 <!-- vT40 家长端实时：网页端自动发布家长快照（与小程序端同源加密，老师改完网页数据家长端 30 秒内可见） -->
