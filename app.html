@@ -17704,9 +17704,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v108';
-var WB_MY_VER = '优化版 vT108 · 提醒修复';
-var WB_BUILD_DATE = '11-12', WB_BUILD_NO = '2.6.130';
+var WB_VER_TAG = 'v109';
+var WB_MY_VER = '优化版 vT109 · 家长端抽图鉴';
+var WB_BUILD_DATE = '11-12', WB_BUILD_NO = '2.6.131';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -25589,12 +25589,16 @@ function cwInit(){
     var cost = (it.action === 'draw') ? ptCost('draw') : (it.action === 'redeem') ? ptCost('redeem') : ptCost('feed');
     var actName = (it.action === 'feed') ? '蓄灵' : (it.action === 'draw') ? '唤醒' : (it.action === 'redeem') ? '兑换' : '蓄灵';
     ptAddManual(who, '启灵图鉴 · 家长' + actName, -cost).then(function () {
-      if (pet) {
+      /* vT109 唤醒不要求该生已有灵杰：家长第一次替孩子抽卡时，学生可能一只都没有，
+         原来整个动作包在 if (pet) 里 → 只扣积分不唤醒。 */
+      if (it.action === 'draw') {
+        var dPool = codexDrawPool(s);
+        if (dPool.length) { var sp = dPool[Math.floor(Math.random() * dPool.length)]; var np = ptMkPet(who, sp); s.pets.push(np); pet = np; }
+      } else if (pet) {
         if (it.action === 'feed') { pet.exp = (pet.exp || 0) + 10; pet.hunger = Math.min(100, (pet.hunger || 0) + 20); }
-        else if (it.action === 'draw') { var dPool = codexDrawPool(s); if (dPool.length) { var sp = dPool[Math.floor(Math.random() * dPool.length)]; s.pets.push(ptMkPet(who, sp)); } }
         else if (it.action === 'redeem') { pet.ownedItems = (pet.ownedItems || []).concat([it.item || '配饰']); }
-        ptLevelUp(pet); pet.updatedAt = Date.now();
       }
+      if (pet) { ptLevelUp(pet); pet.updatedAt = Date.now(); }
       it.status = 'done';
       ptSave(s); PET_DB = s; toastMsg('✅ 已批准家长提案'); ptRenderParent(); ptRenderWall();
     }).catch(function () {});
@@ -26633,16 +26637,23 @@ function cwInit(){
       });
     } catch (e) {}
 
-    /* 成绩（最近 120 天） */
+    /* 成绩（最近 120 天）。vT109 同一学生同一场考试只发最新一条：
+       合并键含日期，重录/改日期会存两条，不去重家长端会多出一条旧「第一单元」。 */
     var grades = [];
+    var gBest = {};
     try {
       (window.SC_ROWS || []).forEach(function (r) {
         var nm = fval(r, '学生姓名'); if (!nm) return;
         var dt = String(fval(r, '考试日期') || '').slice(0, 10);
         if (dt < lim120) return;
-        var sc = fval(r, '分数'); var full = fval(r, '满分');
-        grades.push({ date: dt, exam: fval(r, '考试名称') || '', subject: fval(r, '科目') || '', name: nm, score: sc, full: (full === '' || full == null ? 100 : full) });
+        var k = (fval(r, '科目') || '') + '|' + (fval(r, '考试名称') || '') + '|' + String(nm).replace(/\s+/g, '');
+        var old = gBest[k];
+        if (!old || dt > old.date) {
+          var sc = fval(r, '分数'); var full = fval(r, '满分');
+          gBest[k] = { date: dt, exam: fval(r, '考试名称') || '', subject: fval(r, '科目') || '', name: nm, score: sc, full: (full === '' || full == null ? 100 : full) };
+        }
       });
+      grades = Object.keys(gBest).map(function (k) { return gBest[k]; });
     } catch (e) {}
 
     /* 今日留堂（s-detain） */
@@ -26736,6 +26747,16 @@ function cwInit(){
           doc.parentPanels = (typeof ptPanelsGet === 'function') ? ptPanelsGet() : null;
           /* vT68 家长端「📖 启灵图鉴」卡片：公开图鉴目录（只有名字/形象/系列，无学生隐私） */
           doc.codexCatalog = snap.codexPool || [];
+          /* vT109 唤醒定价：家长端「提交唤醒申请」按钮的提示文字用 */
+          doc.codexCost = (function () {
+            try {
+              var pdb = JSON.parse(localStorage.getItem('wb_pet_db_v1') || 'null');
+              var c = pdb && (pdb.petCfg || []).filter(function (x) { return x && x.id === 'cfg'; })[0];
+              var v = Number(c && c.costs ? c.costs.draw : NaN);
+              if (!isFinite(v) || v < 0) v = 20;
+              return Math.max(0, Math.round(v));
+            } catch (_e) { return 20; }
+          })();
           if (j) {
             if (j.parentEssayOwner) doc.parentEssayOwner = j.parentEssayOwner;
             if (j.parentEssayRepo) doc.parentEssayRepo = j.parentEssayRepo;
