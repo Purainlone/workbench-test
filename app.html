@@ -2662,6 +2662,15 @@ table.paper td.l{text-align:left;font-weight:600}
         <button class="btn2" onclick="ptPanelsAll(false)">全不选</button>
         <span id="ptPanelsStatus" class="syncstatus"></span>
       </div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
+        <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
+        <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html</code>
+          <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
+          <button class="btn2" onclick="window.open('parent.html','_blank')">🔗 打开看看</button>
+          <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
+        </div>
+      </div>
     </div>
 
     <div class="synccard">
@@ -17352,6 +17361,28 @@ function mpSyncFill() {
 }
 /* ================= vT59 家长端显示设置（后台控制：勾选家长端显示哪些板块） ================= */
 var PT_PANEL_KEYS = ['detain', 'points', 'hw', 'rc', 'cmt', 'grade', 'essay', 'codex'];
+/* vT111 家长端网页：复制链接（家长点开填接入码即可，不用审核、不限人数） */
+function paCopyUrl() {
+  var el = document.getElementById('paWebUrl');
+  var url = (el && el.textContent || '').trim() || 'https://purainlone.github.io/workbench-test/parent.html';
+  var tip = document.getElementById('paWebTip');
+  var done = function () { if (tip) tip.textContent = '✅ 链接已复制，发到家长群即可'; if (typeof toastMsg === 'function') toastMsg('✅ 家长端网页链接已复制'); };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done, function () { paFallbackCopy(url, done); });
+      return;
+    }
+  } catch (e) {}
+  paFallbackCopy(url, done);
+}
+function paFallbackCopy(txt, done) {
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    if (done) done();
+  } catch (e) { if (typeof toastMsg === 'function') toastMsg('复制失败，请手动选中链接复制'); }
+}
 function ptPanelsDefault() { return { detain: true, points: true, hw: true, rc: true, cmt: true, grade: true, essay: true, codex: true }; }
 function ptPanelsGet() {
   var d = ptPanelsDefault();
@@ -17743,9 +17774,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v110';
-var WB_MY_VER = '优化版 vT110 · 蓄灵改集卡';
-var WB_BUILD_DATE = '11-12', WB_BUILD_NO = '2.6.132';
+var WB_VER_TAG = 'v111';
+var WB_MY_VER = '优化版 vT111 · 家长端网页';
+var WB_BUILD_DATE = '11-12', WB_BUILD_NO = '2.6.133';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24409,6 +24440,8 @@ function cwInit(){
       gradLevel: GRAD_LEVEL, saleOff: 100, shopSeeded: false,
       /* vT110 集卡大奖文案：集齐一个系列后可兑换，老师可在后台自定义 */
       cardReward: CARD_REWARD_DEFAULT,
+      /* vT111 家长提案自动批准：开关 + 每人每天上限 + 允许自动批准的动作 */
+      autoApprove: false, autoLimit: 1, autoActs: ['draw', 'feed'],
       updatedAt: Date.now(), updatedBy: 'web'
     };
   }
@@ -24448,6 +24481,10 @@ function cwInit(){
     if (!c) { c = ptDefaultCfg(); s.petCfg.push(c); ptSave(s); }
     if (!c.costs) c.costs = { feed: DEF_COST.feed, draw: DEF_COST.draw, redeem: DEF_COST.redeem };
     if (!c.cardReward) c.cardReward = CARD_REWARD_DEFAULT;   /* vT110 老配置补集卡大奖文案 */
+    /* vT111 老配置补自动批准字段 */
+    if (typeof c.autoApprove !== 'boolean') c.autoApprove = false;
+    if (!(Number(c.autoLimit) >= 0)) c.autoLimit = 1;
+    if (!Array.isArray(c.autoActs) || !c.autoActs.length) c.autoActs = ['draw', 'feed'];
     return c;
   }
   function ptEnabled() { return ptCfg().enabled || 'on'; }
@@ -25185,8 +25222,28 @@ function cwInit(){
         '<span class="pet-acts"><button class="btn2 sm primary" onclick="ptApproveParent(\'' + x.id + '\')">✅ 批准</button>' +
         '<button class="btn2 sm" onclick="ptRejectParent(\'' + x.id + '\')">❌ 驳回</button></span></div>';
     }).join('') : '<div class="pet-empty">暂无待处理的家长集卡提案</div>';
-    box.innerHTML = '<div class="sub">家长在小程序端提交的集卡 / 唤醒 / 兑换提案，老师批准后才真正入账（扣学生积分 + 集卡入册）。' +
-      (ptPlayable() ? '' : ' <b style="color:#c33">⏸ 模块暂停中，批准后也不会消耗积分，建议先驳回或启用模块。</b>') + '</div>' + html;
+    /* vT111 自动批准设置 + 最近日志 */
+    var c = ptCfg(), logs = ptAutoLog();
+    var acts = Array.isArray(c.autoActs) ? c.autoActs : ['draw', 'feed'];
+    var autoOn = !!c.autoApprove;
+    var logHtml = logs.length ? logs.slice().reverse().map(function (g) {
+      var d = new Date(g.at || 0), hm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+      return '<div class="pet-row"><span>' + hm + ' · ' + ptEsc(g.who || '') + ' · ' + ptEsc(g.act || '') + '（-' + (g.cost || 0) + '）</span><span class="pet-stu">' + ptEsc(g.msg || '') + '</span></div>';
+    }).join('') : '<div class="pet-empty">还没有自动批准记录</div>';
+    var autoHtml = '<div class="gpset" style="margin-top:10px">' +
+      '<span class="lbl">🤖 自动批准</span>' +
+      '<label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" id="ptAutoOn"' + (autoOn ? ' checked' : '') + '> 开启</label>' +
+      '<span class="lbl">每人每天</span><input class="search" style="width:56px" type="number" min="0" max="20" id="ptAutoLimit" value="' + (Number(c.autoLimit) || 0) + '"> 次' +
+      '<label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" id="ptAutoActDraw"' + (acts.indexOf('draw') >= 0 ? ' checked' : '') + '> 唤醒</label>' +
+      '<label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" id="ptAutoActFeed"' + (acts.indexOf('feed') >= 0 ? ' checked' : '') + '> 集卡</label>' +
+      '<button class="btn2 primary" onclick="ptAutoCfgSave()">💾 保存</button>' +
+      '<button class="btn2" onclick="ptAutoRunNow()">🔄 立即扫描</button>' +
+      '<span class="sctip" id="ptaStatus">' + (autoOn ? '开启中：家长提交后约 5~20 秒自动入账（需本页或教室电脑保持打开）' : '未开启：家长提案需要你手动批准') + '</span>' +
+      '</div>' +
+      '<div class="sub" style="margin-top:6px">自动批准只对「家长端提交 + 已开启的动作 + 每人每天未超额 + 积分足够」的提案生效，每一笔都会写进学生奖惩流水；关掉开关立即回到人工审批。</div>' +
+      '<details style="margin:6px 0 10px"><summary style="cursor:pointer;color:#666">🤖 最近自动批准记录（' + logs.length + '）</summary>' + logHtml + '</details>';
+    box.innerHTML = '<div class="sub">家长在小程序 / 家长网页端提交的集卡 / 唤醒 / 兑换提案，老师批准后才真正入账（扣学生积分 + 集卡入册）。' +
+      (ptPlayable() ? '' : ' <b style="color:#c33">⏸ 模块暂停中，批准后也不会消耗积分，建议先驳回或启用模块。</b>') + '</div>' + html + autoHtml;
     ptBadges();
   }
   /* 手绘作品的网页端取图：本地缓存优先，没有就异步经 contents API 拉一次 */
@@ -25770,14 +25827,18 @@ function cwInit(){
     p.updatedAt = Date.now();
     ptSave(s); PET_DB = s; toastMsg('🎓 毕业卡号：' + p.gradCode); ptRenderGrad(); ptRenderWall();
   }
-  function ptApproveParent(id) {
-    if (!ptPlayable()) return toastMsg('⏸ 模块暂停 / 关停中，不能批准消耗类提案');
-    var s = ptGet(); var it = s.parentQueue.filter(function (x) { return x.id === id; })[0]; if (!it) return;
+  /* vT111 审批核心：UI 手动批准与「自动批准」共用同一套入账逻辑（扣积分 + 唤醒/集卡 + 落库）。
+     resolve 值 { ok, act, actName, who, cost, msg } ；已处理过的提案返回 { ok:true, dup:true }。 */
+  function ptApproveParentCore(id, byAuto) {
+    if (!ptPlayable()) return Promise.reject(new Error('模块暂停 / 关停中'));
+    var s = ptGet(); var it = s.parentQueue.filter(function (x) { return x.id === id; })[0];
+    if (!it) return Promise.reject(new Error('提案不存在'));
+    if ((it.status || 'pending') !== 'pending') return Promise.resolve({ ok: true, dup: true, msg: '该提案已处理过' });
     var who = it.studentName || it.studentId;
     var pet = s.pets.filter(function (p) { return (p.studentId || p.studentName) === who && !p.deleted; })[0];
     var cost = (it.action === 'draw') ? ptCost('draw') : (it.action === 'redeem') ? ptCost('redeem') : ptCost('feed');
     var actName = (it.action === 'feed') ? '集卡' : (it.action === 'draw') ? '唤醒' : (it.action === 'redeem') ? '兑换' : '集卡';
-    ptAddManual(who, '启灵图鉴 · 家长' + actName, -cost).then(function () {
+    return ptAddManual(who, '启灵图鉴 · 家长' + actName + (byAuto ? '（自动批准）' : ''), -cost).then(function () {
       /* vT109 唤醒不要求该生已有灵杰：家长第一次替孩子抽卡时，学生可能一只都没有，
          原来整个动作包在 if (pet) 里 → 只扣积分不唤醒。 */
       var cardMsg = '';
@@ -25792,11 +25853,108 @@ function cwInit(){
         if (it.action === 'redeem') { pet.ownedItems = (pet.ownedItems || []).concat([it.item || '配饰']); }
       }
       if (pet) { ptLevelUp(pet); pet.updatedAt = Date.now(); }
-      it.status = 'done';
-      ptSave(s); PET_DB = s; toastMsg('✅ 已批准家长' + actName + '提案' + cardMsg);
+      it.status = 'done'; it.doneAt = Date.now(); it.doneBy = byAuto ? 'auto' : 'teacher';
+      ptSave(s); PET_DB = s;
       ptRenderParent(); ptRenderWall(); ptRenderCards();
-    }).catch(function () {});
+      return { ok: true, act: it.action, actName: actName, who: who, cost: cost, msg: '已批准家长' + actName + '提案' + cardMsg, cardMsg: cardMsg };
+    });
   }
+  function ptApproveParent(id) {
+    if (!ptPlayable()) return toastMsg('⏸ 模块暂停 / 关停中，不能批准消耗类提案');
+    ptApproveParentCore(id, false).then(function (r) {
+      toastMsg(r.dup ? ('ℹ️ ' + r.msg) : ('✅ ' + r.msg));
+    }).catch(function (e) { toastMsg('⚠️ ' + ((e && e.message) || '批准失败')); });
+  }
+
+  /* ===== vT111 家长提案自动批准（执行器在网页端：定时拉 pq/ → 交给这里判定与入账） ===== */
+  /* 把网页/小程序拉到的 pq/ 提案合入 parentQueue（按 id 去重），返回新增条数 */
+  function ptIngestParentProposals(list) {
+    var s = ptGet(); var n = 0;
+    (list || []).forEach(function (x) {
+      if (!x || !x.id) return;
+      var old = s.parentQueue.filter(function (y) { return y.id === x.id; })[0];
+      if (old) {
+        /* 老记录保留本地处理结果（老师已批/已驳），只补全缺失字段 */
+        if (old.status === 'done' || old.status === 'rejected') return;
+        old.studentName = old.studentName || x.studentName || x.studentId;
+        old.action = old.action || x.action; old.at = old.at || x.at;
+        return;
+      }
+      s.parentQueue.push({
+        id: x.id, parentId: x.parentId || '', studentId: x.studentId || x.studentName || '',
+        studentName: x.studentName || x.studentId || '', action: x.action || 'draw',
+        item: x.item || '', at: x.at || Date.now(), atText: x.atText || '',
+        status: 'pending', by: x.by || 'parent', ts: x.ts || x.at || Date.now(),
+        updatedAt: Date.now(), updatedBy: 'parent'
+      });
+      n++;
+    });
+    if (n) { s.parentQueue = s.parentQueue.slice(-800); ptSave(s); PET_DB = s; ptRenderParent(); }
+    return n;
+  }
+  /* 自动批准判定：返回 { ok, reason, action, who, cost } —— 判定与执行分离，便于日志与面板展示 */
+  function ptAutoJudge(id) {
+    var c = ptCfg(), s = ptGet();
+    var it = s.parentQueue.filter(function (x) { return x.id === id; })[0];
+    if (!it) return { ok: false, reason: '提案不存在' };
+    if ((it.status || 'pending') !== 'pending') return { ok: false, reason: '已处理过' };
+    if (!ptPlayable()) return { ok: false, reason: '模块暂停/关停' };
+    if (!c.autoApprove) return { ok: false, reason: '自动批准未开启' };
+    var who = it.studentName || it.studentId;
+    var acts = Array.isArray(c.autoActs) ? c.autoActs : ['draw', 'feed'];
+    if (acts.indexOf(it.action) < 0) return { ok: false, reason: '该动作未开启自动批准' };
+    var cost = (it.action === 'draw') ? ptCost('draw') : (it.action === 'redeem') ? ptCost('redeem') : ptCost('feed');
+    /* 每人每天上限：只数「今天 + 自动批准」的已办件，老师手动批的不占额度 */
+    var lim = Number(c.autoLimit); if (!(lim >= 0)) lim = 1;
+    if (lim > 0) {
+      var today = ptYmd(new Date()), used = 0;
+      s.parentQueue.forEach(function (x) {
+        if (x.status !== 'done' || x.doneBy !== 'auto') return;
+        if ((x.studentName || x.studentId) !== who) return;
+        if (ptYmd(new Date(x.doneAt || x.updatedAt || 0)) === today) used++;
+      });
+      if (used >= lim) return { ok: false, reason: who + ' 今日自动批准已用完（' + used + '/' + lim + '）' };
+    }
+    if (ptStuPoints(who) < cost) return { ok: false, reason: who + ' 积分不足（需 ' + cost + '，现有 ' + Math.round(ptStuPoints(who)) + '）' };
+    return { ok: true, action: it.action, who: who, cost: cost };
+  }
+  /* 自动批准的日志（本地环形 20 条，面板展示用） */
+  function ptAutoLog(list) {
+    var K = 'wb_pt_autolog_v1', arr = [];
+    try { arr = JSON.parse(localStorage.getItem(K) || '[]') || []; } catch (e) { arr = []; }
+    if (!list) return arr;
+    arr = arr.concat(list).slice(-20);
+    try { localStorage.setItem(K, JSON.stringify(arr)); } catch (e) {}
+    return arr;
+  }
+  /* 网页端调用：判定通过才入账；返回 { ok, msg } 供执行器写回 pq/ 状态 */
+  function ptAutoApproveOne(id) {
+    var j = ptAutoJudge(id);
+    if (!j.ok) return Promise.resolve({ ok: false, skip: true, msg: j.reason });
+    return ptApproveParentCore(id, true).then(function (r) {
+      var log = ptAutoLog([{ at: Date.now(), who: r.who || j.who, act: r.actName || j.action, cost: j.cost, msg: r.msg }]);
+      return { ok: true, msg: r.msg, cost: j.cost, who: j.who, act: r.actName, log: log };
+    });
+  }
+  function ptAutoCfgSave() {
+    var c = ptCfg();
+    var on = document.getElementById('ptAutoOn');
+    var lim = document.getElementById('ptAutoLimit');
+    var dA = document.getElementById('ptAutoActDraw');
+    var fA = document.getElementById('ptAutoActFeed');
+    c.autoApprove = !!(on && on.checked);
+    var v = lim ? Number(lim.value) : 1; if (!(v >= 0)) v = 1;
+    c.autoLimit = Math.round(v);
+    var acts = []; if (dA && dA.checked) acts.push('draw'); if (fA && fA.checked) acts.push('feed');
+    if (!acts.length) acts = ['draw'];
+    c.autoActs = acts;
+    c.updatedBy = 'web'; c.updatedAt = Date.now();
+    ptSave(ptGet()); toastMsg('✅ 自动批准设置已保存');
+    ptRenderParent();
+    if (c.autoApprove && typeof window.ptaKick === 'function') window.ptaKick();
+  }
+  function ptAutoRunNow() { if (typeof window.ptaScan === 'function') window.ptaScan(true); else toastMsg('⚠️ 自动批准引擎未就绪'); }
+
   function ptRejectParent(id) {
     var s = ptGet(); var it = s.parentQueue.filter(function (x) { return x.id === id; })[0]; if (!it) return;
     it.status = 'rejected'; ptSave(s); PET_DB = s; toastMsg('❌ 已驳回'); ptRenderParent();
@@ -26643,6 +26801,14 @@ function cwInit(){
   window.ptGradReq = ptGradReq;
   window.ptGradApprove = ptGradApprove;
   window.ptApproveParent = ptApproveParent;
+  /* vT111 自动批准：网页端引擎调这几个 */
+  window.ptIngestParentProposals = ptIngestParentProposals;
+  window.ptAutoJudge = ptAutoJudge;
+  window.ptAutoApproveOne = ptAutoApproveOne;
+  window.ptAutoCfgSave = ptAutoCfgSave;
+  window.ptAutoRunNow = ptAutoRunNow;
+  window.ptAutoLog = ptAutoLog;
+  window.ptAutoCfg = function () { var c = ptCfg(); return { on: !!c.autoApprove, limit: Number(c.autoLimit) || 0, acts: (c.autoActs || []).slice() }; };
   window.ptRejectParent = ptRejectParent;
   window.ptApproveSub = ptApproveSub;
   window.ptRejectSub = ptRejectSub;
@@ -26958,6 +27124,16 @@ function cwInit(){
               return Math.max(0, Math.round(v));
             } catch (_e) { return 20; }
           })();
+          /* vT111 家长网页端「🎴 集卡」按钮的单价（与唤醒同源，缺省 5） */
+          doc.codexFeedCost = (function () {
+            try {
+              var pdb2 = JSON.parse(localStorage.getItem('wb_pet_db_v1') || 'null');
+              var c2 = pdb2 && (pdb2.petCfg || []).filter(function (x) { return x && x.id === 'cfg'; })[0];
+              var v2 = Number(c2 && c2.costs ? c2.costs.feed : NaN);
+              if (!isFinite(v2) || v2 < 0) v2 = 5;
+              return Math.max(0, Math.round(v2));
+            } catch (_e2) { return 5; }
+          })();
           if (j) {
             if (j.parentEssayOwner) doc.parentEssayOwner = j.parentEssayOwner;
             if (j.parentEssayRepo) doc.parentEssayRepo = j.parentEssayRepo;
@@ -26982,6 +27158,125 @@ function cwInit(){
     if (_ptwTimer) clearTimeout(_ptwTimer);
     _ptwTimer = setTimeout(function () { _ptwTimer = null; ptwPublish(); }, 12000);
   }
+  /* ===== vT111 家长提案自动批准引擎（执行器） =====
+     链路：家长网页 / 小程序写 pq/{id}.json（只写令牌）→ 本引擎每 12 秒拉一次 →
+     合入 parentQueue（petapp）→ 按「开关 + 动作 + 每人每天上限 + 积分」判定 →
+     批准入账 → 把状态回写到 pq 文件（家长页据此显示「已生效 / 待老师处理」）。
+     关闭开关即回到人工审批；判定与入账都在 petapp 里，网页只负责网络与调度。 */
+  var PTA = { timer: null, busy: false, lastAt: 0, seen: {}, cfg: null, cfgAt: 0 };
+  function ptaHm(ts) { var d = new Date(ts || Date.now()); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+  function ptaBadge(txt) { var el = document.getElementById('ptaStatus'); if (el) el.textContent = txt; }
+  function ptaB64ToStr(b64) {
+    var bin = atob(String(b64 || '').replace(/\s+/g, ''));
+    var bytes = new Uint8Array(bin.length), i;
+    for (i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    try { return new TextDecoder('utf-8').decode(bytes); } catch (e) { return decodeURIComponent(escape(bin)); }
+  }
+  function ptaDir(cfg, sub) {
+    return GITEE_API + '/repos/' + encodeURIComponent(cfg.owner) + '/' + encodeURIComponent(cfg.repo) +
+      '/contents/' + (sub || '') + '?ref=master&access_token=' + encodeURIComponent(cfg.token);
+  }
+  /* 家长仓库配置从「已发布的家长快照」里取（快照本来就是公开可读的，家长端也读它） */
+  function ptaParentCfg(force) {
+    if (!force && PTA.cfg && Date.now() - PTA.cfgAt < 300000) return Promise.resolve(PTA.cfg);
+    var s = (typeof mpSyncSettings === 'function') ? mpSyncSettings() : null;
+    if (!s || !s.gOwner || !s.gRepo) return Promise.reject(new Error('还没配置 Gitee 云端同步'));
+    var url = GITEE_API + '/repos/' + encodeURIComponent(s.gOwner) + '/' + encodeURIComponent(String(s.gRepo) + '-pt') +
+      '/contents/wb_parent_snap.json?ref=master';
+    return fetch(url).then(function (r) { return r.text().then(function (t) { var j = null; try { j = JSON.parse(t) } catch (_e) {} if (!r.ok || !j) throw new Error('读不到家长快照 ' + r.status); return j; }); })
+      .then(function (j) {
+        var doc = JSON.parse(ptaB64ToStr(j.content));
+        if (!doc || !doc.parentEssayRepo) throw new Error('家长通道还没开通（缺家长作文仓库配置）');
+        var cfg = { owner: doc.parentEssayOwner || s.gOwner, repo: doc.parentEssayRepo, token: doc.parentEssayToken || '' };
+        if (!cfg.token) throw new Error('家长快照里没有只写令牌，请先在小程序端发布一次家长端');
+        PTA.cfg = cfg; PTA.cfgAt = Date.now();
+        return cfg;
+      });
+  }
+  function ptaList(cfg) {
+    return fetch(ptaDir(cfg, 'pq')).then(function (r) {
+      if (r.status === 404) return [];
+      return r.text().then(function (t) {
+        var j = null; try { j = JSON.parse(t) } catch (_e) {}
+        if (!r.ok) throw new Error((j && j.message) || ('列目录失败 ' + r.status));
+        return Array.isArray(j) ? j : [];
+      });
+    });
+  }
+  function ptaGet(cfg, name) {
+    return fetch(ptaDir(cfg, 'pq/' + encodeURIComponent(name))).then(function (r) {
+      return r.text().then(function (t) {
+        var j = null; try { j = JSON.parse(t) } catch (_e) {}
+        if (!r.ok || !j) throw new Error('读提案失败 ' + r.status);
+        return { rec: JSON.parse(ptaB64ToStr(j.content)), sha: j.sha };
+      });
+    });
+  }
+  function ptaMark(cfg, name, sha, rec, patch) {
+    var body = {};
+    Object.keys(rec || {}).forEach(function (k) { body[k] = rec[k]; });
+    Object.keys(patch || {}).forEach(function (k) { body[k] = patch[k]; });
+    var payload = { access_token: cfg.token, content: b64en(utf8Encode(JSON.stringify(body))), message: '家长提案 ' + (patch.status || '标记') };
+    if (sha) payload.sha = sha;
+    return fetch(ptaDir(cfg, 'pq/' + encodeURIComponent(name)), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    }).then(function (r) { if (!r.ok) throw new Error('回写状态失败 ' + r.status); return true; });
+  }
+  function ptaScan(manual) {
+    if (PTA.busy) return Promise.resolve();
+    if (typeof window.ptAutoCfg !== 'function') return Promise.resolve();
+    var st = window.ptAutoCfg();
+    if (!st.on && !manual) { ptaBadge('自动批准未开启 · 家长提案需你手动批准'); return Promise.resolve(); }
+    PTA.busy = true;
+    var n = 0, okN = 0, heldN = 0;
+    ptaBadge('正在扫描家长提案…');
+    return ptaParentCfg(false).then(function (cfg) {
+      return ptaList(cfg).then(function (list) {
+        var todo = list.filter(function (f) { return f && f.type === 'file' && /\.json$/i.test(f.name) && !PTA.seen[f.sha]; });
+        if (!todo.length) { ptaBadge('没有新提案 · ' + ptaHm(Date.now())); return null; }
+        var chain = Promise.resolve();
+        todo.forEach(function (f) {
+          chain = chain.then(function () {
+            return ptaGet(cfg, f.name).then(function (got) {
+              var rec = got.rec || {};
+              PTA.seen[got.sha] = 1;
+              if ((rec.status || 'pending') !== 'pending') return null;
+              n++;
+              try { window.ptIngestParentProposals([rec]); } catch (e) {}
+              var v = window.ptAutoJudge(rec.id);
+              if (!v.ok) {
+                heldN++;
+                return ptaMark(cfg, f.name, got.sha, rec, { status: 'held', heldReason: v.reason, heldAt: Date.now() });
+              }
+              return window.ptAutoApproveOne(rec.id).then(function (r) {
+                if (r && r.ok) {
+                  okN++;
+                  return ptaMark(cfg, f.name, got.sha, rec, { status: 'done', doneAt: Date.now(), result: r.msg, doneBy: 'auto' });
+                }
+                heldN++;
+                return ptaMark(cfg, f.name, got.sha, rec, { status: 'held', heldReason: (r && r.msg) || '未通过判定', heldAt: Date.now() });
+              });
+            }).catch(function (e) { console.warn('[家长提案] 单条处理失败', f.name, e); });
+          });
+        });
+        return chain;
+      });
+    }).then(function () {
+      PTA.lastAt = Date.now();
+      ptaBadge('上次扫描 ' + ptaHm(PTA.lastAt) + (n ? (' · 处理 ' + n + ' 条（自动批准 ' + okN + ' / 待你处理 ' + heldN + '）') : ' · 无新提案'));
+    }).catch(function (e) {
+      ptaBadge('⚠️ ' + ((e && e.message) || '扫描失败'));
+    }).then(function () { PTA.busy = false; });
+  }
+  function ptaStart() {
+    if (PTA.timer) return;
+    PTA.timer = setInterval(function () { if (!document.hidden) ptaScan(false); }, 12000);
+    setTimeout(function () { ptaScan(false); }, 6000);
+  }
+  window.ptaScan = ptaScan;
+  window.ptaKick = function () { return ptaScan(true); };
+  if (document.readyState === 'complete') ptaStart(); else window.addEventListener('load', ptaStart);
+
   /* 暴露给本页其它脚本的编辑钩子调用 */
   window.ptwSchedule = ptwSchedule;
   window.ptwPublish = ptwPublish;
