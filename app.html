@@ -11043,7 +11043,9 @@ function rmCheckAlerts(){
     if(diff>=0&&diff<30*60000){
       RM_ALERTED[r._id]=ymd(now);rmSaveAlerted();
       rmSysNotify(r);
-      if(!rmIsDesktop())rmPopup(r);   /* 桌面版交给系统通知，不叠加应用内弹窗 */
+      /* vT108 应用内弹窗一律保留：浏览器通知常被系统/浏览器拦截，
+         弹窗+提示音是兜底线，桌面 WebView2 宿主重复提醒也可接受 */
+      rmPopup(r);
     }
   });
 }
@@ -11127,6 +11129,19 @@ function rmPopup(r){
   b2.onclick=function(){toggleMemo(r._id,null,true);close()};
   b3.onclick=close;
   try{if(navigator.vibrate)navigator.vibrate([150,70,150])}catch(e){}
+  /* vT108 提示音：页面在后台/被静音也能听到（WebAudio 三短音，不依赖系统通知权限） */
+  try{
+    var _AC=window.AudioContext||window.webkitAudioContext;
+    if(_AC){
+      var _ac=new _AC();
+      [0,320,640].forEach(function(dl){
+        var o=_ac.createOscillator(),g=_ac.createGain();
+        o.type='sine';o.frequency.value=880;g.gain.value=.22;
+        o.connect(g);g.connect(_ac.destination);
+        o.start(_ac.currentTime+dl/1000);o.stop(_ac.currentTime+dl/1000+.16);
+      });
+    }
+  }catch(e){}
 }
 /* 快速添加：只填标题，默认今天 */
 /* ---------- 导出给「提醒小助手」本地程序 ----------
@@ -17689,9 +17704,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v107';
-var WB_MY_VER = '优化版 vT107 · 提审专用开关';
-var WB_BUILD_DATE = '11-11', WB_BUILD_NO = '2.6.129';
+var WB_VER_TAG = 'v108';
+var WB_MY_VER = '优化版 vT108 · 提醒修复';
+var WB_BUILD_DATE = '11-12', WB_BUILD_NO = '2.6.130';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -18987,7 +19002,18 @@ function mpToDesk(tables) {
       '清单': m.list ? { select: String(m.list) } : undefined,
       '是否完成': { checkbox: !!m.done },
       '重要': { checkbox: !!m.important },
-      '更新时间': mpTxt(m.date || m.ts || '')
+      /* vT108 更新时间带上时分秒：原来只传 m.date（YYYY-MM-DD），
+         两端按时间戳做 LWW 合并时同一天内分不出先后，勾选完成容易被旧版本盖回 */
+      '更新时间': mpTxt((function () {
+        try {
+          var d = new Date(m.updatedAt || m.ts || 0);
+          if (!isNaN(d.getTime()) && d.getTime() > 0) {
+            return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) +
+              ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2);
+          }
+        } catch (e) {}
+        return m.date || m.ts || '';
+      })())
     };
     if (m.due) p['截止时间'] = mpTxt(m.due);
     if (m.remind) p['提醒时间'] = mpTxt(m.remind);
@@ -19261,6 +19287,15 @@ function mpFromDeskBuild(o) {
           if (isNaN(dd.getTime())) return '';
           return dd.getFullYear() + '-' + ('0' + (dd.getMonth() + 1)).slice(-2) + '-' + ('0' + dd.getDate()).slice(-2);
         }
+        /* vT108 带时分：原来 due/remind 被截成纯日期（YYYY-MM-DD），
+           小程序端显示/提醒就丢了「几点几分」，和网页版不一致 */
+        function ymdHm(v) {
+          var ds = ymd(v);
+          if (!ds) return '';
+          var dd = (typeof v === 'number') ? new Date(v) : new Date(String(v));
+          if (dd.getHours() === 0 && dd.getMinutes() === 0) return ds;   /* 没填时分就保持纯日期 */
+          return ds + ' ' + ('0' + dd.getHours()).slice(-2) + ':' + ('0' + dd.getMinutes()).slice(-2);
+        }
         var upd = dv(p, '更新时间');
         return {
           id: (r && (r.id || r._id || r.recordId || r.record_id)) || ('m_' + t),   /* vT85 补 record_id 口径 */
@@ -19268,8 +19303,8 @@ function mpFromDeskBuild(o) {
           done: dvBool(p, '是否完成'),
           note: String(dv(p, '备注') || ''),
           list: String(dv(p, '清单') || ''),
-          due: ymd(dv(p, '截止时间')),
-          remind: ymd(dv(p, '提醒时间')),
+          due: ymdHm(dv(p, '截止时间')),
+          remind: ymdHm(dv(p, '提醒时间')),
           important: dvBool(p, '重要'),
           ts: (function () { var x = upd ? new Date(String(upd)) : null; return x && !isNaN(x.getTime()) ? x.getTime() : Date.now() })(),
           date: ymd(upd) || ''
