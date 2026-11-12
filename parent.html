@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#2f7a5a">
+<meta name="format-detection" content="telephone=no">
+<title>家长端 · 孩子的学习记录</title>
+<style>
+  :root{
+    --bg:#f4f7f4; --card:#fff; --ink:#22312a; --ink2:#5b6c62; --line:#e3ece6;
+    --g:#2f7a5a; --g2:#3f9a72; --gold:#c9932a; --red:#c8442f; --shadow:0 2px 10px rgba(30,60,45,.06);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:560px;margin:0 auto;padding:14px 14px 40px}
+  /* ---------- 登录 ---------- */
+  .login{padding:26px 18px;background:linear-gradient(160deg,#eaf5ee,#f7fbf8 60%,#fff);min-height:100vh}
+  .login h1{font-size:21px;margin:6px 0 4px;letter-spacing:.5px}
+  .login .sub{color:var(--ink2);font-size:13px;margin-bottom:18px}
+  .fld{margin-bottom:12px}
+  .fld label{display:block;font-size:13px;color:var(--ink2);margin-bottom:5px}
+  .fld input{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:12px;background:#fff;
+    font-size:16px;color:var(--ink);outline:none;transition:border-color .15s}
+  .fld input:focus{border-color:var(--g2)}
+  .btn{display:block;width:100%;padding:13px;border:0;border-radius:12px;background:var(--g);color:#fff;
+    font-size:16px;font-weight:600;letter-spacing:.5px;cursor:pointer}
+  .btn:active{opacity:.85}
+  .btn[disabled]{background:#b9c9c1}
+  .btn2{display:inline-block;padding:7px 14px;border-radius:10px;border:1px solid var(--line);background:#fff;
+    color:var(--g);font-size:13px;font-weight:600;cursor:pointer}
+  .btn2:active{background:#eef6f1}
+  .err{color:var(--red);font-size:13px;margin-top:10px;min-height:18px}
+  .hint{margin-top:18px;font-size:12px;color:var(--ink2);line-height:1.8;border-top:1px dashed var(--line);padding-top:12px}
+  /* ---------- 顶栏 ---------- */
+  .top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;padding:4px 2px}
+  .top .who{font-size:17px;font-weight:700}
+  .top .who small{font-size:12px;font-weight:400;color:var(--ink2);margin-left:6px}
+  .top .tools{display:flex;gap:8px;align-items:center}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--g2);display:inline-block;margin-right:4px}
+  /* ---------- 卡片 ---------- */
+  .card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:14px 15px;margin-bottom:12px}
+  .card h2{font-size:14px;margin:0 0 10px;color:var(--ink2);font-weight:600;display:flex;justify-content:space-between;align-items:center}
+  .card h2 em{font-style:normal;font-size:12px;color:#9aa8a0;font-weight:400}
+  .points{display:flex;align-items:flex-end;gap:14px}
+  .points .big{font-size:34px;font-weight:800;color:var(--g);line-height:1}
+  .points .big small{font-size:13px;font-weight:500;color:var(--ink2);margin-left:3px}
+  .points .side{font-size:12px;color:var(--ink2);line-height:1.7;padding-bottom:3px}
+  .kpis{display:flex;gap:8px;margin-top:12px}
+  .kpi{flex:1;background:#f7faf8;border-radius:12px;padding:9px 10px;text-align:center}
+  .kpi b{display:block;font-size:18px;color:var(--ink)}
+  .kpi span{font-size:11px;color:var(--ink2)}
+  /* 作业 */
+  .hw{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f1f5f2}
+  .hw:last-child{border-bottom:0}
+  .hw .nm{font-size:14px}
+  .chip{font-size:11px;padding:2px 9px;border-radius:999px;font-weight:600}
+  .c-g{background:#e6f4ea;color:#2b7a4b}
+  .c-y{background:#fdf3dd;color:#a97a11}
+  .c-z{background:#eef0f4;color:#5f6b7a}
+  .c-r{background:#fdeaea;color:#b4382a}
+  /* 留堂 */
+  .warn{background:#fff6f4;border:1px solid #f6d9d2}
+  .warn h2{color:#b4382a}
+  .warn .why{font-size:13px;color:#8a4c41}
+  /* 诵读 */
+  .rc{display:flex;flex-wrap:wrap;gap:7px}
+  .rc span{background:#eef6f1;color:#2f6b4f;border-radius:9px;padding:5px 11px;font-size:13px}
+  .empty{color:#9aa8a0;font-size:13px;text-align:center;padding:10px 0}
+  /* 图鉴 */
+  .cxgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .cx{background:#fbfdfb;border:1px solid var(--line);border-radius:13px;padding:7px 6px 8px;position:relative;overflow:hidden;text-align:center}
+  .cx img{width:100%;aspect-ratio:1/1;object-fit:contain;display:block;border-radius:9px;background:#f2f6f3}
+  .cx .nm{font-size:12px;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cx .sr{font-size:10px;color:#9aa8a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cx .ph{width:100%;aspect-ratio:1/1;border-radius:9px;background:#f2f6f3;display:flex;align-items:center;justify-content:center;font-size:26px}
+  .tier{position:absolute;left:5px;top:5px;font-size:9px;padding:1px 6px;border-radius:7px;background:rgba(255,255,255,.88);color:#8a6a15;font-weight:700}
+  @keyframes cxsheen{0%{background-position:130% 0}100%{background-position:-130% 0}}
+  @keyframes cxpulse{0%,100%{box-shadow:0 0 6px 1px rgba(124,92,255,.28)}50%{box-shadow:0 0 16px 4px rgba(124,92,255,.5)}}
+  @keyframes cxpulseGold{0%,100%{box-shadow:0 0 6px 1px rgba(201,147,42,.3)}50%{box-shadow:0 0 18px 5px rgba(201,147,42,.55)}}
+  .fx-purple{border-color:#9a7cff;animation:cxpulse 2.6s ease-in-out infinite}
+  .fx-gold{border-color:var(--gold);animation:cxpulseGold 2.6s ease-in-out infinite}
+  .fx-purple::after,.fx-gold::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(115deg,transparent 0 38%,rgba(255,255,255,.16) 46%,rgba(255,246,214,.45) 50%,rgba(255,255,255,.16) 54%,transparent 62% 100%);
+    background-size:280% 100%;animation:cxsheen 3.4s linear infinite}
+  .drawbox{margin-top:12px;background:#f7faf8;border-radius:12px;padding:11px 12px}
+  .drawbox .t{font-size:13px;color:var(--ink2);margin-bottom:8px}
+  .drawbox .acts{display:flex;gap:8px;flex-wrap:wrap}
+  .drawbox .note{font-size:11px;color:#9aa8a0;margin-top:8px;line-height:1.6}
+  .pend{margin-top:10px;font-size:13px;padding:9px 11px;border-radius:10px;background:#eef6f1;color:#2f6b4f}
+  .pend.wait{background:#fdf3dd;color:#8a6511}
+  .pend.bad{background:#fdeaea;color:#b4382a}
+  /* 成绩 */
+  .gr{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f1f5f2}
+  .gr:last-child{border-bottom:0}
+  .gr .l{font-size:13px}
+  .gr .l small{color:#9aa8a0;font-size:11px;margin-left:6px}
+  .gr .r{display:flex;align-items:center;gap:8px}
+  .gr .sc{font-size:15px;font-weight:700}
+  /* 点评 */
+  .cmt{padding:9px 0;border-bottom:1px solid #f1f5f2}
+  .cmt:last-child{border-bottom:0}
+  .cmt .d{font-size:11px;color:#9aa8a0;margin-bottom:3px}
+  .cmt .tx{font-size:13px;color:#3c4b43}
+  .foot{text-align:center;font-size:12px;color:#9aa8a0;padding:10px 0 0;line-height:1.9}
+  .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:rgba(30,45,38,.9);color:#fff;
+    font-size:13px;padding:10px 16px;border-radius:12px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:99;max-width:86%}
+  .toast.on{opacity:1}
+  .skel{height:14px;background:#eef2ef;border-radius:7px;margin:8px 0;animation:sk 1.2s infinite}
+  @keyframes sk{0%,100%{opacity:.6}50%{opacity:1}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<script>
+/* ============================================================
+   家长端网页（vT111）—— 免审核、不限人数的「家长查看」入口
+   ------------------------------------------------------------
+   数据链路与小程序家长端完全同源：
+     老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
+     家长登录 → 接入码解出 owner/repo → 匿名拉快照 → 姓名 + 绑定码解密自己孩子那块
+   抽图鉴 / 集卡 → 写家长作文仓库 pq/{id}.json（只写令牌，快照里下发）
+     老师网页端「自动批准」开启时数秒内入账；未开启则等老师手动批准
+   ============================================================ */
+(function () {
+  'use strict';
+
+  var GITEE = 'https://gitee.com/api/v5';
+  var SNAP = 'wb_parent_snap.json';
+  var K_ACCESS = 'wb_pa_access', K_NAME = 'wb_pa_name', K_CODE = 'wb_pa_code', K_PEND = 'wb_pa_pending';
+
+  /* ---------- 编解码（与小程序 ptcloud.js 同一套算法） ---------- */
+  var B64T = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  function utf8Encode(str) {
+    var out = [], i, c;
+    for (i = 0; i < str.length; i++) {
+      c = str.codePointAt(i);
+      if (c > 0xffff) i++;
+      if (c < 0x80) out.push(c);
+      else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 63));
+      else if (c < 0x10000) out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+      else out.push(0xf0 | (c >> 18), 0x80 | ((c >> 12) & 63), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    return out;
+  }
+  function utf8Decode(bytes) {
+    var out = '', i = 0, c;
+    while (i < bytes.length) {
+      c = bytes[i];
+      if (c < 0x80) { out += String.fromCharCode(c); i += 1; }
+      else if (c < 0xe0) { out += String.fromCharCode(((c & 31) << 6) | (bytes[i + 1] & 63)); i += 2; }
+      else if (c < 0xf0) { out += String.fromCharCode(((c & 15) << 12) | ((bytes[i + 1] & 63) << 6) | (bytes[i + 2] & 63)); i += 3; }
+      else {
+        var cp = ((c & 7) << 18) | ((bytes[i + 1] & 63) << 12) | ((bytes[i + 2] & 63) << 6) | (bytes[i + 3] & 63);
+        out += String.fromCodePoint(cp); i += 4;
+      }
+    }
+    return out;
+  }
+  function b64en(bytes) {
+    var r = '', i, b0, b1, b2;
+    for (i = 0; i < bytes.length; i += 3) {
+      b0 = bytes[i]; b1 = bytes[i + 1]; b2 = bytes[i + 2];
+      r += B64T[b0 >> 2];
+      r += B64T[((b0 & 3) << 4) | ((b1 == null ? 0 : b1) >> 4)];
+      r += b1 == null ? '=' : B64T[((b1 & 15) << 2) | ((b2 == null ? 0 : b2) >> 6)];
+      r += b2 == null ? '=' : B64T[b2 & 63];
+    }
+    return r;
+  }
+  function b64de(str) {
+    var out = [], i, v = 0, n = 0;
+    str = String(str).replace(/[^A-Za-z0-9+/]/g, '');
+    for (i = 0; i < str.length; i++) {
+      v = (v << 6) | B64T.indexOf(str.charAt(i));
+      n += 6;
+      if (n >= 8) { n -= 8; out.push((v >> n) & 255); }
+    }
+    return out;
+  }
+  function xorBytes(bytes, code) {
+    var kb = utf8Encode('wb_pt_v3::' + String(code).toUpperCase()), i, k = [];
+    for (i = 0; i < 24; i++) kb.push((i * 131 + kb.length * 7 + i * i) & 255);
+    for (i = 0; i < bytes.length; i++) k.push(bytes[i] ^ kb[i % kb.length]);
+    return k;
+  }
+  function unsealBlock(b64, code) { return JSON.parse(utf8Decode(xorBytes(b64de(b64), code))); }
+  function b64Json(b64) {   /* Gitee contents API 的 content → 文本 */
+    var bin = atob(String(b64 || '').replace(/\s+/g, ''));
+    var bytes = new Uint8Array(bin.length), i;
+    for (i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    try { return new TextDecoder('utf-8').decode(bytes); } catch (e) { return decodeURIComponent(escape(bin)); }
+  }
+  function enc(s) { return encodeURIComponent(s); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function ymd(d) { d = d || new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function dateOnly(s) { return String(s || '').slice(0, 10); }
+
+  /* ---------- 状态 ---------- */
+  var ST = { access: '', name: '', code: '', snap: null, per: null, view: null, pending: null, busy: false };
+
+  function toast(msg, ms) {
+    var t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('on');
+    clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('on'); }, ms || 2200);
+  }
+  function api(url, opt) {
+    return fetch(url, opt).then(function (r) {
+      return r.text().then(function (txt) {
+        var j = null; try { j = JSON.parse(txt); } catch (e) {}
+        if (!r.ok) { var e = new Error((j && (j.message || j.error)) || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+        return j;
+      });
+    });
+  }
+  function decodeAccess(ac) {
+    var txt = b64Json(String(ac || '').replace(/[^A-Za-z0-9+/=]/g, ''));
+    var j = JSON.parse(txt);
+    if (!j || !j.owner || !j.repo) throw new Error('接入码不对');
+    return j;
+  }
+  function loadSnap(repo) {
+    var u = GITEE + '/repos/' + enc(repo.owner) + '/' + enc(repo.repo) + '/contents/' + SNAP + '?ref=master&_t=' + Date.now();
+    return api(u).then(function (j) {
+      var doc = JSON.parse(b64Json(j.content));
+      if (!doc || !doc.blocks) throw new Error('老师的家长端数据还没发布');
+      return doc;
+    });
+  }
+
+  /* ---------- 视图：把快照里的孩子数据整理成页面要用的形状 ---------- */
+  function buildView(per, name) {
+    var day = ymd();
+    var items = (per.hwItems || []).filter(function (x) { return dateOnly(x.date) === day; })
+      .sort(function (a, b) { return String(a.item).localeCompare(String(b.item)); });
+    var LV = { '优': 'g', '良': 'y', '中': 'z', '差': 'r', '超时未交': 'r' };
+    var hw = items.map(function (it) {
+      var rec = null;
+      (per.hw || []).forEach(function (r) {
+        if (!rec && r.name === name && r.item === it.item && dateOnly(r.date) === dateOnly(it.date)) rec = r;
+      });
+      var lv = rec ? (rec.level || '') : '';
+      return { item: it.item, level: lv, cls: LV[lv] || 'r', done: !!rec };
+    });
+    var rcList = [], seen = {};
+    (per.rc || []).filter(function (r) { return dateOnly(r.date) === day; }).forEach(function (r) {
+      if (seen[r.title]) return; seen[r.title] = 1; rcList.push(r.title);
+    });
+    var gSeen = {}, grades = (per.grades || []).slice()
+      .sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); })
+      .filter(function (r) {
+        var k = (r.subject || '') + '|' + (r.exam || '');
+        if (gSeen[k]) return false; gSeen[k] = 1; return true;
+      })
+      .map(function (r) {
+        var full = Number(r.full) || 100, sc = Number(r.score);
+        var ratio = isNaN(sc) ? 0 : sc / full;
+        var lv = ratio >= 0.85 ? '优' : ratio >= 0.7 ? '良' : ratio >= 0.6 ? '中' : '差';
+        return { exam: r.exam || '', subject: r.subject || '', score: sc, full: full, level: lv, cls: LV[lv] || 'r', date: dateOnly(r.date) };
+      }).slice(0, 12);
+    var cmts = (per.comments || []).filter(function (r) { return r && r.text; })
+      .sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); }).slice(0, 8)
+      .map(function (r) {
+        var d = r.ts ? new Date(r.ts) : null;
+        return { theme: r.theme || '', text: r.text, date: d ? (ymd(d)) : '' };
+      });
+    return {
+      day: day, hw: hw, hwDone: hw.filter(function (x) { return x.done; }).length, hwN: hw.length,
+      rc: rcList, points: per.points || { hw: 0, manual: 0, total: 0 },
+      detain: (per.detain || []), grades: grades, comments: cmts, codex: per.codex || []
+    };
+  }
+
+  /* ---------- 图鉴图源（与小程序 codeximg.js 一致的三级回退） ---------- */
+  var MIRRORS = [
+    'https://testingcf.jsdelivr.net/gh/Purainlone/workbench-test@main/',
+    'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@main/',
+    'https://purainlone.github.io/workbench-test/'
+  ];
+  function pickSrcs(rel) {
+    if (!rel) return [];
+    if (/^(https?:|data:)/i.test(rel)) return [rel];
+    if (String(rel).indexOf('codeximg/') !== 0) return [];
+    var out = [];
+    MIRRORS.forEach(function (b) { out.push(b + rel); });
+    return out;
+  }
+  function cxCard(p, i) {
+    var srcs = pickSrcs(p.img);
+    var fx = (p.tier === '典藏') ? 'fx-gold' : (p.tier === '隐藏') ? 'fx-purple' : '';
+    var tier = (p.tier && p.tier !== '普通') ? ('<span class="tier">' + esc(p.tier) + '</span>') : '';
+    var inner = srcs.length
+      ? '<img src="' + esc(srcs[0]) + '" data-i="' + i + '" onerror="window.__paImgErr(this)" alt="">'
+      : '<div class="ph">🥚</div>';
+    return '<div class="cx ' + fx + '">' + tier + inner +
+      '<div class="nm">' + esc(p.name || '灵杰') + '</div>' +
+      '<div class="sr">' + esc(p.series || '') + '</div></div>';
+  }
+  window.__paImgErr = function (img) {
+    var i = Number(img.getAttribute('data-i'));
+    var p = (ST.view && ST.view.codex) ? ST.view.codex[i] : null;
+    if (!p) { img.style.display = 'none'; return; }
+    var srcs = pickSrcs(p.img);
+    var at = srcs.indexOf(img.getAttribute('src'));
+    if (at + 1 < srcs.length) { img.setAttribute('src', srcs[at + 1]); }
+    else { img.outerHTML = '<div class="ph">📖</div>'; }
+  };
+
+  /* ---------- 渲染 ---------- */
+  function renderLogin(err) {
+    document.getElementById('app').innerHTML =
+      '<div class="login">' +
+      '<h1>👋 家长您好</h1>' +
+      '<div class="sub">输入老师发的信息，查看孩子今天的作业、积分、图鉴与成绩</div>' +
+      '<div class="fld"><label>家长接入码（老师发到群里的一长串）</label>' +
+      '<input id="fAccess" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="粘贴接入码" value="' + esc(ST.access) + '"></div>' +
+      '<div class="fld"><label>孩子姓名</label><input id="fName" placeholder="如：李小明" value="' + esc(ST.name) + '"></div>' +
+      '<div class="fld"><label>绑定码（老师单独发给你）</label>' +
+      '<input id="fCode" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="如：A7K2" value="' + esc(ST.code) + '"></div>' +
+      '<button class="btn" id="btnLogin">进入家长端</button>' +
+      '<div class="err" id="loginErr">' + esc(err || '') + '</div>' +
+      '<div class="hint">· 信息只保存在本机，换手机需重新填写。<br>' +
+      '· 数据是老师发布时加密的，只有孩子的绑定码能解开。<br>' +
+      '· 打不开或提示「名单里没有」，请把姓名和老师花名册核对一致。</div>' +
+      '</div>';
+    document.getElementById('btnLogin').onclick = doLogin;
+    ['fAccess', 'fName', 'fCode'].forEach(function (id) {
+      document.getElementById(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+    });
+  }
+
+  function doLogin() {
+    var ac = (document.getElementById('fAccess').value || '').trim();
+    var nm = (document.getElementById('fName').value || '').trim();
+    var cd = (document.getElementById('fCode').value || '').trim().toUpperCase();
+    var err = document.getElementById('loginErr');
+    if (!ac || !nm || !cd) { err.textContent = '三项都要填哦'; return; }
+    var btn = document.getElementById('btnLogin');
+    btn.disabled = true; btn.textContent = '正在读取…'; err.textContent = '';
+    var repo;
+    try { repo = decodeAccess(ac); } catch (e) { btn.disabled = false; btn.textContent = '进入家长端'; err.textContent = '接入码格式不对，请重新复制'; return; }
+    loadSnap(repo).then(function (snap) {
+      var b = (snap.blocks || {})[nm];
+      if (!b) throw new Error('名单里没有「' + nm + '」，请核对姓名');
+      if (String(b.code || '') !== cd) throw new Error('绑定码不对，请找老师核对');
+      var per;
+      try { per = unsealBlock(b.data, cd); } catch (e) { throw new Error('绑定码不对，数据解不开'); }
+      ST.access = ac; ST.name = nm; ST.code = cd; ST.snap = snap; ST.per = per;
+      try {
+        localStorage.setItem(K_ACCESS, ac); localStorage.setItem(K_NAME, nm); localStorage.setItem(K_CODE, cd);
+      } catch (e) {}
+      renderMain();
+    }).catch(function (e) {
+      btn.disabled = false; btn.textContent = '进入家长端';
+      err.textContent = (e && e.message) || '读取失败，请检查网络后重试';
+    });
+  }
+
+  function pendText() {
+    var p = ST.pending; if (!p) return '';
+    if (p.status === 'done') return '<div class="pend">✅ 已生效：' + esc(p.msg || '老师已批准') + '（下拉或点刷新查看）</div>';
+    if (p.status === 'held') return '<div class="pend bad">⚠️ ' + esc(p.msg || '老师需要手动处理') + '</div>';
+    return '<div class="pend wait">⏳ 已提交，正在等待入账…' + (ST.snap && ST.snap.autoApprove ? '（自动批准已开启，通常 10 秒内生效）' : '（需老师批准，批准后这里会变成已生效）') + '</div>';
+  }
+
+  function renderMain() {
+    var v = buildView(ST.per, ST.name);
+    ST.view = v;
+    var panels = (ST.snap && ST.snap.parentPanels) || {};
+    var on = function (k) { return panels[k] !== false; };
+    var drawCost = Number(ST.snap.codexCost); if (!isFinite(drawCost) || drawCost < 0) drawCost = 20;
+    var feedCost = Number(ST.snap.codexFeedCost); if (!isFinite(feedCost) || feedCost < 0) feedCost = 5;
+    var ts = ST.snap.ts ? new Date(ST.snap.ts) : null;
+    var ageH = ts ? Math.round((Date.now() - ts.getTime()) / 3600000) : 0;
+    var at = ts ? (pad(ts.getHours()) + ':' + pad(ts.getMinutes())) : '—';
+
+    var h = '';
+    h += '<div class="top"><div class="who">' + esc(ST.name) +
+      '<small>' + esc(ST.snap.className || '') + (ST.per.group ? (' · ' + esc(ST.per.group)) : '') + '</small></div>' +
+      '<div class="tools"><button class="btn2" id="btnRefresh">刷新</button>' +
+      '<button class="btn2" id="btnOut">切换</button></div></div>';
+    h += '<div style="font-size:12px;color:#9aa8a0;margin:-6px 2px 10px"><span class="dot"></span>数据 ' + at + ' 更新' +
+      (ageH >= 24 ? ('（老师 ' + Math.round(ageH / 24) + ' 天前发布）') : '') + '</div>';
+
+    /* 留堂 */
+    if (on('detain') && v.detain.length) {
+      h += '<div class="card warn"><h2>📌 今天被留堂</h2><div class="why">' +
+        v.detain.map(function (d) { return esc((d.subject ? d.subject + ' · ' : '') + (d.by || '需留下补完')); }).join('<br>') +
+        '</div></div>';
+    }
+    /* 积分 */
+    if (on('points')) {
+      h += '<div class="card"><h2>积分 <em>作业分 + 平时分</em></h2>' +
+        '<div class="points"><div class="big">' + Math.round(v.points.total || 0) + '<small>分</small></div>' +
+        '<div class="side">作业 ' + Math.round(v.points.hw || 0) + ' · 平时 ' + Math.round(v.points.manual || 0) + '</div></div>' +
+        '<div class="kpis"><div class="kpi"><b>' + v.hwDone + '/' + v.hwN + '</b><span>今日作业完成</span></div>' +
+        '<div class="kpi"><b>' + v.rc.length + '</b><span>今日诵读</span></div>' +
+        '<div class="kpi"><b>' + (v.codex.length || 0) + '</b><span>已唤醒灵杰</span></div></div></div>';
+    }
+    /* 作业 */
+    if (on('hw')) {
+      h += '<div class="card"><h2>📝 今日作业 <em>' + esc(v.day) + '</em></h2>';
+      h += v.hw.length ? v.hw.map(function (x) {
+        var label = x.done ? (x.level || '已交') : '未交';
+        return '<div class="hw"><span class="nm">' + esc(x.item) + '</span><span class="chip c-' + x.cls + '">' + esc(label) + '</span></div>';
+      }).join('') : '<div class="empty">今天老师还没布置作业</div>';
+      h += '</div>';
+    }
+    /* 诵读 */
+    if (on('rc')) {
+      h += '<div class="card"><h2>📖 今日诵读</h2>';
+      h += v.rc.length ? '<div class="rc">' + v.rc.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</div>'
+        : '<div class="empty">今天还没有诵读记录</div>';
+      h += '</div>';
+    }
+    /* 图鉴 */
+    if (on('codex')) {
+      h += '<div class="card"><h2>🎴 孩子的启灵图鉴 <em>共 ' + (v.codex.length || 0) + ' 位</em></h2>';
+      h += v.codex.length ? '<div class="cxgrid">' + v.codex.map(cxCard).join('') + '</div>'
+        : '<div class="empty">还没唤醒灵杰，第一次唤醒会从「？？？」里揭晓</div>';
+      h += '<div class="drawbox"><div class="t">✨ 帮孩子抽一位 / 收一张卡（扣孩子的启灵积分）</div>' +
+        '<div class="acts"><button class="btn2" id="btnDraw">🎲 唤醒一位（-' + drawCost + '）</button>' +
+        '<button class="btn2" id="btnFeed">🎴 集卡（-' + feedCost + '）</button></div>' +
+        '<div class="note">' + (ST.snap.autoApprove ? '老师已开启自动批准，提交后约 10 秒自动入账；' : '提交后由老师批准；') +
+        '每人每天有次数上限，积分不够会自动作废。</div>' + pendText() + '</div>';
+      h += '</div>';
+    }
+    /* 成绩 */
+    if (on('grade')) {
+      h += '<div class="card"><h2>🏅 成绩记录</h2>';
+      h += v.grades.length ? v.grades.map(function (g) {
+        return '<div class="gr"><span class="l">' + esc(g.exam || '考试') + '<small>' + esc(g.subject || '') + ' · ' + esc(g.date) + '</small></span>' +
+          '<span class="r"><span class="sc">' + g.score + '</span><span class="chip c-' + g.cls + '">' + esc(g.level) + '</span></span></div>';
+      }).join('') : '<div class="empty">还没有成绩记录</div>';
+      h += '</div>';
+    }
+    /* 点评 */
+    if (on('cmt')) {
+      h += '<div class="card"><h2>💬 老师点评</h2>';
+      h += v.comments.length ? v.comments.map(function (c) {
+        return '<div class="cmt"><div class="d">' + esc(c.date) + (c.theme ? (' · ' + esc(c.theme)) : '') + '</div><div class="tx">' + esc(c.text) + '</div></div>';
+      }).join('') : '<div class="empty">暂无点评</div>';
+      h += '</div>';
+    }
+    h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码</div>';
+
+    document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
+    document.getElementById('btnRefresh').onclick = function () { refresh(); };
+    document.getElementById('btnOut').onclick = function () { goLogin(); };
+    var bd = document.getElementById('btnDraw'); if (bd) bd.onclick = function () { submitProposal('draw', drawCost); };
+    var bf = document.getElementById('btnFeed'); if (bf) bf.onclick = function () { submitProposal('feed', feedCost); };
+    if (ST.pending && ST.pending.status === 'pending') startPoll();
+  }
+
+  function loadPending() {
+    try { ST.pending = JSON.parse(localStorage.getItem(K_PEND) || 'null'); } catch (e) { ST.pending = null; }
+    if (ST.pending && ST.pending.name !== ST.name) ST.pending = null;
+  }
+  function savePending() {
+    try {
+      if (ST.pending) localStorage.setItem(K_PEND, JSON.stringify(ST.pending));
+      else localStorage.removeItem(K_PEND);
+    } catch (e) {}
+  }
+
+  function refresh() {
+    var repo;
+    try { repo = decodeAccess(ST.access); } catch (e) { goLogin(); return; }
+    toast('正在刷新…', 900);
+    loadSnap(repo).then(function (snap) {
+      ST.snap = snap;
+      var b = (snap.blocks || {})[ST.name];
+      if (!b) throw new Error('名单里没有「' + ST.name + '」');
+      ST.per = unsealBlock(b.data, ST.code);
+      renderMain();
+    }).catch(function (e) { toast((e && e.message) || '刷新失败'); });
+  }
+
+  function goLogin() {
+    ST.access = ST.access || ''; ST.name = ST.name || ''; ST.code = '';
+    ST.snap = null; ST.per = null; ST.pending = null; savePending();
+    renderLogin('');
+  }
+
+  /* ---------- 抽图鉴 / 集卡：写 pq/ 提案 → 轮询结果 ---------- */
+  function proposalUrl(name, withToken) {
+    var owner = ST.snap.parentEssayOwner || '', repo = ST.snap.parentEssayRepo || '';
+    return GITEE + '/repos/' + enc(owner) + '/' + enc(repo) + '/contents/pq/' + enc(name) +
+      (withToken ? ('?ref=master&access_token=' + enc(ST.snap.parentEssayToken || '')) : '');
+  }
+  function submitProposal(action, cost) {
+    if (ST.busy) return;
+    if (!ST.snap.parentEssayToken || !ST.snap.parentEssayRepo) { toast('老师还没开通家长通道'); return; }
+    if (ST.pending && ST.pending.status === 'pending') { toast('上一笔还在等待，稍等再试'); return; }
+    var actName = action === 'draw' ? '唤醒一位灵杰' : '集一张卡';
+    if (!confirm('帮「' + ST.name + '」' + actName + '，消耗 ' + cost + ' 启灵积分？\n（' +
+      (ST.snap.autoApprove ? '老师已开启自动批准，提交后自动入账' : '需老师批准后生效') + '）')) return;
+    ST.busy = true;
+    var rec = {
+      id: 'pq_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      studentId: ST.name, studentName: ST.name, action: action, item: '',
+      at: Date.now(), atText: ymd(), status: 'pending', by: 'parent-web',
+      ts: Date.now(), updatedAt: Date.now(), updatedBy: 'parent'
+    };
+    var body = {
+      access_token: ST.snap.parentEssayToken,
+      content: b64en(utf8Encode(JSON.stringify(rec))),
+      message: '家长提案 ' + rec.id
+    };
+    var url = proposalUrl(rec.id + '.json', false);
+    var put = function (method) {
+      return api(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    };
+    put('PUT').catch(function (e) {
+      if (e && e.status === 404) return put('POST');
+      throw e;
+    }).then(function () {
+      ST.busy = false;
+      ST.pending = { id: rec.id, name: ST.name, action: action, at: rec.at, status: 'pending' };
+      savePending(); renderMain(); startPoll();
+    }).catch(function (e) {
+      ST.busy = false;
+      toast('提交失败：' + ((e && e.message) || '网络问题'));
+    });
+  }
+  var POLL = null;
+  function startPoll() {
+    if (POLL) return;
+    var tries = 0;
+    POLL = setInterval(function () {
+      tries++;
+      if (!ST.pending || ST.pending.status !== 'pending' || tries > 40) { clearInterval(POLL); POLL = null; return; }
+      var url = proposalUrl(ST.pending.id + '.json', true);
+      api(url).then(function (j) {
+        var rec = JSON.parse(b64Json(j.content));
+        if (!rec || rec.status === 'pending') return;
+        if (rec.status === 'done') {
+          ST.pending.status = 'done'; ST.pending.msg = rec.result || '老师已批准';
+          savePending(); renderMain(); clearInterval(POLL); POLL = null;
+          setTimeout(refresh, 1500);    /* 快照稍后才会重发，先等一下再刷新 */
+        } else if (rec.status === 'held') {
+          ST.pending.status = 'held'; ST.pending.msg = rec.heldReason || '需要老师处理';
+          savePending(); renderMain(); clearInterval(POLL); POLL = null;
+        }
+      }).catch(function () { /* 文件可能还没生成，继续等 */ });
+    }, 3000);
+  }
+
+  /* ---------- 启动 ---------- */
+  function boot() {
+    try {
+      ST.access = localStorage.getItem(K_ACCESS) || '';
+      ST.name = localStorage.getItem(K_NAME) || '';
+      ST.code = localStorage.getItem(K_CODE) || '';
+    } catch (e) {}
+    loadPending();
+    if (!ST.access || !ST.name || !ST.code) { renderLogin(''); return; }
+    var repo;
+    try { repo = decodeAccess(ST.access); } catch (e) { renderLogin(''); return; }
+    document.getElementById('app').innerHTML = '<div class="wrap" style="padding-top:40px">' +
+      '<div class="card"><div class="skel" style="width:40%"></div><div class="skel"></div><div class="skel" style="width:70%"></div></div>' +
+      '<div class="card"><div class="skel" style="width:55%"></div><div class="skel"></div></div></div>';
+    loadSnap(repo).then(function (snap) {
+      ST.snap = snap;
+      var b = (snap.blocks || {})[ST.name];
+      if (!b) throw new Error('名单里没有「' + ST.name + '」');
+      ST.per = unsealBlock(b.data, ST.code);
+      renderMain();
+    }).catch(function (e) {
+      renderLogin((e && e.message) || '读取失败，请重试');
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>
+</body>
+</html>
