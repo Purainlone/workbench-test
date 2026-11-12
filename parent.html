@@ -537,7 +537,16 @@
     var tries = 0;
     POLL = setInterval(function () {
       tries++;
-      if (!ST.pending || ST.pending.status !== 'pending' || tries > 40) { clearInterval(POLL); POLL = null; return; }
+      if (!ST.pending || ST.pending.status !== 'pending' || tries > 40) {
+        clearInterval(POLL); POLL = null;
+        /* 等了约 2 分钟还没结果：多半是老师的工作台没开着（自动批准靠它执行），提示后再让家长重试 */
+        if (ST.pending && ST.pending.status === 'pending' && tries > 40) {
+          ST.pending.status = 'held';
+          ST.pending.msg = '还没生效：老师的工作台可能没打开，过一会儿再点一次即可';
+          savePending(); renderMain();
+        }
+        return;
+      }
       var url = proposalUrl(ST.pending.id + '.json', true);
       api(url).then(function (j) {
         var rec = JSON.parse(b64Json(j.content));
