@@ -30,7 +30,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-he
   <div class="tip" id="ldt">正在加载工作台，请稍候…<br>首次加载稍慢，之后浏览器会缓存、再次打开会快很多</div>
   <button id="ldr" onclick="location.reload()">🔄 重新加载</button>
   <div id="lde"></div>
-  <div class="ver">✨ 优化版 vT120 · 灵宠池精简 · 2.6.143</div>
+  <div class="ver">✨ 优化版 vT120 · 灵宠池精简 · 2.6.144</div>
 </div>
 <script>
 /* 2.6.61 启动器：单文件应用 3.3MB，在慢速/不稳定链路上直接打开可能被截断，
@@ -43,19 +43,61 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-he
   function fail(s) { e.innerHTML = s; b.style.display = 'inline-block' }
   function go(tries) {
     var u = 'app.html';
-    /* vT24 缓存修复：部署脚本每次会把 1794575654704 替换成部署时间戳。
+    /* vT24 缓存修复：部署脚本每次会把 1794576087782 替换成部署时间戳。
        vT67 修复：原来写成「有 query 就只保留原 query」，而旧标签页自动刷新
        恰好会带 ?wbv=…，结果部署时间戳被丢掉 → 浏览器把缓存里的旧 app.html
        又拿了出来，表现为「刷新了还是旧版」。现在无论有无 query 都拼上部署键。 */
-    u += (location.search ? location.search + '&' : '?') + 'v=1794575654704';
-    say('正在加载工作台' + (tries ? '（第 ' + (tries + 1) + ' 次尝试）' : '') + '…');
-    /* vT24 弱网补强：fetch 加 20 秒超时。弱网下 fetch 可能永远挂起，
-       页面一直停在"正在加载…"看起来就像无响应 —— 超时后自动重试/给出直连入口 */
+    u += (location.search ? location.search + '&' : '?') + 'v=1794576087782';
+    say('正在加载工作台' + (tries ? '（第 ' + (tries + 1) / 1 + ' 次尝试）' : '') + '…');
+    /* vT120 弱网补强（替代 vT24 的固定 20 秒超时）：
+       实测慢链路拉整个 2.7MB 要 1 分多钟，固定 20 秒必然误杀 —— 改成两段看门狗：
+       ① 响应头 20 秒没回来 → 断（服务器没响应）；
+       ② 正文开始后，每收到一段数据就续 45 秒生命线，只在「真的卡住不动」时才断；
+       下载过程实时显示已收到多少 MB，老师能看到在动，不再像死机。 */
     var ctl = (typeof AbortController === 'function') ? new AbortController() : null;
-    var timer = ctl ? setTimeout(function () { try { ctl.abort() } catch (e) {} }, 20000) : null;
+    var timer = null;
+    function arm(ms, why) {
+      if (!ctl) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () { try { ctl.abort(); } catch (e) {} }, ms);
+      timer._why = why;
+    }
+    arm(20000, '服务器无响应');
     fetch(u, ctl ? { signal: ctl.signal } : undefined).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.text();
+      /* 有流式读取就走流：一边收一边续命 + 显示进度；老浏览器退回一次性 r.text() */
+      if (!(r.body && typeof r.body.getReader === 'function')) {
+        arm(180000, '下载超时');
+        return r.text().then(function (txt) { if (timer) clearTimeout(timer); return txt; });
+      }
+      var t0 = Date.now(), got = 0, chunks = [];
+      var dec = (typeof TextDecoder === 'function') ? new TextDecoder() : null;
+      arm(45000, '下载中断（45 秒无数据）');
+      function pump(reader) {
+        return reader.read().then(function (chunk) {
+          if (chunk.done) return;
+          chunks.push(chunk.value); got += chunk.value.length;
+          arm(45000, '下载中断（45 秒无数据）');            /* 有数据就续命 */
+          var sec = Math.round((Date.now() - t0) / 1000);
+          say('正在加载工作台…已收到 ' + (got / 1048576).toFixed(2) + ' MB' +
+            (sec ? (' · ' + sec + ' 秒') : '') + '（慢网络首次加载约 1 分钟属正常）');
+          return pump(reader);
+        });
+      }
+      return pump(r.body.getReader()).then(function () {
+        if (timer) clearTimeout(timer);
+        if (dec) {
+          var out = '';
+          for (var i = 0; i < chunks.length; i++) out += dec.decode(chunks[i], { stream: true });
+          return out;
+        }
+        var total = 0, pos = 0;
+        chunks.forEach(function (c) { total += c.length; });
+        var buf = new Uint8Array(total);
+        chunks.forEach(function (c) { buf.set(c, pos); pos += c.length; });
+        try { return new TextDecoder('utf-8').decode(buf); }
+        catch (e) { return String.fromCharCode.apply(null, buf); }
+      });
     }).then(function (txt) {
       if (timer) clearTimeout(timer);
       if (!/<\/html>\s*$/i.test(txt.slice(-400))) throw new Error('文件不完整（网络截断）');
@@ -63,7 +105,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-he
       document.open(); document.write(txt); document.close();
     }).catch(function (err) {
       if (timer) clearTimeout(timer);
-      var msg = (err && err.name === 'AbortError') ? '加载超时（20 秒无数据）' : err.message;
+      var msg = (err && err.name === 'AbortError') ? ((timer && timer._why) || '网络超时') : (err && err.message) || '网络错误';
       if (tries < 4) { say('网络不稳（' + msg + '），自动重试…'); setTimeout(function () { go(tries + 1) }, 1200) }
       else fail('⚠️ ' + msg + '<br>请检查网络后点下方按钮重试，或<a style="color:#2563eb;text-decoration:underline" href="' + u + '">直接打开工作台 →</a>');
     });
