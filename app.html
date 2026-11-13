@@ -18072,7 +18072,7 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
 var WB_VER_TAG = 'v118';
 var WB_MY_VER = '优化版 vT118 · 品级特效与排名面板';
-var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.140';
+var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.141';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -25424,11 +25424,34 @@ function cwInit(){
     console.log('[pet] vT116 卡池换血：迁移 ' + moved + ' 条、下架 ' + dropped + ' 条');
     return true;
   }
+  /* ---------------- vT118 旧池幽灵清理 ----------------
+   ｜现象：图鉴出现「新 200 只 + 旧池残留」（旧 cx201~cx261 等约 61 只）。
+   ｜根因：云端 petPool 还挂着 vT116 之前的旧灵杰，wbPetMergeRemote 按 id 合并
+   ｜「只增不删」——本地换血后云端旧条目会被原样加回来。
+   ｜修法：不在新名录里的 codex 条目统一软删除（updatedAt 取当前时间，
+   ｜合并时以较新时间戳盖过云端旧条目，删除标记随之传播到网页/桌面/小程序，
+   ｜各端自动收敛；回收站仍可恢复，老师改过的品级/系列不受影响——同 id 会被盖回）。 */
+  function ptCodexGhostCleanV118(s) {
+    if (!s || (Number(s.ghostCleanVer) || 0) >= 118) return false;
+    var have = {};
+    ptBuildCodexSeed().forEach(function (d) { have[d.id] = 1; });
+    var now = Date.now(), cleaned = 0;
+    (s.petPool || []).forEach(function (p) {
+      if (p && p.origin === 'codex' && !p.deleted && !have[p.id]) {
+        p.deleted = 1; p.removedV116 = 1; p.updatedAt = now; cleaned++;
+      }
+    });
+    s.ghostCleanVer = 118;
+    if (cleaned) console.log('[pet] vT118 清理旧池残留 ' + cleaned + ' 条（软删除，各端自动收敛）');
+    return cleaned > 0;
+  }
   function wbPetSeed() {
     var s = ptGet();
     var dirty = false;
     /* vT116：老库首次加载执行一次卡池换血 + 学生卡迁移 */
     if (ptCodexMigrateV116(s)) dirty = true;
+    /* vT118：清掉云端合流回来的旧池幽灵（软删除传播，各端同步收敛） */
+    if (ptCodexGhostCleanV118(s)) dirty = true;
     if (!s.petPool.length) { s.petPool = ptBuildSeed(); dirty = true; }
     /* vT116+ 图鉴种子：按 id 增量补齐 200 只灵杰。老用户强刷后自动追加新增形象，
        旧种子、老师改过的品级/系列、已收回的条目全部保留；后台「重置灵杰池」可全量重建。 */
