@@ -3024,6 +3024,15 @@ table.paper td.l{text-align:left;font-weight:600}
       #s-pet .pet-card.ps-adult::before{content:'';position:absolute;left:50%;top:44%;width:130px;height:130px;border-radius:50%;
         transform:translate(-50%,-50%);pointer-events:none;z-index:0;
         background:radial-gradient(circle,rgba(255,224,130,.28) 0%,rgba(255,224,130,0) 62%)}
+      /* ---------- vT121 灵宠唤醒台 ---------- */
+      #s-pet .pg-bar{position:sticky;top:0;z-index:6;background:rgba(255,255,255,.95);backdrop-filter:blur(6px);
+        padding:6px 2px 2px;margin:-2px 0 2px;border-bottom:1px dashed var(--line,#e3e8ee)}
+      #s-pet .pg-bar .gpset{margin:4px 0}
+      #s-pet .pg-card{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease}
+      #s-pet .pg-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.10)}
+      #s-pet .pg-card:active{transform:scale(.985)}
+      #s-pet .pg-own{font-size:10px;color:#8a9a92;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0 0 6px}
+      #s-pet .pg-tip{font-size:12px;color:#76867e;margin:0 0 8px}
     </style>
     <h2>📖 班级启灵图鉴 <span style="font-size:12px;color:#76867e;font-weight:400;margin-left:8px" id="petSub">积蓄启灵之力 · 唤醒灵杰 · 收录图鉴</span><span id="petStateTag" class="pet-state s-on">🟢 运行中</span></h2>
     <div class="sub">抽卡消耗的积分 = 学生「个人累计积分」（作业+小组+奖惩汇总），抽卡 / 兑换会写一条「启灵图鉴」奖惩记录，自动进入学生流水与积分榜。抽到一位还没拥有的灵杰，就等于同时唤醒了他——灵杰墙上多一只、图鉴格子随之点亮；重复抽到会自动升星。在启灵世界里，每一次认真品读、大胆表达、坚持书写、团结协作，都能积蓄启灵之力，唤醒一位灵杰、集齐一套卡牌，点亮你的专属图鉴。</div>
@@ -3035,7 +3044,8 @@ table.paper td.l{text-align:left;font-weight:600}
       </div>
     </div>
     <div class="pet-tabs" id="petTabs">
-      <button class="btn2 sm active" data-pt="wall" onclick="ptTab('wall')">🐾 灵杰墙</button>
+      <button class="btn2 sm active" data-pt="grow" onclick="ptTab('grow')">🐣 灵宠唤醒</button>
+      <button class="btn2 sm" data-pt="wall" onclick="ptTab('wall')">🐾 灵杰墙</button>
       <button class="btn2 sm" data-pt="cards" onclick="ptTab('cards')">🎴 集卡册</button>
       <button class="btn2 sm" data-pt="codex" onclick="ptTab('codex')">📖 启灵图鉴</button>
       <button class="btn2 sm" data-pt="sub" onclick="ptTab('sub')">🎨 学生投稿<span id="petSUBn" class="pet-badge"></span></button>
@@ -3043,7 +3053,8 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2 sm" data-pt="admin" onclick="ptTab('admin')">⚙️ 后台管理</button>
       <button class="btn2 sm" data-pt="io" onclick="ptTab('io')">📦 导入导出</button>
     </div>
-    <div id="petPanel-wall" class="pet-panel"></div>
+    <div id="petPanel-grow" class="pet-panel"></div>
+    <div id="petPanel-wall" class="pet-panel" style="display:none"></div>
     <div id="petPanel-cards" class="pet-panel" style="display:none"></div>
     <div id="petPanel-codex" class="pet-panel" style="display:none"></div>
     <div id="petPanel-sub" class="pet-panel" style="display:none"></div>
@@ -18070,9 +18081,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v120';
-var WB_MY_VER = '优化版 vT120 · 灵宠池精简';
-var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.144';
+var WB_VER_TAG = 'v121';
+var WB_MY_VER = '优化版 vT121 · 灵宠唤醒台';
+var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.145';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -25556,6 +25567,31 @@ function cwInit(){
     if (nDef || nPet) console.log('[pet] vT120 退役旧种子灵宠：形象 ' + nDef + ' 个 · 已唤醒记录 ' + nPet + ' 条（♻️ 回收站可恢复）');
     return true;
   }
+  /* ---------------- vT121 误删修复：成长灵宠被旧宠物清理误伤 ----------------
+     ｜vT102 的 ptCleanLegacy 按「有 archetype、没有 img」判定旧宠物，
+     ｜vT119 的 60 只名册灵宠正好符合（三阶段图放在 imgs 里），
+     ｜任何「新设备 / 清了缓存 / 新班主任」首次打开都会把它们整批软删 → 唤醒台空、抽灵宠抽不到。
+     ｜这里把「deletedReason=legacy-clean 且带 imgs」的条目一次性恢复；
+     ｜老师手动删除的（没有该 reason）一律不动，回收站语义不变。 */
+  function ptGrowRestoreV121(s) {
+    var c = (s.petCfg || []).filter(function (x) { return x && x.id === 'cfg'; })[0];
+    if (c && c.growFixV121) return false;
+    var now = Date.now(), n = 0;
+    (s.petPool || []).forEach(function (d) {
+      if (!d || !d.deleted || d.purged) return;
+      if (d.deletedReason !== 'legacy-clean' || !ptIsGrowDef(d)) return;
+      d.deleted = false; delete d.deletedAt; delete d.deletedReason; d.updatedAt = now; n++;
+    });
+    (s.pets || []).forEach(function (p) {
+      if (!p || !p.deleted || p.purged) return;
+      if (p.deletedReason !== 'legacy-clean' || !p.imgs) return;
+      p.deleted = false; delete p.deletedAt; delete p.deletedReason; p.updatedAt = now; n++;
+    });
+    if (!c) { c = ptDefaultCfg(); s.petCfg = (s.petCfg || []).concat([c]); }
+    c.growFixV121 = 1; c.growFixV121At = now;
+    if (n) console.log('[pet] vT121 恢复被旧宠物清理误删的成长灵宠 ' + n + ' 条');
+    return true;
+  }
   function wbPetSeed() {
     var s = ptGet();
     var dirty = false;
@@ -25565,6 +25601,8 @@ function cwInit(){
     if (ptCodexGhostCleanV118(s)) dirty = true;
     /* vT119：旧 74 只种子灵宠整体退役（只留 60 只成长灵宠 + 学生共创） */
     if (ptSeedRetireV120(s)) dirty = true;
+    /* vT121：把被「旧宠物清理」误删的成长灵宠恢复回来（一次性） */
+    if (ptGrowRestoreV121(s)) dirty = true;
     if (!s.petPool.length) { s.petPool = ptBuildCodexSeed().concat(ptBuildGrowSeed()); dirty = true; }
     /* vT116+ 图鉴种子：按 id 增量补齐 200 只灵杰。老用户强刷后自动追加新增形象，
        旧种子、老师改过的品级/系列、已收回的条目全部保留；后台「重置灵杰池」可全量重建。 */
@@ -25606,7 +25644,9 @@ function cwInit(){
       }
     });
     (s.petPool || []).forEach(function (d) {
-      if (d && !d.deleted && !d.purged && d.origin !== 'codex' && d.origin !== 'student' && d.archetype && !d.img && !d.customSvg) {
+      /* vT121 修复：成长灵宠是三阶段图放在 imgs 里、没有 img，
+         原来只判「有 archetype 且没有 img」会把 60 只名册灵宠整批误删 —— 这里补 !d.imgs */
+      if (d && !d.deleted && !d.purged && d.origin !== 'codex' && d.origin !== 'student' && d.archetype && !d.img && !d.customSvg && !d.imgs) {
         d.deleted = true; d.deletedAt = now; d.updatedAt = now; d.deletedReason = 'legacy-clean'; nDef++;
       }
     });
@@ -25674,31 +25714,95 @@ function cwInit(){
     var html = list.length ? list.map(ptCard).join('') : '<div class="pet-empty">还没有灵杰：去「🛠 后台管理 → 🎁 灵杰发放」给同学发一只，或在「📖 启灵图鉴」用「🎁 点卡发放」直接点卡授予～</div>';
     box.innerHTML = '<div class="pet-grid">' + html + '</div>';
   }
+  /* ---------------- vT121 灵宠唤醒台 ----------------
+     背景：旧「唤醒台」(petPanel-inc) 在 vT86 被整体移除，但渲染函数一直留在代码里空转。
+     vT119 接入 60 只成长灵宠后，它们不进《启灵图鉴》名录 → 老师没有任何地方能看到 / 唤醒它们。
+     这里补一个只列成长灵宠的唤醒台：选学生 → 点卡片即唤醒（免费发放，不扣积分），
+     支持「随机一只」「班级还没有的 / 已唤醒过的」筛选与名字搜索。
+     图鉴灵杰（codex）仍走「📖 启灵图鉴」的点卡发放，不在这里重复出现。 */
+  var INC_Q = '', INC_SEG = 'all', INC_WHO = '';
+  function ptIsGrowDef(p) {
+    return !!(p && !PetCore.isPhotoDef(p) && p.imgs && (p.imgs.baby || p.imgs.teen || p.imgs.adult) &&
+      String(p.img || '').indexOf('codeximg/') !== 0);
+  }
+  function ptGrowHallDefs(s) {
+    return (s.petPool || []).filter(function (p) {
+      return p && !p.deleted && !p.purged && p.origin !== 'codex' && p.origin !== 'student' && ptIsGrowDef(p);
+    });
+  }
+  function ptGrowWho(v) { INC_WHO = v || ''; }
+  function ptGrowSeg(k) { INC_SEG = k || 'all'; ptGrowFilter(); }
+  function ptGrowSearch(v) { INC_Q = String(v || ''); ptGrowFilter(); }
+  function ptGrowFilter() {
+    var q = String(INC_Q || '').trim().toLowerCase(), n = 0, tot = 0;
+    document.querySelectorAll('#petPanel-grow .pg-card').forEach(function (el) {
+      tot++;
+      var okQ = !q || (el.getAttribute('data-q') || '').indexOf(q) >= 0;
+      var owned = el.getAttribute('data-own') === '1';
+      var okS = INC_SEG === 'all' || (INC_SEG === 'new' ? !owned : owned);
+      var hit = okQ && okS;
+      el.style.display = hit ? '' : 'none';
+      if (hit) n++;
+    });
+    var c = document.getElementById('pgCnt'); if (c) c.textContent = '显示 ' + n + ' / ' + tot + ' 只';
+    document.querySelectorAll('#petPanel-grow [data-pgseg]').forEach(function (b) {
+      b.classList.toggle('primary', b.getAttribute('data-pgseg') === INC_SEG);
+    });
+  }
   function ptRenderIncubator() {
-    var box = document.getElementById('petPanel-inc'); if (!box) return;
+    var box = document.getElementById('petPanel-grow'); if (!box) return;
     var s = ptGet();
-    var opts = ptNames().map(function (n) { return '<option value="' + ptEsc(n) + '">' + ptEsc(n) + '</option>'; }).join('');
-    var pool = s.petPool.filter(function (sp) { return sp && !sp.deleted && !sp.purged; }).map(function (sp) {
-      var isPhoto = PetCore.isPhotoDef(sp);
-      /* vT82 图鉴灵杰在池子里也直接显示卡面（不再误走手绘通道） */
-      var isCxPic = !isPhoto && sp.img && String(sp.img).indexOf('codeximg/') === 0;
-      /* vT37 池子里的宠物一律以「蛋」呈现 —— 发放那一刻才孵化，惊喜感留给学生 */
-      var isGrow = !isPhoto && !isCxPic && sp.imgs && sp.imgs.baby;   /* vT119 成长灵宠 */
-      var pic = isGrow ? ptGrowPetPicHtml(sp, 'baby')
-              : isPhoto ? ptPetPhotoHtml(sp, 'pet-photo', 'egg')
-              : isCxPic ? ptCodexPetPicHtml(sp, 'pet-photo')
-              : PetCore.renderPet(sp, { seed: sp.id, egg: true });
-      var kind = (sp.origin === 'student') ? ' <span class="pet-stu">同学共创</span>' : (isGrow ? ' <span class="pet-stu">成长灵宠</span>' : '');
-      return '<div class="pet-card" style="cursor:pointer" onclick="ptHatchFromSel(\'' + sp.id + '\')">' + pic +
-        '<div class="pet-nm">' + ptEsc(sp.name) + ' <span class="pet-rare r-' + ptRarClass(sp.rarity) + '">' + ptEsc(sp.rarity) + '</span>' + kind + '</div>' +
-        '<div class="pet-own">' + ptEsc(sp.series || '') + ' · ' + (isPhoto ? '手绘作品' : (PT_ARC_NAME[sp.archetype] || ptBreedDisp(sp) || sp.archetype)) + '</div>' +
-        '<div class="pet-lv">' + (ptPlayable() ? '🥚 点击唤醒，发放给上方所选学生' : '⏸ 模块已暂停，暂不可唤醒') + '</div></div>';
+    var names = ptNames();
+    /* 名单还没加载出来时，退化成「已唤醒过灵宠的学生」，至少不会空手 */
+    if (!names.length) {
+      var seen = {}; names = [];
+      ptPets().forEach(function (p) { if (p.studentName && !seen[p.studentName]) { seen[p.studentName] = 1; names.push(p.studentName); } });
+    }
+    if (INC_WHO && names.indexOf(INC_WHO) < 0) INC_WHO = '';
+    var opts = names.map(function (n) {
+      return '<option value="' + ptEsc(n) + '"' + (n === INC_WHO ? ' selected' : '') + '>' + ptEsc(n) + '</option>';
     }).join('');
-    box.innerHTML = '<div class="gpset"><span class="lbl">发放给：</span><select id="petStuSel" class="search">' + opts + '</select>' +
-      '<button class="btn2 primary" onclick="ptHatchSel()">🥚 整批唤醒（随机一只给所选学生）</button>' +
-      '<button class="btn2" onclick="var v=document.getElementById(\'petStuSel\');ptPetDraw(v?v.value:null)">🐾 抽灵宠（学生自费 ' + ptCost('petDraw') + ' 分）</button>' +
-      '<span class="sctip" id="petIncTip"></span></div>' +
-      '<div class="pet-grid">' + pool + '</div>';
+    var defs = ptGrowHallDefs(s);
+    var sc = ptStageCfg();
+    var ownMap = {};
+    (s.pets || []).forEach(function (p) {
+      if (!p || p.deleted || p.purged || !p.defId) return;
+      var st = PetCore.stageName(PetCore.stageOf(p.level, p.graduated, ptStageCfg()));
+      (ownMap[p.defId] = ownMap[p.defId] || []).push(p.studentName + '·' + st);
+    });
+    var awakeN = defs.filter(function (d) { return (ownMap[d.id] || []).length; }).length;
+    var ageN = (s.pets || []).filter(function (p) { return p && !p.deleted && !p.purged && p.imgs; }).length;
+    var html = defs.map(function (sp) {
+      var owners = ownMap[sp.id] || [];
+      /* 池子里只展示「奶团子」态：唤醒后才开始养，惊喜留给学生；loading=lazy 避免一次拉 60 张大图 */
+      var pic = ptGrowPetPicHtml(sp, 'baby').replace('<img ', '<img loading="lazy" ');
+      var q = (String(sp.name || '') + ' ' + String(sp.series || '') + ' ' + String(sp.rarity || '')).toLowerCase();
+      return '<div class="pet-card pg-card ps-baby" data-q="' + ptEsc(q) + '" data-own="' + (owners.length ? '1' : '0') + '"' +
+        ' onclick="ptHatchFromSel(\'' + sp.id + '\')" title="点一下：把「' + ptEsc(sp.name) + '」唤醒给上方所选学生">' + pic +
+        '<div class="pet-nm">' + ptEsc(sp.name) + ' <span class="pet-rare r-' + ptRarClass(sp.rarity) + '">' + ptEsc(sp.rarity || '普通') + '</span></div>' +
+        '<div class="pet-own">' + ptEsc(sp.series || '成长灵宠') + ' · 🐾 已 ' + owners.length + ' 只</div>' +
+        '<div class="pet-own pg-own">' + (owners.length ? ptEsc(owners.slice(0, 2).join('、')) + (owners.length > 2 ? ' 等' : '') : '🥚 班级还没有') + '</div>' +
+        '<div class="pet-acts"><button class="btn2 sm primary" onclick="event.stopPropagation();ptHatchFromSel(\'' + sp.id + '\')"' +
+        (ptPlayable() ? '' : ' disabled title="模块已暂停/关停"') + '>🐣 唤醒</button></div></div>';
+    }).join('');
+    box.innerHTML =
+      '<div class="pg-bar">' +
+        '<div class="gpset"><span class="lbl">唤醒给：</span><select id="petStuSel" class="search" onchange="ptGrowWho(this.value)">' +
+          (opts || '<option value="">（还没有学生名单）</option>') + '</select>' +
+          '<button class="btn2 primary" onclick="ptGrowAwakenRandom()">🎲 随机唤醒一只</button>' +
+          '<button class="btn2" onclick="var v=document.getElementById(\'petStuSel\');ptPetDraw(v?v.value:null)">🐾 学生自费抽(-' + ptCost('petDraw') + ')</button>' +
+          '<span class="sctip">成长灵宠 ' + defs.length + ' 只 · 已唤醒过 ' + awakeN + ' 只 · 全班累计 ' + ageN + ' 只</span></div>' +
+        '<div class="gpset">' +
+          '<button class="btn2 sm" data-pgseg="all" onclick="ptGrowSeg(\'all\')">全部</button>' +
+          '<button class="btn2 sm" data-pgseg="new" onclick="ptGrowSeg(\'new\')">🥚 班级还没有的</button>' +
+          '<button class="btn2 sm" data-pgseg="owned" onclick="ptGrowSeg(\'owned\')">🐾 已唤醒过的</button>' +
+          '<input class="search" id="pgQ" placeholder="搜名字 / 系列…" value="' + ptEsc(INC_Q) + '" oninput="ptGrowSearch(this.value)" style="max-width:190px">' +
+          '<span class="sctip" id="pgCnt"></span></div>' +
+      '</div>' +
+      '<div class="pg-tip">免费发放，不扣学生积分（学生自己想抽，用右上角「学生自费抽」，扣 ' + ptCost('petDraw') + ' 分）。' +
+        '发出的都是「奶团子」态，养到 ' + sc.teen + ' 级变幼年、' + sc.adult + ' 级成年，进化价在后台可调。</div>' +
+      '<div class="pet-grid">' + (html || '<div class="pet-empty">灵杰池里还没有成长灵宠：去「⚙️ 后台管理 → 🌱 重置灵杰池为种子」恢复 60 只。</div>') + '</div>';
+    ptGrowFilter();
   }
   function ptRenderParent() {
     var box = document.getElementById('petPanel-parent'); if (!box) return;
@@ -26244,10 +26348,17 @@ function cwInit(){
     var sp = s.petPool.filter(function (x) { return x.id === poolId; })[0];
     if (!sp) return;
     if (!studentName) return toastMsg('⚠️ 请先选择学生');
+    /* vT121：老师免费发放不限制「一只未成年」，但同种重复发要确认一次，避免误点 */
+    var dup = (s.pets || []).filter(function (p) {
+      return p && !p.deleted && !p.purged && p.studentName === studentName && p.defId === sp.id;
+    })[0];
+    if (dup && !confirm('「' + studentName + '」已经有「' + sp.name + '」了，还要再唤醒一只吗？\n（同名灵宠会各自独立养成）')) return;
     s.pets.push(ptMkPet(studentName, sp));
     ptSave(s); PET_DB = s;
     ptKickSync();
-    toastMsg('🐾 已唤醒「' + sp.name + '」授予 ' + studentName);
+    toastMsg(ptIsGrowDef(sp)
+      ? ('🐣 已唤醒「' + sp.name + '」（奶团子态）授予 ' + studentName + '，可在灵杰墙点「进化」')
+      : ('🐾 已唤醒「' + sp.name + '」授予 ' + studentName));
     ptRenderWall(); ptRenderIncubator();
   }
   function ptHatchFromSel(poolId) { var sel = document.getElementById('petStuSel'); if (!sel || !sel.value) return toastMsg('请先选择学生'); ptHatch(sel.value, poolId); }
@@ -26255,6 +26366,19 @@ function cwInit(){
     var sel = document.getElementById('petStuSel'); if (!sel || !sel.value) return toastMsg('请先选择学生');
     var s = ptGet(); var drawPool = codexDrawPool(s); if (!drawPool.length) return toastMsg('灵杰池为空');
     var sp = drawPool[Math.floor(Math.random() * drawPool.length)];
+    ptHatch(sel.value, sp.id);
+  }
+  /* vT121 唤醒台：随机一只成长灵宠（优先该生还没有的物种） */
+  function ptGrowAwakenRandom() {
+    var sel = document.getElementById('petStuSel');
+    if (!sel || !sel.value) return toastMsg('⚠️ 请先选择学生');
+    var s = ptGet();
+    var pool = ptGrowHallDefs(s);
+    if (!pool.length) return toastMsg('灵杰池里没有成长灵宠');
+    var owned = ptPetOwnedDefIds(s, sel.value);
+    var cand = pool.filter(function (p) { return !owned[p.id]; });
+    var list = cand.length ? cand : pool;
+    var sp = list[Math.floor(Math.random() * list.length)];
     ptHatch(sel.value, sp.id);
   }
   /* ---------------- vT117 成长灵宠：三阶段养成（奶团子→幼年→成年） ----------------
@@ -27327,11 +27451,12 @@ function cwInit(){
     toastMsg('📦 已导出 ' + lines.length + ' 行');
   }
   function ptTab(name) {
-    ['inc', 'wall', 'cards', 'codex', 'parent', 'sub', 'grad', 'admin', 'io'].forEach(function (t) {
+    if (name === 'inc') name = 'grow';   /* vT121 旧页签名兼容 */
+    ['grow', 'wall', 'cards', 'codex', 'parent', 'sub', 'grad', 'admin', 'io'].forEach(function (t) {
       var b = document.querySelector('#petTabs [data-pt="' + t + '"]'); if (b) b.classList.toggle('active', t === name);
       var p = document.getElementById('petPanel-' + t); if (p) p.style.display = (t === name) ? 'block' : 'none';
     });
-    if (name === 'inc') ptRenderIncubator();
+    if (name === 'grow') ptRenderIncubator();
     else if (name === 'wall') ptRenderWall();
     else if (name === 'cards') ptRenderCards();   /* vT110 集卡册 */
     else if (name === 'codex') ptRenderCodex();
@@ -27361,6 +27486,12 @@ function cwInit(){
   window.ptHatch = ptHatch;
   window.ptHatchFromSel = ptHatchFromSel;
   window.ptHatchSel = ptHatchSel;
+  /* vT121 灵宠唤醒台 */
+  window.ptGrowWho = ptGrowWho;
+  window.ptGrowSeg = ptGrowSeg;
+  window.ptGrowSearch = ptGrowSearch;
+  window.ptGrowFilter = ptGrowFilter;
+  window.ptGrowAwakenRandom = ptGrowAwakenRandom;
   window.ptFeed = ptFeed;
   /* vT110 集卡册 */
   window.ptRenderCards = ptRenderCards;
