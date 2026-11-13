@@ -26203,6 +26203,10 @@ function cwInit(){
     PT_CODEX_BASE
   ];
   var PT_CX_SRCS = {};
+  /* vT116：卡面整体换血后 jsDelivr 主源仍可能缓存旧卡面（最长 12h），
+     给候选 URL 加版本参数，CDN 当作全新资源回源，保证立刻看到新图。 */
+  var PT_CX_Q = 'v=116';
+  function ptCxUrl(b, rel) { return b + rel + (rel.indexOf('?') >= 0 ? '&' : '?') + PT_CX_Q; }
   /* vT78 隐藏/典藏卡优先加载动态卡面 codeximg/NNN.gif（vT78 生成的光效版），
      404 时按候选顺序自动回落静态 png；普通卡不产生多余请求。 */
   function ptCodexImgSrcs(rel, tier) {
@@ -26211,9 +26215,9 @@ function cwInit(){
     if (rel.indexOf('codeximg/') !== 0) return [];
     var out = [];
     if ((tier === '隐藏' || tier === '典藏') && /\.png$/i.test(rel)) {
-      PT_CODEX_MIRRORS.forEach(function (b) { out.push(b + rel.replace(/\.png$/i, '.gif')); });
+      PT_CODEX_MIRRORS.forEach(function (b) { out.push(ptCxUrl(b, rel.replace(/\.png$/i, '.gif'))); });
     }
-    PT_CODEX_MIRRORS.forEach(function (b) { out.push(b + rel); });
+    PT_CODEX_MIRRORS.forEach(function (b) { out.push(ptCxUrl(b, rel)); });
     return out;
   }
   function ptCodexImgErr(im) {
