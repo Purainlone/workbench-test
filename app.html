@@ -25641,7 +25641,7 @@ function cwInit(){
     var rw = document.getElementById('ptCfgReward');
     if (rw) c.cardReward = String(rw.value || '').trim() || CARD_REWARD_DEFAULT;
     c.updatedAt = Date.now(); c.updatedBy = 'web';
-    ptSave(s); PET_DB = s; toastMsg('💾 已保存：抽卡一次 ' + c.costs.feed + ' 分（网页 / 小程序 / 家长端同步）');
+    ptSave(s); PET_DB = s; ptKickSync(); toastMsg('💾 已保存：抽卡一次 ' + c.costs.feed + ' 分（网页 / 小程序 / 家长端同步）');
     ptRenderAdmin(); ptRenderWall(); ptRenderGrad();
   }
   function ptShopSet(id, field, val) {
@@ -26011,7 +26011,7 @@ function cwInit(){
     if (!acts.length) acts = ['feed'];   /* 抽卡是唯一消耗动作，不允许空选 */
     c.autoActs = acts;
     c.updatedBy = 'web'; c.updatedAt = Date.now();
-    ptSave(ptGet()); toastMsg('✅ 自动批准设置已保存');
+    ptSave(ptGet()); ptKickSync(); toastMsg('✅ 自动批准设置已保存');
     ptRenderParent();
     if (c.autoApprove && typeof window.ptaKick === 'function') window.ptaKick();
   }
