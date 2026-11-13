@@ -18070,9 +18070,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v118';
-var WB_MY_VER = '优化版 vT118 · 品级特效与排名面板';
-var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.141';
+var WB_VER_TAG = 'v119';
+var WB_MY_VER = '优化版 vT119 · 灵宠名册接入';
+var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.142';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24970,6 +24970,7 @@ function cwInit(){
       studentId: stu.学号 || studentName, studentName: studentName,
       defId: sp.id, name: sp.name, archetype: sp.archetype, style: sp.style, rarity: sp.rarity,
       series: sp.series || '同学共创', tier: sp.tier || '普通', blessing: sp.blessing || '', img: sp.img || null,   /* vT67 图鉴字段 */
+      imgs: sp.imgs || null,   /* vT119 成长灵宠三阶段图 {baby,teen,adult} */
       skin: sp.skin, hair: sp.hair, acc: sp.acc, ears: sp.ears, horn: sp.horn, hat: sp.hat, prop: sp.prop || [], tail: sp.tail || '',
       emoji: sp.emoji, customSvg: sp.customSvg || null,
       level: 1, exp: 0, hunger: 80, mood: 90, ownedItems: [], equipped: {},
@@ -25364,6 +25365,85 @@ function cwInit(){
       return d;
     });
   }
+  /* ---------------- vT119 成长灵宠名册：60 只三阶段灵宠（2026-11-13 老师定稿） ----------------
+     ｜图源 petimg/NNN_S.png（S=1 奶团子 / 2 幼年 / 3 成年，已抠图去水印）；
+     ｜名字取自《灵宠名册.csv》。origin:'seed' → 自动进成长抽宠池（ptGrowthDrawPool），
+     ｜不进图鉴集卡（那里只认 origin==='codex'）。id=gp001~gp060，imgs 按阶段存图，
+     ｜抽灵宠/进化换阶段时渲染层自动切换对应图片与特效。 */
+  var PT_GROW60_ROWS = [
+    [1,'白泽'],
+    [2,'火猿'],
+    [3,'天马'],
+    [4,'天狗'],
+    [5,'蛇灵'],
+    [6,'飞虎'],
+    [7,'冰鹿'],
+    [8,'金狐'],
+    [9,'赤虎'],
+    [10,'赤鹿'],
+    [11,'青龙'],
+    [12,'灵猫'],
+    [13,'月兽'],
+    [14,'白驹'],
+    [15,'水鹿'],
+    [16,'狻猊'],
+    [17,'九尾狐'],
+    [18,'玄龟'],
+    [19,'赤鬃鹿'],
+    [20,'青鳞龙'],
+    [21,'抱火狐'],
+    [22,'珊瑚鹿'],
+    [23,'蓝翼龙'],
+    [24,'蛇翼灵'],
+    [25,'剑猿'],
+    [26,'雷麒麟'],
+    [27,'蛇翼灵二'],
+    [28,'青鸟'],
+    [29,'金翼狐'],
+    [30,'灰甲牛'],
+    [31,'玄牛'],
+    [32,'金貔貅'],
+    [33,'白纹虎'],
+    [34,'水鳞鹿'],
+    [35,'彩羽凤'],
+    [36,'墨绿蛇'],
+    [37,'玄龟二'],
+    [38,'蛇龙'],
+    [39,'火凤'],
+    [40,'铜貔貅'],
+    [41,'薄荷鹿'],
+    [42,'蓝鳞鹿'],
+    [43,'黑火凤'],
+    [44,'白尾狐'],
+    [45,'霜羽鹤'],
+    [46,'赤金鲤'],
+    [47,'墨獬豸'],
+    [48,'焰毕方'],
+    [49,'月金蟾'],
+    [50,'沧溟鲲'],
+    [51,'重明雀'],
+    [52,'碧螭吻'],
+    [53,'青甪端'],
+    [54,'琉光蝶'],
+    [55,'竹隐熊'],
+    [56,'玉辟邪'],
+    [57,'星纹豹'],
+    [58,'素雪貂'],
+    [59,'云瑞象'],
+    [60,'银霜狼']
+  ];
+  function ptBuildGrowSeed() {
+    return PT_GROW60_ROWS.map(function (r) {
+      var nn = ('00' + r[0]).slice(-3);
+      var d = PetCore.buildPetDef({
+        id: 'gp' + nn, name: r[1], series: '成长灵宠',
+        archetype: 'spirit', rarity: '普通', origin: 'seed', emoji: '🐾'
+      });
+      d.imgs = { baby: 'petimg/' + nn + '_1.png', teen: 'petimg/' + nn + '_2.png', adult: 'petimg/' + nn + '_3.png' };
+      d.updatedAt = Date.now();
+      return d;
+    });
+  }
   function ptBuildShopSeed() {
     return [
       { name: '能量饼干', type: 'food', price: 5, emoji: '🍪', desc: '恢复饱食度' },
@@ -25455,7 +25535,7 @@ function cwInit(){
     if (!s.petPool.length) { s.petPool = ptBuildSeed(); dirty = true; }
     /* vT116+ 图鉴种子：按 id 增量补齐 200 只灵杰。老用户强刷后自动追加新增形象，
        旧种子、老师改过的品级/系列、已收回的条目全部保留；后台「重置灵杰池」可全量重建。 */
-    var seedAll = ptBuildCodexSeed();
+    var seedAll = ptBuildCodexSeed().concat(ptBuildGrowSeed());   /* vT119 + 成长灵宠 60 只 */
     var seedHave = {}, seedExcl = {};
     s.petPool.forEach(function (x) { if (x && x.id) seedHave[x.id] = 1; });
     /* vT68 回收站清空后记入排除名单，避免种子把老师永久删掉的灵杰补回来 */
@@ -25526,7 +25606,11 @@ function cwInit(){
     /* vT82 图鉴灵杰：img 指向 codeximg/ 卡面，直接显示线上卡面（含 gif 动效回退链） */
     var isCxPic = !isPhoto && pet.img && String(pet.img).indexOf('codeximg/') === 0;
     var stage = PetCore.stageOf(pet.level, pet.graduated, ptStageCfg());
-    var svg = isPhoto ? (ptPetPhotoHtml(pet, 'pet-photo', stage) || '<div class="pet-photo" style="display:flex;align-items:center;justify-content:center">🖼️</div>')
+    /* vT119 成长灵宠：按当前阶段取对应阶段图（毕业按成年图） */
+    var gStage = (stage === 'grad') ? 'adult' : stage;
+    var growRel = (!isPhoto && pet.imgs && pet.imgs[gStage]) ? pet.imgs[gStage] : '';
+    var svg = growRel ? ptGrowPetPicHtml(pet, gStage)
+                      : isPhoto ? (ptPetPhotoHtml(pet, 'pet-photo', stage) || '<div class="pet-photo" style="display:flex;align-items:center;justify-content:center">🖼️</div>')
                       : isCxPic ? ptCodexPetPicHtml(pet, 'pet-photo')
                       : PetCore.renderPet(def, { seed: pet.id, level: pet.level, graduated: pet.graduated, stageCfg: ptStageCfg() });
     var grad = pet.graduated ? '<span class="pet-grad">🎓 已毕业 · ' + ptEsc(pet.gradCode || '') + '</span>' : '';
@@ -25566,10 +25650,12 @@ function cwInit(){
       /* vT82 图鉴灵杰在池子里也直接显示卡面（不再误走手绘通道） */
       var isCxPic = !isPhoto && sp.img && String(sp.img).indexOf('codeximg/') === 0;
       /* vT37 池子里的宠物一律以「蛋」呈现 —— 发放那一刻才孵化，惊喜感留给学生 */
-      var pic = isPhoto ? ptPetPhotoHtml(sp, 'pet-photo', 'egg')
+      var isGrow = !isPhoto && !isCxPic && sp.imgs && sp.imgs.baby;   /* vT119 成长灵宠 */
+      var pic = isGrow ? ptGrowPetPicHtml(sp, 'baby')
+              : isPhoto ? ptPetPhotoHtml(sp, 'pet-photo', 'egg')
               : isCxPic ? ptCodexPetPicHtml(sp, 'pet-photo')
               : PetCore.renderPet(sp, { seed: sp.id, egg: true });
-      var kind = (sp.origin === 'student') ? ' <span class="pet-stu">同学共创</span>' : '';
+      var kind = (sp.origin === 'student') ? ' <span class="pet-stu">同学共创</span>' : (isGrow ? ' <span class="pet-stu">成长灵宠</span>' : '');
       return '<div class="pet-card" style="cursor:pointer" onclick="ptHatchFromSel(\'' + sp.id + '\')">' + pic +
         '<div class="pet-nm">' + ptEsc(sp.name) + ' <span class="pet-rare r-' + ptRarClass(sp.rarity) + '">' + ptEsc(sp.rarity) + '</span>' + kind + '</div>' +
         '<div class="pet-own">' + ptEsc(sp.series || '') + ' · ' + (isPhoto ? '手绘作品' : (PT_ARC_NAME[sp.archetype] || ptBreedDisp(sp) || sp.archetype)) + '</div>' +
@@ -25645,6 +25731,23 @@ function cwInit(){
     /* vT110 隐藏/典藏卡面通用光效（有 GIF 动态卡面的叠加后更华丽） */
     var fx = (tier === '典藏') ? ' cx-fx cx-fx-gold' : (tier === '隐藏') ? ' cx-fx cx-fx-purple' : '';
     return '<div class="pet-photobox' + fx + '"><img class="' + (cls || 'pet-photo') + '" src="' + ptEsc(srcs[0]) +
+      '" data-cxk="' + ptEsc(key) + '" onerror="ptCodexImgErr(this)" alt="' + ptEsc(p.name || '') + '"></div>';
+  }
+  /* vT119 成长灵宠三阶段图（petimg/NNN_S.png）：镜像回退与图鉴卡同源，
+     图片挂在 .pet-photo 上 —— ps-baby/teen/adult 三档特效自动生效 */
+  function ptGrowImgSrcs(rel) {
+    if (!rel) return [];
+    if (/^(https?:|data:)/i.test(rel)) return [rel];
+    return PT_CODEX_MIRRORS.map(function (b) { return ptCxUrl(b, rel); });
+  }
+  function ptGrowPetPicHtml(p, stage) {
+    var imgs = p.imgs || (p.def && p.def.imgs) || null;
+    var rel = imgs && (imgs[stage] || imgs.adult);
+    if (!rel) return '';
+    var srcs = ptGrowImgSrcs(rel);
+    var key = 'g' + (p.id || rel) + stage;
+    PT_CX_SRCS[key] = srcs;
+    return '<div class="pet-photobox"><img class="pet-photo" src="' + ptEsc(srcs[0]) +
       '" data-cxk="' + ptEsc(key) + '" onerror="ptCodexImgErr(this)" alt="' + ptEsc(p.name || '') + '"></div>';
   }
   /* 宠物（已入池/墙上）取手绘照片 + 成长装饰层，取到后原位补渲染 */
@@ -26449,7 +26552,7 @@ function cwInit(){
     if (!confirm('重置灵杰池为图鉴全集（200 只灵杰 + 旧种子）？已有的同学共创投稿会保留。')) return;
     var s = ptGet();
     var keep = s.petPool.filter(function (x) { return x.origin === 'student'; });
-    s.petPool = ptBuildSeed().concat(ptBuildCodexSeed()).concat(keep);
+    s.petPool = ptBuildSeed().concat(ptBuildCodexSeed()).concat(ptBuildGrowSeed()).concat(keep);   /* vT119 + 成长灵宠 */
     ptSave(s); PET_DB = s; toastMsg('🌱 已重置灵杰池'); ptRenderIncubator();
   }
   /* ---------------- vT67 启灵图鉴 ---------------- */
@@ -26466,8 +26569,8 @@ function cwInit(){
      之前后台图鉴一片空白/发灰，图片加载失败也是原因之一。 */
   var PT_CODEX_BASE = 'https://purainlone.github.io/workbench-test/';
   var PT_CODEX_MIRRORS = [
-    'https://testingcf.jsdelivr.net/gh/Purainlone/workbench-test@857ed542fea363e66c6d1c96268d9796c3c31219/',
-    'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@857ed542fea363e66c6d1c96268d9796c3c31219/',
+    'https://testingcf.jsdelivr.net/gh/Purainlone/workbench-test@b6b3fde9bfd6a8155f90646194d33ced1e603cff/',
+    'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@b6b3fde9bfd6a8155f90646194d33ced1e603cff/',
     PT_CODEX_BASE
   ];
   var PT_CX_SRCS = {};
@@ -26475,7 +26578,7 @@ function cwInit(){
      故镜像源锁定到含新卡的 commit；换卡面时同步改这里的 SHA 与 PT_CX_Q。
      卡面 URL 再加版本参数（最长 12h），
      给候选 URL 加版本参数，CDN 当作全新资源回源，保证立刻看到新图。 */
-  var PT_CX_Q = 'v=116';
+  var PT_CX_Q = 'v=119';   /* vT119 成长灵宠 petimg 上线，顺带刷新图鉴缓存键 */
   function ptCxUrl(b, rel) { return b + rel + (rel.indexOf('?') >= 0 ? '&' : '?') + PT_CX_Q; }
   /* vT78 隐藏/典藏卡优先加载动态卡面 codeximg/NNN.gif（vT78 生成的光效版），
      404 时按候选顺序自动回落静态 png；普通卡不产生多余请求。 */
