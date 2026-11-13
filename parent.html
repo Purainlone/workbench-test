@@ -77,6 +77,7 @@
   .cx .sr{font-size:10px;color:#9aa8a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .cx .ph{width:100%;aspect-ratio:1/1;border-radius:9px;background:#f2f6f3;display:flex;align-items:center;justify-content:center;font-size:26px}
   .tier{position:absolute;left:5px;top:5px;font-size:9px;padding:1px 6px;border-radius:7px;background:rgba(255,255,255,.88);color:#8a6a15;font-weight:700}
+  .cx .st{position:absolute;right:5px;top:5px;font-size:9px;letter-spacing:-1px;padding:1px 5px;border-radius:7px;background:rgba(255,244,214,.94);color:#b8860b;font-weight:700}
   @keyframes cxsheen{0%{background-position:130% 0}100%{background-position:-130% 0}}
   @keyframes cxpulse{0%,100%{box-shadow:0 0 6px 1px rgba(124,92,255,.28)}50%{box-shadow:0 0 16px 4px rgba(124,92,255,.5)}}
   @keyframes cxpulseGold{0%,100%{box-shadow:0 0 6px 1px rgba(201,147,42,.3)}50%{box-shadow:0 0 18px 5px rgba(201,147,42,.55)}}
@@ -117,13 +118,14 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT111）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT113）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
      家长登录 → 接入码解出 owner/repo → 匿名拉快照 → 姓名 + 绑定码解密自己孩子那块
-   抽图鉴 / 集卡 → 写家长作文仓库 pq/{id}.json（只写令牌，快照里下发）
+   抽卡 → 写家长作文仓库 pq/{id}.json（只写令牌，快照里下发）
      老师网页端「自动批准」开启时数秒内入账；未开启则等老师手动批准
+   vT113：抽卡单价 10 分起、由老师在后台自定；卡面显示星级与集卡进度
    ============================================================ */
 (function () {
   'use strict';
@@ -300,7 +302,10 @@
     var inner = srcs.length
       ? '<img src="' + esc(srcs[0]) + '" data-i="' + i + '" onerror="window.__paImgErr(this)" alt="">'
       : '<div class="ph">🥚</div>';
-    return '<div class="cx ' + fx + '">' + tier + inner +
+    /* vT113 卡面显示星级（重复卡升星，满 5 星） */
+    var st = Number(p.stars) || 1;
+    var starHtml = (st > 1) ? ('<div class="st">' + '★'.repeat(Math.min(5, st)) + '</div>') : '';
+    return '<div class="cx ' + fx + '">' + tier + inner + starHtml +
       '<div class="nm">' + esc(p.name || '灵杰') + '</div>' +
       '<div class="sr">' + esc(p.series || '') + '</div></div>';
   }
@@ -376,8 +381,10 @@
     ST.view = v;
     var panels = (ST.snap && ST.snap.parentPanels) || {};
     var on = function (k) { return panels[k] !== false; };
-    /* vT112 抽卡即唤醒：只剩一个动作，价格用集卡单价（快照 codexFeedCost） */
-    var feedCost = Number(ST.snap.codexFeedCost); if (!isFinite(feedCost) || feedCost < 0) feedCost = 5;
+    /* vT112 抽卡即唤醒：只剩一个动作，价格用抽卡单价（快照 codexFeedCost，vT113 起默认 10 分、老师可自定） */
+    var feedCost = Number(ST.snap.codexFeedCost); if (!isFinite(feedCost) || feedCost < 0) feedCost = 10;
+    /* 集卡进度：已集 / 全图鉴总数（快照顶层 codexPool） */
+    var poolN = (ST.snap.codexPool || []).length;
     var ts = ST.snap.ts ? new Date(ST.snap.ts) : null;
     var ageH = ts ? Math.round((Date.now() - ts.getTime()) / 3600000) : 0;
     var at = ts ? (pad(ts.getHours()) + ':' + pad(ts.getMinutes())) : '—';
@@ -403,7 +410,7 @@
         '<div class="side">作业 ' + Math.round(v.points.hw || 0) + ' · 平时 ' + Math.round(v.points.manual || 0) + '</div></div>' +
         '<div class="kpis"><div class="kpi"><b>' + v.hwDone + '/' + v.hwN + '</b><span>今日作业完成</span></div>' +
         '<div class="kpi"><b>' + v.rc.length + '</b><span>今日诵读</span></div>' +
-        '<div class="kpi"><b>' + (v.codex.length || 0) + '</b><span>已唤醒灵杰</span></div></div></div>';
+        '<div class="kpi"><b>' + (v.codex.length || 0) + '</b><span>已集灵杰卡</span></div></div></div>';
     }
     /* 作业 */
     if (on('hw')) {
@@ -423,13 +430,15 @@
     }
     /* 图鉴 */
     if (on('codex')) {
-      h += '<div class="card"><h2>🎴 孩子的启灵图鉴 <em>共 ' + (v.codex.length || 0) + ' 位</em></h2>';
+      h += '<div class="card"><h2>🎴 孩子的启灵图鉴 <em>' +
+        (poolN ? ('已集 ' + (v.codex.length || 0) + ' / ' + poolN) : ('共 ' + (v.codex.length || 0) + ' 位')) + '</em></h2>';
       h += v.codex.length ? '<div class="cxgrid">' + v.codex.map(cxCard).join('') + '</div>'
-        : '<div class="empty">还没唤醒灵杰，第一次唤醒会从「？？？」里揭晓</div>';
-      h += '<div class="drawbox"><div class="t">🎴 帮孩子抽一张灵杰卡（扣孩子的启灵积分）</div>' +
+        : '<div class="empty">还没抽到灵杰，第一次抽卡会从「？？？」里揭晓</div>';
+      h += '<div class="drawbox"><div class="t">🎴 帮孩子抽一张灵杰卡（扣孩子的启灵积分，每次 ' + feedCost + ' 分）</div>' +
         '<div class="acts"><button class="btn2" id="btnFeed">🎴 抽一张（-' + feedCost + '）</button></div>' +
-        '<div class="note">抽到还没有的灵杰 = 同时唤醒，图鉴格子会跟着点亮；重复的卡自动升星。' +
+        '<div class="note">抽到还没有的灵杰 = 同时唤醒，图鉴格子会跟着点亮；重复的卡自动升星（最高 ★5）。' +
         '隐藏款也能抽到（比较稀有），典藏款由老师发放。<br>' +
+        '每次消耗的积分由老师在工作台里设定，价格变动这里会跟着变。<br>' +
         (ST.snap.autoApprove ? '老师已开启自动批准，提交后约 10 秒自动入账；' : '提交后由老师批准；') +
         '每人每天有次数上限，积分不够会自动作废。</div>' + pendText() + '</div>';
       h += '</div>';
@@ -500,7 +509,7 @@
     if (ST.busy) return;
     if (!ST.snap.parentEssayToken || !ST.snap.parentEssayRepo) { toast('老师还没开通家长通道'); return; }
     if (ST.pending && ST.pending.status === 'pending') { toast('上一笔还在等待，稍等再试'); return; }
-    var actName = action === 'draw' ? '唤醒一位灵杰' : '集一张卡';
+    var actName = '抽一张灵杰卡';   /* vT112 起抽卡即唤醒，只剩这一个动作 */
     if (!confirm('帮「' + ST.name + '」' + actName + '，消耗 ' + cost + ' 启灵积分？\n（' +
       (ST.snap.autoApprove ? '老师已开启自动批准，提交后自动入账' : '需老师批准后生效') + '）')) return;
     ST.busy = true;
