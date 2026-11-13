@@ -26198,12 +26198,14 @@ function cwInit(){
      之前后台图鉴一片空白/发灰，图片加载失败也是原因之一。 */
   var PT_CODEX_BASE = 'https://purainlone.github.io/workbench-test/';
   var PT_CODEX_MIRRORS = [
-    'https://testingcf.jsdelivr.net/gh/Purainlone/workbench-test@main/',
-    'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@main/',
+    'https://testingcf.jsdelivr.net/gh/Purainlone/workbench-test@857ed542fea363e66c6d1c96268d9796c3c31219/',
+    'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@857ed542fea363e66c6d1c96268d9796c3c31219/',
     PT_CODEX_BASE
   ];
   var PT_CX_SRCS = {};
-  /* vT116：卡面整体换血后 jsDelivr 主源仍可能缓存旧卡面（最长 12h），
+  /* vT116：jsDelivr @main 分支快照会缓存旧卡面（换图后 12h 不更新），
+     故镜像源锁定到含新卡的 commit；换卡面时同步改这里的 SHA 与 PT_CX_Q。
+     卡面 URL 再加版本参数（最长 12h），
      给候选 URL 加版本参数，CDN 当作全新资源回源，保证立刻看到新图。 */
   var PT_CX_Q = 'v=116';
   function ptCxUrl(b, rel) { return b + rel + (rel.indexOf('?') >= 0 ? '&' : '?') + PT_CX_Q; }
