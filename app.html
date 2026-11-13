@@ -17890,9 +17890,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v116';
-var WB_MY_VER = '优化版 vT116 · 卡池图鉴换血';
-var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.138';
+var WB_VER_TAG = 'v117';
+var WB_MY_VER = '优化版 vT117 · 成长灵宠养成';
+var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.139';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24348,8 +24348,8 @@ function cwInit(){
      ============================================================ */
   const STAGE_LIST = [
     { k: 'egg', n: '宠物蛋', emoji: '🥚' },
-    { k: 'baby', n: '幼崽', emoji: '🐣' },
-    { k: 'teen', n: '成长期', emoji: '🐾' },
+    { k: 'baby', n: '奶团子', emoji: '🐣' },
+    { k: 'teen', n: '幼年', emoji: '🐾' },
     { k: 'adult', n: '成年', emoji: '🦁' },
     { k: 'grad', n: '毕业', emoji: '🎓' }
   ];
@@ -24535,7 +24535,7 @@ function cwInit(){
   var PET_TABLES = ['pets', 'parentQueue', 'petPool', 'petSubmissions', 'petShop', 'petCoupon', 'petCfg', 'petGift', 'petCards'];
   var ADMIN_FLAG = 'wb_pet_admin_v1';
   /* vT113 抽卡一次 10 分（老师可在「宠物后台 → 定价与折扣」里自己改） */
-  var DEF_COST = { feed: 10, draw: 10, redeem: 15 };
+  var DEF_COST = { feed: 10, draw: 10, redeem: 15, petDraw: 20, petEvoY: 30, petEvoA: 50 };
   var DEF_FEED_V112 = 5;          /* vT112 及更早的默认抽卡价，用于老数据平滑升级 */
   /* vT110 集卡参数：全图鉴可抽，稀有品级权重更低更难出；重复卡升星，满星后重复化作星光
      vT112 抽卡即唤醒：普通 100 / 隐藏 10（明显更稀有）/ 典藏 0 —— 典藏不进随机池，只由老师发放 */
@@ -25329,6 +25329,8 @@ function cwInit(){
     var grad = pet.graduated ? '<span class="pet-grad">🎓 已毕业 · ' + ptEsc(pet.gradCode || '') + '</span>' : '';
     var f = ptCost('feed'), r = ptCost('redeem');
     var dis = ptPlayable() ? '' : ' disabled title="模块已暂停/关停"';
+    /* vT117 成长灵宠：非图鉴卡(codex)且处于奶团子/幼年态才显示进化按钮 */
+    var evoBtn = (!isCxPic && (stage === 'baby' || stage === 'teen')) ? ('<button class="btn2 sm primary" onclick="ptPetEvolve(\'' + pet.id + '\')"' + dis + '>' + (stage === 'baby' ? '🌟进化→幼年(-' + ptCost('petEvoY') + ')' : '🌟进化→成年(-' + ptCost('petEvoA') + ')') + '</button>') : '';
     /* vT110 卡面信息行：Lv/EXP 改为集卡进度（升级肉眼无变化，学生看集卡数与星级更有感知） */
     var myCards = ptCardsOf(ptGet(), pet.studentName);
     var maxStar = 0;
@@ -25338,6 +25340,7 @@ function cwInit(){
       '<div class="pet-own">主人：' + ptEsc(pet.studentName) + (isPhoto ? ' <span class="pet-stu">手绘</span>' : '') + ' <span class="pet-stu">' + PetCore.stageName(stage) + '</span></div>' +
       '<div class="pet-lv">🎴 已集 ' + myCards.length + ' 张卡' + (maxStar ? ' · 最高 ★' + maxStar : '') + '</div>' +
       '<div class="pet-acts">' +
+      evoBtn +
       '<button class="btn2 sm" onclick="ptFeed(\'' + pet.id + '\')"' + dis + ' title="花积分随机抽一张灵杰卡；抽到新的会同时唤醒上墙、点亮图鉴">🎴 抽卡(-' + f + ')</button>' +
       '<button class="btn2 sm" onclick="ptRedeem(\'' + pet.id + '\')"' + dis + '>🎁 兑换(-' + r + ')</button>' +
       (pet.graduated ? '' : '<button class="btn2 sm" onclick="ptGradReq(\'' + pet.id + '\')">🎓 申请毕业</button>') +
@@ -25371,6 +25374,7 @@ function cwInit(){
     }).join('');
     box.innerHTML = '<div class="gpset"><span class="lbl">发放给：</span><select id="petStuSel" class="search">' + opts + '</select>' +
       '<button class="btn2 primary" onclick="ptHatchSel()">🥚 整批唤醒（随机一只给所选学生）</button>' +
+      '<button class="btn2" onclick="var v=document.getElementById(\'petStuSel\');ptPetDraw(v?v.value:null)">🐾 抽灵宠（学生自费 ' + ptCost('petDraw') + ' 分）</button>' +
       '<span class="sctip" id="petIncTip"></span></div>' +
       '<div class="pet-grid">' + pool + '</div>';
   }
@@ -25654,6 +25658,9 @@ function cwInit(){
       '<span class="lbl">毕业等级</span><input class="search" style="width:64px" type="number" min="1" id="ptCfgGrad" value="' + ptGradLevel() + '">' +
       '<span class="lbl">成长期≥</span><input class="search" style="width:56px" type="number" min="1" id="ptCfgTeen" value="' + ptStageCfg().teen + '">' +
       '<span class="lbl">成年≥</span><input class="search" style="width:56px" type="number" min="1" id="ptCfgAdult" value="' + ptStageCfg().adult + '">' +
+      '<span class="lbl">抽灵宠</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgPetDraw" value="' + ptCost('petDraw') + '" title="学生抽取一只成长灵宠要扣的启灵积分，默认 20 分；0 = 免费抽。">' +
+      '<span class="lbl">奶团子→幼年</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgPetEvoY" value="' + ptCost('petEvoY') + '">' +
+      '<span class="lbl">幼年→成年</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgPetEvoA" value="' + ptCost('petEvoA') + '">' +
       '</div>' +
       '<div class="gpset">' +
       '<span class="lbl">全场折扣</span><input class="search" style="width:64px" type="number" min="1" max="100" id="ptCfgSale" value="' + (Number(cfg.saleOff) || 100) + '">' +
@@ -25730,7 +25737,7 @@ function cwInit(){
     /* vT113 抽卡 / 兑换单价：取整并限制 0~999（填 0 = 免费抽，方便做活动） */
     function costNum(id, def) { return Math.min(999, Math.max(0, Math.round(num(id, def)))); }
     /* vT112 唤醒并入抽卡：draw 与 feed 同价（旧字段保留，避免历史配置报错） */
-    c.costs = { feed: costNum('ptCfgFeed', DEF_COST.feed), draw: costNum('ptCfgFeed', DEF_COST.feed), redeem: costNum('ptCfgRedeem', DEF_COST.redeem) };
+    c.costs = { feed: costNum('ptCfgFeed', DEF_COST.feed), draw: costNum('ptCfgFeed', DEF_COST.feed), redeem: costNum('ptCfgRedeem', DEF_COST.redeem), petDraw: costNum('ptCfgPetDraw', DEF_COST.petDraw), petEvoY: costNum('ptCfgPetEvoY', DEF_COST.petEvoY), petEvoA: costNum('ptCfgPetEvoA', DEF_COST.petEvoA) };
     c.costVer = 113;
     var g = num('ptCfgGrad', GRAD_LEVEL); c.gradLevel = Math.max(1, g);
     var teen = num('ptCfgTeen', 3), adult = num('ptCfgAdult', 6);
@@ -25741,7 +25748,7 @@ function cwInit(){
     var rw = document.getElementById('ptCfgReward');
     if (rw) c.cardReward = String(rw.value || '').trim() || CARD_REWARD_DEFAULT;
     c.updatedAt = Date.now(); c.updatedBy = 'web';
-    ptSave(s); PET_DB = s; ptKickSync(); toastMsg('💾 已保存：抽卡一次 ' + c.costs.feed + ' 分（网页 / 小程序 / 家长端同步）');
+    ptSave(s); PET_DB = s; ptKickSync(); toastMsg('💾 已保存：抽卡 ' + c.costs.feed + ' 分 · 抽灵宠 ' + c.costs.petDraw + ' 分 · 进化 ' + c.costs.petEvoY + '/' + c.costs.petEvoA + ' 分（网页 / 小程序 / 家长端同步）');
     ptRenderAdmin(); ptRenderWall(); ptRenderGrad();
   }
   function ptShopSet(id, field, val) {
@@ -25910,6 +25917,64 @@ function cwInit(){
     var s = ptGet(); var drawPool = codexDrawPool(s); if (!drawPool.length) return toastMsg('灵杰池为空');
     var sp = drawPool[Math.floor(Math.random() * drawPool.length)];
     ptHatch(sel.value, sp.id);
+  }
+  /* ---------------- vT117 成长灵宠：三阶段养成（奶团子→幼年→成年） ----------------
+     抽灵宠：扣 petDraw 分，从「成长池」(origin!=='codex') 随机抽一只；不抽该生已拥有的物种；
+     只有该生没有「未成年的灵宠」时才能抽下一只（养到成年才能抽下一个），不限量。
+     进化：奶团子→幼年扣 petEvoY 分；幼年→成年扣 petEvoA 分（老师可在后台改价）。 */
+  function ptGrowthDrawPool(s) {
+    return (s.petPool || []).filter(function (p) { return p && !p.deleted && p.origin !== 'codex'; });
+  }
+  function ptPetOwnedDefIds(s, who) {
+    var set = {}; (s.pets || []).forEach(function (p) { if (p && !p.deleted && p.studentName === who) set[p.defId] = 1; }); return set;
+  }
+  function ptPetHasYoung(s, who) {
+    return (s.pets || []).some(function (p) {
+      if (!p || p.deleted || p.graduated || p.studentName !== who) return false;
+      var st = PetCore.stageOf(p.level, p.graduated, ptStageCfg());
+      return st === 'baby' || st === 'teen';
+    });
+  }
+  function ptPetDraw(who) {
+    if (!ptPlayable()) return toastMsg('⏸ 图鉴模块已暂停 / 关停，暂不能抽灵宠');
+    if (!who) return toastMsg('⚠️ 请先选择学生');
+    var s = ptGet();
+    if (ptPetHasYoung(s, who)) return toastMsg('🐣 ' + who + ' 还有未成年的灵宠：先把它养到「成年态」，才能抽下一只（不限量，养成就接着抽）');
+    var owned = ptPetOwnedDefIds(s, who);
+    var pool = ptGrowthDrawPool(s).filter(function (p) { return !owned[p.id]; });
+    if (!pool.length) return toastMsg('⚠️ 没有可抽的成长灵宠了（已全部拥有 / 池为空）');
+    var cost = ptCost('petDraw');
+    if (ptStuPoints(who) < cost) return toastMsg('⚠️ ' + who + ' 积分不足（抽灵宠需 ' + cost + ' 分）');
+    var sp = pool[Math.floor(Math.random() * pool.length)];
+    return ptAddManual(who, '成长灵宠 · 抽取', -cost).then(function () {
+      var np = ptMkPet(who, sp); np.fromPetDraw = 1;
+      (s.pets = s.pets || []).push(np);
+      ptSave(s); PET_DB = s; ptKickSync();
+      toastMsg('🎉 ' + who + ' 抽到成长灵宠「' + sp.name + '」（奶团子态）');
+      ptRenderWall(); ptRenderIncubator();
+      return np;
+    }).catch(function () {});
+  }
+  function ptPetEvolve(petId) {
+    if (!ptPlayable()) return toastMsg('⏸ 图鉴模块已暂停 / 关停');
+    var s = ptGet();
+    var pet = s.pets.filter(function (p) { return p && !p.deleted && p.id === petId; })[0];
+    if (!pet) return;
+    var who = pet.studentName;
+    var st = PetCore.stageOf(pet.level, pet.graduated, ptStageCfg());
+    var cost, toLevel, nextName;
+    if (st === 'baby') { cost = ptCost('petEvoY'); toLevel = Number(ptStageCfg().teen) || 3; nextName = '幼年'; }
+    else if (st === 'teen') { cost = ptCost('petEvoA'); toLevel = Number(ptStageCfg().adult) || 6; nextName = '成年'; }
+    else return toastMsg('✅ 「' + pet.name + '」已是成年态，无需进化');
+    if (ptStuPoints(who) < cost) return toastMsg('⚠️ ' + who + ' 积分不足（进化需 ' + cost + ' 分）');
+    return ptAddManual(who, '成长灵宠 · 喂养进化', -cost).then(function () {
+      pet.level = Math.max(Number(pet.level) || 1, toLevel);
+      pet.updatedAt = Date.now();
+      ptSave(s); PET_DB = s; ptKickSync();
+      toastMsg('🌟 ' + who + ' 的「' + pet.name + '」进化到「' + nextName + '」！');
+      ptRenderWall(); ptRenderIncubator();
+      return pet;
+    }).catch(function () {});
   }
   /* vT65 误发收回：打 deleted 标记（不真删，便于反悔恢复，且同步不会被云端旧数据复活） */
   function ptRevoke(petId) {
