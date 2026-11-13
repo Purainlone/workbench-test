@@ -749,6 +749,20 @@ table.rc td.sum{background:#f7fbf9;font-weight:700;color:var(--primary);width:58
 table.rc tfoot td{background:#f7fbf9;font-weight:600;color:var(--muted);position:sticky;bottom:0;padding:8px 6px;border-top:1px solid var(--line)}
 table.rc tfoot td.nm{color:var(--text);z-index:2}
 
+/* vT115 首行篇目固定：表格内层滚动靠原生 sticky；整页滚走表格容器时，
+   由 rcSyncFloatHead 生成一条固定在视口顶部的「镜像表头」，篇目名永远看得见。 */
+table.rc thead th{background-clip:padding-box;box-shadow:inset 0 -2px 0 rgba(26,156,91,.22)}
+#rcFloatHead{position:fixed;left:0;top:0;z-index:9998;display:none;overflow:hidden;background:#fff;box-shadow:0 3px 10px rgba(16,80,48,.2);border-bottom:2px solid #b6e3cd}
+#rcFloatHead .rcfh-in{will-change:transform}
+#rcFloatHead table.rc{width:auto;min-width:0}
+#rcFloatHead th{position:static!important;left:auto!important;top:auto!important;z-index:auto!important;cursor:pointer}
+/* 当前登记列：点篇目名（或登记时点格子）设为本列，整列淡黄 + 表头橙线 */
+table.rc th.foc{background:#ffe9b0!important;color:#8a5a00;box-shadow:inset 0 -3px 0 #f59e0b}
+table.rc td.cell.foc:not(.on){background:#fff8e8!important}
+table.rc td.cell.foc.on{box-shadow:inset 0 0 0 2px #f59e0b}
+table.rc tfoot td.foc{background:#fff8e8!important;color:#8a5a00}
+#rcFloatHead th.foc{background:#ffe9b0!important;color:#8a5a00;box-shadow:inset 0 -3px 0 #f59e0b}
+
 /* ---------- 班级切换条 ---------- */
 .clsbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;margin:0 0 12px;background:linear-gradient(135deg,#f2faf6,#eaf6ef);border:1px solid #cfe8da;border-radius:11px}
 .clsbar-lb{font-size:13px;font-weight:600;color:#1a7a4d}
@@ -1455,12 +1469,13 @@ table.paper td.l{text-align:left;font-weight:600}
 
   <section data-page-node-id="QyjILLUtFmUOOOMFtxfS5Z" class="section" id="s-recite">
     <h2 data-page-node-id="9yJgSVfAVjoHC5fZ626z9v"><!--pnid:1Z4qmOYsoWiStlga16CU2w-->诵读管理</h2>
-    <div data-page-node-id="HXTAxz191Bp4vdzJMX7Mh5" class="sub"><!--pnid:Sr8bYWerATWNkPiDgq4mLE-->纵栏学生 · 横栏篇目 · 平时只读防误触，点「开始登记」后才能涂色 · 课内篇目绿色、课外篇目黄色（管理篇目时可分设）· 记录实时同步到资料库</div>
+    <div data-page-node-id="HXTAxz191Bp4vdzJMX7Mh5" class="sub"><!--pnid:Sr8bYWerATWNkPiDgq4mLE-->纵栏学生 · 横栏篇目 · 平时只读防误触，点「开始登记」后才能涂色 · 课内篇目绿色、课外篇目黄色（管理篇目时可分设）· 首行篇目已固定，滚动不跑；点篇目名可设为「当前登记列」（再点一次取消）· 记录实时同步到资料库</div>
     <div data-page-node-id="mU8Xj9XGD8PzZE2CtGuD8c" class="rcmode browse" id="rcMode">
       <span data-page-node-id="EA1xrArscENXJ9jRPvciiH" id="rcModeTxt"><!--pnid:Y5pyLOnfoZ4uTP2plqE6jm-->👀 浏览模式 · 格子只读，不会误改</span>
       <button data-page-node-id="IdO3Kq5TvFIrQQ0yJNQdwZ" class="btn2 sm primary" id="rcModeBtn" onclick="toggleRCMode()"><!--pnid:PzaEACTkpPtihDkjX31gZE-->✍️ 开始登记</button>
       <button data-page-node-id="93HaUKrJ3MNqG5eoZOwc8U" class="btn2 sm" id="rcFullBtn" onclick="toggleRCFull()" title="铺满整屏，去掉侧边栏，格子更大好点"><!--pnid:jxu6porAgx8QE8jbp5QlKK-->⛶ 全屏</button>
       <span data-page-node-id="qMkbjUC2JIi7aygifCHrMF" class="mt" id="rcModeTip"><!--pnid:myDcl3jS0KbIbZREtHXSBp-->登记时点格子=涂色，再点=取消</span>
+      <span class="mt" id="rcFocusTip" style="color:#a16207">点篇目名可设为「当前登记列」</span>
     </div>
     <div data-page-node-id="WODM8V7OtUse6K6PVdFLl5" class="rcctl">
       <button data-page-node-id="QZ1Cdlxp21L7MLRX187BVl" class="btn2" onclick="openRCManager()"><!--pnid:yRdnNdht4rTtgZTzHZY7bZ-->📑 管理篇目</button>
@@ -1492,10 +1507,16 @@ table.paper td.l{text-align:left;font-weight:600}
           var grip=document.getElementById('rcGrip'),w=document.getElementById('rcWrap');
           if(!grip||!w)return;
           var KEY='wb_rc_size';
+          /* vT115：表格高度永远不超过视口，保证首行篇目在内层滚动里能吸顶；
+             以前拖得比屏幕还高时整页滚、表头会跟着页面跑掉。 */
+          function maxH(){return Math.max(220,window.innerHeight-170)}
           /* 记住上次拖的大小，下次打开还是这个尺寸 */
           try{var s=JSON.parse(localStorage.getItem(KEY)||'null');
-            if(s&&s.w>320&&s.h>220){w.style.width=s.w+'px';w.style.height=s.h+'px';w.style.maxHeight='none';}
+            if(s&&s.w>320&&s.h>220){w.style.width=s.w+'px';w.style.height=Math.min(s.h,maxH())+'px';w.style.maxHeight='none';}
           }catch(e){}
+          window.addEventListener('resize',function(){
+            if(w.style.height&&parseInt(w.style.height,10)>maxH())w.style.height=maxH()+'px';
+          });
           var sx,sy,sw,sh;
           /* vT79 把手始终贴住表格卡片（rcWrap）的右下角，而不是外层 rcmain 的右下角：
              之前锚在 rcmain 上，一旦拖过宽度（wb_rc_size 记住自定义尺寸）卡片比容器窄，
@@ -1520,7 +1541,7 @@ table.paper td.l{text-align:left;font-weight:600}
             document.addEventListener('mouseup',up);
           }
           function move(e){
-            var nw=Math.max(320,sw+e.clientX-sx),nh=Math.max(220,sh+e.clientY-sy);
+            var nw=Math.max(320,sw+e.clientX-sx),nh=Math.max(220,Math.min(sh+e.clientY-sy,maxH()));
             w.style.maxHeight='none';
             w.style.width=nw+'px';w.style.height=nh+'px';
             sync();
@@ -11625,6 +11646,88 @@ var RC_MAP={};                          /* '姓名||篇目' → 记录 _id */
 var RC_BUSY={};                         /* 正在提交的格子，防连点重复写 */
 var RC_SAVING=0;
 var RC_MODE=false;                      /* false=浏览（只读） / true=登记（可涂色） */
+/* vT115 当前登记列：点篇目名或登记时点格子把该篇目高亮，整列淡黄方便对齐打勾。
+   存的是篇目名（不是列号），隐藏列 / 新增篇目后位置变了也不会指错。 */
+var RC_FOCUS_KEY='wb_rc_focus_title';
+var RC_FOCUS='';
+function rcLoadFocus(){try{RC_FOCUS=localStorage.getItem(RC_FOCUS_KEY)||''}catch(e){RC_FOCUS=''}}
+function rcSetFocus(t,noRender){
+  RC_FOCUS=t||'';
+  try{if(RC_FOCUS)localStorage.setItem(RC_FOCUS_KEY,RC_FOCUS);else localStorage.removeItem(RC_FOCUS_KEY)}catch(e){}
+  if(noRender)rcPaintFocus();
+  else if(document.getElementById('rcTable'))renderRecite();
+}
+function rcPaintFocus(){
+  var tbl=document.getElementById('rcTable'),hit=false;
+  function paint(root){
+    if(!root)return;
+    [].forEach.call(root.querySelectorAll('[data-t]'),function(n){
+      var on=!!RC_FOCUS&&n.getAttribute('data-t')===RC_FOCUS;
+      if(on)hit=true;
+      n.classList.toggle('foc',on);
+    });
+  }
+  paint(tbl);paint(document.getElementById('rcFloatHead'));
+  if(RC_FOCUS&&!hit){RC_FOCUS='';try{localStorage.removeItem(RC_FOCUS_KEY)}catch(e){}}
+  var tip=document.getElementById('rcFocusTip');
+  if(tip)tip.textContent=RC_FOCUS?('📌 当前篇目：'+RC_FOCUS+'（点别的篇目名可切换，再点一次取消）'):'点篇目名可设为「当前登记列」';
+}
+/* vT115 整页滚动时固定首行篇目：原生 sticky 只在 rcWrap 内部滚动时有效，
+   页面整体滚动把表格容器顶出屏幕后，用一条 position:fixed 的镜像表头接管。 */
+var RC_FLOAT_TICK=0;
+function rcFloatEl(){
+  var f=document.getElementById('rcFloatHead');
+  if(f)return f;
+  f=document.createElement('div');f.id='rcFloatHead';
+  f.innerHTML='<div class="rcstage" id="rcFloatStage"><div class="rcmain"><div class="rcfh-in"><table class="rc" id="rcFloatTable"></table></div></div></div>';
+  document.body.appendChild(f);
+  f.addEventListener('click',function(ev){
+    var n=ev.target;
+    while(n&&n!==f&&(!n.getAttribute||!n.getAttribute('data-t')))n=n.parentNode;
+    if(n&&n!==f&&n.getAttribute('data-t'))rcSetFocus(n.getAttribute('data-t'));
+  });
+  return f;
+}
+function rcSyncFloatHead(){
+  var tbl=document.getElementById('rcTable'),f=rcFloatEl(),ft=document.getElementById('rcFloatTable');
+  var head=tbl?tbl.querySelector('thead'):null;
+  if(!head){f.style.display='none';return}
+  var st=document.getElementById('rcFloatStage');
+  try{var cs=getComputedStyle(document.getElementById('rcStage')||document.body);st.style.setProperty('--rc-s',cs.getPropertyValue('--rc-s')||'1')}catch(e){}
+  ft.textContent='';ft.appendChild(head.cloneNode(true));
+  var wpx=tbl.offsetWidth+'px';
+  ft.style.width=wpx;ft.style.minWidth=wpx;
+  var inner=f.querySelector('.rcfh-in');if(inner)inner.style.width=wpx;
+  rcPaintFocus();
+  rcUpdateFloatHead();
+}
+function rcUpdateFloatHead(){
+  if(RC_FLOAT_TICK)return;
+  if(typeof requestAnimationFrame==='function')RC_FLOAT_TICK=requestAnimationFrame(function(){RC_FLOAT_TICK=0;rcFloatApply()});
+  else rcFloatApply();
+}
+function rcFloatApply(){
+  var f=document.getElementById('rcFloatHead'),wrap=document.getElementById('rcWrap');
+  var sec=document.getElementById('s-recite'),tbl=document.getElementById('rcTable');
+  if(!f||!wrap||!sec||!tbl){if(f)f.style.display='none';return}
+  if(!sec.classList.contains('active')||!tbl.querySelector('thead')){f.style.display='none';return}
+  /* 刚切进诵读页、表格还在异步重绘时，镜像表头可能还没同步宽度：先别显示空白条 */
+  var ft=document.getElementById('rcFloatTable');
+  if(!ft||!ft.querySelector('thead')||!(parseFloat(ft.style.width)>0)){f.style.display='none';return}
+  var r=wrap.getBoundingClientRect();
+  if(r.top>=-1||r.bottom<=24){f.style.display='none';return}
+  f.style.display='block';
+  f.style.left=r.left+'px';
+  f.style.width=wrap.clientWidth+'px';
+  var inner=f.querySelector('.rcfh-in');
+  if(inner)inner.style.transform='translateX('+(-wrap.scrollLeft)+'px)';
+}
+(function rcBindFloat(){
+  window.addEventListener('scroll',rcUpdateFloatHead,true);
+  window.addEventListener('resize',function(){try{rcSyncFloatHead()}catch(e){}});
+  document.addEventListener('click',rcUpdateFloatHead,true);   /* 切换栏目后立刻判断要不要显示 */
+  var w=document.getElementById('rcWrap');if(w)w.addEventListener('scroll',rcUpdateFloatHead);
+})();
 /* 2.6.61 篇目升级为「带类型」：课内 core / 课外 extra。
    t=篇目名（同时作为打卡存储键，保持原样以便和历史打卡记录匹配），k=类型。
    名字里带「课外」的向后兼容为 extra；新增时可不带后缀，仅靠颜色区分。 */
@@ -12315,8 +12418,12 @@ function renderRecite(){
     var nm=rcTName(t),kind=rcTKind(t),isExtra=kind==='extra';
     var cls=isExtra?'extra':'core';
     var th=el('th',cls,nm);
-    th.title=nm+(isExtra?'（课外）':'（课内）');
-    th.addEventListener('click',function(){toastMsg((isExtra?'课外篇目：':'课内篇目：')+nm)});
+    th.setAttribute('data-t',nm);          /* vT115 当前登记列定位 */
+    th.title=nm+(isExtra?'（课外）':'（课内）')+' · 点击设为当前登记列（再点取消）';
+    th.addEventListener('click',function(){
+      rcSetFocus(RC_FOCUS===nm?'':nm);
+      toastMsg(RC_FOCUS?('📌 当前篇目：'+nm+'（首行已固定）'):'已取消当前篇目');
+    });
     hr.appendChild(th);
   });
   hr.appendChild(el('th',null,'已完成'));
@@ -12337,6 +12444,7 @@ function renderRecite(){
       var k=rcKey(s.姓名,nm2),on=!!RC_MAP[k];
       var td=el('td','cell'+(on?' on':'')+(isExtra?' extra':(on?'':' core')));
       if(on)td.appendChild(el('span','mk','✓'));
+      td.setAttribute('data-t',nm2);       /* vT115 当前登记列 */
       td.setAttribute('role','checkbox');
       td.setAttribute('aria-checked',on?'true':'false');
       td.setAttribute('aria-label',s.姓名+' · '+nm2);
@@ -12345,6 +12453,7 @@ function renderRecite(){
         var me=this;
         if(!RC_MODE){rcPeek(s.姓名,nm2,!!RC_MAP[k]);return}
         if(!rcIsTap(ev))return;          /* 滑动误触不算 */
+        rcSetFocus(nm2,true);            /* vT115 登记哪列就高亮哪列，方便对齐 */
         rcToggleCell(me,s.姓名,nm2);
       };
       tr.appendChild(td);
@@ -12365,6 +12474,7 @@ function renderRecite(){
       var on=!!RC_MAP[rcKey(s.姓名,nm2)];
       var td=el('td','cell'+(on?' on':'')+(isExtra?' extra':(on?'':' core')));
       if(on)td.appendChild(el('span','mk','✓'));
+      td.setAttribute('data-t',nm2);       /* vT115 当前登记列 */
       td.title=s.姓名+' · '+nm2+'（不参与，只读）';
       td.onclick=function(){rcPeek(s.姓名,nm2,on)};
       tr.appendChild(td);
@@ -12378,7 +12488,9 @@ function renderRecite(){
   vis.forEach(function(t){
     var c=0,nm=rcTName(t),isExtra=rcTKind(t)==='extra';
     stu.forEach(function(s){if(RC_MAP[rcKey(s.姓名,nm)])c++});
-    fr.appendChild(el('td',isExtra?'extra':'core',c+'/'+stu.length));
+    var td=el('td',isExtra?'extra':'core',c+'/'+stu.length);
+    td.setAttribute('data-t',nm);        /* vT115 当前登记列 */
+    fr.appendChild(td);
   });
   fr.appendChild(el('td','sum',''));
   tfoot.appendChild(fr);
@@ -12388,6 +12500,9 @@ function renderRecite(){
   rcRefreshStat();
   rcRenderRank();
   renderIgnoreBars();
+  /* vT115：表头刚重建，刷新当前登记列高亮 + 浮动镜像表头 */
+  rcPaintFocus();
+  try{rcSyncFloatHead()}catch(e){}
 }
 /* 篇目管理面板：增删 + 上下移 */
 function openRCManager(){
@@ -14835,6 +14950,7 @@ function stuUndoClear(){
   rcLoadTitles();
   rcLoadMode();
   rcLoadViewPrefs();
+  rcLoadFocus();                 /* vT115 当前登记列（刷新后仍记得） */
   rcPaintViewPrefs();
   renderRecite();
   if(window.__WB_LOCAL__){try{wbLocalStatus()}catch(e){}}
@@ -17774,9 +17890,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v114';
-var WB_MY_VER = '优化版 vT114 · 集卡说明修正';
-var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.136';
+var WB_VER_TAG = 'v115';
+var WB_MY_VER = '优化版 vT115 · 诵读首行固定';
+var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.137';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
