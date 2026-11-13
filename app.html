@@ -2997,6 +2997,116 @@ table.paper td.l{text-align:left;font-weight:600}
       .pt-foodbtn .fp{font-size:11.5px;color:#a4763a;background:#fff2dc;border-radius:8px;padding:1px 6px}
       .pt-foodbtn.off{opacity:.45;cursor:not-allowed;filter:grayscale(.4)}
       .pt-foodtip{font-size:12px;color:#76867e;line-height:1.6}
+      /* ---------- vT125 抽卡演出（音效 + 特效）----------
+         一次抽取：蓄力光阵收束 → 爆闪 → 卡面翻出 → 彩带收下。
+         层挂 body、z-index 10020；四档品级只换配色（金/紫/蓝/绿），结构与节奏一致，
+         所以加新卡池不用再写一套动画。音效由 Web Audio 现场合成，这里只管画面。 */
+      @keyframes ptfxFadeIn{from{opacity:0}to{opacity:1}}
+      @keyframes ptfxOut{to{opacity:0}}
+      @keyframes ptfxSpin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+      @keyframes ptfxSpinR{to{transform:translate(-50%,-50%) rotate(-360deg)}}
+      @keyframes ptfxPulse{0%,100%{transform:translate(-50%,-50%) scale(.92);opacity:.55}50%{transform:translate(-50%,-50%) scale(1.08);opacity:.95}}
+      @keyframes ptfxGather{
+        0%{transform:rotate(var(--a)) translateX(196px) scale(.35);opacity:0}
+        28%{opacity:1}
+        100%{transform:rotate(var(--a)) translateX(6px) scale(1.06);opacity:.12}}
+      @keyframes ptfxDot{0%,100%{opacity:.2}50%{opacity:1}}
+      @keyframes ptfxFlash{0%{opacity:0}10%{opacity:1}100%{opacity:0}}
+      @keyframes ptfxRaySpin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+      @keyframes ptfxCardIn{
+        0%{transform:translate(-50%,-50%) perspective(900px) rotateY(88deg) scale(.7);opacity:0}
+        52%{transform:translate(-50%,-50%) perspective(900px) rotateY(-9deg) scale(1.05);opacity:1}
+        74%{transform:translate(-50%,-50%) perspective(900px) rotateY(4deg) scale(.995)}
+        100%{transform:translate(-50%,-50%) perspective(900px) rotateY(0) scale(1)}}
+      @keyframes ptfxHalo{0%,100%{transform:translate(-50%,-50%) scale(.9);opacity:.45}50%{transform:translate(-50%,-50%) scale(1.12);opacity:.9}}
+      @keyframes ptfxSheen{0%{background-position:-160% 0}100%{background-position:260% 0}}
+      @keyframes ptfxNewIn{0%{transform:rotate(-30deg) scale(2.6);opacity:0}58%{transform:rotate(-10deg) scale(.94);opacity:1}100%{transform:rotate(-12deg) scale(1)}}
+      @keyframes ptfxTap{0%,100%{opacity:.5}50%{opacity:1}}
+      @keyframes ptfxConf{0%{transform:translate3d(0,-50px,0) rotate(var(--r));opacity:0}
+        10%{opacity:1}
+        100%{transform:translate3d(0,112vh,0) rotate(calc(var(--r) + 540deg));opacity:.85}}
+      .ptfx{position:fixed;left:0;top:0;right:0;bottom:0;z-index:10020;overflow:hidden;user-select:none;-webkit-user-select:none;
+        display:flex;align-items:center;justify-content:center;animation:ptfxFadeIn .18s ease both}
+      .ptfx-out{animation:ptfxOut .3s ease both}
+      .ptfx-veil{position:absolute;left:0;top:0;right:0;bottom:0;
+        background:radial-gradient(circle at 50% 46%,rgba(20,18,38,.60) 0%,rgba(10,9,20,.90) 60%,rgba(5,5,11,.96) 100%)}
+      /* 蓄力：三层符文环 + 中心印记 + 由外向内收束的粒子 */
+      .ptfx-field{position:relative;width:360px;height:360px;flex:0 0 auto;max-width:86vw;max-height:86vw}
+      .ptfx-ring{position:absolute;left:50%;top:50%;border-radius:50%;transform:translate(-50%,-50%)}
+      .ptfx-ring.r1{width:300px;height:300px;max-width:80vw;max-height:80vw;border:2px solid rgba(160,220,255,.30);
+        border-top-color:rgba(255,255,255,.92);border-right-color:rgba(190,160,255,.85);
+        box-shadow:0 0 26px rgba(120,200,255,.28),inset 0 0 26px rgba(120,200,255,.16);
+        animation:ptfxSpin 2.6s linear infinite}
+      .ptfx-ring.r2{width:224px;height:224px;border:1px dashed rgba(210,180,255,.5);animation:ptfxSpinR 4.4s linear infinite}
+      .ptfx-ring.r3{width:150px;height:150px;border:1px solid rgba(255,235,180,.42);animation:ptfxPulse 2.2s ease-in-out infinite}
+      .ptfx-sigil{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:34px;color:#fff;
+        text-shadow:0 0 18px #9fd7ff,0 0 36px #c9a6ff;animation:ptfxPulse 1.6s ease-in-out infinite}
+      .ptfx-dots{position:absolute;left:0;top:0;right:0;bottom:0}
+      .ptfx-dots i{position:absolute;left:50%;top:50%;margin:-3px 0 0 -3px;border-radius:50%;background:#fff;display:block;
+        box-shadow:0 0 10px #bfe6ff,0 0 20px rgba(180,150,255,.6);
+        animation:ptfxGather 1.05s cubic-bezier(.35,.7,.3,1) var(--d) infinite}
+      .ptfx-tip{position:absolute;left:50%;bottom:15%;transform:translateX(-50%);color:#eaf2ff;font-size:15px;
+        letter-spacing:.5px;white-space:nowrap;text-shadow:0 2px 10px rgba(0,0,0,.65)}
+      .ptfx-tip b{color:#ffe6a8}
+      .ptfx-dt{display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle}
+      .ptfx-dt i{width:5px;height:5px;border-radius:50%;background:#9fd7ff;animation:ptfxDot 1s ease-in-out infinite}
+      .ptfx-dt i:nth-child(2){animation-delay:.2s}
+      .ptfx-dt i:nth-child(3){animation-delay:.4s}
+      .ptfx-mute{position:absolute;right:14px;top:12px;width:36px;height:36px;border-radius:50%;display:flex;
+        align-items:center;justify-content:center;background:rgba(255,255,255,.12);
+        border:1px solid rgba(255,255,255,.24);color:#fff;font-size:16px;cursor:pointer;z-index:8}
+      .ptfx-mute:hover{background:rgba(255,255,255,.22)}
+      /* 揭晓：爆闪 + 旋转光芒 + 翻转的卡面 */
+      .ptfx-flash{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;
+        background:radial-gradient(circle at 50% 46%,#fff 0%,rgba(255,255,255,.55) 16%,rgba(255,255,255,0) 54%);
+        animation:ptfxFlash .8s ease-out both}
+      .ptfx-rays{position:absolute;left:50%;top:46%;width:1000px;height:1000px;border-radius:50%;pointer-events:none;
+        transform:translate(-50%,-50%);opacity:.45;
+        background:repeating-conic-gradient(from 0deg,rgba(255,255,255,.34) 0deg 2.6deg,rgba(255,255,255,0) 2.6deg 17deg);
+        -webkit-mask-image:radial-gradient(circle,#000 0 18%,rgba(0,0,0,.55) 42%,transparent 64%);
+        mask-image:radial-gradient(circle,#000 0 18%,rgba(0,0,0,.55) 42%,transparent 64%);
+        animation:ptfxRaySpin 16s linear infinite}
+      .ptfx-cd{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);width:280px;max-width:82vw;
+        padding:16px 14px 14px;border-radius:22px;text-align:center;box-sizing:border-box;
+        background:linear-gradient(180deg,#fffdf7,#fff);border:2px solid #dfe7e2;
+        box-shadow:0 26px 70px rgba(0,0,0,.55);animation:ptfxCardIn .74s cubic-bezier(.2,.8,.25,1) both}
+      .ptfx-cd.t1{border-color:#7cb8ff;box-shadow:0 26px 70px rgba(16,50,100,.55),0 0 26px rgba(108,182,255,.5)}
+      .ptfx-cd.t2{border-color:#a98bff;box-shadow:0 26px 70px rgba(46,18,86,.58),0 0 34px rgba(169,139,255,.6)}
+      .ptfx-cd.t3{border-color:#f0c33c;box-shadow:0 26px 70px rgba(80,54,0,.58),0 0 42px rgba(240,195,60,.72)}
+      .ptfx-halo{position:absolute;left:50%;top:50%;width:380px;height:380px;border-radius:50%;z-index:-1;pointer-events:none;
+        background:radial-gradient(circle,rgba(140,210,170,.45) 0%,rgba(140,210,170,0) 62%);
+        animation:ptfxHalo 2.4s ease-in-out infinite}
+      .ptfx-cd.t1 .ptfx-halo{background:radial-gradient(circle,rgba(108,182,255,.5) 0%,rgba(108,182,255,0) 62%)}
+      .ptfx-cd.t2 .ptfx-halo{background:radial-gradient(circle,rgba(169,139,255,.55) 0%,rgba(169,139,255,0) 62%)}
+      .ptfx-cd.t3 .ptfx-halo{background:radial-gradient(circle,rgba(255,206,80,.58) 0%,rgba(255,206,80,0) 62%)}
+      .ptfx-pic{position:relative;height:188px;display:flex;align-items:center;justify-content:center;
+        overflow:hidden;border-radius:14px;background:linear-gradient(180deg,#f8fcfa,#eef6f0)}
+      .ptfx-cd.t3 .ptfx-pic{background:linear-gradient(180deg,#fffaf0,#fdf1d6)}
+      .ptfx-cd.t2 .ptfx-pic{background:linear-gradient(180deg,#faf7ff,#f1ecff)}
+      .ptfx-pic .pet-photobox{height:100%;width:100%;border-radius:14px;overflow:hidden}
+      .ptfx-pic img.pet-photo,.ptfx-pic img.ptfx-img{height:100%;width:100%;object-fit:contain;display:block}
+      .ptfx-noimg{font-size:64px;line-height:1}
+      .ptfx-sheen{position:absolute;left:14px;right:14px;top:16px;height:188px;pointer-events:none;border-radius:14px;
+        background:linear-gradient(115deg,transparent 0 40%,rgba(255,255,255,.9) 50%,transparent 60% 100%);
+        background-size:260% 100%;animation:ptfxSheen 1.4s ease-out .3s 2 both}
+      .ptfx-new{position:absolute;left:-8px;top:10px;z-index:5;transform:rotate(-12deg);
+        background:linear-gradient(135deg,#ff5d73,#ff9a3c);color:#fff;font-weight:800;font-size:15px;
+        letter-spacing:1px;padding:6px 12px;border-radius:10px;box-shadow:0 8px 20px rgba(255,90,90,.45);
+        animation:ptfxNewIn .52s cubic-bezier(.2,1.4,.4,1) .44s both}
+      .ptfx-new.dup{background:linear-gradient(135deg,#9aa8a0,#c3ccc7);box-shadow:none;font-size:12px;letter-spacing:0;
+        padding:5px 10px}
+      .ptfx-nm{font-size:20px;font-weight:800;color:#22352c;margin-top:10px;line-height:1.25}
+      .ptfx-meta{font-size:12px;color:#8a9a92;margin-top:3px;min-height:16px}
+      .ptfx-note{font-size:12.5px;color:#1f6f4a;margin-top:8px;padding:4px 9px;border-radius:10px;
+        background:#eef8f2;border:1px solid #cfead9;display:inline-block}
+      .ptfx-cd.t3 .ptfx-note{background:#fff8e6;border-color:#ecd39a;color:#9a6d00}
+      .ptfx-cd.t2 .ptfx-note{background:#f4efff;border-color:#ddcfff;color:#5b3fb8}
+      .ptfx-conf{position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden;pointer-events:none}
+      .ptfx-conf i{position:absolute;top:0;left:var(--x);width:7px;height:12px;border-radius:2px;
+        background:var(--c,#ffd76a);animation:ptfxConf 2.7s cubic-bezier(.25,.6,.4,1) var(--dl) both}
+      .ptfx-tap{position:absolute;left:50%;bottom:8%;transform:translateX(-50%);color:rgba(255,255,255,.72);
+        font-size:12.5px;letter-spacing:1px;animation:ptfxTap 1.8s ease-in-out infinite;white-space:nowrap}
+      @media (prefers-reduced-motion: reduce){.ptfx,.ptfx *{animation:none !important}}
     </style>
     <h2>📖 班级启灵图鉴 <span style="font-size:12px;color:#76867e;font-weight:400;margin-left:8px" id="petSub">积蓄启灵之力 · 唤醒灵杰 · 收录图鉴</span><span id="petStateTag" class="pet-state s-on">🟢 运行中</span></h2>
     <div class="sub">抽卡消耗的积分 = 学生「个人累计积分」（作业+小组+奖惩汇总），抽卡会写一条「启灵图鉴」奖惩记录，自动进入学生流水与积分榜。抽到一位还没拥有的灵杰，就等于同时唤醒了他——灵宠家园里多一只、图鉴格子随之点亮；集卡不设等级，重复抽到只提示「已经有了」。在启灵世界里，每一次认真品读、大胆表达、坚持书写、团结协作，都能积蓄启灵之力，唤醒一位灵杰、集齐一套卡牌，点亮你的专属图鉴。</div>
@@ -18023,9 +18133,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v124';
-var WB_MY_VER = '优化版 vT124 · 去商城与食物喂养';
-var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.148';
+var WB_VER_TAG = 'v125';
+var WB_MY_VER = '优化版 vT125 · 抽卡音效与特效';
+var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.149';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -26066,7 +26176,11 @@ function cwInit(){
       '<div class="pet-row"><span><b>🎨 学生投稿：' + (subSt === 'off' ? '⛔ 已关闭' : '✅ 已开放') + '</b><br><span class="pet-own">' +
       (subSt === 'off' ? '学生端不能再「共创一位」提交新作品，抽卡 / 喂养照常；已投稿的作品仍可在「🎨 学生投稿」里审批。'
                        : '学生可在小程序「共创一位」投稿，老师在「🎨 学生投稿」里审批入池。') + '</span></span></div>' +
-      '<div class="gpset">' + subSw + '<span class="sctip">独立于上面的模块总开关；改动随同步下发到小程序</span></div></div>' +
+      '<div class="gpset">' + subSw + '<span class="sctip">独立于上面的模块总开关；改动随同步下发到小程序</span></div>' +
+      /* vT125 抽卡演出音效开关（存在本机 localStorage，学生自己的设备各自记忆） */
+      '<div class="gpset"><span class="lbl">🔊 抽卡音效</span>' +
+      '<button class="btn2 sm" onclick="ptSfxSwitch(this)">' + (ptSfxOn() ? '🔊 音效开（点一下关）' : '🔇 音效关（点一下开）') + '</button>' +
+      '<span class="sctip">抽卡 / 抽灵宠 / 唤醒 / 喂养 / 进化共用；关掉只演画面不响，投屏安静场合用得上</span></div></div>' +
 
       /* ---- 2 定价 ---- */
       '<div class="pet-sec"><h3>💰 定价</h3>' +
@@ -26186,6 +26300,9 @@ function cwInit(){
     s.pets.push(ptMkPet(studentName, sp));
     ptSave(s); PET_DB = s;
     ptKickSync();
+    /* vT125 老师点唤醒也给一段轻量演出：不蓄力，直接弹出卡面 + 短音效 */
+    ptFxBegin('hatch', studentName).reveal({ kind: 'hatch', name: sp.name, imgs: sp.imgs, img: sp.img,
+      tier: sp.tier, rarity: sp.rarity, stage: 'baby', who: studentName, isNew: true });
     toastMsg(ptIsGrowDef(sp)
       ? ('🐣 已唤醒「' + sp.name + '」（奶团子态）授予 ' + studentName + '，可在灵宠家园点「进化」')
       : ('🐾 已唤醒「' + sp.name + '」授予 ' + studentName));
@@ -26239,14 +26356,17 @@ function cwInit(){
     var cost = ptCost('petDraw');
     if (ptStuPoints(who) < cost) return toastMsg('⚠️ ' + who + ' 积分不足（抽灵宠需 ' + cost + ' 分）');
     var sp = pool[Math.floor(Math.random() * pool.length)];
+    var fx = ptFxBegin('pet', who);   /* vT125 抽灵宠同样有演出 */
     return ptAddManual(who, '成长灵宠 · 抽取', -cost).then(function () {
       var np = ptMkPet(who, sp); np.fromPetDraw = 1;
       (s.pets = s.pets || []).push(np);
       ptSave(s); PET_DB = s; ptKickSync();
+      fx.reveal({ kind: 'pet', name: sp.name, imgs: sp.imgs, img: sp.img, tier: sp.tier, rarity: sp.rarity,
+        stage: 'baby', who: who, isNew: true });
       toastMsg('🎉 ' + who + ' 抽到成长灵宠「' + sp.name + '」（奶团子态）');
       ptRenderHome(); ptRenderIncubator();
       return np;
-    }).catch(function () {});
+    }).catch(function () { fx.abort(); });
   }
   /* ---------------- vT123 喂养累积进化 / vT124 改成食物 ----------------
      · 每只成长灵宠带一个 growExp（成长值），1 分 = 1 点成长值；
@@ -26326,6 +26446,7 @@ function cwInit(){
       pet.updatedAt = Date.now();
       ptSave(s); PET_DB = s; ptKickSync();
       ptFoodClose();
+      ptSfx('eat');   /* vT125 喂养的「啊呜」一声 */
       var g2 = ptGrowState(pet);
       toastMsg(g2.left <= 0
         ? (food.e + ' ' + who + ' 的「' + pet.name + '」成长值攒满了，可以免费进化！')
@@ -26358,6 +26479,7 @@ function cwInit(){
       pet.growExp = 0;   /* 成长值已用于这次进化 */
       pet.updatedAt = Date.now();
       ptSave(s); PET_DB = s; ptKickSync();
+      ptSfx('level');   /* vT125 进化三连音 */
       toastMsg('🌟 ' + who + ' 的「' + pet.name + '」进化到「' + nextName + '」！' +
         (pay > 0 ? ('（已用喂养攒下的 ' + have + ' 点，补 ' + pay + ' 分）') : '（成长值攒满，免费进化）'));
       ptRenderHome(); ptRenderIncubator();
@@ -26394,6 +26516,271 @@ function cwInit(){
     ptRenderHome(); ptRenderGrad();
     if (ptAdminUnlocked()) ptRenderAdmin();
   }
+  /* ================= vT125 抽卡演出（音效 + 特效） =================
+     一次抽取的动作节奏：蓄力（符文光阵收束，约 0.7s）→ 爆闪 → 卡面翻出 → 收下。
+     · 音效全部用 Web Audio 现场合成，不引用任何音频文件 —— 离线 / 内网 / 投屏都响，
+       也不会让 2.7MB 的 app.html 再多出几百 KB 素材；静音状态记在 localStorage。
+     · 卡面图复用图鉴 / 成长灵宠的取图回退链（ptCodexPetPicHtml / ptGrowPetPicHtml），
+       破图自动换镜像，不会出现空白卡。
+     · 演出层挂 body（.ptfx，z-index 10020），不参与面板布局；点任意处或倒计时结束关闭，
+       右上角 🔊 可静音；同一时刻只允许一层，后来的先关掉前一层，避免连点叠成花屏。
+     · 老师点唤醒台的「🐣 唤醒」走轻量版（不蓄力、0.9 秒弹出）；学生抽卡 / 抽灵宠走完整版。
+     · 环境不具备（无 AudioContext / 无 rAF / 切到后台 / 系统开了「减少动态效果」）时
+       自动跳过演出，抽卡逻辑本身完全不受影响 —— 演出只是锦上添花，不能挡住功能。 */
+  var PT_FX_KEY = 'wb_pet_fx_v1';           /* '0' = 静音（只演画面） */
+  var PT_FX_RANK = [
+    { k: 'n', nm: '普通', c1: '#eaf7ef', c2: '#8fd2ac', glow: 'rgba(140,210,170,.55)' },
+    { k: 'r', nm: '稀有', c1: '#e6f3ff', c2: '#6cb6ff', glow: 'rgba(108,182,255,.60)' },
+    { k: 'h', nm: '隐藏', c1: '#f1eaff', c2: '#a98bff', glow: 'rgba(169,139,255,.66)' },
+    { k: 'm', nm: '典藏', c1: '#fff4d6', c2: '#f0c33c', glow: 'rgba(240,195,60,.72)' }
+  ];
+  var PT_FX_CONF = ['#ffd76a', '#8fd2ac', '#6cb6ff', '#c9a6ff', '#ff9db0', '#fff3c4'];
+  function ptLsGet(k) { try { return (typeof localStorage === 'undefined') ? null : localStorage.getItem(k); } catch (e) { return null; } }
+  function ptLsSet(k, v) { try { if (typeof localStorage !== 'undefined') localStorage.setItem(k, String(v)); } catch (e) {} }
+  function ptSfxOn() { return ptLsGet(PT_FX_KEY) !== '0'; }
+  function ptSfxToggle(el) {
+    var on = !ptSfxOn();
+    ptLsSet(PT_FX_KEY, on ? '1' : '0');
+    if (el) el.textContent = on ? '🔊' : '🔇';
+    if (on) ptSfx('click');
+    if (typeof toastMsg === 'function') toastMsg(on ? '🔊 抽卡音效已打开' : '🔇 抽卡音效已静音（画面照演）');
+    return on;
+  }
+  var PT_AUD = null;
+  function ptAc() {
+    if (!ptSfxOn()) return null;
+    try {
+      var AC = (typeof window !== 'undefined') && (window.AudioContext || window.webkitAudioContext);
+      if (!AC) return null;
+      if (!PT_AUD) PT_AUD = new AC();
+      if (PT_AUD.state === 'suspended' && PT_AUD.resume) PT_AUD.resume();
+      return PT_AUD;
+    } catch (e) { return null; }
+  }
+  /* 单音：f 起始频率，dur 时长(s)，o = {type, gain, at, 到 to 滑音} */
+  function ptTone(f, dur, o) {
+    var ac = ptAc(); if (!ac) return;
+    o = o || {};
+    try {
+      var t0 = ac.currentTime + (o.at || 0);
+      var osc = ac.createOscillator(), g = ac.createGain();
+      osc.type = o.type || 'sine';
+      osc.frequency.setValueAtTime(f, t0);
+      if (o.to) osc.frequency.exponentialRampToValueAtTime(Math.max(24, o.to), t0 + dur);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(o.gain || 0.05, t0 + 0.014);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(g); g.connect(ac.destination);
+      osc.start(t0); osc.stop(t0 + dur + 0.03);
+    } catch (e) {}
+  }
+  /* 噪声：爆闪 / 星尘的「沙」声，衰减包络写在 buffer 里，省一个 GainNode 自动化 */
+  function ptNoise(dur, gain, o) {
+    var ac = ptAc(); if (!ac) return;
+    o = o || {};
+    try {
+      var n = Math.max(1, Math.floor(ac.sampleRate * dur));
+      var buf = ac.createBuffer(1, n, ac.sampleRate);
+      var ch = buf.getChannelData(0);
+      for (var i = 0; i < n; i++) { var k = 1 - i / n; ch[i] = (Math.random() * 2 - 1) * k * k; }
+      var src = ac.createBufferSource(); src.buffer = buf;
+      var flt = ac.createBiquadFilter(); flt.type = 'highpass'; flt.frequency.value = o.hp || 900;
+      var g = ac.createGain(); g.gain.value = gain;
+      src.connect(flt); flt.connect(g); g.connect(ac.destination);
+      src.start();
+    } catch (e) {}
+  }
+  /* 音效总入口：一个名字一段小乐句，全部即时合成 */
+  function ptSfx(name) {
+    var ac = ptAc(); if (!ac) return;
+    try {
+      if (name === 'charge') {
+        for (var i = 0; i < 9; i++) ptTone(300 * Math.pow(1.085, i), 0.13, { type: 'triangle', gain: 0.030, at: i * 0.068 });
+        ptTone(96, 0.72, { type: 'sawtooth', gain: 0.016, at: 0, to: 210 });
+      } else if (name === 'burst') {
+        ptNoise(0.40, 0.085, { hp: 760 });
+        ptTone(900, 0.32, { type: 'sawtooth', gain: 0.040, to: 150 });
+        ptTone(58, 0.40, { type: 'sine', gain: 0.070 });
+      } else if (name === 'rare') {
+        [523.25, 659.25, 783.99].forEach(function (f, i) { ptTone(f, 0.36, { type: 'triangle', gain: 0.045, at: i * 0.085 }); });
+        ptTone(1567.98, 0.70, { type: 'sine', gain: 0.014, at: 0.26 });
+      } else if (name === 'legend') {
+        [523.25, 659.25, 783.99, 1046.50, 1318.51].forEach(function (f, i) { ptTone(f, 0.50, { type: 'triangle', gain: 0.048, at: i * 0.075 }); });
+        ptTone(2093.00, 0.90, { type: 'sine', gain: 0.016, at: 0.40 });
+        ptNoise(0.85, 0.030, { hp: 3200 });
+        ptTone(65, 0.70, { type: 'sine', gain: 0.055 });
+      } else if (name === 'dup') {
+        ptTone(440.00, 0.16, { type: 'triangle', gain: 0.040 });
+        ptTone(349.23, 0.30, { type: 'triangle', gain: 0.034, at: 0.14 });
+      } else if (name === 'hatch') {
+        ptTone(659.25, 0.16, { type: 'triangle', gain: 0.048 });
+        ptTone(987.77, 0.34, { type: 'triangle', gain: 0.042, at: 0.11 });
+        ptNoise(0.16, 0.026, { hp: 2400 });
+      } else if (name === 'eat') {
+        ptTone(196.00, 0.10, { type: 'square', gain: 0.024 });
+        ptTone(246.94, 0.12, { type: 'square', gain: 0.020, at: 0.09 });
+        ptNoise(0.10, 0.016, { hp: 1200 });
+      } else if (name === 'level') {
+        [659.25, 880.00, 1318.51].forEach(function (f, i) { ptTone(f, 0.40, { type: 'sine', gain: 0.042, at: i * 0.09 }); });
+      } else if (name === 'click') {
+        ptTone(880.00, 0.06, { type: 'sine', gain: 0.028 });
+      }
+    } catch (e) {}
+  }
+  /* 品级 → 0 普通 / 1 稀有 / 2 隐藏 / 3 典藏（tier 优先，老数据看 rarity） */
+  function ptFxRankOf(d) {
+    d = d || {};
+    var t = String(d.tier || ''), r = String(d.rarity || '');
+    if (t === '典藏' || r === '传说') return 3;
+    if (t === '隐藏' || r === '隐藏') return 2;
+    if (r === '稀有') return 1;
+    return 0;
+  }
+  /* 环境自检：真浏览器 + 有 rAF + 页面在前台 + 没开「减少动态效果」才演 */
+  function ptFxReady() {
+    try {
+      if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+      if (!document.body || typeof document.createElement !== 'function') return false;
+      if (typeof window.requestAnimationFrame !== 'function') return false;
+      if (window.__PTFX_OFF) return false;
+      if (document.hidden) return false;
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+      return true;
+    } catch (e) { return false; }
+  }
+  function ptFxPicHtml(d) {
+    try {
+      if (d && d.imgs) {
+        var gh = ptGrowPetPicHtml({ imgs: d.imgs, name: d.name }, d.stage || 'baby');
+        if (gh) return gh;
+      }
+      if (d && d.img) {
+        var ch = ptCodexPetPicHtml({ img: d.img, tier: d.tier || '普通', name: d.name }, 'ptfx-img');
+        if (ch) return ch;
+      }
+    } catch (e) {}
+    return '<div class="ptfx-noimg">🐾</div>';
+  }
+  var PT_FX_HINT = { card: '灵杰正在回应…', pet: '灵宠蛋在动…', hatch: '正在唤醒…' };
+  function ptFxDots(n) {
+    var h = '';
+    for (var i = 0; i < n; i++) {
+      var a = Math.round(i * 360 / n + 7);
+      var sz = 4 + (i % 3) * 2;
+      h += '<i style="--a:' + a + 'deg;--d:' + ((i % 5) * 0.07).toFixed(2) + 's;width:' + sz + 'px;height:' + sz + 'px"></i>';
+    }
+    return h;
+  }
+  function ptFxChargeHtml(who, kind) {
+    return '<div class="ptfx-veil"></div>' +
+      '<div class="ptfx-field">' +
+        '<div class="ptfx-ring r1"></div><div class="ptfx-ring r2"></div><div class="ptfx-ring r3"></div>' +
+        '<div class="ptfx-sigil">✦</div>' +
+        '<div class="ptfx-dots">' + ptFxDots(16) + '</div>' +
+      '</div>' +
+      '<div class="ptfx-tip"><b>' + ptEsc(who || '这位同学') + '</b>　' + (PT_FX_HINT[kind] || PT_FX_HINT.card) +
+        '<span class="ptfx-dt"><i></i><i></i><i></i></span></div>' +
+      '<div class="ptfx-mute" id="ptFxMute" title="点一下：静音 / 打开音效">' + (ptSfxOn() ? '🔊' : '🔇') + '</div>';
+  }
+  function ptFxRevealHtml(d) {
+    var lv = ptFxRankOf(d);
+    var isNew = !d.dup;
+    var meta = [];
+    if (d.tier) meta.push(d.tier); else if (d.rarity) meta.push(d.rarity);
+    if (d.series) meta.push(d.series);
+    var note = (d.kind === 'card')
+      ? (d.dup ? '这张已经有了（集卡不设等级）' : (d.awakened ? '新卡 · 已唤醒进灵宠家园' : '新卡 · 已进集卡册'))
+      : (d.kind === 'hatch' ? '已唤醒 · 去灵宠家园喂它长大' : '新灵宠 · 奶团子态');
+    var conf = '', cn = lv >= 2 ? 26 : 16;
+    for (var i = 0; i < cn; i++) {
+      conf += '<i style="--x:' + (Math.random() * 98).toFixed(1) + '%;--dl:' + (Math.random() * 0.55).toFixed(2) +
+        's;--r:' + Math.round(Math.random() * 360) + 'deg;--c:' + PT_FX_CONF[i % PT_FX_CONF.length] + '"></i>';
+    }
+    return '<div class="ptfx-veil on"></div><div class="ptfx-flash"></div><div class="ptfx-rays"></div>' +
+      '<div class="ptfx-cd t' + lv + '">' +
+        '<div class="ptfx-halo"></div>' +
+        '<div class="ptfx-pic">' + ptFxPicHtml(d) + '</div>' +
+        '<div class="ptfx-sheen"></div>' +
+        (isNew ? '<div class="ptfx-new">NEW</div>' : '<div class="ptfx-new dup">已经有了</div>') +
+        '<div class="ptfx-nm">' + ptEsc(d.name || '灵杰') + '</div>' +
+        '<div class="ptfx-meta">' + ptEsc(meta.join(' · ')) + '</div>' +
+        '<div class="ptfx-note">' + ptEsc(note) + '</div>' +
+      '</div>' +
+      '<div class="ptfx-conf">' + conf + '</div>' +
+      '<div class="ptfx-tap">点任意处收下</div>' +
+      '<div class="ptfx-mute" id="ptFxMute" title="点一下：静音 / 打开音效">' + (ptSfxOn() ? '🔊' : '🔇') + '</div>';
+  }
+  var PT_FX_OPEN = null;
+  /* 起演出：返回 { reveal(payload), abort(), on } —— on=false 表示这次不演（逻辑照走） */
+  function ptFxBegin(kind, who) {
+    var ctl = { kind: kind, on: false, done: false, t0: Date.now(), reveal: function () {}, abort: function () {}, close: function () {} };
+    if (!ptFxReady()) return ctl;
+    try {
+      if (PT_FX_OPEN && PT_FX_OPEN.close) PT_FX_OPEN.close();
+      var ov = document.createElement('div');
+      ov.className = 'ptfx ptfx-charge k-' + kind;
+      ov.id = 'ptFx';
+      ov.innerHTML = ptFxChargeHtml(who, kind);
+      document.body.appendChild(ov);
+      ctl.on = true; ctl.ov = ov;
+      /* 蓄力最短时长：轻量版几乎不等，完整版给足「屏息」的时间；
+         若网络慢、扣分写库要 2 秒，则天然多点期待，结果是回来才翻牌 */
+      ctl.minT = (kind === 'hatch') ? 120 : 700;
+      if (kind !== 'hatch') ptSfx('charge');
+      PT_FX_OPEN = ctl;
+      var bindMute = function () {
+        var m = document.getElementById('ptFxMute');
+        if (m) m.onclick = function (e) { if (e && e.stopPropagation) e.stopPropagation(); ptSfxToggle(m); };
+      };
+      bindMute();
+      ctl.close = function () {
+        if (!ov || ov.__ptfxDead) return;
+        ov.__ptfxDead = true;
+        try { ov.className = 'ptfx ptfx-out'; } catch (e) {}
+        setTimeout(function () {
+          try {
+            if (ov.parentNode) ov.parentNode.removeChild(ov);
+            else if (ov.remove) ov.remove();
+          } catch (e) {}
+        }, 300);
+        if (PT_FX_OPEN === ctl) PT_FX_OPEN = null;
+      };
+      ctl.abort = function () { ctl.done = true; ctl.close(); };
+      ctl.reveal = function (d) {
+        if (ctl.done || !ctl.on) return;
+        ctl.done = true;
+        var wait = Math.max(0, ctl.minT - (Date.now() - ctl.t0));
+        setTimeout(function () {
+          if (ov.__ptfxDead) return;
+          try {
+            d = d || {};
+            d.kind = d.kind || (kind === 'card' ? 'card' : 'pet');
+            var lv = ptFxRankOf(d);
+            ptSfx('burst');
+            setTimeout(function () { ptSfx(d.dup ? 'dup' : (lv >= 2 ? 'legend' : (lv === 1 ? 'rare' : 'hatch'))); }, 130);
+            ov.className = 'ptfx ptfx-reveal k-' + kind + ' t' + lv;
+            ov.innerHTML = ptFxRevealHtml(d);
+            bindMute();
+            if (ov.addEventListener) ov.addEventListener('click', ctl.close);
+            setTimeout(ctl.close, d.dup ? 2600 : 3600);
+          } catch (e) {}
+        }, wait);
+      };
+      return ctl;
+    } catch (e) { return ctl; }
+  }
+  window.ptSfxToggle = ptSfxToggle;     /* 后台 / 面板上的音效开关也能调 */
+  function ptSfxSwitch(el) {
+    var on = ptSfxToggle(el);
+    if (el) el.textContent = on ? '🔊 音效开（点一下关）' : '🔇 音效关（点一下开）';
+    return on;
+  }
+  window.ptSfxSwitch = ptSfxSwitch;
+  window.ptSfxOn = ptSfxOn;
+  window.ptFxRankOf = ptFxRankOf;
+  window.ptCardOpen = ptCardOpen;
+  window.ptFxBegin = ptFxBegin;
+
   /* vT112 抽卡即唤醒：一个动作搞定「抽卡 + 唤醒」。
      · 抽到新卡 → 灵杰墙上补一只、图鉴格子点亮、卡册记一张（store 层 ptCardDrawOne 里完成）
      · 重复卡 → 只记「已经有了」（vT124 起不再升星）
@@ -26403,17 +26790,20 @@ function cwInit(){
     if (!who) return toastMsg('请先选择学生');
     var cost = ptCost('feed');
     if (ptStuPoints(who) < cost) return toastMsg('⚠️ ' + who + ' 积分不足（需 ' + cost + '）');
+    var fx = ptFxBegin('card', who);   /* vT125 先起蓄力演出，结果回来才翻牌 */
     return ptAddManual(who, '启灵图鉴 · 抽卡', -cost).then(function () {
       var s = ptGet();
       var r = ptCardDrawOne(s, who);
-      if (!r) { toastMsg('灵杰池为空，暂时抽不到卡'); ptRenderHome(); ptRenderCards(); return null; }
+      if (!r) { fx.abort(); toastMsg('灵杰池为空，暂时抽不到卡'); ptRenderHome(); ptRenderCards(); return null; }
       ptSave(s); PET_DB = s; ptKickSync();
+      fx.reveal({ kind: 'card', name: r.def.name, img: r.def.img, tier: r.def.tier, rarity: r.def.rarity,
+        series: r.def.series, isNew: r.isNew, dup: r.dup, awakened: r.awakened, who: who });
       toastMsg(r.isNew
         ? ('🎴 新卡「' + r.def.name + '」' + (r.awakened ? '，已唤醒上墙！' : '！'))
         : ('🎴 又抽到「' + r.def.name + '」，这张已经有了（集卡不设等级，抽到就集齐）'));
       ptRenderHome(); ptRenderCards();
       return r;
-    }).catch(function () { return null; });
+    }).catch(function () { fx.abort(); return null; });
   }
   function ptFeed(petId) {
     var s = ptGet(); var pet = s.pets.filter(function (p) { return p.id === petId && !p.deleted; })[0];
