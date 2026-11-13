@@ -18070,9 +18070,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v119';
-var WB_MY_VER = '优化版 vT119 · 灵宠名册接入';
-var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.142';
+var WB_VER_TAG = 'v120';
+var WB_MY_VER = '优化版 vT120 · 灵宠池精简';
+var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.143';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -25114,7 +25114,9 @@ function cwInit(){
     return out;
   }
 
-  /* ---------------- 种子：宠物池 + 商城 ---------------- */
+  /* ---------------- 种子：宠物池 + 商城 ----------------
+     ｜vT119 起 ptBuildSeed 已停用（旧的 74 只种子灵宠被 60 只成长灵宠取代），
+     ｜函数保留备查 / 回滚，正常流程不再调用它。 ---------------- */
   function ptBuildSeed() {
     var arcs = ['monkey', 'rodent', 'fuzzy', 'merfolk', 'serpent', 'mech', 'bird', 'object', 'spirit', 'tree', 'uniform'];
     var series = ['西游', '哪吒', '小王子', '爱丽丝', '游戏手办', '动画经典', '动漫战斗', '奇幻萌宠'];
@@ -25525,6 +25527,35 @@ function cwInit(){
     if (cleaned) console.log('[pet] vT118 清理旧池残留 ' + cleaned + ' 条（软删除，各端自动收敛）');
     return cleaned > 0;
   }
+  /* ---------------- vT120 旧种子灵宠退役 ----------------
+     ｜老师 2026-11-13 定稿：成长灵宠统一改用《灵宠名册》60 只三阶段形象（gp001~gp060），
+     ｜vT117 之前的 74 只种子灵宠（西游 / 哪吒 / 小王子…，origin:'seed' 且 id 不是 gpNNN）整体退役：
+     ｜  · 池子里软删除 → 不再出现在孵化池，也抽不到 / 发不出去；
+     ｜  · 学生手里已经唤醒的同样软删除（♻️ 回收站可还原，宠物记录里的形象字段是快照）；
+     ｜删除标记带当前时间戳，随云同步盖过旧数据，网页 / 桌面 / 小程序各端自动收敛。
+     ｜一次性执行（petCfg.seedRetiredV120），同学共创投稿（origin:'student'）完全不受影响。 */
+  function ptIsRetiredSeed(x) {
+    return !!x && x.origin === 'seed' && !/^gp\d{3}$/.test(String(x.id || ''));
+  }
+  function ptSeedRetireV120(s) {
+    var c = (s.petCfg || []).filter(function (x) { return x && x.id === 'cfg'; })[0];
+    if (c && c.seedRetiredV120) return false;
+    var now = Date.now(), gone = {}, nDef = 0, nPet = 0;
+    (s.petPool || []).forEach(function (d) {
+      if (!ptIsRetiredSeed(d)) return;
+      gone[d.id] = 1;
+      if (d.deleted || d.purged) return;
+      d.deleted = true; d.deletedAt = now; d.updatedAt = now; d.deletedReason = 'seed-retire-v120'; nDef++;
+    });
+    (s.pets || []).forEach(function (p) {
+      if (!p || p.deleted || p.purged || !gone[p.defId]) return;
+      p.deleted = true; p.deletedAt = now; p.updatedAt = now; p.deletedReason = 'seed-retire-v120'; nPet++;
+    });
+    if (!c) { c = ptDefaultCfg(); s.petCfg = (s.petCfg || []).concat([c]); }
+    c.seedRetiredV120 = 1;
+    if (nDef || nPet) console.log('[pet] vT120 退役旧种子灵宠：形象 ' + nDef + ' 个 · 已唤醒记录 ' + nPet + ' 条（♻️ 回收站可恢复）');
+    return true;
+  }
   function wbPetSeed() {
     var s = ptGet();
     var dirty = false;
@@ -25532,7 +25563,9 @@ function cwInit(){
     if (ptCodexMigrateV116(s)) dirty = true;
     /* vT118：清掉云端合流回来的旧池幽灵（软删除传播，各端同步收敛） */
     if (ptCodexGhostCleanV118(s)) dirty = true;
-    if (!s.petPool.length) { s.petPool = ptBuildSeed(); dirty = true; }
+    /* vT119：旧 74 只种子灵宠整体退役（只留 60 只成长灵宠 + 学生共创） */
+    if (ptSeedRetireV120(s)) dirty = true;
+    if (!s.petPool.length) { s.petPool = ptBuildCodexSeed().concat(ptBuildGrowSeed()); dirty = true; }
     /* vT116+ 图鉴种子：按 id 增量补齐 200 只灵杰。老用户强刷后自动追加新增形象，
        旧种子、老师改过的品级/系列、已收回的条目全部保留；后台「重置灵杰池」可全量重建。 */
     var seedAll = ptBuildCodexSeed().concat(ptBuildGrowSeed());   /* vT119 + 成长灵宠 60 只 */
@@ -25645,7 +25678,7 @@ function cwInit(){
     var box = document.getElementById('petPanel-inc'); if (!box) return;
     var s = ptGet();
     var opts = ptNames().map(function (n) { return '<option value="' + ptEsc(n) + '">' + ptEsc(n) + '</option>'; }).join('');
-    var pool = s.petPool.map(function (sp) {
+    var pool = s.petPool.filter(function (sp) { return sp && !sp.deleted && !sp.purged; }).map(function (sp) {
       var isPhoto = PetCore.isPhotoDef(sp);
       /* vT82 图鉴灵杰在池子里也直接显示卡面（不再误走手绘通道） */
       var isCxPic = !isPhoto && sp.img && String(sp.img).indexOf('codeximg/') === 0;
@@ -26549,10 +26582,10 @@ function cwInit(){
     rd.readAsText(f);
   }
   function ptResetPool() {
-    if (!confirm('重置灵杰池为图鉴全集（200 只灵杰 + 旧种子）？已有的同学共创投稿会保留。')) return;
+    if (!confirm('重置灵杰池为当前名录（200 只图鉴灵杰 + 60 只成长灵宠）？同学共创投稿会保留；\n旧种子灵宠（西游/哪吒/小王子那批 74 只）自 vT119 起已退役，不再放回池子。')) return;
     var s = ptGet();
-    var keep = s.petPool.filter(function (x) { return x.origin === 'student'; });
-    s.petPool = ptBuildSeed().concat(ptBuildCodexSeed()).concat(ptBuildGrowSeed()).concat(keep);   /* vT119 + 成长灵宠 */
+    var keep = s.petPool.filter(function (x) { return x && x.origin === 'student' && !x.deleted; });
+    s.petPool = ptBuildCodexSeed().concat(ptBuildGrowSeed()).concat(keep);   /* vT119 起不再含旧种子 */
     ptSave(s); PET_DB = s; toastMsg('🌱 已重置灵杰池'); ptRenderIncubator();
   }
   /* ---------------- vT67 启灵图鉴 ---------------- */
