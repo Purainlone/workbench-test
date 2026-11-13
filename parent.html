@@ -287,12 +287,15 @@
     'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@main/',
     'https://purainlone.github.io/workbench-test/'
   ];
+  /* vT116：卡面换血后 CDN 主源仍缓存旧图，URL 加版本号强制回源 */
+  var CX_Q = 'v=116';
+  function cxUrl(b, rel) { return b + rel + (rel.indexOf('?') >= 0 ? '&' : '?') + CX_Q; }
   function pickSrcs(rel) {
     if (!rel) return [];
     if (/^(https?:|data:)/i.test(rel)) return [rel];
     if (String(rel).indexOf('codeximg/') !== 0) return [];
     var out = [];
-    MIRRORS.forEach(function (b) { out.push(b + rel); });
+    MIRRORS.forEach(function (b) { out.push(cxUrl(b, rel)); });
     return out;
   }
   function cxCard(p, i) {
