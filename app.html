@@ -17774,9 +17774,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v113';
-var WB_MY_VER = '优化版 vT113 · 抽卡10分可调';
-var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.135';
+var WB_VER_TAG = 'v114';
+var WB_MY_VER = '优化版 vT114 · 集卡说明修正';
+var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.136';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24429,7 +24429,8 @@ function cwInit(){
     return Object.prototype.hasOwnProperty.call(CARD_TIER_WEIGHT, k) ? CARD_TIER_WEIGHT[k] : 100;
   }
   var CARD_MAX_STAR = 5;
-  var CARD_REWARD_DEFAULT = '🎓 毕业卡优先审批 + 🎴 典藏抽取券（找老师兑现）';
+  /* vT114 大奖默认文案不再含毕业相关字样；面板已不显示奖励，此文案仅供 ptCardsClaim（暂不接入 UI） */
+  var CARD_REWARD_DEFAULT = '🎴 典藏抽取券（找老师兑现）';
   var GRAD_LEVEL = 10;            // 毕业等级默认阈值
   var SHOP_TYPES = { food: '食料', deco: '装饰', prop: '道具', egg: '灵杰蛋' };
 
@@ -24717,8 +24718,8 @@ function cwInit(){
        · 卡池 = 普通 + 隐藏（隐藏权重低、明显更稀有）；典藏 0 权重，只能老师发放；
        · 抽到新卡 → 同时「唤醒」：灵杰墙上多一只、图鉴格子点亮、卡册里记一张（★1）；
        · 重复的卡自动升星（★1→★5），满星后再抽到只提示星光；
-       · 集齐一个系列的全部灵杰卡 → 「🎴 集卡册」里可兑换大奖；
-       · 兑换写一条 petGift(kind=cardPrize) 记录，既是流水也是「已兑换」标记，随同步下发三端。
+       · vT114：集齐奖励暂不承诺、不显示「兑换大奖」——先让攒卡本身好玩，
+         等想好奖励再恢复（ptCardsClaim / cardPrize 逻辑保留，随时可接回）。
      卡行 id 用 hash(学生|灵杰id) 稳定生成 —— 网页 / 小程序两端算出的 id 一致，
      LWW 合并才不会把同一张卡存成两条。 */
   function ptCardIdOf(who, defId) { return 'cd_' + PetCore.hashStr(who + '|' + defId); }
@@ -25406,7 +25407,6 @@ function cwInit(){
     if (!CARDS_STU || names.indexOf(CARDS_STU) < 0) CARDS_STU = names[0] || '';
     var who = CARDS_STU;
     var cfg = ptCfg();
-    var reward = cfg.cardReward || CARD_REWARD_DEFAULT;
     var stuOpts = names.map(function (n) {
       return '<option value="' + ptEsc(n) + '"' + (n === who ? ' selected' : '') + '>' + ptEsc(n) + '</option>';
     }).join('');
@@ -25424,17 +25424,15 @@ function cwInit(){
       var defs = ptSeriesDefs(s, sr);
       var got = defs.filter(function (p) { return byDef[p.id]; });
       var complete = got.length === defs.length && defs.length > 0;
-      var claimed = ptSeriesClaimed(s, who, sr);
+      /* vT114：集齐奖励暂不承诺，只给一句加油；complete/claimed 仍算好，恢复大奖时可立即接回 */
+      var completeTip = complete ? '<span class="cc-done">🎉 已集齐</span>' : '';
       var chips = defs.map(function (p) {
         var c = byDef[p.id];
         return c
           ? '<span class="cc ok t' + ((p.tier === '典藏') ? 2 : (p.tier === '隐藏') ? 1 : 0) + '" title="' + ptEsc(p.name + ' · ' + (p.tier || '普通')) + '">' + ptEsc(p.name) + ' <i>★' + (c.stars || 1) + '</i></span>'
           : '<span class="cc no" title="还没抽到">❓</span>';
       }).join('');
-      var act = complete ? (claimed
-        ? '<span class="cc-done">🎉 已兑换</span>'
-        : '<button class="btn2 sm primary" onclick="ptCardsClaim(\'' + ptAt(sr) + '\')">🎁 兑换大奖</button>') : '';
-      return '<div class="cc-series"><div class="cc-hd"><b>' + ptEsc(sr) + '</b><span class="cc-n">已集 ' + got.length + '/' + defs.length + '</span>' + act + '</div>' +
+      return '<div class="cc-series"><div class="cc-hd"><b>' + ptEsc(sr) + '</b><span class="cc-n">已集 ' + got.length + '/' + defs.length + '</span>' + completeTip + '</div>' +
         '<div class="cc-grid">' + chips + '</div></div>';
     }).join('');
     box.innerHTML =
@@ -25442,8 +25440,7 @@ function cwInit(){
       '<button class="btn2 sm primary" onclick="ptCardsDraw()"' + (ptPlayable() ? '' : ' disabled') + ' title="花积分抽一张灵杰卡；抽到没有的灵杰会自动唤醒上墙、点亮图鉴">🎴 给 ' + ptEsc(who || '该生') + ' 抽一张(-' + ptCost('feed') + ')</button>' +
       '<span class="sctip">🎴 ' + who + ' 共集得 ' + totalGot + ' 张卡（重复卡升星，★' + CARD_MAX_STAR + ' 满星）</span></div>' +
       rushHtml +
-      '<div class="sub">🎴 抽卡玩法：花积分随机抽一张灵杰卡，<b>抽到还没有的灵杰会同时唤醒、上墙、点亮图鉴</b>；普通款最常见，隐藏款较稀有，典藏款只能由老师发放。重复的卡自动升星，<b>集齐一个系列</b>就能兑换大奖。</div>' +
-      '<div class="cc-reward">🎁 集齐系列大奖：<b>' + ptEsc(reward) + '</b>（可在「⚙️ 后台管理」自定义）</div>' +
+      '<div class="sub">🎴 抽卡玩法：花积分随机抽一张灵杰卡，<b>抽到还没有的灵杰会同时唤醒、上墙、点亮图鉴</b>；普通款最常见，隐藏款较稀有，<b>典藏款由老师发放</b>、抽卡抽不到。重复的卡自动升星（最高 ★5），集齐一个系列就是满成就。</div>' +
       (blocks || '<div class="pet-empty">灵杰池为空，先在「📖 启灵图鉴 → 🛠 图鉴管理」导入灵杰</div>');
   }
   function ptCardsPickStu(name) { CARDS_STU = name || ''; ptRenderCards(); }
@@ -25557,7 +25554,7 @@ function cwInit(){
       '</div>' +
       '<div class="gpset">' +
       '<span class="lbl">全场折扣</span><input class="search" style="width:64px" type="number" min="1" max="100" id="ptCfgSale" value="' + (Number(cfg.saleOff) || 100) + '">' +
-      '<span class="lbl">集卡大奖</span><input class="search" style="width:230px" id="ptCfgReward" value="' + ptEsc(cfg.cardReward || CARD_REWARD_DEFAULT) + '" title="集齐一个系列后可兑换的奖励文案，兑换时写入赠送流水">' +
+      /* vT114 集卡大奖输入框撤下：暂不承诺奖励；cardReward 字段与保存逻辑保留，恢复时加回一行即可 */
       '<span class="sctip">100 = 不打折，80 = 全场 8 折；单个商品可另设折扣，为 0 时跟随全场。成长期/成年 = 灵杰换形态的等级线（灵杰蛋→幼崽→成长期→成年→毕业）</span>' +
       '<button class="btn2 primary" onclick="ptCfgSave()">💾 保存定价</button>' +
       '</div></div>' +
