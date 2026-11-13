@@ -43,11 +43,11 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-he
   function fail(s) { e.innerHTML = s; b.style.display = 'inline-block' }
   function go(tries) {
     var u = 'app.html';
-    /* vT24 缓存修复：部署脚本每次会把 1794530998743 替换成部署时间戳。
+    /* vT24 缓存修复：部署脚本每次会把 1794531097677 替换成部署时间戳。
        vT67 修复：原来写成「有 query 就只保留原 query」，而旧标签页自动刷新
        恰好会带 ?wbv=…，结果部署时间戳被丢掉 → 浏览器把缓存里的旧 app.html
        又拿了出来，表现为「刷新了还是旧版」。现在无论有无 query 都拼上部署键。 */
-    u += (location.search ? location.search + '&' : '?') + 'v=1794530998743';
+    u += (location.search ? location.search + '&' : '?') + 'v=1794531097677';
     say('正在加载工作台' + (tries ? '（第 ' + (tries + 1) + ' 次尝试）' : '') + '…');
     /* vT24 弱网补强：fetch 加 20 秒超时。弱网下 fetch 可能永远挂起，
        页面一直停在"正在加载…"看起来就像无响应 —— 超时后自动重试/给出直连入口 */
