@@ -79,13 +79,17 @@
   .tier{position:absolute;left:5px;top:5px;font-size:9px;padding:1px 6px;border-radius:7px;background:rgba(255,255,255,.88);color:#8a6a15;font-weight:700}
   .cx .st{position:absolute;right:5px;top:5px;font-size:9px;letter-spacing:-1px;padding:1px 5px;border-radius:7px;background:rgba(255,244,214,.94);color:#b8860b;font-weight:700}
   @keyframes cxsheen{0%{background-position:130% 0}100%{background-position:-130% 0}}
-  @keyframes cxpulse{0%,100%{box-shadow:0 0 6px 1px rgba(124,92,255,.28)}50%{box-shadow:0 0 16px 4px rgba(124,92,255,.5)}}
-  @keyframes cxpulseGold{0%,100%{box-shadow:0 0 6px 1px rgba(201,147,42,.3)}50%{box-shadow:0 0 18px 5px rgba(201,147,42,.55)}}
-  .fx-purple{border-color:#9a7cff;animation:cxpulse 2.6s ease-in-out infinite}
-  .fx-gold{border-color:var(--gold);animation:cxpulseGold 2.6s ease-in-out infinite}
-  .fx-purple::after,.fx-gold::after{content:"";position:absolute;inset:0;pointer-events:none;
-    background:linear-gradient(115deg,transparent 0 38%,rgba(255,255,255,.16) 46%,rgba(255,246,214,.45) 50%,rgba(255,255,255,.16) 54%,transparent 62% 100%);
-    background-size:280% 100%;animation:cxsheen 3.4s linear infinite}
+  /* vT117 品级分级：隐藏=紫罗兰慢扫光（柔）；典藏=鎏金快扫光 + 更强金晕（锐） */
+  @keyframes cxpulse{0%,100%{box-shadow:0 0 6px 1px rgba(124,92,255,.26)}50%{box-shadow:0 0 18px 5px rgba(124,92,255,.55)}}
+  @keyframes cxpulseGold{0%,100%{box-shadow:0 0 8px 2px rgba(201,147,42,.38)}50%{box-shadow:0 0 24px 8px rgba(201,147,42,.72)}}
+  .fx-purple{border-color:#9a7cff;animation:cxpulse 3s ease-in-out infinite}
+  .fx-gold{border-color:var(--gold);animation:cxpulseGold 2.2s ease-in-out infinite}
+  .fx-purple::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(115deg,transparent 0 38%,rgba(206,186,255,.16) 46%,rgba(238,230,255,.48) 50%,rgba(206,186,255,.16) 54%,transparent 62% 100%);
+    background-size:280% 100%;animation:cxsheen 4.8s linear infinite}
+  .fx-gold::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(115deg,transparent 0 34%,rgba(255,238,178,.34) 44%,rgba(255,253,234,.92) 50%,rgba(255,238,178,.34) 56%,transparent 64% 100%);
+    background-size:280% 100%;animation:cxsheen 2.4s linear infinite}
   .drawbox{margin-top:12px;background:#f7faf8;border-radius:12px;padding:11px 12px}
   .drawbox .t{font-size:13px;color:var(--ink2);margin-bottom:8px}
   .drawbox .acts{display:flex;gap:8px;flex-wrap:wrap}
@@ -118,7 +122,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT117）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT118）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -464,7 +468,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v117</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v118</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
