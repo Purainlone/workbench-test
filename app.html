@@ -2974,9 +2974,32 @@ table.paper td.l{text-align:left;font-weight:600}
       #s-pet .pet-grow b{font-size:10px;color:#4f8266;font-weight:700;white-space:nowrap}
       #s-pet .ph-pet .pet-grow b{font-size:9.5px}
       #s-pet .ph-pet .pet-grow{margin:2px 0 3px}
+      /* ---------- vT124 后台：喂养食物清单 ---------- */
+      #s-pet .pet-foodchip{display:inline-flex;align-items:center;gap:5px;background:#fff6e9;border:1px solid #f2e0c4;
+        border-radius:12px;padding:4px 10px;font-size:12.5px;color:#5f5340}
+      #s-pet .pet-foodchip b{color:#2f9e63;font-weight:700}
+      #s-pet .pet-foodchip i{font-style:normal;font-size:11px;color:#a4763a;background:#fff;border-radius:8px;padding:0 5px}
+      /* ---------- vT124 喂养食物选择层（挂 body，全局样式） ---------- */
+      .pt-foodov{position:fixed;left:0;top:0;right:0;bottom:0;z-index:9999;background:rgba(24,32,28,.42);
+        display:none;align-items:center;justify-content:center;padding:18px}
+      .pt-foodbox{background:#fff;border-radius:18px;padding:16px 18px 14px;max-width:420px;width:100%;
+        box-shadow:0 18px 48px rgba(20,40,30,.28);display:flex;flex-direction:column;gap:10px}
+      .pt-foodhd{display:flex;flex-direction:column;gap:2px}
+      .pt-foodhd b{font-size:15px;color:#2f3f37}
+      .pt-foodhd span{font-size:12px;color:#87968e}
+      .pt-foodlist{display:grid;grid-template-columns:1fr;gap:8px}
+      .pt-foodbtn{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;
+        border:1px solid #e8e0d2;background:linear-gradient(180deg,#fffdf8,#fff7ea);cursor:pointer;text-align:left}
+      .pt-foodbtn:hover{border-color:#f0c987;box-shadow:0 2px 10px rgba(210,160,60,.16)}
+      .pt-foodbtn .fe{font-size:22px;line-height:1}
+      .pt-foodbtn .fn{font-weight:700;color:#3a4a42;font-size:13.5px}
+      .pt-foodbtn .fv{margin-left:auto;font-size:12px;color:#2f9e63;font-weight:700}
+      .pt-foodbtn .fp{font-size:11.5px;color:#a4763a;background:#fff2dc;border-radius:8px;padding:1px 6px}
+      .pt-foodbtn.off{opacity:.45;cursor:not-allowed;filter:grayscale(.4)}
+      .pt-foodtip{font-size:12px;color:#76867e;line-height:1.6}
     </style>
     <h2>📖 班级启灵图鉴 <span style="font-size:12px;color:#76867e;font-weight:400;margin-left:8px" id="petSub">积蓄启灵之力 · 唤醒灵杰 · 收录图鉴</span><span id="petStateTag" class="pet-state s-on">🟢 运行中</span></h2>
-    <div class="sub">抽卡消耗的积分 = 学生「个人累计积分」（作业+小组+奖惩汇总），抽卡 / 兑换会写一条「启灵图鉴」奖惩记录，自动进入学生流水与积分榜。抽到一位还没拥有的灵杰，就等于同时唤醒了他——灵宠家园里多一只、图鉴格子随之点亮；重复抽到会自动升星。在启灵世界里，每一次认真品读、大胆表达、坚持书写、团结协作，都能积蓄启灵之力，唤醒一位灵杰、集齐一套卡牌，点亮你的专属图鉴。</div>
+    <div class="sub">抽卡消耗的积分 = 学生「个人累计积分」（作业+小组+奖惩汇总），抽卡会写一条「启灵图鉴」奖惩记录，自动进入学生流水与积分榜。抽到一位还没拥有的灵杰，就等于同时唤醒了他——灵宠家园里多一只、图鉴格子随之点亮；集卡不设等级，重复抽到只提示「已经有了」。在启灵世界里，每一次认真品读、大胆表达、坚持书写、团结协作，都能积蓄启灵之力，唤醒一位灵杰、集齐一套卡牌，点亮你的专属图鉴。</div>
     <div id="petOffBanner" style="display:none;margin:10px 0 14px;padding:12px 16px;border-radius:12px;background:#fff0f0;border:1px solid #ffd0d0;color:#b3261e;font-size:13.5px;line-height:1.7">
       ⛔ 图鉴模块已关停（数据保留）。点击下方按钮可重新启用；或改为「暂停」——保留入口、仅停止学生消耗，老师仍可管理。
       <div style="margin-top:9px;display:flex;gap:10px;flex-wrap:wrap">
@@ -18000,9 +18023,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v123';
-var WB_MY_VER = '优化版 vT123 · 座位精简与灵宠喂养';
-var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.147';
+var WB_VER_TAG = 'v124';
+var WB_MY_VER = '优化版 vT124 · 去商城与食物喂养';
+var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.148';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24635,8 +24658,9 @@ function cwInit(){
  * 积分养宠物 · Web 老师端逻辑（内联进 app.html 的 <script id="petapp"> 块）
  * 依赖：window.PetCore（petcore.js 已先加载）；复用现有 加减分 写路径（db.addRecord）。
  * 数据：本地库 wb_pet_db_v1 存八张表：
- *   pets / parentQueue / petPool / petSubmissions / petShop / petCoupon / petCfg / petGift
+ *   pets / parentQueue / petPool / petSubmissions / petCfg / petGift / petCards
  *   同步时由 wbPetMergeRemote 并入远端、写回时由 wbPetAttach 挂到 out.tables。
+ *   vT124 起宠物商城（petShop）与优惠券（petCoupon）整体下线，不再读也不再上传。
  * 后台管理：班主任口令守卫（复用 wbOwnerPinGet / wbOwnerPinHash）。
  * 模块开关：petCfg.enabled = 'on'(启用) | 'paused'(暂停) | 'off'(关停)。
  * ==========================================================================*/
@@ -24644,24 +24668,32 @@ function cwInit(){
   'use strict';
 
   var PET_KEY = 'wb_pet_db_v1';
-  /* vT110 集卡：petCards 为第九张表（学生集卡册，按 学生+灵杰 一条，stars 升星） */
-  var PET_TABLES = ['pets', 'parentQueue', 'petPool', 'petSubmissions', 'petShop', 'petCoupon', 'petCfg', 'petGift', 'petCards'];
+  /* vT110 集卡：petCards 为集卡表（学生 + 灵杰 一条）；vT124 起集卡不设等级，不再记星级 */
+  var PET_TABLES = ['pets', 'parentQueue', 'petPool', 'petSubmissions', 'petCfg', 'petGift', 'petCards'];   /* vT124 商城/优惠券下线 */
   var ADMIN_FLAG = 'wb_pet_admin_v1';
   /* vT113 抽卡一次 10 分（老师可在「宠物后台 → 定价与折扣」里自己改） */
-  var DEF_COST = { feed: 10, draw: 10, redeem: 15, petDraw: 20, petEvoY: 30, petEvoA: 50, petFeed: 5 };   /* vT123 petFeed：喂养一次（1 分 = 1 点成长值） */
+  var DEF_COST = { feed: 10, draw: 10, petDraw: 20, petEvoY: 30, petEvoA: 50 };   /* vT124 去掉 redeem / petFeed：兑换随商城下线，喂养改由食物表定价 */
   var DEF_FEED_V112 = 5;          /* vT112 及更早的默认抽卡价，用于老数据平滑升级 */
-  /* vT110 集卡参数：全图鉴可抽，稀有品级权重更低更难出；重复卡升星，满星后重复化作星光
+  /* vT110 集卡参数：全图鉴可抽，稀有品级权重更低更难出；vT124 起重复卡不再升星
      vT112 抽卡即唤醒：普通 100 / 隐藏 10（明显更稀有）/ 典藏 0 —— 典藏不进随机池，只由老师发放 */
   var CARD_TIER_WEIGHT = { '普通': 100, '隐藏': 10, '典藏': 0 };
   function cardTierWeight(t) {
     var k = t || '普通';
     return Object.prototype.hasOwnProperty.call(CARD_TIER_WEIGHT, k) ? CARD_TIER_WEIGHT[k] : 100;
   }
-  var CARD_MAX_STAR = 5;
   /* vT114 大奖默认文案不再含毕业相关字样；面板已不显示奖励，此文案仅供 ptCardsClaim（暂不接入 UI） */
   var CARD_REWARD_DEFAULT = '🎴 典藏抽取券（找老师兑现）';
   var GRAD_LEVEL = 10;            // 毕业等级默认阈值
-  var SHOP_TYPES = { food: '食料', deco: '装饰', prop: '道具', egg: '灵杰蛋' };
+  /* vT124 喂养食物：只有成长灵宠能喂，一份食物 = 相应成长值，1 点 = 1 分（不用另外定价） */
+  var PT_FOODS = [
+    { k: 'rice',   e: '🍚', n: '米饭',   v: 5,  d: '家常一口，稳稳长一点' },
+    { k: 'carrot', e: '🥕', n: '胡萝卜', v: 10, d: '脆生生的，长得多一些' },
+    { k: 'meat',   e: '🍖', n: '肉干',   v: 20, d: '香喷喷，长得最快' }
+  ];
+  function ptFoodOf(k) {
+    for (var i = 0; i < PT_FOODS.length; i++) if (PT_FOODS[i].k === k) return PT_FOODS[i];
+    return PT_FOODS[0];
+  }
 
   var PT_ARC_NAME = { monkey: '灵猴', rodent: '萌鼠', fuzzy: '绒球', merfolk: '人鱼', serpent: '灵蛇', mech: '机甲', bird: '飞鸟', object: '星物', spirit: '精灵', tree: '树苗', uniform: '豆苗', freehand: '涂鸦' };
   var PT_ARC_EMOJI = { monkey: '🐵', rodent: '🐭', fuzzy: '🐻', merfolk: '🧜', serpent: '🐉', mech: '🤖', bird: '🐤', object: '⭐', spirit: '✨', tree: '🌱', uniform: '🌟', freehand: '✏️' };
@@ -24675,7 +24707,7 @@ function cwInit(){
     return {
       id: 'cfg', enabled: 'on', subEnabled: 'on',
       costs: { feed: DEF_COST.feed, draw: DEF_COST.draw, redeem: DEF_COST.redeem },
-      gradLevel: GRAD_LEVEL, saleOff: 100, shopSeeded: false,
+      gradLevel: GRAD_LEVEL,
       /* vT110 集卡大奖文案：集齐一个系列后可兑换，老师可在后台自定义 */
       cardReward: CARD_REWARD_DEFAULT,
       /* vT111 家长提案自动批准：开关 + 每人每天上限 + 允许自动批准的动作 */
@@ -24735,7 +24767,7 @@ function cwInit(){
     return c;
   }
   function ptEnabled() { return ptCfg().enabled || 'on'; }
-  /* 消耗类操作（喂养/抽奖/兑换/孵化/家长提案）是否可玩：只有 on 才行 */
+  /* 消耗类操作（抽卡/喂养/进化/家长提案）是否可玩：只有 on 才行 */
   function ptPlayable() { return ptEnabled() === 'on'; }
   function ptCost(kind) {
     var c = ptCfg().costs || {};
@@ -24744,15 +24776,6 @@ function cwInit(){
     return Math.max(0, Math.round(v));
   }
   function ptGradLevel() { var v = Number(ptCfg().gradLevel); return (isFinite(v) && v > 0) ? v : GRAD_LEVEL; }
-  /* 售价：单品折扣优先，为 0/空则跟随全局折扣（100 = 不打折） */
-  function ptPriceOf(it) {
-    var base = Number(it && it.price) || 0;
-    var off = Number(it && it.off) || 0;
-    if (!off) off = Number(ptCfg().saleOff) || 100;
-    if (!off) off = 100;
-    return Math.max(0, Math.round(base * off / 100));
-  }
-
   /* 同步：远端宠物表按 id 合并进本地（远端较新者优先） */
   /* vT102 一键全端校准：立刻同步一轮（拉云端 → 合并 → 写回），然后刷新面板 */
   function ptForceSync() {
@@ -24812,7 +24835,7 @@ function cwInit(){
   function ptAdminUnlock() {
     var rec = (typeof wbOwnerPinGet === 'function') ? wbOwnerPinGet() : null;
     if (!rec || !rec.salt || !rec.hash) {
-      alert('还没有设置班主任口令。\n\n请先到「👤 我的」→ 班主任口令 设置一个口令，\n之后才能进入宠物后台管理（商城定价 / 打折 / 优惠 / 赠送 / 模块开关）。');
+      alert('还没有设置班主任口令。\n\n请先到「👤 我的」→ 班主任口令 设置一个口令，\n之后才能进入宠物后台管理（定价 / 赠送 / 模块开关）。');
       return;
     }
     var pin = prompt('请输入班主任口令，进入宠物后台管理：');
@@ -24865,7 +24888,7 @@ function cwInit(){
     ptRenderAdmin();
   }
   /* vT100 学生投稿独立开关：写进 petCfg.subEnabled，随同步下发小程序。
-     与模块总开关相互独立 —— 关投稿不影响抽卡 / 兑换；关模块则投稿自然也不可用。 */
+     与模块总开关相互独立 —— 关投稿不影响抽卡 / 喂养；关模块则投稿自然也不可用。 */
   function ptSubEnabled() {
     var c = ptCfg();
     return (c && c.subEnabled) || 'on';
@@ -24875,7 +24898,7 @@ function cwInit(){
     var s = ptGet(); var c = s.petCfg.filter(function (x) { return x.id === 'cfg'; })[0] || ptCfg();
     c.subEnabled = (v === 'off' ? 'off' : 'on'); c.updatedAt = Date.now(); c.updatedBy = 'web';
     ptSave(s); PET_DB = s;
-    toastMsg(c.subEnabled === 'on' ? '✅ 学生投稿已开放' : '⛔ 学生投稿已关闭（抽卡 / 兑换照常）');
+    toastMsg(c.subEnabled === 'on' ? '✅ 学生投稿已开放' : '⛔ 学生投稿已关闭（抽卡 / 喂养照常）');
     ptRenderAdmin();
   }
   /* vT89 起这个开关叫 ptSubSwitch，保留同名入口：旧书签 / 旧代码调用不会失效 */
@@ -24946,8 +24969,8 @@ function cwInit(){
   /* ---------------- vT110 集卡 / vT112 抽卡即唤醒 ----------------
      一个动作就够了：花积分随机抽一张灵杰卡。
        · 卡池 = 普通 + 隐藏（隐藏权重低、明显更稀有）；典藏 0 权重，只能老师发放；
-       · 抽到新卡 → 同时「唤醒」：灵杰墙上多一只、图鉴格子点亮、卡册里记一张（★1）；
-       · 重复的卡自动升星（★1→★5），满星后再抽到只提示星光；
+       · 抽到新卡 → 同时「唤醒」：灵宠家园多一只、图鉴格子点亮、卡册里记一张；
+       · 重复抽到只提示「已经有了」——集卡不设等级；
        · vT114：集齐奖励暂不承诺、不显示「兑换大奖」——先让攒卡本身好玩，
          等想好奖励再恢复（ptCardsClaim / cardPrize 逻辑保留，随时可接回）。
      卡行 id 用 hash(学生|灵杰id) 稳定生成 —— 网页 / 小程序两端算出的 id 一致，
@@ -24975,15 +24998,14 @@ function cwInit(){
     var sp = bag[Math.floor(Math.random() * bag.length)];
     var cid = ptCardIdOf(who, sp.id);
     var ex = (s.petCards || []).filter(function (c) { return c && c.id === cid; })[0];
-    var res = { def: sp, isNew: false, starUp: 0, full: false, stars: 1, awakened: false };
+    var res = { def: sp, isNew: false, dup: false, awakened: false };
     if (ex) {
-      if ((ex.stars || 1) < CARD_MAX_STAR) { ex.stars = (ex.stars || 1) + 1; res.starUp = 1; }
-      else res.full = true;
+      /* vT124 取消星级：重复抽到只是「已经有了」，不再升星 */
       ex.updatedAt = Date.now();
-      res.stars = ex.stars || 1;
+      res.dup = true;
     } else {
       ex = { id: cid, studentName: who, defId: sp.id, name: sp.name, series: sp.series || '', tier: sp.tier || '普通',
-             img: sp.img || '', rarity: sp.rarity || '普通', stars: 1, createdAt: Date.now(), updatedAt: Date.now() };
+             img: sp.img || '', rarity: sp.rarity || '普通', createdAt: Date.now(), updatedAt: Date.now() };
       (s.petCards = s.petCards || []).push(ex);
       res.isNew = true;
       /* vT112 抽到新卡 = 唤醒：墙上还没有这位灵杰就补一只（典藏不抽，自然不会走到这里） */
@@ -24996,7 +25018,7 @@ function cwInit(){
     }
     return res;
   }
-  /* vT112 历史数据迁移：以前「唤醒」出来的灵杰没有卡记录，补一张 ★1，
+  /* vT112 历史数据迁移：以前「唤醒」出来的灵杰没有卡记录，补一张，
      否则合并后学生的图鉴亮着、卡册却是空的。返回补了几张。 */
   function ptCardsMigrate(s) {
     if (!s || s.cardsMigratedV112) return 0;
@@ -25012,7 +25034,7 @@ function cwInit(){
       if (have[cid]) return;
       s.petCards.push({ id: cid, studentName: p.studentName, defId: p.defId, name: d.name || p.name,
         series: d.series || '', tier: d.tier || '普通', img: d.img || p.img || '', rarity: d.rarity || p.rarity || '普通',
-        stars: 1, createdAt: Date.now(), updatedAt: Date.now(), fromMigrate: 1 });
+        createdAt: Date.now(), updatedAt: Date.now(), fromMigrate: 1 });
       have[cid] = 1; n++;
     });
     s.cardsMigratedV112 = 1;
@@ -25047,7 +25069,7 @@ function cwInit(){
     return out;
   }
 
-  /* ---------------- 种子：宠物池 + 商城 ----------------
+  /* ---------------- 种子：宠物池（商城已于 vT124 下线） ----------------
      ｜vT119 起 ptBuildSeed 已停用（旧的 74 只种子灵宠被 60 只成长灵宠取代），
      ｜函数保留备查 / 回滚，正常流程不再调用它。 ---------------- */
   function ptBuildSeed() {
@@ -25379,22 +25401,6 @@ function cwInit(){
       return d;
     });
   }
-  function ptBuildShopSeed() {
-    return [
-      { name: '能量饼干', type: 'food', price: 5, emoji: '🍪', desc: '恢复饱食度' },
-      { name: '活力牛奶', type: 'food', price: 8, emoji: '🥛', desc: '大幅恢复饱食度' },
-      { name: '彩虹糖', type: 'food', price: 3, emoji: '🍬', desc: '小幅恢复心情' },
-      { name: '小皇冠', type: 'deco', price: 20, emoji: '👑', desc: '头部装饰' },
-      { name: '酷墨镜', type: 'deco', price: 15, emoji: '🕶', desc: '头部装饰' },
-      { name: '彩虹光圈', type: 'deco', price: 30, emoji: '🌈', desc: '稀有装饰' },
-      { name: '幸运宠物蛋', type: 'egg', price: 50, emoji: '🥚', desc: '孵化一只随机宠物' }
-    ].map(function (x) {
-      return {
-        id: ptNewId('sh'), name: x.name, type: x.type, price: x.price, off: 0, stock: -1,
-        on: true, emoji: x.emoji, desc: x.desc, updatedAt: Date.now()
-      };
-    });
-  }
   /* ---------------- vT116 卡池换血：261 只旧图鉴 → 200 只新卡池 ----------------
      ｜老师 2026-11-13 重新整理并重新编号了三个卡池。编号整体变化，学生卡册里
      ｜的 defId=cxNNN 必须跟着改，否则会张冠李戴。这里按「名称」映射：
@@ -25426,11 +25432,7 @@ function cwInit(){
     var seen = {};
     s.petCards = (s.petCards || []).filter(function (c) {
       if (!c || c.deleted) return true;
-      if (seen[c.id]) {
-        var a = seen[c.id];
-        a.stars = Math.max(Number(a.stars) || 1, Number(c.stars) || 1);
-        return false;
-      }
+      if (seen[c.id]) { return false; }   /* vT124 撞号直接去重（不再比星级） */
       seen[c.id] = c; return true;
     });
     var keep = (s.petPool || []).filter(function (p) { return p && p.origin !== 'codex'; });
@@ -25540,7 +25542,6 @@ function cwInit(){
     if (seedAdd.length) { s.petPool = s.petPool.concat(seedAdd); dirty = true; }
     var c = s.petCfg.filter(function (x) { return x.id === 'cfg'; })[0];
     if (!c) { s.petCfg.push(ptDefaultCfg()); dirty = true; }
-    else if (!c.shopSeeded && !s.petShop.length) { s.petShop = ptBuildShopSeed(); c.shopSeeded = true; dirty = true; }
     if (dirty) { ptSave(s); PET_DB = s; }
   }
 
@@ -25612,7 +25613,7 @@ function cwInit(){
                       : isCxPic ? ptCodexPetPicHtml(pet, 'pet-photo')
                       : PetCore.renderPet(def, { seed: pet.id, level: pet.level, graduated: pet.graduated, stageCfg: ptStageCfg() });
     var grad = pet.graduated ? '<span class="pet-grad">🎓 已毕业 · ' + ptEsc(pet.gradCode || '') + '</span>' : '';
-    var f = ptCost('feed'), r = ptCost('redeem');
+    var f = ptCost('feed');
     var dis = ptPlayable() ? '' : ' disabled title="模块已暂停/关停"';
     /* vT123 成长值：喂养累积，进化只补差额（图鉴卡 / 非成长灵宠不参与） */
     var gs = (!isCxPic && pet.imgs) ? ptGrowState(pet) : null;
@@ -25625,12 +25626,11 @@ function cwInit(){
       evoBtn = '<button class="btn2 sm primary" onclick="ptPetEvolve(\'' + pet.id + '\')"' + dis + '>' +
         (_need > 0 ? ('🌟 进化→' + _to + '(-' + _need + ')') : ('🌟 进化→' + _to + '（免费）')) + '</button>';
     }
-    /* vT123 喂养：一次 petFeed 分 = 同等成长值；攒够 growExp 进化就不用再花分 */
+    /* vT124 喂养：点开选食物（米饭 +5 / 胡萝卜 +10 / 肉干 +20），攒够成长值免费进化 */
     var feedBtn = '';
     if (canGrow && gs.left > 0) {
-      var _fc = Math.min(ptCost('petFeed'), gs.left);
-      feedBtn = '<button class="btn2 sm" onclick="ptPetFeed(\'' + pet.id + '\')"' + dis +
-        ' title="喂一喂灵宠：花 ' + _fc + ' 分累加 ' + _fc + ' 点成长值；攒满 ' + gs.need + ' 点就能免费进化">🍚 喂养(-' + _fc + ')</button>';
+      feedBtn = '<button class="btn2 sm" onclick="ptFoodPick(\'' + pet.id + '\')"' + dis +
+        ' title="喂一喂灵宠：🍚 米饭 +5 · 🥕 胡萝卜 +10 · 🍖 肉干 +20 成长值；攒满 ' + gs.need + ' 点就能免费进化">🍚 喂养</button>';
     }
     var growLine = canGrow
       ? ('<div class="pet-grow' + (o.grouped ? ' ph-grow' : '') + '" title="成长值：喂养累积，攒满 ' + gs.need + ' 点即可免费进化（现在 ' + gs.have + '）">' +
@@ -25638,16 +25638,14 @@ function cwInit(){
       : '';
     /* vT110 卡面信息行：Lv/EXP 改为集卡进度（升级肉眼无变化，学生看集卡数与星级更有感知）
        vT122 家园里按同学分组陈列，主人是谁由分组标题交代 → 卡面改成「阶段 + 等级」 */
-    var myCards = [], maxStar = 0;
-    if (!o.grouped) {
-      myCards = ptCardsOf(ptGet(), pet.studentName);
-      myCards.forEach(function (c) { if ((c.stars || 1) > maxStar) maxStar = c.stars || 1; });
-    }
+    /* vT124 集卡不再有星级：重复抽到只算「已经有了」，卡面只报集卡张数 */
+    var myCardN = 0;
+    if (!o.grouped) myCardN = ptCardsOf(ptGet(), pet.studentName).length;
     var meta = o.grouped
       ? ('<div class="ph-stage">' + (PT_STAGE_EMOJI[stage] || '') + ' ' + PetCore.stageName(stage) +
          '<span class="ph-lv">Lv ' + (pet.level || 1) + '</span></div>')
       : ('<div class="pet-own">主人：' + ptEsc(pet.studentName) + (isPhoto ? ' <span class="pet-stu">手绘</span>' : '') + ' <span class="pet-stu">' + PetCore.stageName(stage) + '</span></div>' +
-         '<div class="pet-lv">🎴 已集 ' + myCards.length + ' 张卡' + (maxStar ? ' · 最高 ★' + maxStar : '') + '</div>');
+         '<div class="pet-lv">🎴 已集 ' + myCardN + ' 张卡</div>');
     /* 家园卡片只留「进化 / 抽卡 / 收回」三个动作，其余入口在后台与毕业审批里，避免 100px 小卡塞满按钮 */
     var cardBtn = '<button class="btn2 sm" onclick="ptFeed(\'' + pet.id + '\')"' + dis + ' title="花积分随机抽一张灵杰卡；抽到新的会同时唤醒、进家园、点亮图鉴">🎴 抽卡(-' + f + ')</button>';
     var revokeBtn = '<button class="btn2 sm" onclick="ptRevoke(\'' + pet.id + '\')" title="误发了可以收回（可在后台赠送记录里恢复）">↩ 收回</button>';
@@ -25656,7 +25654,6 @@ function cwInit(){
       acts = evoBtn + feedBtn + cardBtn + revokeBtn;
     } else {
       acts = evoBtn + feedBtn + cardBtn +
-        '<button class="btn2 sm" onclick="ptRedeem(\'' + pet.id + '\')"' + dis + '>🎁 兑换(-' + r + ')</button>' +
         (pet.graduated ? '' : '<button class="btn2 sm" onclick="ptGradReq(\'' + pet.id + '\')">🎓 申请毕业</button>') +
         revokeBtn +
         (ptAdminUnlocked() ? '<button class="btn2 sm" onclick="ptPetRemove(false,\'' + pet.id + '\')" title="删除这条已发放记录（回收站可恢复）">🗑 删除</button>' : '');
@@ -25992,7 +25989,7 @@ function cwInit(){
       var chips = defs.map(function (p) {
         var c = byDef[p.id];
         return c
-          ? '<span class="cc ok t' + ((p.tier === '典藏') ? 2 : (p.tier === '隐藏') ? 1 : 0) + '" title="' + ptEsc(p.name + ' · ' + (p.tier || '普通')) + '">' + ptEsc(p.name) + ' <i>★' + (c.stars || 1) + '</i></span>'
+          ? '<span class="cc ok t' + ((p.tier === '典藏') ? 2 : (p.tier === '隐藏') ? 1 : 0) + '" title="' + ptEsc(p.name + ' · ' + (p.tier || '普通')) + '">' + ptEsc(p.name) + '</span>'
           : '<span class="cc no" title="还没抽到">❓</span>';
       }).join('');
       return '<div class="cc-series"><div class="cc-hd"><b>' + ptEsc(sr) + '</b><span class="cc-n">已集 ' + got.length + '/' + defs.length + '</span>' + completeTip + '</div>' +
@@ -26001,9 +25998,9 @@ function cwInit(){
     box.innerHTML =
       '<div class="gpset"><span class="lbl">查看：</span><select id="cxAlbumStu" class="search" onchange="ptCardsPickStu(this.value)">' + stuOpts + '</select>' +
       '<button class="btn2 sm primary" onclick="ptCardsDraw()"' + (ptPlayable() ? '' : ' disabled') + ' title="花积分抽一张灵杰卡；抽到没有的灵杰会自动唤醒上墙、点亮图鉴">🎴 给 ' + ptEsc(who || '该生') + ' 抽一张(-' + ptCost('feed') + ')</button>' +
-      '<span class="sctip">🎴 ' + who + ' 共集得 ' + totalGot + ' 张卡（重复卡升星，★' + CARD_MAX_STAR + ' 满星）</span></div>' +
+      '<span class="sctip">🎴 ' + who + ' 共集得 ' + totalGot + ' 张卡（集卡不设等级，抽到即集齐）</span></div>' +
       rushHtml +
-      '<div class="sub">🎴 抽卡玩法：花积分随机抽一张灵杰卡，<b>抽到还没有的灵杰会同时唤醒、上墙、点亮图鉴</b>；普通款最常见，隐藏款较稀有，<b>典藏款由老师发放</b>、抽卡抽不到。重复的卡自动升星（最高 ★5），集齐一个系列就是满成就。</div>' +
+      '<div class="sub">🎴 抽卡玩法：花积分随机抽一张灵杰卡，<b>抽到还没有的灵杰会同时唤醒、进灵宠家园、点亮图鉴</b>；普通款最常见，隐藏款较稀有，<b>典藏款由老师发放</b>、抽卡抽不到。集卡不设等级，重复抽到只提示「已经有了」，集齐一个系列就是满成就。</div>' +
       (blocks || '<div class="pet-empty">灵杰池为空，先在「📖 启灵图鉴 → 🛠 图鉴管理」导入灵杰</div>');
   }
   function ptCardsPickStu(name) { CARDS_STU = name || ''; ptRenderCards(); }
@@ -26024,15 +26021,15 @@ function cwInit(){
   function ptRenderAdmin() {
     var box = document.getElementById('petPanel-admin'); if (!box) return;
     if (!ptAdminUnlocked()) {
-      box.innerHTML = '<div class="pet-empty">🔒 后台管理（商城定价 / 打折 / 优惠券 / 赠送 / 模块开关）需要班主任口令。<br><br>' +
+      box.innerHTML = '<div class="pet-empty">🔒 后台管理（定价 / 喂养 / 赠送 / 模块开关）需要班主任口令。<br><br>' +
         '<button class="btn2 primary" onclick="ptAdminUnlock()">🔑 输入班主任口令进入</button></div>';
       return;
     }
     var s = ptGet(); var cfg = ptCfg(); var st = cfg.enabled || 'on';
     var stName = ({ on: '🟢 运行中', paused: '⏸ 已暂停', off: '⛔ 已关停' })[st] || '🟢 运行中';
     var stDesc = ({
-      on: '学生可在小程序抽卡（抽到即唤醒）/ 兑换，老师可授予灵杰与审批。',
-      paused: '学生端停止一切消耗操作（抽卡 / 兑换 / 家长提案），但已唤醒的灵杰与全部数据原样保留，老师仍可查看、审批与后台管理。',
+      on: '学生可在小程序抽卡（抽到即唤醒）/ 喂养灵宠，老师可授予灵杰与审批。',
+      paused: '学生端停止一切消耗操作（抽卡 / 喂养 / 家长提案），但已唤醒的灵杰与全部数据原样保留，老师仍可查看、审批与后台管理。',
       off: '模块入口从导航隐藏，等同于没装这个功能；所有数据完整保留，随时可一键启用恢复。'
     })[st] || '';
     var sw = ['on', 'paused', 'off'].map(function (v) {
@@ -26045,56 +26042,21 @@ function cwInit(){
       return '<button class="btn2 ' + (subSt === t[0] ? 'primary' : '') + '" onclick="ptSetSubEnabled(\'' + t[0] + '\')">' + t[1] + '</button>';
     }).join('');
 
-    /* 商城行 */
-    var typeOpts = function (cur) {
-      return Object.keys(SHOP_TYPES).map(function (k) {
-        return '<option value="' + k + '"' + (cur === k ? ' selected' : '') + '>' + SHOP_TYPES[k] + '</option>';
-      }).join('');
-    };
-    var shopRows = s.petShop.map(function (it) {
-      return '<div class="pet-row pet-shoprow">' +
-        '<input class="search" style="width:52px;text-align:center" value="' + ptEsc(it.emoji || '🎁') + '" onchange="ptShopSet(\'' + it.id + '\',\'emoji\',this.value)">' +
-        '<input class="search" style="width:110px" value="' + ptEsc(it.name) + '" onchange="ptShopSet(\'' + it.id + '\',\'name\',this.value)">' +
-        '<select class="search" style="width:76px" onchange="ptShopSet(\'' + it.id + '\',\'type\',this.value)">' + typeOpts(it.type) + '</select>' +
-        '<input class="search" style="width:62px" type="number" min="0" value="' + (Number(it.price) || 0) + '" title="原价（积分）" onchange="ptShopSet(\'' + it.id + '\',\'price\',this.value)">' +
-        '<input class="search" style="width:56px" type="number" min="0" max="100" value="' + (Number(it.off) || 0) + '" title="单品折扣：80=8折，0=跟随全局" onchange="ptShopSet(\'' + it.id + '\',\'off\',this.value)">' +
-        '<span class="pet-price">' + ptPriceOf(it) + ' 分</span>' +
-        '<input class="search" style="width:56px" type="number" value="' + (it.stock == null ? -1 : it.stock) + '" title="库存，-1=不限" onchange="ptShopSet(\'' + it.id + '\',\'stock\',this.value)">' +
-        '<button class="btn2 sm" onclick="ptShopToggle(\'' + it.id + '\')">' + (it.on === false ? '❌ 已下架' : '✅ 在售') + '</button>' +
-        '<button class="btn2 sm" onclick="ptShopDel(\'' + it.id + '\')">🗑</button>' +
-        '</div>';
-    }).join('');
-
-    /* 优惠券 */
-    var cpRows = s.petCoupon.slice().sort(function (a, b) { return (b.id || '').localeCompare(a.id || ''); }).slice(0, 60).map(function (c) {
-      var who = (c.owner === '*') ? '全班通用' : ptEsc(c.owner);
-      return '<div class="pet-row"><span>🎟 <b>' + ptEsc(c.name) + '</b> · 减 ' + (Number(c.off) || 0) + ' 分 · 满 ' + (Number(c.min) || 0) + ' 可用 · 至 ' + ptEsc(c.expiry || '—') + ' · ' + who + '</span>' +
-        '<span class="pet-acts">' + (c.used
-          ? '<span class="pet-stu">已核销 ' + ptEsc(c.usedBy || '') + '</span>'
-          : '<button class="btn2 sm" onclick="ptCouponUse(\'' + c.id + '\')">手动核销</button>') +
-        '<button class="btn2 sm" onclick="ptCouponDel(\'' + c.id + '\')">🗑</button></span></div>';
-    }).join('');
-
-    /* 赠送记录 */
+    /* 赠送记录（vT124 只剩积分与灵杰相关） */
     var giftRows = s.petGift.slice().sort(function (a, b) { return (Number(b.at) || 0) - (Number(a.at) || 0); }).slice(0, 20).map(function (g) {
-      var kn = ({ point: '积分', item: '商品', egg: '灵杰蛋', rare: '🏅 灵杰授予', grant: '📖 图鉴发放', revoke: '↩ 收回', revive: '↩️ 恢复', cardPrize: '🎴 集卡大奖' })[g.kind] || g.kind;
+      var kn = ({ point: '积分', rare: '🏅 灵杰授予', grant: '📖 图鉴发放', revoke: '↩ 收回', revive: '↩️ 恢复', cardPrize: '🎴 集卡奖励' })[g.kind] || g.kind;
       var backBtn = (g.kind === 'revoke' && g.petId) ? '<button class="btn2 sm" onclick="ptRevive(\'' + g.petId + '\')">↩️ 恢复</button>' : '';
       return '<div class="pet-row"><span>🎁 ' + ptEsc(g.studentName) + ' · ' + kn + ' · ' + ptEsc(g.item || '') + ' ×' + (Number(g.qty) || 1) + '</span>' +
         '<span class="pet-own">' + ptEsc(g.atText || '') + ' ' + ptEsc(g.note || '') + '</span>' + backBtn + '</div>';
     }).join('');
 
     var whoOpts = '<option value="*">全班（每人一份）</option>' + ptNames().map(function (n) { return '<option value="' + ptEsc(n) + '">' + ptEsc(n) + '</option>'; }).join('');
-    var shopOpts = s.petShop.filter(function (i) { return i.on !== false; }).map(function (i) {
-      return '<option value="' + ptEsc(i.id) + '">' + ptEsc((i.emoji || '') + ' ' + i.name + ' · ' + ptPriceOf(i) + '分') + '</option>';
+
+    /* 喂养食物清单（固定三档，价格 = 成长值，不用另外定价） */
+    var foodChips = PT_FOODS.map(function (f) {
+      return '<span class="pet-foodchip" title="' + ptEsc(f.d) + '">' + f.e + ' ' + ptEsc(f.n) +
+        ' <b>+' + f.v + '</b> <i>' + f.v + ' 分</i></span>';
     }).join('');
-    /* vT67 图鉴下拉：品级管理（全部）与灵杰授予（仅隐藏/典藏） */
-    var codexAll = s.petPool.filter(function (p) { return p && p.origin === 'codex' && !p.deleted; });
-    var tierOpts = codexAll.map(function (p) { return '<option value="' + p.id + '">' + ptEsc(p.name) + ' · ' + ptEsc(p.series || '') + ' · ' + ptEsc(p.tier || '普通') + '</option>'; }).join('');
-    var rareOpts = codexAll.filter(function (p) { return (p.tier || '普通') !== '普通'; }).map(function (p) {
-      return '<option value="' + p.id + '">' + ptEsc(p.name) + ' · ' + ptEsc(p.tier || '') + '</option>';
-    }).join('');
-    PT_SHOP_OPTS = shopOpts || '<option value="">（无在售商品）</option>';
-    PT_RARE_OPTS = rareOpts || '<option value="">（先在品级管理里把灵杰设为隐藏/典藏）</option>';
 
     box.innerHTML =
       /* ---- 1 模块开关 ---- */
@@ -26102,88 +26064,45 @@ function cwInit(){
       '<div class="pet-row"><span><b>当前状态：' + stName + '</b><br><span class="pet-own">' + stDesc + '</span></span></div>' +
       '<div class="gpset">' + sw + '<span class="sctip">开关随同步下发到小程序 / 桌面端</span></div>' +
       '<div class="pet-row"><span><b>🎨 学生投稿：' + (subSt === 'off' ? '⛔ 已关闭' : '✅ 已开放') + '</b><br><span class="pet-own">' +
-      (subSt === 'off' ? '学生端不能再「共创一位」提交新作品，抽卡 / 兑换照常；已投稿的作品仍可在「🎨 学生投稿」里审批。'
+      (subSt === 'off' ? '学生端不能再「共创一位」提交新作品，抽卡 / 喂养照常；已投稿的作品仍可在「🎨 学生投稿」里审批。'
                        : '学生可在小程序「共创一位」投稿，老师在「🎨 学生投稿」里审批入池。') + '</span></span></div>' +
       '<div class="gpset">' + subSw + '<span class="sctip">独立于上面的模块总开关；改动随同步下发到小程序</span></div></div>' +
 
-      /* ---- 2 定价与折扣 ---- */
-      '<div class="pet-sec"><h3>💰 定价与折扣</h3>' +
+      /* ---- 2 定价 ---- */
+      '<div class="pet-sec"><h3>💰 定价</h3>' +
       '<div class="gpset">' +
-      '<span class="lbl">抽卡一次</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgFeed" value="' + ptCost('feed') + '" title="抽一张灵杰卡要扣的启灵积分。默认 10 分；这里填几就收几，填 0 = 免费抽（做活动用）。改完点右边「保存定价」，网页 / 小程序 / 家长端同时生效。">' +
-      '<span class="lbl">兑换</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgRedeem" value="' + ptCost('redeem') + '">' +
-      '<span class="lbl">毕业等级</span><input class="search" style="width:64px" type="number" min="1" id="ptCfgGrad" value="' + ptGradLevel() + '">' +
+      '<span class="lbl">抽卡一次</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgFeed" value="' + ptCost('feed') + '" title="抽一张灵杰卡要扣的启灵积分。默认 10 分；填 0 = 免费抽（做活动用）。改完点下面「保存定价」，网页 / 小程序 / 家长端同时生效。">' +
+      '<span class="lbl">抽灵宠</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgPetDraw" value="' + ptCost('petDraw') + '" title="学生抽取一只成长灵宠要扣的启灵积分，默认 20 分；0 = 免费抽。">' +
+      '<span class="lbl">奶团子→幼年</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgPetEvoY" value="' + ptCost('petEvoY') + '" title="进化需要的成长值；喂养攒够就能免费进化，没攒够则补差额。">' +
+      '<span class="lbl">幼年→成年</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgPetEvoA" value="' + ptCost('petEvoA') + '">' +
       '<span class="lbl">成长期≥</span><input class="search" style="width:56px" type="number" min="1" id="ptCfgTeen" value="' + ptStageCfg().teen + '">' +
       '<span class="lbl">成年≥</span><input class="search" style="width:56px" type="number" min="1" id="ptCfgAdult" value="' + ptStageCfg().adult + '">' +
-      '<span class="lbl">抽灵宠</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgPetDraw" value="' + ptCost('petDraw') + '" title="学生抽取一只成长灵宠要扣的启灵积分，默认 20 分；0 = 免费抽。">' +
-      '<span class="lbl">喂养一次</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgPetFeed" value="' + ptCost('petFeed') + '" title="vT123 喂养一次扣多少分，同时累加同等数量的成长值（1 分 = 1 点）；攒满「进化要求」即可免费进化。默认 5 分。">' +
-      '<span class="lbl">奶团子→幼年</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgPetEvoY" value="' + ptCost('petEvoY') + '">' +
-      '<span class="lbl">幼年→成年</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgPetEvoA" value="' + ptCost('petEvoA') + '">' +
       '</div>' +
-      '<div class="gpset">' +
-      '<span class="lbl">全场折扣</span><input class="search" style="width:64px" type="number" min="1" max="100" id="ptCfgSale" value="' + (Number(cfg.saleOff) || 100) + '">' +
-      /* vT114 集卡大奖输入框撤下：暂不承诺奖励；cardReward 字段与保存逻辑保留，恢复时加回一行即可 */
-      '<span class="sctip">100 = 不打折，80 = 全场 8 折；单个商品可另设折扣，为 0 时跟随全场。成长期/成年 = 灵杰换形态的等级线（灵杰蛋→幼崽→成长期→成年→毕业）</span>' +
-      '<button class="btn2 primary" onclick="ptCfgSave()">💾 保存定价</button>' +
-      '</div></div>' +
+      '<div class="gpset"><span class="sctip">成长期 / 成年 = 灵杰换形态的等级线（奶团子→幼年→成年→毕业）</span>' +
+      '<button class="btn2 primary" onclick="ptCfgSave()">💾 保存定价</button></div></div>' +
 
-      /* ---- 3 商城商品 ---- */
-      '<div class="pet-sec"><h3>🏪 商城商品（定价 / 打折 / 上下架）</h3>' +
-      '<div class="gpset">' +
-      '<input class="search" style="width:52px;text-align:center" id="ptShopNewEmoji" value="🎁">' +
-      '<input class="search" style="width:110px" id="ptShopNewName" placeholder="商品名">' +
-      '<select class="search" style="width:76px" id="ptShopNewType">' + typeOpts('food') + '</select>' +
-      '<input class="search" style="width:62px" type="number" min="0" id="ptShopNewPrice" placeholder="原价">' +
-      '<input class="search" style="width:56px" type="number" min="-1" id="ptShopNewStock" placeholder="库存" value="-1">' +
-      '<button class="btn2 primary" onclick="ptShopAdd()">＋ 上架商品</button>' +
-      '</div>' +
-      '<div class="pet-shophead"><span style="width:52px">图标</span><span style="width:110px">名称</span><span style="width:76px">类型</span>' +
-      '<span style="width:62px">原价</span><span style="width:56px">折扣</span><span class="pet-price">售价</span><span style="width:56px">库存</span></div>' +
-      (shopRows || '<div class="pet-empty">还没有商品，上面加一个吧</div>') +
-      '</div>' +
+      /* ---- 3 喂养食物 ---- */
+      '<div class="pet-sec"><h3>🍚 喂养食物</h3>' +
+      '<div class="gpset">' + foodChips + '</div>' +
+      '<div class="sub">只有<b>成长灵宠</b>能喂养（灵杰卡不参与）。一份食物加对应成长值，<b>1 点成长值 = 1 分</b>，' +
+      '攒满「进化要求」就能免费进化；没攒满时进化只补差额，两条路等价、不会重复收费。食物与价格固定，不用另外设置。</div></div>' +
 
-      /* ---- 4 优惠券 ---- */
-      '<div class="pet-sec"><h3>🎟️ 优惠券（优惠 / 赠送）</h3>' +
-      '<div class="gpset">' +
-      '<input class="search" style="width:100px" id="ptCpName" placeholder="券名，如 开学礼">' +
-      '<span class="lbl">减</span><input class="search" style="width:56px" type="number" min="1" id="ptCpOff" value="5">' +
-      '<span class="lbl">满</span><input class="search" style="width:56px" type="number" min="0" id="ptCpMin" value="0">' +
-      '<span class="lbl">有效期</span><input class="search" style="width:120px" type="date" id="ptCpExp" value="' + ptYmd(new Date(Date.now() + 30 * 864e5)) + '">' +
-      '<span class="lbl">发给</span><select class="search" id="ptCpWho">' + whoOpts + '</select>' +
-      '<button class="btn2 primary" onclick="ptCouponAdd()">🎟️ 发放优惠券</button>' +
-      '</div>' +
-      (cpRows || '<div class="pet-empty">还没有优惠券</div>') +
-      '</div>' +
-
-
-      /* ---- 5 赠送 ---- */
-      '<div class="pet-sec"><h3>🎁 直接赠送（旧宠物 / 积分商城）</h3>' +
+      /* ---- 4 赠送积分 ---- */
+      '<div class="pet-sec"><h3>🎁 直接赠送积分</h3>' +
       '<div class="gpset">' +
       '<span class="lbl">送给</span><select class="search" id="ptGiftWho">' + whoOpts + '</select>' +
-      '<span class="lbl">送</span><select class="search" id="ptGiftKind" onchange="ptGiftKindChange()">' +
-      '<option value="point">积分</option><option value="item">商城商品</option><option value="egg">灵杰蛋</option></select>' +
-      '<span id="ptGiftItemWrap"><span class="lbl">商品</span><select class="search" id="ptGiftItem">' + (shopOpts || '<option value="">（无在售商品）</option>') + '</select></span>' +
+      '<span class="lbl">送</span><select class="search" id="ptGiftKind"><option value="point">积分</option></select>' +
       '<span class="lbl">数量</span><input class="search" style="width:56px" type="number" min="1" id="ptGiftQty" value="1">' +
       '<input class="search" style="width:120px" id="ptGiftNote" placeholder="备注（可选）">' +
       '<button class="btn2 primary" onclick="ptGiftGo()">🎁 确认赠送</button>' +
       '</div>' +
-      '<div class="sub">这里只管旧宠物 / 积分商城：积分、商品、灵杰蛋。<b>《启灵图鉴》的灵杰发放、品级、删除与导入已移到「📖 启灵图鉴」页</b>，两边互不影响。</div>' +
+      '<div class="sub">vT124 起宠物商城与优惠券整体下线：这里只发积分。' +
+      '<b>灵杰发放 / 品级 / 删除 / 导入在「📖 启灵图鉴」页</b>，两边互不影响。</div>' +
       (giftRows || '<div class="pet-empty">暂无赠送记录</div>') +
       '</div>' +
 
       '<div class="gpset"><button class="btn2" onclick="ptAdminLock()">🔒 退出后台管理</button>' +
       '<span class="sctip">后台管理权限只在当前标签页有效，关掉标签页自动失效</span></div>';
-
-    ptGiftKindChange();
-  }
-  var PT_SHOP_OPTS = '', PT_RARE_OPTS = '';   /* vT67 赠送下拉选项（ptRenderAdmin 刷新） */
-  function ptGiftKindChange() {
-    var k = document.getElementById('ptGiftKind');
-    var w = document.getElementById('ptGiftItemWrap');
-    if (!k || !w) return;
-    var sel = w.querySelector('select'); var lbl = w.querySelector('.lbl');
-    if (k.value === 'item') { if (lbl) lbl.textContent = '商品'; if (sel) sel.innerHTML = PT_SHOP_OPTS; w.style.display = ''; }
-    else if (k.value === 'rare') { if (lbl) lbl.textContent = '灵杰'; if (sel) sel.innerHTML = PT_RARE_OPTS; w.style.display = ''; }
-    else w.style.display = 'none';
   }
 
   /* ---------------- 后台管理：动作 ---------------- */
@@ -26191,148 +26110,45 @@ function cwInit(){
     if (!ptNeedAdmin()) return;
     var s = ptGet(); var c = s.petCfg.filter(function (x) { return x.id === 'cfg'; })[0] || ptCfg();
     function num(id, def) { var e = document.getElementById(id); var v = e ? Number(e.value) : NaN; return (isFinite(v) && v >= 0) ? v : def; }
-    /* vT113 抽卡 / 兑换单价：取整并限制 0~999（填 0 = 免费抽，方便做活动） */
+    /* vT113 单价：取整并限制 0~999（填 0 = 免费抽，方便做活动） */
     function costNum(id, def) { return Math.min(999, Math.max(0, Math.round(num(id, def)))); }
-    /* vT112 唤醒并入抽卡：draw 与 feed 同价（旧字段保留，避免历史配置报错） */
-    c.costs = { feed: costNum('ptCfgFeed', DEF_COST.feed), draw: costNum('ptCfgFeed', DEF_COST.feed), redeem: costNum('ptCfgRedeem', DEF_COST.redeem), petDraw: costNum('ptCfgPetDraw', DEF_COST.petDraw), petEvoY: costNum('ptCfgPetEvoY', DEF_COST.petEvoY), petEvoA: costNum('ptCfgPetEvoA', DEF_COST.petEvoA), petFeed: costNum('ptCfgPetFeed', DEF_COST.petFeed) };
-    c.costVer = 113;
+    /* vT124 兑换随商城下线：costs 只留 抽卡 / 抽灵宠 / 两档进化（旧字段不再写） */
+    c.costs = {
+      feed: costNum('ptCfgFeed', DEF_COST.feed), draw: costNum('ptCfgFeed', DEF_COST.feed),
+      petDraw: costNum('ptCfgPetDraw', DEF_COST.petDraw),
+      petEvoY: costNum('ptCfgPetEvoY', DEF_COST.petEvoY), petEvoA: costNum('ptCfgPetEvoA', DEF_COST.petEvoA)
+    };
+    c.costVer = 124;
     var g = num('ptCfgGrad', GRAD_LEVEL); c.gradLevel = Math.max(1, g);
     var teen = num('ptCfgTeen', 3), adult = num('ptCfgAdult', 6);
     c.stageTeen = Math.max(2, Math.floor(teen));
     c.stageAdult = Math.max(c.stageTeen + 1, Math.floor(adult));
-    var so = num('ptCfgSale', 100); c.saleOff = Math.min(100, Math.max(1, so));
-    /* vT110 集卡大奖文案 */
-    var rw = document.getElementById('ptCfgReward');
-    if (rw) c.cardReward = String(rw.value || '').trim() || CARD_REWARD_DEFAULT;
     c.updatedAt = Date.now(); c.updatedBy = 'web';
-    ptSave(s); PET_DB = s; ptKickSync(); toastMsg('💾 已保存：抽卡 ' + c.costs.feed + ' 分 · 抽灵宠 ' + c.costs.petDraw + ' 分 · 喂养 ' + c.costs.petFeed + ' 分 · 进化 ' + c.costs.petEvoY + '/' + c.costs.petEvoA + ' 分（网页 / 小程序 / 家长端同步）');
+    ptSave(s); PET_DB = s; ptKickSync();
+    toastMsg('💾 已保存：抽卡 ' + c.costs.feed + ' 分 · 抽灵宠 ' + c.costs.petDraw + ' 分 · 进化 ' +
+      c.costs.petEvoY + '/' + c.costs.petEvoA + ' 成长值（网页 / 小程序 / 家长端同步）');
     ptRenderAdmin(); ptRenderHome(); ptRenderGrad();
   }
-  function ptShopSet(id, field, val) {
-    if (!ptNeedAdmin()) return;
-    var s = ptGet(); var it = s.petShop.filter(function (x) { return x.id === id; })[0]; if (!it) return;
-    if (field === 'price' || field === 'off' || field === 'stock') { var n = Number(val); it[field] = isFinite(n) ? n : 0; }
-    else it[field] = String(val);
-    it.updatedAt = Date.now();
-    ptSave(s); PET_DB = s; ptRenderAdmin();
-  }
-  function ptShopAdd() {
-    if (!ptNeedAdmin()) return;
-    var nm = (document.getElementById('ptShopNewName') || {}).value || '';
-    if (!nm.trim()) return toastMsg('请填商品名');
-    var pr = Number((document.getElementById('ptShopNewPrice') || {}).value); if (!isFinite(pr) || pr < 0) pr = 0;
-    var stk = Number((document.getElementById('ptShopNewStock') || {}).value); if (!isFinite(stk)) stk = -1;
-    var s = ptGet();
-    s.petShop.push({
-      id: ptNewId('sh'), name: nm.trim(),
-      type: (document.getElementById('ptShopNewType') || {}).value || 'food',
-      price: pr, off: 0, stock: stk, on: true,
-      emoji: (document.getElementById('ptShopNewEmoji') || {}).value || '🎁',
-      desc: '', updatedAt: Date.now()
-    });
-    ptSave(s); PET_DB = s; toastMsg('✅ 已上架：' + nm.trim()); ptRenderAdmin();
-  }
-  function ptShopToggle(id) {
-    if (!ptNeedAdmin()) return;
-    var s = ptGet(); var it = s.petShop.filter(function (x) { return x.id === id; })[0]; if (!it) return;
-    it.on = (it.on === false); it.updatedAt = Date.now();
-    ptSave(s); PET_DB = s; ptRenderAdmin();
-  }
-  function ptShopDel(id) {
-    if (!ptNeedAdmin()) return;
-    if (!confirm('删除这个商品？')) return;
-    var s = ptGet(); s.petShop = s.petShop.filter(function (x) { return x.id !== id; });
-    ptSave(s); PET_DB = s; toastMsg('🗑 已删除'); ptRenderAdmin();
-  }
-  function ptCouponAdd() {
-    if (!ptNeedAdmin()) return;
-    var nm = ((document.getElementById('ptCpName') || {}).value || '').trim() || '宠物优惠券';
-    var off = Number((document.getElementById('ptCpOff') || {}).value); if (!isFinite(off) || off <= 0) return toastMsg('减免额要大于 0');
-    var min = Number((document.getElementById('ptCpMin') || {}).value); if (!isFinite(min) || min < 0) min = 0;
-    var exp = (document.getElementById('ptCpExp') || {}).value || '';
-    var who = (document.getElementById('ptCpWho') || {}).value || '*';
-    var s = ptGet();
-    var targets = (who === '*') ? ptNames() : [who];
-    if (!targets.length) return toastMsg('没有找到学生名单');
-    targets.forEach(function (n) {
-      s.petCoupon.push({
-        id: ptNewId('cp'), name: nm, off: off, min: min, expiry: exp,
-        owner: n, used: false, usedBy: '', usedAt: '', updatedAt: Date.now()
-      });
-    });
-    ptSave(s); PET_DB = s;
-    toastMsg('🎟️ 已发放 ' + targets.length + ' 张「' + nm + '」');
-    ptRenderAdmin();
-  }
-  function ptCouponUse(id) {
-    if (!ptNeedAdmin()) return;
-    var who = prompt('核销给谁？（填学生姓名）'); if (!who) return;
-    var s = ptGet(); var c = s.petCoupon.filter(function (x) { return x.id === id; })[0]; if (!c) return;
-    c.used = true; c.usedBy = who; c.usedAt = ptYmd(new Date()); c.updatedAt = Date.now();
-    ptSave(s); PET_DB = s; toastMsg('✅ 已核销'); ptRenderAdmin();
-  }
-  function ptCouponDel(id) {
-    if (!ptNeedAdmin()) return;
-    var s = ptGet(); s.petCoupon = s.petCoupon.filter(function (x) { return x.id !== id; });
-    ptSave(s); PET_DB = s; ptRenderAdmin();
-  }
+  /* vT124 商城下线后只保留「赠送积分」——整班或单个学生都行，会记一条赠送记录 */
   function ptGiftGo() {
     if (!ptNeedAdmin()) return;
     var s = ptGet();
     var who = (document.getElementById('ptGiftWho') || {}).value || '*';
-    var kind = (document.getElementById('ptGiftKind') || {}).value || 'point';
     var qty = Number((document.getElementById('ptGiftQty') || {}).value); if (!isFinite(qty) || qty < 1) qty = 1;
     var note = ((document.getElementById('ptGiftNote') || {}).value || '').trim();
-    var itemId = (document.getElementById('ptGiftItem') || {}).value || '';
     var targets = (who === '*') ? ptNames() : [who];
     if (!targets.length) return toastMsg('没有找到学生名单');
-
-    var itemName = '';
-    if (kind === 'item') {
-      var it = s.petShop.filter(function (x) { return x.id === itemId; })[0];
-      if (!it) return toastMsg('请选择要赠送的商品');
-      itemName = it.name;
-    } else if (kind === 'egg') itemName = '宠物蛋';
-
     var atText = ptYmd(new Date());
     var jobs = [];
-
     targets.forEach(function (n) {
-      if (kind === 'point') {
-        jobs.push(ptAddManual(n, '宠物商城 · 赠送积分', qty).catch(function () {}));
-        s.petGift.push({ id: ptNewId('gf'), studentName: n, kind: 'point', item: '积分', qty: qty, at: Date.now(), atText: atText, note: note });
-      } else if (kind === 'item') {
-        var pet = s.pets.filter(function (p) { return p.studentName === n && !p.deleted; })[0];
-        if (!pet) { jobs.push(Promise.resolve()); s.petGift.push({ id: ptNewId('gf'), studentName: n, kind: 'item', item: itemName + '（⚠ 该同学还没有宠物，未发放）', qty: qty, at: Date.now(), atText: atText, note: note }); }
-        else {
-          for (var i = 0; i < qty; i++) pet.ownedItems = (pet.ownedItems || []).concat([itemName]);
-          pet.updatedAt = Date.now();
-          s.petGift.push({ id: ptNewId('gf'), studentName: n, kind: 'item', item: itemName, qty: qty, at: Date.now(), atText: atText, note: note });
-        }
-      } else if (kind === 'rare') {
-        /* vT67 灵杰授予：隐藏/典藏只能老师授予，不扣积分 */
-        var spx = s.petPool.filter(function (x) { return x.id === itemId; })[0];
-        if (!spx || (spx.tier || '普通') === '普通') return toastMsg('请先在「🏅 灵杰品级管理」里把该灵杰设为隐藏或典藏');
-        var npr = ptMkPet(n, spx); npr.fromGift = true; s.pets.push(npr);
-        s.petGift.push({ id: ptNewId('gf'), studentName: n, kind: 'rare', item: (spx.tier || '') + '灵杰：' + spx.name, qty: 1, at: Date.now(), atText: atText, note: note });
-      } else {
-        var eggPool = codexDrawPool(s);
-        if (!eggPool.length) { jobs.push(Promise.resolve()); }
-        else {
-          for (var k = 0; k < qty; k++) {
-            var sp = eggPool[Math.floor(Math.random() * eggPool.length)];
-            var np = ptMkPet(n, sp); np.fromGift = true; s.pets.push(np);
-          }
-          s.petGift.push({ id: ptNewId('gf'), studentName: n, kind: 'egg', item: '灵杰蛋（已随机唤醒）', qty: qty, at: Date.now(), atText: atText, note: note });
-        }
-      }
+      jobs.push(ptAddManual(n, '灵宠 · 赠送积分', qty).catch(function () {}));
+      s.petGift.push({ id: ptNewId('gf'), studentName: n, kind: 'point', item: '积分', qty: qty, at: Date.now(), atText: atText, note: note });
     });
-
     ptSave(s); PET_DB = s;
     Promise.all(jobs).then(function () {
       ptSave(PET_DB);
       toastMsg('🎁 已赠送给 ' + targets.length + ' 位同学');
-      ptRenderAdmin(); ptRenderHome();
+      ptRenderAdmin();
     });
   }
 
@@ -26344,7 +26160,7 @@ function cwInit(){
       '<button class="btn2" onclick="ptImport()">📥 导入JSON</button>' +
       '<input type="file" id="petFile" style="display:none" onchange="ptImportFile(event)">' +
       '<button class="btn2" onclick="ptResetPool()">🌱 重置灵杰池为种子</button></div>' +
-      '<div class="sub">导出含 灵杰 / 家长队列 / 灵杰池 / 投稿 / 商城 / 优惠券 / 配置 / 赠送记录 / 灵杰集卡 九张表，可备份或迁移。<br><b>只想增删单只灵杰 / 导入清单 CSV？请到「📖 启灵图鉴」页底部的「🛠 图鉴管理」。</b></div>';
+      '<div class="sub">导出含 灵杰 / 家长队列 / 灵杰池 / 投稿 / 配置 / 赠送记录 / 灵杰集卡 七张表，可备份或迁移。<br><b>只想增删单只灵杰 / 导入清单 CSV？请到「📖 启灵图鉴」页底部的「🛠 图鉴管理」。</b></div>';
   }
   function ptBadges() {
     var s = ptGet();
@@ -26432,11 +26248,12 @@ function cwInit(){
       return np;
     }).catch(function () {});
   }
-  /* ---------------- vT123 喂养累积进化 ----------------
-     · 每只成长灵宠带一个 growExp（成长值），1 分 = 1 点成长值，喂一次累加 petFeed 分；
+  /* ---------------- vT123 喂养累积进化 / vT124 改成食物 ----------------
+     · 每只成长灵宠带一个 growExp（成长值），1 分 = 1 点成长值；
+     · 只有成长灵宠能喂（灵杰卡不参与），点卡片「🍚 喂养」→ 选食物：米饭 +5 / 胡萝卜 +10 / 肉干 +20；
      · 进化要求 = 该阶段原价（奶团子→幼年 petEvoY / 幼年→成年 petEvoA）；
-     · 进化时只补差额：growExp 攒够 = 免费进化，攒一半 = 只付另一半；
-     · 这样「一次掏 30/50」变成「多次喂养慢慢攒」，也可以随时一次补足，两条路等价不重复收费。 */
+     · 进化时只补差额：growExp 攒够 = 免费进化，攒一半 = 只付另一半；快攒满时只收到刚好够用。
+     · 食物与价格固定，后台不用再单独设「喂养一次」。 */
   function ptGrowState(pet) {
     var st = PetCore.stageOf(pet.level, pet.graduated, ptStageCfg());
     var need = st === 'baby' ? ptCost('petEvoY') : (st === 'teen' ? ptCost('petEvoA') : 0);
@@ -26445,7 +26262,7 @@ function cwInit(){
     var left = Math.max(0, need - have);
     return { stage: st, need: need, have: have, left: left, pct: need > 0 ? Math.min(100, Math.round(have * 100 / need)) : 100 };
   }
-  function ptPetFeed(petId) {
+  function ptFoodPick(petId) {
     if (!ptPlayable()) return toastMsg('⏸ 图鉴模块已暂停 / 关停');
     var s = ptGet();
     var pet = (s.pets || []).filter(function (p) { return p && !p.deleted && p.id === petId; })[0];
@@ -26454,24 +26271,69 @@ function cwInit(){
     var gs = ptGrowState(pet);
     if (gs.stage !== 'baby' && gs.stage !== 'teen') return toastMsg('✅ 已经是成年态了，不用再喂');
     if (gs.left <= 0) return toastMsg('🌱 成长值已经攒满，直接点「🌟 进化」就行');
+    var pts = ptStuPoints(pet.studentName);
+    var btns = PT_FOODS.map(function (f) {
+      var give = Math.min(f.v, gs.left);   /* 快攒满只给到刚好够用，不多扣分 */
+      var can = pts >= give;
+      return '<button class="pt-foodbtn' + (can ? '' : ' off') + '"' + (can ? '' : ' disabled') +
+        ' onclick="ptPetFeed(\'' + pet.id + '\',\'' + f.k + '\')" title="' + ptEsc(f.d) + '">' +
+        '<span class="fe">' + f.e + '</span><span class="fn">' + ptEsc(f.n) + '</span>' +
+        '<span class="fv">+' + give + ' 成长值</span><span class="fp">-' + give + ' 分</span></button>';
+    }).join('');
+    var ov = document.getElementById('ptFoodOv');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'ptFoodOv'; ov.className = 'pt-foodov';
+      ov.onclick = function (e) { if (e.target === ov) ptFoodClose(); };
+      document.body.appendChild(ov);
+    }
+    ov.innerHTML = '<div class="pt-foodbox">' +
+      '<div class="pt-foodhd"><b>🍚 喂养「' + ptEsc(pet.name) + '」</b>' +
+        '<span>' + ptEsc(pet.studentName) + ' · 成长值 ' + gs.have + '/' + gs.need + '</span></div>' +
+      '<div class="pt-foodlist">' + btns + '</div>' +
+      '<div class="pt-foodtip">一份食物 = 相应成长值（1 点 = 1 分）。攒满 ' + gs.need +
+        ' 点就能免费进化；' + ptEsc(pet.studentName) + ' 现在有 ' + pts + ' 分。</div>' +
+      '<button class="btn2" onclick="ptFoodClose()">取消</button></div>';
+    ov.style.display = 'flex';
+    return ov;
+  }
+  function ptFoodClose() {
+    var ov = document.getElementById('ptFoodOv');
+    if (ov) { ov.style.display = 'none'; ov.innerHTML = ''; }
+  }
+  /* 喂养：foodK = rice / carrot / meat；扣分 = 食物成长值（快攒满时按剩余量收） */
+  function ptPetFeed(petId, foodK) {
+    if (!ptPlayable()) return toastMsg('⏸ 图鉴模块已暂停 / 关停');
+    var food = ptFoodOf(foodK);
+    var s = ptGet();
+    var pet = (s.pets || []).filter(function (p) { return p && !p.deleted && p.id === petId; })[0];
+    if (!pet) return;
+    if (!pet.imgs) return toastMsg('这只灵杰不是成长灵宠，不适用喂养');
+    var gs = ptGrowState(pet);
+    if (gs.stage !== 'baby' && gs.stage !== 'teen') { ptFoodClose(); return toastMsg('✅ 已经是成年态了，不用再喂'); }
+    if (gs.left <= 0) { ptFoodClose(); return toastMsg('🌱 成长值已经攒满，直接点「🌟 进化」就行'); }
     var who = pet.studentName;
-    var unit = ptCost('petFeed');
-    var cost = Math.min(unit, gs.left);   /* 快攒满时只收到刚好够用，不让学生多花冤枉分 */
-    if (cost > 0 && ptStuPoints(who) < cost) return toastMsg('⚠️ ' + who + ' 积分不足（喂养需 ' + cost + ' 分）');
+    var cost = Math.min(food.v, gs.left);
+    if (cost > 0 && ptStuPoints(who) < cost) {
+      return toastMsg('⚠️ ' + who + ' 积分不足（这份「' + food.n + '」需 ' + cost + ' 分）');
+    }
     var go = function () {
       pet.growExp = (Number(pet.growExp) || 0) + cost;
       pet.hunger = Math.min(100, (Number(pet.hunger) || 80) + 6);
       pet.mood = Math.min(100, (Number(pet.mood) || 90) + 2);
+      pet.feedN = (Number(pet.feedN) || 0) + 1;
+      pet.lastFood = food.k;
       pet.updatedAt = Date.now();
       ptSave(s); PET_DB = s; ptKickSync();
+      ptFoodClose();
       var g2 = ptGrowState(pet);
       toastMsg(g2.left <= 0
-        ? ('🌱 ' + who + ' 的「' + pet.name + '」成长值攒满了，可以免费进化！')
-        : ('🍚 喂养 +' + cost + ' 成长值（' + g2.have + '/' + g2.need + '，再攒 ' + g2.left + ' 点可进化）'));
+        ? (food.e + ' ' + who + ' 的「' + pet.name + '」成长值攒满了，可以免费进化！')
+        : (food.e + ' 喂了' + food.n + '，+' + cost + ' 成长值（' + g2.have + '/' + g2.need + '，再攒 ' + g2.left + ' 点可进化）'));
       ptRenderHome(); ptRenderIncubator();
       return pet;
     };
-    if (cost > 0) return ptAddManual(who, '成长灵宠 · 喂养', -cost).then(go).catch(function () {});
+    if (cost > 0) return ptAddManual(who, '成长灵宠 · 喂养（' + food.n + '）', -cost).then(go).catch(function () {});
     return go();
   }
   function ptPetEvolve(petId) {
@@ -26534,7 +26396,7 @@ function cwInit(){
   }
   /* vT112 抽卡即唤醒：一个动作搞定「抽卡 + 唤醒」。
      · 抽到新卡 → 灵杰墙上补一只、图鉴格子点亮、卡册记一张（store 层 ptCardDrawOne 里完成）
-     · 重复卡 → 升星；满星 → 化作星光
+     · 重复卡 → 只记「已经有了」（vT124 起不再升星）
      入口有两个：灵宠家园每张卡上的「🎴 抽卡」、灵杰集卡顶部的「🎴 抽一张」（没有灵杰的学生也能抽）。 */
   function ptCardOpen(who) {
     if (!ptPlayable()) return toastMsg('⏸ 图鉴模块已暂停 / 关停');
@@ -26548,8 +26410,7 @@ function cwInit(){
       ptSave(s); PET_DB = s; ptKickSync();
       toastMsg(r.isNew
         ? ('🎴 新卡「' + r.def.name + '」' + (r.awakened ? '，已唤醒上墙！' : '！'))
-        : r.starUp ? ('🎴 「' + r.def.name + '」升到 ★' + r.stars + '！')
-        : ('🎴 「' + r.def.name + '」已满星，星光化作祝福 ✨'));
+        : ('🎴 又抽到「' + r.def.name + '」，这张已经有了（集卡不设等级，抽到就集齐）'));
       ptRenderHome(); ptRenderCards();
       return r;
     }).catch(function () { return null; });
@@ -26563,18 +26424,6 @@ function cwInit(){
   function ptCardsDraw() { return ptCardOpen(CARDS_STU); }
   /* vT112 兼容：老页面/老书签里的 ptDraw → 与抽卡同一个动作（不再单独收唤醒费） */
   function ptDraw(petId) { return ptFeed(petId); }
-  function ptRedeem(petId) {
-    if (!ptPlayable()) return toastMsg('⏸ 图鉴模块已暂停 / 关停');
-    var s = ptGet(); var pet = s.pets.filter(function (p) { return p.id === petId && !p.deleted; })[0]; if (!pet) return;
-    var cost = ptCost('redeem');
-    if (ptStuPoints(pet.studentName) < cost) return toastMsg('⚠️ ' + pet.studentName + ' 积分不足（需 ' + cost + '）');
-    var items = ['皇冠', '墨镜', '围巾', '蝴蝶结', '彩虹光圈', '圣诞帽'];
-    var it = items[Math.floor(Math.random() * items.length)];
-    ptAddManual(pet.studentName, '启灵图鉴 · 兑换配饰', -cost).then(function () {
-      pet.ownedItems = (pet.ownedItems || []).concat([it]); pet.redeemCntToday = (pet.redeemCntToday || 0) + 1; pet.updatedAt = Date.now();
-      ptSave(s); PET_DB = s; toastMsg('🎁 兑换到配饰：' + it); ptRenderHome();
-    }).catch(function () {});
-  }
   function ptGradReq(petId) { toastMsg('已记录毕业申请，等待老师审批'); }
   function ptGradApprove(id) {
     var s = ptGet(); var p = s.pets.filter(function (x) { return x.id === id; })[0]; if (!p) return;
@@ -26591,21 +26440,16 @@ function cwInit(){
     if ((it.status || 'pending') !== 'pending') return Promise.resolve({ ok: true, dup: true, msg: '该提案已处理过' });
     var who = it.studentName || it.studentId;
     var pet = s.pets.filter(function (p) { return (p.studentId || p.studentName) === who && !p.deleted; })[0];
-    /* vT112 抽卡即唤醒：家长提案里的 draw / feed 一律按「抽卡」处理（旧提案也能正常入账） */
-    var isCard = (it.action === 'draw' || it.action === 'feed' || !it.action);
-    var cost = isCard ? ptCost('feed') : ptCost('redeem');
-    var actName = isCard ? '抽卡' : '兑换';
+    /* vT112 抽卡即唤醒；vT124 兑换随商城下线，家长提案一律按「抽卡」入账 */
+    var cost = ptCost('feed');
+    var actName = '抽卡';
     return ptAddManual(who, '启灵图鉴 · 家长' + actName + (byAuto ? '（自动批准）' : ''), -cost).then(function () {
       var cardMsg = '';
-      if (isCard) {
-        var cr = ptCardDrawOne(s, who);
-        if (cr) {
-          cardMsg = cr.isNew
-            ? ('，抽到新卡「' + cr.def.name + '」' + (cr.awakened ? '并唤醒上墙' : ''))
-            : cr.starUp ? ('，「' + cr.def.name + '」升到 ★' + cr.stars) : ('，「' + cr.def.name + '」已满星');
-        }
-      } else if (pet) {
-        pet.ownedItems = (pet.ownedItems || []).concat([it.item || '配饰']);
+      var cr = ptCardDrawOne(s, who);
+      if (cr) {
+        cardMsg = cr.isNew
+          ? ('，抽到新卡「' + cr.def.name + '」' + (cr.awakened ? '并唤醒上墙' : ''))
+          : ('，「' + cr.def.name + '」这张已经有了');
       }
       if (pet) { ptLevelUp(pet); pet.updatedAt = Date.now(); }
       it.status = 'done'; it.doneAt = Date.now(); it.doneBy = byAuto ? 'auto' : 'teacher';
@@ -26657,9 +26501,9 @@ function cwInit(){
     if (!c.autoApprove) return { ok: false, reason: '自动批准未开启' };
     var who = it.studentName || it.studentId;
     var acts = Array.isArray(c.autoActs) ? c.autoActs : ['feed'];
-    var actKey = (it.action === 'draw' || it.action === 'feed' || !it.action) ? 'feed' : it.action;
-    if (acts.indexOf(actKey) < 0) return { ok: false, reason: '该动作未开启自动批准' };
-    var cost = (actKey === 'feed') ? ptCost('feed') : ptCost('redeem');
+    /* vT124 家长端只剩抽卡一个动作，兑换已随商城下线 */
+    if (acts.indexOf('feed') < 0) return { ok: false, reason: '抽卡未开启自动批准' };
+    var cost = ptCost('feed');
     /* 每人每天上限：只数「今天 + 自动批准」的已办件，老师手动批的不占额度 */
     var lim = Number(c.autoLimit); if (!(lim >= 0)) lim = 1;
     if (lim > 0) {
@@ -27002,7 +26846,7 @@ function cwInit(){
   }
 /* vT68《启灵图鉴》老师操作区代码片段 —— 由 tools/patch_v68.py 插入 source/_pet_app.js 的 IIFE 内。
    设计：图鉴的发放 / 品级 / 删除 / 导入全部收进「📖 启灵图鉴」tab，
-   与旧宠物、积分商城（⚙ 后台管理 → 🎁 直接赠送）彻底分开。
+   与积分赠送（⚙ 后台管理 → 🎁 直接赠送）彻底分开。
    所有写操作统一走 ptNeedAdmin() 班主任口令闸门；删除一律软删（墓碑），
    避免 LWW 合并被云端旧数据复活、也避免图鉴种子把删掉的编号补回来。 */
   var PT_IMPORT_MODE = '';
@@ -27086,7 +26930,7 @@ function cwInit(){
       '<input class="search" style="width:130px" id="cxGrantNote" placeholder="备注（可选）">' +
       '<button class="btn2 primary" onclick="ptCodexGrant()">🎁 确认发放</button></div>' +
       '<div class="sub">这里发放的是《班级启灵图鉴》里的灵杰，普通 / 隐藏 / 典藏都可以直接指定发放，不扣学生积分；发放记录写入赠送流水。' +
-      '<b>旧宠物、积分、商城商品、灵杰蛋</b>仍在「⚙ 后台管理 → 🎁 直接赠送」，两边互不干扰。</div></div>' +
+      '<b>积分赠送</b>仍在「⚙ 后台管理 → 🎁 直接赠送」，两边互不干扰。</div></div>' +
 
 
       /* ①-b 按系列批量发放 */
@@ -27561,6 +27405,10 @@ function cwInit(){
   window.ptFeed = ptFeed;
   window.ptPetEvolve = ptPetEvolve;   /* vT123 修：卡片上的「进化」按钮此前没导出，点了没反应 */
   window.ptPetFeed = ptPetFeed;
+  window.ptFoodPick = ptFoodPick;   /* vT124 喂养选食物 */
+  window.PT_FOODS = PT_FOODS;       /* 食物表（测试 / 调试可读） */
+  window.ptFoodOf = ptFoodOf;
+  window.ptFoodClose = ptFoodClose;
   window.ptGrowState = ptGrowState;
   /* vT110 集卡册 */
   window.ptRenderCards = ptRenderCards;
@@ -27570,7 +27418,6 @@ function cwInit(){
   window.ptCardsDraw = ptCardsDraw;
   window.ptCardIdOf = ptCardIdOf;
   window.ptDraw = ptDraw;
-  window.ptRedeem = ptRedeem;
   window.ptGradReq = ptGradReq;
   window.ptGradApprove = ptGradApprove;
   window.ptApproveParent = ptApproveParent;
@@ -27605,15 +27452,7 @@ function cwInit(){
   window.ptAdminLock = ptAdminLock;
   window.ptSetEnabled = ptSetEnabled;
   window.ptCfgSave = ptCfgSave;
-  window.ptShopSet = ptShopSet;
-  window.ptShopAdd = ptShopAdd;
-  window.ptShopToggle = ptShopToggle;
-  window.ptShopDel = ptShopDel;
-  window.ptCouponAdd = ptCouponAdd;
-  window.ptCouponUse = ptCouponUse;
-  window.ptCouponDel = ptCouponDel;
   window.ptGiftGo = ptGiftGo;
-  window.ptGiftKindChange = ptGiftKindChange;
   window.ptRenderAdmin = ptRenderAdmin;
   /* vT67 启灵图鉴 */
   window.ptRenderCodex = ptRenderCodex;
@@ -27649,7 +27488,6 @@ function cwInit(){
   window.ptCodexImportFile = ptCodexImportFile;
   window.ptCodexExportCsv = ptCodexExportCsv;
   /* 定价 / 折扣 / 开关：供测试与其它端复用 */
-  window.ptPriceOf = ptPriceOf;
   window.ptCost = ptCost;
   window.ptEnabled = ptEnabled;
   window.ptPlayable = ptPlayable;
