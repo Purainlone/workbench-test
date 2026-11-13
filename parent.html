@@ -376,7 +376,7 @@
     ST.view = v;
     var panels = (ST.snap && ST.snap.parentPanels) || {};
     var on = function (k) { return panels[k] !== false; };
-    var drawCost = Number(ST.snap.codexCost); if (!isFinite(drawCost) || drawCost < 0) drawCost = 20;
+    /* vT112 抽卡即唤醒：只剩一个动作，价格用集卡单价（快照 codexFeedCost） */
     var feedCost = Number(ST.snap.codexFeedCost); if (!isFinite(feedCost) || feedCost < 0) feedCost = 5;
     var ts = ST.snap.ts ? new Date(ST.snap.ts) : null;
     var ageH = ts ? Math.round((Date.now() - ts.getTime()) / 3600000) : 0;
@@ -426,10 +426,11 @@
       h += '<div class="card"><h2>🎴 孩子的启灵图鉴 <em>共 ' + (v.codex.length || 0) + ' 位</em></h2>';
       h += v.codex.length ? '<div class="cxgrid">' + v.codex.map(cxCard).join('') + '</div>'
         : '<div class="empty">还没唤醒灵杰，第一次唤醒会从「？？？」里揭晓</div>';
-      h += '<div class="drawbox"><div class="t">✨ 帮孩子抽一位 / 收一张卡（扣孩子的启灵积分）</div>' +
-        '<div class="acts"><button class="btn2" id="btnDraw">🎲 唤醒一位（-' + drawCost + '）</button>' +
-        '<button class="btn2" id="btnFeed">🎴 集卡（-' + feedCost + '）</button></div>' +
-        '<div class="note">' + (ST.snap.autoApprove ? '老师已开启自动批准，提交后约 10 秒自动入账；' : '提交后由老师批准；') +
+      h += '<div class="drawbox"><div class="t">🎴 帮孩子抽一张灵杰卡（扣孩子的启灵积分）</div>' +
+        '<div class="acts"><button class="btn2" id="btnFeed">🎴 抽一张（-' + feedCost + '）</button></div>' +
+        '<div class="note">抽到还没有的灵杰 = 同时唤醒，图鉴格子会跟着点亮；重复的卡自动升星。' +
+        '隐藏款也能抽到（比较稀有），典藏款由老师发放。<br>' +
+        (ST.snap.autoApprove ? '老师已开启自动批准，提交后约 10 秒自动入账；' : '提交后由老师批准；') +
         '每人每天有次数上限，积分不够会自动作废。</div>' + pendText() + '</div>';
       h += '</div>';
     }
@@ -455,7 +456,6 @@
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
     document.getElementById('btnOut').onclick = function () { goLogin(); };
-    var bd = document.getElementById('btnDraw'); if (bd) bd.onclick = function () { submitProposal('draw', drawCost); };
     var bf = document.getElementById('btnFeed'); if (bf) bf.onclick = function () { submitProposal('feed', feedCost); };
     if (ST.pending && ST.pending.status === 'pending') startPoll();
   }
