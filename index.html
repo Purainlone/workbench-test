@@ -30,7 +30,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-he
   <div class="tip" id="ldt">正在加载工作台，请稍候…<br>首次加载稍慢，之后浏览器会缓存、再次打开会快很多</div>
   <button id="ldr" onclick="location.reload()">🔄 重新加载</button>
   <div id="lde"></div>
-  <div class="ver">✨ 优化版 vT123 · 座位精简与灵宠喂养 · 2.6.147</div>
+  <div class="ver">✨ 优化版 vT124 · 去商城与食物喂养 · 2.6.148</div>
 </div>
 <script>
 /* 2.6.61 启动器：单文件应用 3.3MB，在慢速/不稳定链路上直接打开可能被截断，
@@ -43,11 +43,11 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-he
   function fail(s) { e.innerHTML = s; b.style.display = 'inline-block' }
   function go(tries) {
     var u = 'app.html';
-    /* vT24 缓存修复：部署脚本每次会把 1794580526722 替换成部署时间戳。
+    /* vT24 缓存修复：部署脚本每次会把 1794581422932 替换成部署时间戳。
        vT67 修复：原来写成「有 query 就只保留原 query」，而旧标签页自动刷新
        恰好会带 ?wbv=…，结果部署时间戳被丢掉 → 浏览器把缓存里的旧 app.html
        又拿了出来，表现为「刷新了还是旧版」。现在无论有无 query 都拼上部署键。 */
-    u += (location.search ? location.search + '&' : '?') + 'v=1794580526722';
+    u += (location.search ? location.search + '&' : '?') + 'v=1794581422932';
     say('正在加载工作台' + (tries ? '（第 ' + (tries + 1) / 1 + ' 次尝试）' : '') + '…');
     /* vT120 弱网补强（替代 vT24 的固定 20 秒超时）：
        实测慢链路拉整个 2.7MB 要 1 分多钟，固定 20 秒必然误杀 —— 改成两段看门狗：
