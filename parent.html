@@ -122,7 +122,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT118）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT119）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -287,12 +287,12 @@
 
   /* ---------- 图鉴图源（与小程序 codeximg.js 一致的三级回退） ---------- */
   var MIRRORS = [
-    'https://testingcf.jsdelivr.net/gh/Purainlone/workbench-test@857ed542fea363e66c6d1c96268d9796c3c31219/',
-    'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@857ed542fea363e66c6d1c96268d9796c3c31219/',
+    'https://testingcf.jsdelivr.net/gh/Purainlone/workbench-test@b6b3fde9bfd6a8155f90646194d33ced1e603cff/',
+    'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@b6b3fde9bfd6a8155f90646194d33ced1e603cff/',
     'https://purainlone.github.io/workbench-test/'
   ];
   /* vT116：卡面换血后 CDN 主源仍缓存旧图，URL 加版本号强制回源 */
-  var CX_Q = 'v=116';
+  var CX_Q = 'v=119';
   function cxUrl(b, rel) { return b + rel + (rel.indexOf('?') >= 0 ? '&' : '?') + CX_Q; }
   function pickSrcs(rel) {
     if (!rel) return [];
@@ -468,7 +468,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v118</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v119</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
