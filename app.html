@@ -2670,6 +2670,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="detain" checked> 留堂通知</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="points" checked> 积分卡</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="hw" checked> 当天作业</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="hwtodo" checked> ⚠️ 未完成作业</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="hwstat" checked> 📊 作业统计</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="rc" checked> 诵读打卡</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="cmt" checked> 老师点评</label>
@@ -17798,7 +17799,9 @@ function paFallbackCopy(txt, done) {
     if (done) done();
   } catch (e) { if (typeof toastMsg === 'function') toastMsg('复制失败，请手动选中链接复制'); }
 }
-function ptPanelsDefault() { return { detain: true, points: true, hw: true, rc: true, cmt: true, grade: true, essay: true, codex: true }; }
+/* vT131 修复：hwstat（vT129 加的「📊 作业统计」）之前漏在默认表外 —— 勾选框压根不保存；
+   本轮新增 hwtodo（⚠️ 未完成作业），一并补进默认表 */
+function ptPanelsDefault() { return { detain: true, points: true, hw: true, hwtodo: true, hwstat: true, rc: true, cmt: true, grade: true, essay: true, codex: true }; }
 function ptPanelsGet() {
   var d = ptPanelsDefault();
   try {
@@ -18257,9 +18260,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v130';
-var WB_MY_VER = '优化版 vT130 · 诵读进度与口令遮罩';
-var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.154';
+var WB_VER_TAG = 'v131';
+var WB_MY_VER = '优化版 vT131 · 未完成作业清单';
+var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.155';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -28321,23 +28324,27 @@ function cwInit(){
     var lim120 = ptwDstr(new Date(now.getTime() - 120 * 86400000));
     var today = ptwDstr(now);
 
-    /* 作业列（最近 30 天） */
-    var items = [];
+    /* 作业列（最近 30 天）
+       vT131：HW_ITEMS 只是工作台「当前显示的 12 列」，只靠它会漏掉更早的作业列 ——
+       家长端就算不出「以前欠交的作业」。改成并集：视图列 + 近 30 天登记记录里出现过的列。
+       去重按「日期|作业名」，科目以视图列为准（登记记录里没有科目）。 */
+    var items = [], itemMap = {};
+    var pushItem = function (d, nm, sj) {
+      d = String(d || '').slice(0, 10); nm = String(nm || '').trim();
+      if (!d || !nm || d < lim30) return;
+      var k = d + '|' + nm;
+      if (itemMap[k]) { if (sj && !itemMap[k].subject) itemMap[k].subject = sj; return; }
+      var o = { date: d, item: nm, subject: sj || '' };
+      itemMap[k] = o; items.push(o);
+    };
     if (Array.isArray(HW_ITEMS)) {
-      HW_ITEMS.forEach(function (it) {
-        var d = it.date ? String(it.date).slice(0, 10) : '';
-        if (d < lim30) return;
-        items.push({ date: d, item: it.name || '', subject: it.subject || '' });
-      });
+      HW_ITEMS.forEach(function (it) { pushItem(it.date, it.name, it.subject); });
     }
-    if (!items.length) {
-      var seen = {};
-      (local.hw || []).forEach(function (r) {
-        var k = r.date + '|' + r.item; if (seen[k]) return; seen[k] = 1;
-        if ((r.date || '') < lim30) return;
-        items.push({ date: r.date, item: r.item, subject: '' });
-      });
-    }
+    (local.hw || []).forEach(function (r) { pushItem(r.date, r.item, ''); });
+    items.sort(function (a, b) {
+      return String(a.date).localeCompare(String(b.date)) || String(a.item).localeCompare(String(b.item));
+    });
+    if (items.length > 300) items = items.slice(-300);
 
     var hwRows = (local.hw || []).filter(function (r) { return (r.date || '') >= lim30; })
       .map(function (r) { return { date: r.date, item: r.item, name: r.name, level: r.level }; });
