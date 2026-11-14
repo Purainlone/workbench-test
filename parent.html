@@ -122,7 +122,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT127）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT128）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -294,16 +294,25 @@
   /* vT116：卡面换血后 CDN 主源仍缓存旧图，URL 加版本号强制回源 */
   var CX_Q = 'v=119';
   function cxUrl(b, rel) { return b + rel + (rel.indexOf('?') >= 0 ? '&' : '?') + CX_Q; }
+  /* vT128 成长灵宠三阶段图 petimg/NNN_S.png 与图鉴卡面走同一套镜像；
+     老快照里只有 imgs{baby,teen,adult}、没有 img，这里按 stage 兜底拼一次。 */
+  function petRel(p) {
+    if (!p) return '';
+    if (p.img) return p.img;
+    var imgs = p.imgs;
+    if (!imgs) return '';
+    return imgs[p.stage] || imgs.baby || imgs.teen || imgs.adult || '';
+  }
   function pickSrcs(rel) {
     if (!rel) return [];
     if (/^(https?:|data:)/i.test(rel)) return [rel];
-    if (String(rel).indexOf('codeximg/') !== 0) return [];
+    if (!/^(codeximg|petimg)\//.test(String(rel))) return [];
     var out = [];
     MIRRORS.forEach(function (b) { out.push(cxUrl(b, rel)); });
     return out;
   }
   function cxCard(p, i) {
-    var srcs = pickSrcs(p.img);
+    var srcs = pickSrcs(petRel(p));
     var fx = (p.tier === '典藏') ? 'fx-gold' : (p.tier === '隐藏') ? 'fx-purple' : '';
     var tier = (p.tier && p.tier !== '普通') ? ('<span class="tier">' + esc(p.tier) + '</span>') : '';
     var inner = srcs.length
@@ -320,7 +329,7 @@
     var i = Number(img.getAttribute('data-i'));
     var p = (ST.view && ST.view.codex) ? ST.view.codex[i] : null;
     if (!p) { img.style.display = 'none'; return; }
-    var srcs = pickSrcs(p.img);
+    var srcs = pickSrcs(petRel(p));
     var at = srcs.indexOf(img.getAttribute('src'));
     if (at + 1 < srcs.length) { img.setAttribute('src', srcs[at + 1]); }
     else { img.outerHTML = '<div class="ph">📖</div>'; }
@@ -468,7 +477,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v127</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v128</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
