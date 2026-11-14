@@ -104,7 +104,7 @@
   .cx .ph{width:100%;aspect-ratio:1/1;border-radius:9px;background:#f2f6f3;display:flex;align-items:center;justify-content:center;font-size:26px}
   .tier{position:absolute;left:5px;top:5px;font-size:9px;padding:1px 6px;border-radius:7px;background:rgba(255,255,255,.88);color:#8a6a15;font-weight:700}
   .cx .st{position:absolute;right:5px;top:5px;font-size:9px;letter-spacing:-1px;padding:1px 5px;border-radius:7px;background:rgba(255,244,214,.94);color:#b8860b;font-weight:700}
-  /* vT136 灵宠互动：点卡片喂食 / 摸摸 / 玩耍（本地演出，不动成长值） */
+  /* vT136 灵宠互动：点卡片捏捏 / 摸摸 / 玩耍（本地演出，不动成长值） */
   .cx.ispet{cursor:pointer}
   .cx.ispet:active{transform:scale(.97)}
   .cx .fheart{position:absolute;right:5px;bottom:22px;font-size:9px;color:#c2416a;background:#fff0f4;border-radius:7px;padding:1px 5px;font-weight:700}
@@ -472,7 +472,7 @@
     /* vT136 灵宠卡可点击互动（灵杰卡不互动）；有互动记录的先带上 ❤ 角标 */
     var ispet = cxIsPet(p);
     var n = ispet ? petFunCntOf(p) : 0;
-    /* vT137 成长灵宠显示成长值进度（能不能真喂一看就知道） */
+    /* vT137 成长灵宠显示成长值进度（能不能喂食一看就知道） */
     var sub = esc(p.series || '');
     if (p.grow && Number(p.gneed) > 0) {
       var stn = ({ baby: '奶团子', teen: '幼年', adult: '成年', grad: '成年' })[p.stage] || '';
@@ -493,7 +493,7 @@
     else { img.outerHTML = '<div class="ph">📖</div>'; }
   };
 
-  /* ---------- vT136 灵宠互动：喂食 / 摸摸 / 玩耍 ----------
+  /* ---------- vT136 灵宠互动：捏捏 / 摸摸 / 玩耍 ----------
      纯本地演出：家长点孩子的灵宠冒表情和台词，记今日 ❤ 次数（按孩子分开存）。
      家长端没有写回灵宠库的权限，不会真的改变成长值、不扣积分。 */
   var K_PETFUN = 'wb_parent_pet_fun_v1';
@@ -514,7 +514,7 @@
   }
   function cxIsPet(p) { return !!(p && (p.stage || p.imgs)); }   /* 灵宠有阶段/三阶段图，灵杰没有 */
   /* ---------- vT137 真实喂养（提案制）----------
-     家长端点「🍚 真喂」→ 选食物 → 写一条 growfeed 提案；老师批准 / 自动批准后才真正加成长值、扣积分。 */
+     家长端点「🍚 喂食」→ 选食物 → 写一条 growfeed 提案；老师批准 / 自动批准后才真正加成长值、扣积分。 */
   var PP_FOODS_DEF = [
     { k: 'rice', e: '🍚', n: '米饭', v: 5 },
     { k: 'carrot', e: '🥕', n: '胡萝卜', v: 10 },
@@ -564,7 +564,7 @@
     ppPop = pop;
   }
   var PP_ACTS = {
-    feed: { fly: '🍖', say: ['好好吃！', '再来一口～', '肚子饱饱的'] },
+    feed: { fly: '🤏', say: ['软软的～', '再捏一下嘛', '嘿嘿，痒痒的'] },
     pat: { fly: '💗', say: ['呼噜呼噜～', '好舒服～', '最喜欢你摸我'] },
     play: { fly: '🎾', say: ['一起玩！', '接住啦！', '再来一次'] }
   };
@@ -590,8 +590,8 @@
     pop.setAttribute('data-for', (p.name || '') + '|' + (p.defId || ''));
     pop.style.left = Math.max(8, Math.min(window.innerWidth - 200, r.left)) + 'px';
     pop.style.top = Math.min(window.innerHeight - 60, r.bottom + 6) + 'px';
-    pop.innerHTML = '<button data-act="feed">🍖 喂食</button><button data-act="pat">✋ 摸摸</button><button data-act="play">🎾 玩耍</button>' +
-      (cxCanFeed(p) ? '<button data-act="realfeed" class="ppreal">🍚 真喂</button>' : '');
+    pop.innerHTML = '<button data-act="feed">🤏 捏捏</button><button data-act="pat">✋ 摸摸</button><button data-act="play">🎾 玩耍</button>' +
+      (cxCanFeed(p) ? '<button data-act="realfeed" class="ppreal">🍚 喂食</button>' : '');
     pop.onclick = function (e) {
       e.stopPropagation();
       var b = e.target && e.target.closest ? e.target.closest('[data-act]') : null;
@@ -865,7 +865,7 @@
       h += '<div class="card"><h2>🎴 孩子的启灵图鉴 <em>' +
         (poolN ? ('已集 ' + (v.codex.length || 0) + ' / ' + poolN) : ('共 ' + (v.codex.length || 0) + ' 位')) + '</em></h2>';
       h += v.codex.length ? '<div class="cxgrid">' + v.codex.map(cxCard).join('') + '</div>' +
-        '<div class="cxtip">🐾 点灵宠卡片：喂食 / 摸摸 / 玩耍是免费小演出，不会真的改变成长值；想真的长成长值，点菜单里的「🍚 真喂」（扣孩子积分，老师批准 / 自动批准后生效）。</div>'
+        '<div class="cxtip">🐾 点灵宠卡片：「🤏 捏捏 / ✋ 摸摸 / 🎾 玩耍」是免费小演出，不会真的改变成长值；想真的长成长值，点菜单里的「🍚 喂食」（扣孩子积分，老师批准 / 自动批准后生效）。</div>'
         : '<div class="empty">还没抽到灵杰，第一次抽卡会从「？？？」里揭晓</div>';
       var chOK = !!(ST.snap.parentEssayToken && ST.snap.parentEssayRepo);
       var chTip = chOK
@@ -880,7 +880,7 @@
         '</div>' +
         '<div class="note">抽灵杰卡：抽到还没有的灵杰会同时唤醒上墙；重复的卡自动升星（最高 ★5）。<br>' +
         '抽灵宠：抽一只成长灵宠（奶团子态）；<b>名下还有未成年灵宠时不能抽</b>，养到成年才能抽下一只。<br>' +
-        '喂养：点孩子的灵宠卡 →「🍚 真喂」，米饭 +5 / 胡萝卜 +10 / 肉干 +20 成长值（1 点 = 1 分），攒满免费进化。<br>' +
+        '喂养：点孩子的灵宠卡 →「🍚 喂食」，米饭 +5 / 胡萝卜 +10 / 肉干 +20 成长值（1 点 = 1 分），攒满免费进化。<br>' +
         (perm0.draw ? '' : '⚠️ 老师关掉了家长端抽卡；') + (perm0.feed ? '' : '⚠️ 老师关掉了家长端喂养；') +
         (perm0.draw || perm0.feed ? '' : '<br>') + chTip +
         '<br>每人每天有次数上限，积分不够会自动作废。</div>' + pendText() + '</div>';
@@ -904,14 +904,14 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v137</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v139</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
     document.getElementById('btnOut').onclick = function () { goLogin(); };
     var bf = document.getElementById('btnFeed'); if (bf) bf.onclick = function () { submitProposal('feed', feedCost); };
     var bp = document.getElementById('btnPet'); if (bp) bp.onclick = function () { submitProposal('growdraw', petCost); };
-    wirePetFun();   /* vT136 灵宠卡互动：喂食 / 摸摸 / 玩耍 */
+    wirePetFun();   /* vT136 灵宠卡互动：捏捏 / 摸摸 / 玩耍 */
     if (ST.pending && ST.pending.status === 'pending') startPoll();
   }
 
