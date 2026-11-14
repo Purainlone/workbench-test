@@ -104,6 +104,19 @@
   .cx .ph{width:100%;aspect-ratio:1/1;border-radius:9px;background:#f2f6f3;display:flex;align-items:center;justify-content:center;font-size:26px}
   .tier{position:absolute;left:5px;top:5px;font-size:9px;padding:1px 6px;border-radius:7px;background:rgba(255,255,255,.88);color:#8a6a15;font-weight:700}
   .cx .st{position:absolute;right:5px;top:5px;font-size:9px;letter-spacing:-1px;padding:1px 5px;border-radius:7px;background:rgba(255,244,214,.94);color:#b8860b;font-weight:700}
+  /* vT136 灵宠互动：点卡片喂食 / 摸摸 / 玩耍（本地演出，不动成长值） */
+  .cx.ispet{cursor:pointer}
+  .cx.ispet:active{transform:scale(.97)}
+  .cx .fheart{position:absolute;right:5px;bottom:22px;font-size:9px;color:#c2416a;background:#fff0f4;border-radius:7px;padding:1px 5px;font-weight:700}
+  .cx .fly{position:absolute;left:50%;top:18%;font-size:20px;transform:translateX(-50%);animation:ppFly .9s ease forwards;pointer-events:none}
+  @keyframes ppFly{0%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,-30px) scale(1.3)}}
+  .cx.bnc{animation:ppBob .5s ease}
+  @keyframes ppBob{0%,100%{transform:none}30%{transform:translateY(-5px) scale(1.04)}60%{transform:translateY(-2px)}}
+  .ppmenu{position:fixed;z-index:999;display:flex;gap:6px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px;box-shadow:0 10px 28px rgba(0,0,0,.18)}
+  .ppmenu button{border:none;background:#f2f8f4;border-radius:9px;padding:8px 11px;font-size:13px;font-weight:600;color:#24483a;font-family:inherit}
+  .ppmenu button:active{background:#e2f1ea}
+  .ppbub{position:fixed;z-index:999;background:#24483a;color:#fff;font-size:12px;font-weight:600;border-radius:11px 11px 11px 3px;padding:6px 10px;max-width:240px;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+  .cxtip{font-size:11px;color:#9aa8a0;margin-top:8px}
   @keyframes cxsheen{0%{background-position:130% 0}100%{background-position:-130% 0}}
   /* vT117 品级分级：隐藏=紫罗兰慢扫光（柔）；典藏=鎏金快扫光 + 更强金晕（锐） */
   @keyframes cxpulse{0%,100%{box-shadow:0 0 6px 1px rgba(124,92,255,.26)}50%{box-shadow:0 0 18px 5px rgba(124,92,255,.55)}}
@@ -165,7 +178,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT134）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT136）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -451,7 +464,11 @@
     /* vT113 卡面显示星级（重复卡升星，满 5 星） */
     var st = Number(p.stars) || 1;
     var starHtml = (st > 1) ? ('<div class="st">' + '★'.repeat(Math.min(5, st)) + '</div>') : '';
-    return '<div class="cx ' + fx + '">' + tier + inner + starHtml +
+    /* vT136 灵宠卡可点击互动（灵杰卡不互动）；有互动记录的先带上 ❤ 角标 */
+    var ispet = cxIsPet(p);
+    var n = ispet ? petFunCntOf(p) : 0;
+    return '<div class="cx ' + fx + (ispet ? ' ispet' : '') + '" data-pi="' + i + '">' + tier + inner + starHtml +
+      (n ? '<span class="fheart">❤' + n + '</span>' : '') +
       '<div class="nm">' + esc(p.name || '灵杰') + '</div>' +
       '<div class="sr">' + esc(p.series || '') + '</div></div>';
   }
@@ -464,6 +481,118 @@
     if (at + 1 < srcs.length) { img.setAttribute('src', srcs[at + 1]); }
     else { img.outerHTML = '<div class="ph">📖</div>'; }
   };
+
+  /* ---------- vT136 灵宠互动：喂食 / 摸摸 / 玩耍 ----------
+     纯本地演出：家长点孩子的灵宠冒表情和台词，记今日 ❤ 次数（按孩子分开存）。
+     家长端没有写回灵宠库的权限，不会真的改变成长值、不扣积分。 */
+  var K_PETFUN = 'wb_parent_pet_fun_v1';
+  var ppPop = null;
+  function petFunLoad() {
+    try {
+      var o = JSON.parse(localStorage.getItem(K_PETFUN + '_' + (ST.name || '')) || 'null');
+      var today = new Date().toDateString();
+      if (!o || o.day !== today) return { day: today, cnt: {} };
+      if (!o.cnt || typeof o.cnt !== 'object') o.cnt = {};
+      return o;
+    } catch (e) { return { day: new Date().toDateString(), cnt: {} } }
+  }
+  function petFunCntOf(p) {
+    if (!p) return 0;
+    var o = petFunLoad();
+    return Number(o.cnt[(p.name || '') + '|' + (p.defId || '')]) || 0;
+  }
+  function cxIsPet(p) { return !!(p && (p.stage || p.imgs)); }   /* 灵宠有阶段/三阶段图，灵杰没有 */
+  var PP_ACTS = {
+    feed: { fly: '🍖', say: ['好好吃！', '再来一口～', '肚子饱饱的'] },
+    pat: { fly: '💗', say: ['呼噜呼噜～', '好舒服～', '最喜欢你摸我'] },
+    play: { fly: '🎾', say: ['一起玩！', '接住啦！', '再来一次'] }
+  };
+  function ppClosePop() {
+    if (ppPop && ppPop.parentNode) ppPop.parentNode.removeChild(ppPop);
+    ppPop = null;
+  }
+  function wirePetFun() {
+    Array.prototype.forEach.call(document.querySelectorAll('.cx.ispet'), function (el) {
+      el.onclick = function (ev) { ev.stopPropagation(); ppTap(el); };
+    });
+  }
+  function ppTap(el) {
+    var i = Number(el.getAttribute('data-pi'));
+    var p = (ST.view && ST.view.codex) ? ST.view.codex[i] : null;
+    if (!p) return;
+    var same = ppPop && ppPop.getAttribute('data-for') === ((p.name || '') + '|' + (p.defId || ''));
+    ppClosePop();
+    if (same) return;
+    var r = el.getBoundingClientRect();
+    var pop = document.createElement('div');
+    pop.className = 'ppmenu';
+    pop.setAttribute('data-for', (p.name || '') + '|' + (p.defId || ''));
+    pop.style.left = Math.max(8, Math.min(window.innerWidth - 200, r.left)) + 'px';
+    pop.style.top = Math.min(window.innerHeight - 60, r.bottom + 6) + 'px';
+    pop.innerHTML = '<button data-act="feed">🍖 喂食</button><button data-act="pat">✋ 摸摸</button><button data-act="play">🎾 玩耍</button>';
+    pop.onclick = function (e) {
+      e.stopPropagation();
+      var b = e.target && e.target.closest ? e.target.closest('[data-act]') : null;
+      if (b) ppAct(el, p, b.getAttribute('data-act'));
+    };
+    document.body.appendChild(pop);
+    ppPop = pop;
+  }
+  function ppAct(el, p, act) {
+    var a = PP_ACTS[act] || PP_ACTS.pat;
+    ppClosePop();
+    var o = petFunLoad();
+    var k = (p.name || '') + '|' + (p.defId || '');
+    o.cnt[k] = (Number(o.cnt[k]) || 0) + 1;
+    try { localStorage.setItem(K_PETFUN + '_' + (ST.name || ''), JSON.stringify(o)) } catch (e) {}
+    var n = o.cnt[k];
+    el.classList.remove('bnc');
+    void el.offsetWidth;
+    el.classList.add('bnc');
+    var fly = document.createElement('span');
+    fly.className = 'fly';
+    fly.textContent = a.fly;
+    el.appendChild(fly);
+    setTimeout(function () { if (fly.parentNode) fly.parentNode.removeChild(fly) }, 1000);
+    ppBubble(el, a.say[Math.floor(Math.random() * a.say.length)] + (act === 'feed' ? '（今天第 ' + n + ' 次）' : ''));
+    var h = el.querySelector('.fheart');
+    if (!h) { h = document.createElement('span'); h.className = 'fheart'; el.appendChild(h); }
+    h.textContent = '❤' + n;
+    ppBeep(act === 'feed' ? 460 : act === 'pat' ? 700 : 620, act === 'feed' ? 660 : act === 'pat' ? 940 : 1020);
+  }
+  function ppBubble(el, text) {
+    Array.prototype.forEach.call(document.querySelectorAll('.ppbub'), function (x) { if (x.parentNode) x.parentNode.removeChild(x); });
+    var r = el.getBoundingClientRect();
+    var b = document.createElement('div');
+    b.className = 'ppbub';
+    b.textContent = text;
+    b.style.left = Math.max(8, Math.min(window.innerWidth - 250, r.left - 10)) + 'px';
+    b.style.top = Math.max(8, r.top - 34) + 'px';
+    document.body.appendChild(b);
+    setTimeout(function () { if (b.parentNode) b.parentNode.removeChild(b) }, 1900);
+  }
+  function ppBeep(f1, f2) {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      ppBeep.ac = ppBeep.ac || new AC();
+      var t0 = ppBeep.ac.currentTime;
+      var o = ppBeep.ac.createOscillator(), g = ppBeep.ac.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f1, t0);
+      o.frequency.exponentialRampToValueAtTime(f2, t0 + 0.16);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.06, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+      o.connect(g); g.connect(ppBeep.ac.destination);
+      o.start(t0); o.stop(t0 + 0.26);
+    } catch (e) {}
+  }
+  document.addEventListener('click', function (ev) {
+    if (ev.target && ev.target.closest && ev.target.closest('.ppmenu')) return;
+    if (ev.target && ev.target.closest && ev.target.closest('.cx.ispet')) return;
+    ppClosePop();
+  });
 
   /* ---------- 渲染 ---------- */
   function renderLogin(err) {
@@ -666,7 +795,8 @@
     if (on('codex')) {
       h += '<div class="card"><h2>🎴 孩子的启灵图鉴 <em>' +
         (poolN ? ('已集 ' + (v.codex.length || 0) + ' / ' + poolN) : ('共 ' + (v.codex.length || 0) + ' 位')) + '</em></h2>';
-      h += v.codex.length ? '<div class="cxgrid">' + v.codex.map(cxCard).join('') + '</div>'
+      h += v.codex.length ? '<div class="cxgrid">' + v.codex.map(cxCard).join('') + '</div>' +
+        '<div class="cxtip">🐾 点灵宠卡片可以喂食、摸摸、玩耍 —— 给孩子的小惊喜演出，不会真的改变成长值。</div>'
         : '<div class="empty">还没抽到灵杰，第一次抽卡会从「？？？」里揭晓</div>';
       h += '<div class="drawbox"><div class="t">🎴 帮孩子抽一张灵杰卡（扣孩子的启灵积分，每次 ' + feedCost + ' 分）</div>' +
         '<div class="acts"><button class="btn2" id="btnFeed">🎴 抽一张（-' + feedCost + '）</button></div>' +
@@ -695,12 +825,13 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v134</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v136</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
     document.getElementById('btnOut').onclick = function () { goLogin(); };
     var bf = document.getElementById('btnFeed'); if (bf) bf.onclick = function () { submitProposal('feed', feedCost); };
+    wirePetFun();   /* vT136 灵宠卡互动：喂食 / 摸摸 / 玩耍 */
     if (ST.pending && ST.pending.status === 'pending') startPoll();
   }
 
