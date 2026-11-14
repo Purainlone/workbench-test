@@ -567,7 +567,7 @@
     var st = p.stage || '';
     if (st === 'adult' || st === 'grad' || st === 'egg') return false;
     var need = Number(p.gneed) || 0;
-    if (need > 0 && (Number(p.gx) || 0) >= need) return false;   /* 攒满等老师点进化 */
+    if (need > 0 && (Number(p.gx) || 0) >= need) return false;   /* vT145 攒满会自动进化，不用再喂 */
     return true;
   }
   function ppFeedMenu(el, p) {
@@ -911,7 +911,7 @@
         '</div>' +
         '<div class="note">抽灵杰卡：抽到还没有的灵杰会同时唤醒上墙；重复的卡自动升星（最高 ★5）。<br>' +
         '抽灵宠：抽一只成长灵宠（奶团子态）；<b>名下还有未成年灵宠时不能抽</b>，养到成年才能抽下一只。<br>' +
-        '喂养：点孩子的灵宠卡 →「🍚 喂食」，米饭 +5 / 胡萝卜 +10 / 肉干 +20 成长值（1 点 = 1 分），攒满免费进化。<br>' +
+        '喂养：点孩子的灵宠卡 →「🍚 喂食」，米饭 +5 / 胡萝卜 +10 / 肉干 +20 成长值（1 点 = 1 分），攒满自动进化。<br>' +
         (perm0.draw ? '' : '⚠️ 老师关掉了家长端抽卡；') + (perm0.feed ? '' : '⚠️ 老师关掉了家长端喂养；') +
         (perm0.draw || perm0.feed ? '' : '<br>') + chTip +
         '<br>每人每天有次数上限，积分不够会自动作废。</div>' + pendText() + '</div>';
