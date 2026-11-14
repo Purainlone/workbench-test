@@ -2686,12 +2686,14 @@ table.paper td.l{text-align:left;font-weight:600}
         <span id="ptPanelsStatus" class="syncstatus"></span>
       </div>
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
-        <div class="syncdesc"><b>👪 家长端权限 · 提案仓库（vT137）</b>：家长端「🎴 抽灵杰卡 / 🐾 抽灵宠 / 🍚 喂养」都是提交提案，老师批准（或自动批准）后才真正扣孩子积分、加成长值。提案要写进下面这个 Gitee 仓库，<b>以前只能在手机小程序「我的」里配，电脑端没配过家长端就会一直提示「老师还没开通」</b>。建议单独开一个私有仓库专门放提案。</div>
+        <div class="syncdesc"><b>👪 家长端权限 · 提案仓库（vT137）</b>：家长端「🎴 抽灵杰卡 / 🐾 抽灵宠 / 🍚 喂养」都是提交提案，老师批准（或自动批准）后才真正扣孩子积分、加成长值。提案要写进下面这个 Gitee 仓库，<b>以前只能在手机小程序「我的」里配，电脑端没配过家长端就会一直提示「老师还没开通」</b>。<br>
+          <b>怎么填：</b>用户名＝Gitee 账号名；仓库名＝<b>当前云端数据仓库名后面加 <code>-pt</code></b>（例：数据仓库 <code>work-test-data</code> → 这里填 <code>work-test-data-pt</code>，家长快照和提案都放这个库）；令牌＝能读写该仓库的 Gitee 私人令牌。忘了叫什么就点下面「一键填入」。</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
           <input id="paChOwner" placeholder="Gitee 用户名" style="width:150px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
-          <input id="paChRepo" placeholder="提案仓库名（如 workbench-proposal）" style="width:230px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
+          <input id="paChRepo" placeholder="提案仓库名（数据仓库名 + -pt）" style="width:230px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
           <input id="paChToken" type="password" placeholder="该仓库的私人令牌" style="width:200px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
           <button class="btn2 primary" onclick="paChannelSave()">💾 保存家长通道</button>
+          <button class="btn2" onclick="paChannelAutofill()" title="按「云端同步」里现在用的 Gitee 账号 / 仓库 / 令牌自动填好，仓库名自动加 -pt">📋 一键填入</button>
           <button class="btn2" onclick="paChannelTest()">🔍 检测连通</button>
         </div>
         <div class="syncstatus" id="paChStatus"></div>
@@ -17814,11 +17816,30 @@ function paChannelGet() {
 }
 function paChannelFill() {
   var c = paChannelGet();
+  var s = (typeof mpSyncSettings === 'function') ? mpSyncSettings() : { gOwner: '', gRepo: '', gToken: '' };
+  var propRepo = s.gRepo ? (/-pt$/.test(s.gRepo) ? s.gRepo : (s.gRepo + '-pt')) : '';
   var o = document.getElementById('paChOwner'), r = document.getElementById('paChRepo'), t = document.getElementById('paChToken');
-  if (o && !o.value) o.value = c.owner || ((typeof mpSyncSettings === 'function') ? mpSyncSettings().gOwner : '');
-  if (r && !r.value) r.value = c.repo || '';
-  if (t && !t.value) t.value = c.token || '';
+  if (o && !o.value) o.value = c.owner || s.gOwner || '';
+  if (r && !r.value) r.value = c.repo || propRepo || '';
+  if (t && !t.value) t.value = c.token || s.gToken || '';
   paChannelStatus();
+}
+/* vT139 一键填入：照「云端同步」里正在用的账号 / 仓库 / 令牌填，仓库名自动补 -pt。
+   老师的提案仓库就叫「数据仓库名 + -pt」（家长快照也放这里），不用再去 Gitee 翻。 */
+function paChannelAutofill() {
+  var s = (typeof mpSyncSettings === 'function') ? mpSyncSettings() : null;
+  var st = document.getElementById('paChStatus');
+  if (!s || !s.gOwner || !s.gRepo) {
+    if (st) { st.textContent = '⚠️ 还没配置「云端同步」的 Gitee 账号 / 仓库，先在上面填好再点这里'; st.style.color = '#b45309'; }
+    return;
+  }
+  var repo = /-pt$/.test(s.gRepo) ? s.gRepo : (s.gRepo + '-pt');
+  var o = document.getElementById('paChOwner'), r = document.getElementById('paChRepo'), t = document.getElementById('paChToken');
+  if (o) o.value = s.gOwner;
+  if (r) r.value = repo;
+  if (t) t.value = s.gToken || '';
+  if (st) { st.textContent = '📋 已按当前云端同步填好：' + s.gOwner + ' / ' + repo + '　点「🔍 检测连通」确认，再点「💾 保存家长通道」'; st.style.color = '#2b7a4e'; }
+  if (typeof toastMsg === 'function') toastMsg('📋 已填入 ' + s.gOwner + ' / ' + repo);
 }
 function paChannelStatus() {
   var el = document.getElementById('paChStatus'); if (!el) return;
@@ -17866,7 +17887,12 @@ function paChannelTest() {
   var url = 'https://gitee.com/api/v5/repos/' + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo) +
     '?access_token=' + encodeURIComponent(c.token);
   fetch(url).then(function (r) {
-    if (r.status === 200) { paChannelStatus(); if (el) el.innerHTML = '✅ 检测通过：仓库可读写（' + c.owner + '/' + c.repo + '）<br><span style="color:#2b7a4e">' + el.innerHTML.replace(/^✅[^<]*/, '') + '</span>'; return; }
+    if (r.status === 200) {
+      paChannelStatus();
+      var warn = /-pt$/.test(c.repo) ? '' : '<br><span style="color:#b45309">⚠️ 仓库名一般是「云端数据仓库名 + -pt」，家长快照就在那个库里；如果不是这个库，家长端可能读不到，确认后再保存。</span>';
+      if (el) el.innerHTML = '✅ 检测通过：仓库可读写（' + c.owner + '/' + c.repo + '）<br><span style="color:#2b7a4e">' + el.innerHTML.replace(/^✅[^<]*/, '') + '</span>' + warn;
+      return;
+    }
     return r.text().then(function (t) {
       var j = null; try { j = JSON.parse(t); } catch (e) {}
       if (el) { el.textContent = '❌ 检测失败（' + r.status + '）：' + ((j && (j.message || j.error)) || '检查用户名 / 仓库名 / 令牌权限'); el.style.color = '#c0392b'; }
@@ -18343,9 +18369,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v138';
-var WB_MY_VER = '优化版 vT138 · 图鉴集卡自愈';
-var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.162';
+var WB_VER_TAG = 'v139';
+var WB_MY_VER = '优化版 vT139 · 捏捏互动与家长通道';
+var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.163';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
