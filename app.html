@@ -18343,9 +18343,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v137';
-var WB_MY_VER = '优化版 vT137 · 家长端抽卡与喂养权限';
-var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.161';
+var WB_VER_TAG = 'v138';
+var WB_MY_VER = '优化版 vT138 · 图鉴集卡自愈';
+var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.162';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -25433,6 +25433,42 @@ function cwInit(){
     if (n) console.log('[pet] vT112 历史灵杰补卡', n, '张');
     return n;
   }
+  /* vT138 集卡自愈：给「已唤醒的图鉴灵杰」补一张卡记录（幂等；已有记录绝不覆盖，
+     软删除的也不复活 —— 老师在记录管理里删掉的不算数）。返回是否新增。 */
+  function ptCardEnsure(s, who, def) {
+    if (!s || !who || !def || !def.id || (def.origin || 'codex') !== 'codex') return false;
+    var cid = ptCardIdOf(who, def.id);
+    var ex = (s.petCards || []).filter(function (c) { return c && c.id === cid; })[0];
+    if (ex) return false;
+    s.petCards.push({ id: cid, studentName: who, defId: def.id, name: def.name || '',
+      series: def.series || '', tier: def.tier || '普通', img: def.img || '', rarity: def.rarity || '普通',
+      createdAt: Date.now(), updatedAt: Date.now(), fromRepair: 1 });
+    return true;
+  }
+  /* vT138 常驻补卡：按 pets 全量扫一遍，凡未删除的图鉴灵杰都确保有卡。
+     ｜背景：以前只有「抽卡」写卡，唤醒台手动唤醒 / 发放灵杰（单个 / 批量 / 导入）
+     ｜只建灵宠不写卡，卡册就一直 0；vT112 的一次性迁移跑过不再回头。
+     ｜改成每次启动自愈 + 各创建路径即时补写，双保险。返回补了几张。 */
+  function ptCardsRepairAll(s) {
+    if (!s) return 0;
+    var pool = {};
+    (s.petPool || []).forEach(function (d) { if (d && d.origin === 'codex' && !d.deleted && !d.purged) pool[d.id] = d; });
+    var have = {};
+    (s.petCards || []).forEach(function (c) { if (c && c.id) have[c.id] = 1; });
+    var n = 0, now = Date.now();
+    (s.pets || []).forEach(function (p) {
+      if (!p || p.deleted || p.purged) return;
+      var d = pool[p.defId];
+      if (!d) return;
+      var cid = ptCardIdOf(p.studentName, d.id);
+      if (have[cid]) return;
+      s.petCards.push({ id: cid, studentName: p.studentName, defId: d.id, name: d.name || p.name || '',
+        series: d.series || '', tier: d.tier || '普通', img: d.img || p.img || '', rarity: d.rarity || '普通',
+        createdAt: p.createdAt || now, updatedAt: now, fromRepair: 1 });
+      have[cid] = 1; n++;
+    });
+    return n;
+  }
   function ptSeriesDefs(s, sr) { return ptCardPool(s).filter(function (p) { return (p.series || '未分系列') === sr; }); }
   function ptSeriesComplete(s, who, sr) {
     var defs = ptSeriesDefs(s, sr);
@@ -26042,6 +26078,9 @@ function cwInit(){
     if (seedAdd.length) { s.petPool = s.petPool.concat(seedAdd); dirty = true; }
     var c = s.petCfg.filter(function (x) { return x.id === 'cfg'; })[0];
     if (!c) { s.petCfg.push(ptDefaultCfg()); dirty = true; }
+    /* vT138 集卡自愈：已唤醒的图鉴灵杰补齐卡记录（常驻，幂等） */
+    var nCardFix = ptCardsRepairAll(s);
+    if (nCardFix) { dirty = true; console.log('[pet] vT138 集卡自愈：补 ' + nCardFix + ' 张卡'); }
     if (dirty) { ptSave(s); PET_DB = s; }
   }
 
@@ -26758,6 +26797,7 @@ function cwInit(){
     })[0];
     if (dup && !confirm('「' + studentName + '」已经有「' + sp.name + '」了，还要再唤醒一只吗？\n（同名灵宠会各自独立养成）')) return;
     s.pets.push(ptMkPet(studentName, sp));
+    ptCardEnsure(s, studentName, sp);   /* vT138 唤醒的图鉴灵杰同步记一张卡，卡册跟着点亮 */
     ptSave(s); PET_DB = s;
     ptKickSync();
     /* vT125 老师点唤醒也给一段轻量演出：不蓄力，直接弹出卡面 + 短音效 */
@@ -28145,6 +28185,7 @@ function cwInit(){
     var atText = ptYmd(new Date());
     targets.forEach(function (n) {
       var np = ptMkPet(n, def); np.fromGrant = true; s.pets.push(np);
+      ptCardEnsure(s, n, def);   /* vT138 发放的图鉴灵杰同步记一张卡 */
       s.petGift.push({ id: ptNewId('gf'), studentName: n, kind: 'grant', item: '图鉴灵杰：' + def.name, qty: 1, at: Date.now(), atText: atText, note: note });
     });
     ptSave(s); PET_DB = s;
@@ -28224,6 +28265,7 @@ function cwInit(){
       for (var i = 0; i < per && bag.length; i++) {
         var sp = bag.splice(Math.floor(Math.random() * bag.length), 1)[0];
         var np = ptMkPet(name, sp); np.fromGrant = true; s.pets.push(np); got.push(sp.name);
+        ptCardEnsure(s, name, sp);   /* vT138 批量发放同步记卡 */
       }
       s.petGift.push({ id: ptNewId('gf'), studentName: name, kind: 'grant',
         item: '批量发放：' + (series === '*' ? '全部系列' : series) + ' · ' + got.join('、'),
@@ -28380,6 +28422,7 @@ function cwInit(){
       if (!def && nm) def = defs.filter(function (p) { return p.name === nm; })[0];
       if (!def) { skipped++; return; }
       var np = ptMkPet(stu, def); np.fromImport = true; s.pets.push(np); added++;
+      ptCardEnsure(s, stu, def);   /* vT138 导入的图鉴灵杰同步记卡 */
     });
     return { added: added, skipped: skipped };
   }
