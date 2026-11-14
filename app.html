@@ -2670,6 +2670,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="detain" checked> 留堂通知</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="points" checked> 积分卡</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="hw" checked> 当天作业</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="hwstat" checked> 📊 作业统计</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="rc" checked> 诵读打卡</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="cmt" checked> 老师点评</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="grade" checked> 成绩等级</label>
@@ -2678,6 +2679,7 @@ table.paper td.l{text-align:left;font-weight:600}
       </div>
       <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center">
         <button class="btn2 primary" onclick="ptPanelsSave()">💾 保存并显示到家长端</button>
+        <button class="btn2" onclick="ptwPublishNow()" title="把最新的作业、积分、灵宠（含已收回的）重新生成一次并上传，家长刷新就能看到">🚀 立即重发快照</button>
         <button class="btn2" onclick="ptPanelsAll(true)">全选</button>
         <button class="btn2" onclick="ptPanelsAll(false)">全不选</button>
         <span id="ptPanelsStatus" class="syncstatus"></span>
@@ -18187,9 +18189,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v128';
-var WB_MY_VER = '优化版 vT128 · 灵宠形象修复';
-var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.152';
+var WB_VER_TAG = 'v129';
+var WB_MY_VER = '优化版 vT129 · 收回生效与作业统计';
+var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.153';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24898,7 +24900,30 @@ function cwInit(){
     if (ptCardsMigrate(PET_DB)) ptSave(PET_DB);
     return PET_DB;
   }
-  function ptSave(s) { try { localStorage.setItem(PET_KEY, JSON.stringify(s || PET_DB)); } catch (e) { console.error('[pet] 存盘失败', e); } }
+  /* vT129 写盘即外发（唯一的写盘出口做一次防抖外发）
+     ------------------------------------------------------------
+     症状：老师在网页端「收回」一只灵杰，家长端刷新后它还在；刚修的成长灵宠形象
+     家长端也还是旧的。根因不在渲染，而在数据根本没出去：
+       · ptRevoke / ptRevive / 抽卡 / 喂养 / 进化只写了 localStorage，没推云；
+       · 家长快照（wb_parent_snap.json）只有作业、积分等少数入口会触发重发，
+         灵宠相关的写操作一个都没触发 —— Gitee 上那份快照一直是旧的。
+     这里在 ptSave 后面挂一个 2 秒防抖：推一次云端 + 预约重发家长快照（ptwSchedule
+     内部还有 12 秒防抖）。所有灵宠写操作自动覆盖，不再漏。 */
+  var _ptAfterTimer = null;
+  function ptAfterSave() {
+    try {
+      if (_ptAfterTimer) clearTimeout(_ptAfterTimer);
+      _ptAfterTimer = setTimeout(function () {
+        _ptAfterTimer = null;
+        try { if (typeof ptKickSync === 'function') ptKickSync(); } catch (e) {}
+        try { if (typeof window.ptwSchedule === 'function') window.ptwSchedule(); } catch (e2) {}
+      }, 2000);
+    } catch (e) {}
+  }
+  function ptSave(s) {
+    try { localStorage.setItem(PET_KEY, JSON.stringify(s || PET_DB)); } catch (e) { console.error('[pet] 存盘失败', e); }
+    ptAfterSave();
+  }
   /* vT81 图鉴写操作后立刻推云：以前要等下一轮自动同步（最长 10 分钟），
      教室桌面迟迟收不到新灵杰，祝贺弹窗自然不出现。这里 1.2 秒防抖后触发一次同步。 */
   function ptKickSync() {
@@ -25853,7 +25878,8 @@ function cwInit(){
     var stage = PetCore.stageOf(pet.level, pet.graduated, ptStageCfg());
     /* vT119 成长灵宠：按当前阶段取对应阶段图（毕业按成年图） */
     var gStage = (stage === 'grad') ? 'adult' : stage;
-    var growRel = (!isPhoto && pet.imgs && pet.imgs[gStage]) ? pet.imgs[gStage] : '';
+    var gImgs = ptGrowImgsOf(pet);
+    var growRel = (!isPhoto && gImgs && gImgs[gStage]) ? gImgs[gStage] : '';
     var svg = growRel ? ptGrowPetPicHtml(pet, gStage)
                       : isPhoto ? (ptPetPhotoHtml(pet, 'pet-photo', stage) || '<div class="pet-photo" style="display:flex;align-items:center;justify-content:center">🖼️</div>')
                       : isCxPic ? ptCodexPetPicHtml(pet, 'pet-photo')
@@ -25862,7 +25888,7 @@ function cwInit(){
     var f = ptCost('feed');
     var dis = ptPlayable() ? '' : ' disabled title="模块已暂停/关停"';
     /* vT123 成长值：喂养累积，进化只补差额（图鉴卡 / 非成长灵宠不参与） */
-    var gs = (!isCxPic && pet.imgs) ? ptGrowState(pet) : null;
+    var gs = (!isCxPic && ptGrowImgsOf(pet)) ? ptGrowState(pet) : null;
     var canGrow = !!gs && (gs.stage === 'baby' || gs.stage === 'teen');
     /* vT117 成长灵宠：非图鉴卡(codex)且处于奶团子/幼年态才显示进化按钮 */
     var evoBtn = '';
@@ -26134,7 +26160,7 @@ function cwInit(){
     return PT_CODEX_MIRRORS.map(function (b) { return ptCxUrl(b, rel); });
   }
   function ptGrowPetPicHtml(p, stage) {
-    var imgs = p.imgs || (p.def && p.def.imgs) || null;
+    var imgs = ptGrowImgsOf(p) || null;
     var rel = imgs && (imgs[stage] || imgs.adult);
     if (!rel) return '';
     var srcs = ptGrowImgSrcs(rel);
@@ -26521,6 +26547,40 @@ function cwInit(){
      · 进化要求 = 该阶段原价（奶团子→幼年 petEvoY / 幼年→成年 petEvoA）；
      · 进化时只补差额：growExp 攒够 = 免费进化，攒一半 = 只付另一半；快攒满时只收到刚好够用。
      · 食物与价格固定，后台不用再单独设「喂养一次」。 */
+  /* vT129 成长灵宠三阶段图：记录上没带 imgs 时回落到灵杰池里的定义。
+     历史记录（vT119 之前发放 / 从旧备份导入）只有 defId，没有三阶段图字段，
+     渲染层取不到图就退回 PetCore 程序化老形象 —— 桌面祝贺窗、家长端都踩过。 */
+  function ptGrowImgsOf(pet) {
+    if (!pet) return null;
+    if (pet.imgs && (pet.imgs.baby || pet.imgs.teen || pet.imgs.adult)) return pet.imgs;
+    try {
+      var s = ptGet();
+      var def = (s.petPool || []).filter(function (x) {
+        return x && x.id === pet.defId && x.imgs && (x.imgs.baby || x.imgs.teen || x.imgs.adult);
+      })[0];
+      return def ? def.imgs : null;
+    } catch (e) { return null; }
+  }
+  /* vT129 一次性补图：把池里的 imgs 写回历史宠物记录（写 updatedAt，靠 LWW 带到云端与桌面） */
+  var GROW_IMG_VER = 129;
+  function ptRepairGrowImgs(s) {
+    s = s || ptGet();
+    var cfg = (s.petCfg || []).filter(function (x) { return x && x.id === 'cfg'; })[0];
+    if (!cfg || (Number(cfg.growImgVer) || 0) >= GROW_IMG_VER) return false;
+    var pool = {}, now = Date.now(), n = 0;
+    (s.petPool || []).forEach(function (x) {
+      if (x && x.id && x.imgs && (x.imgs.baby || x.imgs.teen || x.imgs.adult)) pool[x.id] = x.imgs;
+    });
+    (s.pets || []).forEach(function (p) {
+      if (!p || p.imgs || !p.defId || !pool[p.defId]) return;
+      p.imgs = pool[p.defId];
+      p.updatedAt = now;
+      n++;
+    });
+    cfg.growImgVer = GROW_IMG_VER; cfg.updatedAt = now;
+    if (n) console.log('[pet] vT129 补回 ' + n + ' 条成长灵宠的阶段图');
+    return true;
+  }
   function ptGrowState(pet) {
     var st = PetCore.stageOf(pet.level, pet.graduated, ptStageCfg());
     var need = st === 'baby' ? ptCost('petEvoY') : (st === 'teen' ? ptCost('petEvoA') : 0);
@@ -26534,7 +26594,7 @@ function cwInit(){
     var s = ptGet();
     var pet = (s.pets || []).filter(function (p) { return p && !p.deleted && p.id === petId; })[0];
     if (!pet) return;
-    if (!pet.imgs) return toastMsg('这只灵杰不是成长灵宠，不适用喂养');
+    if (!ptGrowImgsOf(pet)) return toastMsg('这只灵杰不是成长灵宠，不适用喂养');
     var gs = ptGrowState(pet);
     if (gs.stage !== 'baby' && gs.stage !== 'teen') return toastMsg('✅ 已经是成年态了，不用再喂');
     if (gs.left <= 0) return toastMsg('🌱 成长值已经攒满，直接点「🌟 进化」就行');
@@ -26575,7 +26635,7 @@ function cwInit(){
     var s = ptGet();
     var pet = (s.pets || []).filter(function (p) { return p && !p.deleted && p.id === petId; })[0];
     if (!pet) return;
-    if (!pet.imgs) return toastMsg('这只灵杰不是成长灵宠，不适用喂养');
+    if (!ptGrowImgsOf(pet)) return toastMsg('这只灵杰不是成长灵宠，不适用喂养');
     var gs = ptGrowState(pet);
     if (gs.stage !== 'baby' && gs.stage !== 'teen') { ptFoodClose(); return toastMsg('✅ 已经是成年态了，不用再喂'); }
     if (gs.left <= 0) { ptFoodClose(); return toastMsg('🌱 成长值已经攒满，直接点「🌟 进化」就行'); }
@@ -27447,6 +27507,8 @@ function cwInit(){
         p.tier = (sp && sp.tier) || '普通'; p.updatedAt = now; dirty = true;
       }
     });
+    /* vT129：历史成长灵宠补回三阶段图（只做一次，靠 updatedAt 带到云端 / 桌面 / 家长快照） */
+    try { if (ptRepairGrowImgs(s)) dirty = true; } catch (_gi) {}
     if (dirty) { ptSave(s); PET_DB = s; }
   }
 /* vT68《启灵图鉴》老师操作区代码片段 —— 由 tools/patch_v68.py 插入 source/_pet_app.js 的 IIFE 内。
@@ -28015,6 +28077,8 @@ function cwInit(){
   window.ptFoodOf = ptFoodOf;
   window.ptFoodClose = ptFoodClose;
   window.ptGrowState = ptGrowState;
+  window.ptGrowImgsOf = ptGrowImgsOf;   /* vT129 阶段图回落（家长快照构建时用） */
+  window.ptRepairGrowImgs = ptRepairGrowImgs;
   /* vT110 集卡册 */
   window.ptRenderCards = ptRenderCards;
   window.ptCardsPickStu = ptCardsPickStu;
@@ -28203,6 +28267,26 @@ function cwInit(){
 
     var hwRows = (local.hw || []).filter(function (r) { return (r.date || '') >= lim30; })
       .map(function (r) { return { date: r.date, item: r.item, name: r.name, level: r.level }; });
+    /* vT129 家长端「📊 作业等级统计」：优 / 良 / 中 / 差 / 超时未交 各几次。
+       近 120 天（约一个学期），与成绩统计同窗口；按姓名汇总，随各自加密块下发。 */
+    var lim120s = ptwDstr(new Date(now.getTime() - 120 * 86400000));
+    var hwStats = {};
+    (local.hw || []).forEach(function (r) {
+      if (!r || !r.name) return;
+      var d = String(r.date || '').slice(0, 10);
+      if (d < lim120s) return;
+      var lv = r.level || '';
+      if (!lv) return;
+      if (!hwStats[r.name]) hwStats[r.name] = { you: 0, liang: 0, zhong: 0, cha: 0, over: 0, total: 0 };
+      var o = hwStats[r.name];
+      if (lv === '优') o.you++;
+      else if (lv === '良') o.liang++;
+      else if (lv === '中') o.zhong++;
+      else if (lv === '差') o.cha++;
+      else if (lv === '超时未交') o.over++;
+      o.total++;
+    });
+    var hwStatFrom = lim120s, hwStatTo = today;
     var rcRows = (local.rc || []).map(function (r) { return { date: r.date, name: r.name, title: r.title }; });
 
     /* 积分汇总（作业分 + 手动奖惩分） */
@@ -28260,6 +28344,11 @@ function cwInit(){
     try {
       var pdb = JSON.parse(localStorage.getItem('wb_pet_db_v1') || 'null');
       if (pdb) {
+        /* vT129 历史宠物记录没带 imgs 时，从灵杰池的定义里补（否则家长端只能退回旧形象） */
+        var poolImgs = {};
+        (pdb.petPool || []).forEach(function (x) {
+          if (x && x.id && x.imgs && (x.imgs.baby || x.imgs.teen || x.imgs.adult)) poolImgs[x.id] = x.imgs;
+        });
         /* vT113 家长端也能看到星级：集卡册里的 ★ 数按「学生|灵杰」索引 */
         (pdb.petCards || []).forEach(function (c) {
           if (c && c.studentName && c.defId) cardStars[c.studentName + '|' + c.defId] = Number(c.stars) || 1;
@@ -28274,13 +28363,14 @@ function cwInit(){
           var nm = p.studentName || ''; if (!nm) return;
           if (!codexPets[nm]) codexPets[nm] = [];
           /* vT128 成长灵宠（gp001~gp060）没有 img，三阶段图在 imgs{baby,teen,adult}。
-             家长端原来只认 img → 这类灵宠显示成 🥚 / 旧形象。这里按当前成长阶段
-             把相对路径算好一起下发（同时带上 imgs + stage，家长端可自行兜底）。 */
-          var gImgs = p.imgs || null;
+             vT129：记录里没有 imgs（老数据）→ 用 defId 去灵杰池找定义里的三阶段图。
+             找到就按当前成长阶段算好相对路径一起下发（img + imgs + stage 三手准备）。 */
+          var gImgs = p.imgs || poolImgs[p.defId] || null;
           var gStage = '';
           if (gImgs && typeof window.ptGrowState === 'function') {
             try { gStage = (window.ptGrowState(p) || {}).stage || ''; } catch (_g) { gStage = ''; }
           }
+          if (gStage === 'grad') gStage = 'adult';
           var gRel = p.img || '';
           if (!gRel && gImgs) gRel = gImgs[gStage] || gImgs.baby || gImgs.teen || gImgs.adult || '';
           codexPets[nm].push({
@@ -28298,6 +28388,7 @@ function cwInit(){
       classId: (s2 && s2.classId) || '', className: '',
       exportedAt: new Date().toISOString(),
       students: stus, hwItems: items, hw: hwRows, rc: rcRows,
+      hwStats: hwStats, hwStatFrom: hwStatFrom, hwStatTo: hwStatTo,
       points: points, comments: comments, grades: grades, detain: detain,
       codexPool: codexPool, codexPets: codexPets
     };
@@ -28338,6 +28429,9 @@ function cwInit(){
         comments: (snap.comments || []).filter(function (r) { return r.name === st.name; }),
         grades: (snap.grades || []).filter(function (r) { return r.name === st.name; }),
         detain: (snap.detain || []).filter(function (r) { return r.name === st.name; }),
+        /* vT129 作业等级统计（近 120 天）：优/良/中/差/超时未交 + 合计 + 统计区间 */
+        hwStats: (snap.hwStats && snap.hwStats[st.name]) || { you: 0, liang: 0, zhong: 0, cha: 0, over: 0, total: 0 },
+        hwStatFrom: snap.hwStatFrom || '', hwStatTo: snap.hwStatTo || '',
         codex: (snap.codexPets && snap.codexPets[st.name]) || []
       };
       blocks[st.name] = { code: String(st.code || '').toUpperCase(), data: seal(per, st.code || st.name) };
@@ -28397,6 +28491,59 @@ function cwInit(){
     if (_ptwTimer) clearTimeout(_ptwTimer);
     _ptwTimer = setTimeout(function () { _ptwTimer = null; ptwPublish(); }, 12000);
   }
+  /* vT129 立即重发（老师在「家长端显示设置」里手动点）：不等 12 秒，也把失败原因显示出来 */
+  function ptwPublishNow() {
+    var el = document.getElementById('ptPanelsStatus');
+    function say(t) { if (el) el.textContent = t; }
+    var s = null;
+    try { s = (typeof mpSyncSettings === 'function') ? mpSyncSettings() : null; } catch (e) {}
+    if (!s || !s.gOwner || !s.gRepo || !s.gToken) { say('⚠️ 先在「数据同步」里填好 Gitee 三项'); return; }
+    if (_ptwTimer) { clearTimeout(_ptwTimer); _ptwTimer = null; }
+    var snap = null;
+    try { snap = ptwBuildSnap(); } catch (e) { say('❌ 生成失败：' + (e && e.message)); return; }
+    if (!snap) { say('⚠️ 还没读到学生名单'); return; }
+    say('⏳ 正在生成并上传…');
+    ptwPublishSnapToGitee(snap).then(function () {
+      _ptwSig = ptwPetSig();
+      say('✅ 已重发，家长端刷新即见最新');
+      try { toastMsg('✅ 家长端快照已重发'); } catch (e) {}
+    }).catch(function (e) {
+      say('❌ 失败：' + ((e && e.message) || '网络问题'));
+    });
+  }
+  window.ptwPublishNow = ptwPublishNow;
+  /* vT129 快照自愈：别的端（小程序 / 另一台电脑）改了灵宠，这台网页收到同步后
+     只更新本地库、不会主动重发家长快照 —— 家长端就会一直看到「旧形象」和
+     「已经收回的灵宠」。这里每 90 秒比一次灵宠库指纹（条数 + 已收回数 + 最大更新时间），
+     有变化就预约重发（ptwSchedule 自带 12 秒防抖，不会刷爆 Gitee）。 */
+  var _ptwSig = '', _ptwWatch = null;
+  function ptwPetSig() {
+    try {
+      var pdb = JSON.parse(localStorage.getItem('wb_pet_db_v1') || 'null');
+      if (!pdb) return '';
+      var n = 0, del = 0, mx = 0;
+      (pdb.pets || []).forEach(function (p) {
+        if (!p) return;
+        n++;
+        if (p.deleted) del++;
+        var u = Number(p.updatedAt) || 0;
+        if (u > mx) mx = u;
+      });
+      return n + ':' + del + ':' + mx;
+    } catch (e) { return ''; }
+  }
+  function ptwWatchStart() {
+    if (_ptwWatch) return;
+    _ptwSig = ptwPetSig();
+    _ptwWatch = setInterval(function () {
+      var sg = ptwPetSig();
+      if (!sg || sg === _ptwSig) return;
+      _ptwSig = sg;
+      try { ptwSchedule(); } catch (e) {}
+    }, 90000);
+  }
+  window.ptwWatchStart = ptwWatchStart;
+  try { setTimeout(ptwWatchStart, 8000); } catch (e) {}
   /* ===== vT111 家长提案自动批准引擎（执行器） =====
      链路：家长网页 / 小程序写 pq/{id}.json（只写令牌）→ 本引擎每 12 秒拉一次 →
      合入 parentQueue（petapp）→ 按「开关 + 动作 + 每人每天上限 + 积分」判定 →
