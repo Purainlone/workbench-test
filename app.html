@@ -2686,6 +2686,18 @@ table.paper td.l{text-align:left;font-weight:600}
         <span id="ptPanelsStatus" class="syncstatus"></span>
       </div>
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
+        <div class="syncdesc"><b>👪 家长端权限 · 提案仓库（vT137）</b>：家长端「🎴 抽灵杰卡 / 🐾 抽灵宠 / 🍚 喂养」都是提交提案，老师批准（或自动批准）后才真正扣孩子积分、加成长值。提案要写进下面这个 Gitee 仓库，<b>以前只能在手机小程序「我的」里配，电脑端没配过家长端就会一直提示「老师还没开通」</b>。建议单独开一个私有仓库专门放提案。</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+          <input id="paChOwner" placeholder="Gitee 用户名" style="width:150px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
+          <input id="paChRepo" placeholder="提案仓库名（如 workbench-proposal）" style="width:230px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
+          <input id="paChToken" type="password" placeholder="该仓库的私人令牌" style="width:200px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
+          <button class="btn2 primary" onclick="paChannelSave()">💾 保存家长通道</button>
+          <button class="btn2" onclick="paChannelTest()">🔍 检测连通</button>
+        </div>
+        <div class="syncstatus" id="paChStatus"></div>
+        <div class="syncdesc" style="margin-top:6px">权限开关在「🐾 班级宠物 → 👪 家长提案」面板里：允许抽卡 / 允许喂养 + 自动批准（勾上就秒到账，不勾就等你手动批）。</div>
+      </div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
           <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html</code>
@@ -17774,6 +17786,7 @@ function mpSyncFill() {
   var gt = document.getElementById('gToken'); if (gt && !gt.value) gt.value = s.gToken;
   var ga = document.getElementById('gAuto'); if (ga) ga.checked = !!s.gAuto;
   ptPanelsFill();
+  try { paChannelFill(); } catch (e) {}
 }
 /* ================= vT59 家长端显示设置（后台控制：勾选家长端显示哪些板块） ================= */
 var PT_PANEL_KEYS = ['detain', 'points', 'hw', 'rc', 'cmt', 'grade', 'essay', 'codex'];
@@ -17791,8 +17804,78 @@ function paCopyUrl() {
   } catch (e) {}
   paFallbackCopy(url, done);
 }
-function paFallbackCopy(txt, done) {
+/* ===== vT137 家长通道（家长提案仓库）=====
+   家长端「抽灵杰卡 / 抽灵宠 / 喂养」都要往这个仓库写提案（pq/{id}.json），老师批准或自动批准后
+   才真正扣分入账。这项以前只能在手机小程序「我的 → 家长通道」里配，只在电脑上用的老师就永远
+   开不通 —— 家长端点按钮只会看到「老师还没开通家长通道」。现在这里也能配，本机填的优先。 */
+function paChannelGet() {
+  function g(k) { try { return (localStorage.getItem(k) || '').trim(); } catch (e) { return ''; } }
+  return { owner: g('wb_pe_owner'), repo: g('wb_pe_repo'), token: g('wb_pe_token') };
+}
+function paChannelFill() {
+  var c = paChannelGet();
+  var o = document.getElementById('paChOwner'), r = document.getElementById('paChRepo'), t = document.getElementById('paChToken');
+  if (o && !o.value) o.value = c.owner || ((typeof mpSyncSettings === 'function') ? mpSyncSettings().gOwner : '');
+  if (r && !r.value) r.value = c.repo || '';
+  if (t && !t.value) t.value = c.token || '';
+  paChannelStatus();
+}
+function paChannelStatus() {
+  var el = document.getElementById('paChStatus'); if (!el) return;
+  var c = paChannelGet();
+  var ok = !!(c.owner && c.repo && c.token);
+  var perm = { draw: true, feed: true };
+  try { if (typeof window.ptParentPerm === 'function') perm = window.ptParentPerm(); } catch (e) {}
+  var auto = false, lim = 1;
   try {
+    var pdb = JSON.parse(localStorage.getItem('wb_pet_db_v1') || 'null');
+    var cf = pdb && (pdb.petCfg || []).filter(function (x) { return x && x.id === 'cfg'; })[0];
+    auto = !!(cf && cf.autoApprove);
+    var n = Number(cf && cf.autoLimit); if (isFinite(n) && n >= 0) lim = n;
+  } catch (e2) {}
+  el.innerHTML = (ok ? '✅ 家长通道已开通（' + c.owner + '/' + c.repo + '）' : '⚠️ 家长通道未开通：三个框都填好并保存，家长端才能提交')
+    + '　·　抽卡/抽灵宠 ' + (perm.draw ? '开' : '关')
+    + '　·　喂养 ' + (perm.feed ? '开' : '关')
+    + '　·　自动批准 ' + (auto ? ('开（每人每天 ' + lim + ' 次）') : '关（手动批准）');
+  el.style.color = ok ? '#2b7a4e' : '#b45309';
+}
+function paChannelSave() {
+  function v(id) { var e = document.getElementById(id); return e ? e.value.trim() : ''; }
+  var owner = v('paChOwner'), repo = v('paChRepo'), token = v('paChToken');
+  var st = document.getElementById('paChStatus');
+  if (!owner || !repo || !token) {
+    if (st) { st.textContent = '⚠️ 用户名 / 仓库名 / 令牌 三项都要填'; st.style.color = '#b45309'; }
+    if (typeof toastMsg === 'function') toastMsg('⚠️ 家长通道三项都要填');
+    return;
+  }
+  try {
+    localStorage.setItem('wb_pe_owner', owner);
+    localStorage.setItem('wb_pe_repo', repo);
+    localStorage.setItem('wb_pe_token', token);
+  } catch (e) {}
+  paChannelStatus();
+  if (typeof toastMsg === 'function') toastMsg('✅ 家长通道已保存，正在重发快照…');
+  try { ptwPublishNow(); } catch (e2) {}
+}
+/* 检测：只读一次仓库信息，确认用户名 / 仓库名 / 令牌对得上 */
+function paChannelTest() {
+  var c = paChannelGet();
+  var el = document.getElementById('paChStatus');
+  if (!c.owner || !c.repo || !c.token) { paChannelSave(); return; }
+  if (el) { el.textContent = '⏳ 正在检测…'; el.style.color = '#666'; }
+  var url = 'https://gitee.com/api/v5/repos/' + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo) +
+    '?access_token=' + encodeURIComponent(c.token);
+  fetch(url).then(function (r) {
+    if (r.status === 200) { paChannelStatus(); if (el) el.innerHTML = '✅ 检测通过：仓库可读写（' + c.owner + '/' + c.repo + '）<br><span style="color:#2b7a4e">' + el.innerHTML.replace(/^✅[^<]*/, '') + '</span>'; return; }
+    return r.text().then(function (t) {
+      var j = null; try { j = JSON.parse(t); } catch (e) {}
+      if (el) { el.textContent = '❌ 检测失败（' + r.status + '）：' + ((j && (j.message || j.error)) || '检查用户名 / 仓库名 / 令牌权限'); el.style.color = '#c0392b'; }
+    });
+  }).catch(function () {
+    if (el) { el.textContent = '❌ 网络不通：稍后再试，或检查令牌是否过期'; el.style.color = '#c0392b'; }
+  });
+}
+function paFallbackCopy(txt, done) {  try {
     var ta = document.createElement('textarea');
     ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
     document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
@@ -18260,9 +18343,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v136';
-var WB_MY_VER = '优化版 vT136 · 本周新伙伴与全班图鉴';
-var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.160';
+var WB_VER_TAG = 'v137';
+var WB_MY_VER = '优化版 vT137 · 家长端抽卡与喂养权限';
+var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.161';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24952,6 +25035,8 @@ function cwInit(){
       cardReward: CARD_REWARD_DEFAULT,
       /* vT111 家长提案自动批准：开关 + 每人每天上限 + 允许自动批准的动作 */
       autoApprove: false, autoLimit: 1, autoActs: ['feed'],
+      /* vT137 家长端权限：抽卡 / 喂养各自一个总开关（默认开，家长提交后仍需老师批准或自动批准） */
+      parentDraw: true, parentFeed: true,
       updatedAt: Date.now(), updatedBy: 'web'
     };
   }
@@ -25027,8 +25112,13 @@ function cwInit(){
     /* vT112 抽卡即唤醒：动作只剩「抽卡」，旧配置里的 draw 也按抽卡算 */
     if (!Array.isArray(c.autoActs) || !c.autoActs.length) c.autoActs = ['feed'];
     c.autoActs = c.autoActs.map(function (a) { return a === 'draw' ? 'feed' : a; })
+    /* vT137 家长端权限：老配置没有这两个字段时按「开」补（老师随时可关） */
+    if (typeof c.parentDraw !== 'boolean') c.parentDraw = true;
+    if (typeof c.parentFeed !== 'boolean') c.parentFeed = true;
     return c;
   }
+  /* vT137 家长端能干哪些事：抽卡 / 喂养。快照下发给家长端做按钮显隐 */
+  function ptParentPerm() { var c = ptCfg(); return { draw: c.parentDraw !== false, feed: c.parentFeed !== false }; }
   function ptEnabled() { return ptCfg().enabled || 'on'; }
   /* 消耗类操作（抽卡/喂养/进化/家长提案）是否可玩：只有 on 才行 */
   function ptPlayable() { return ptEnabled() === 'on'; }
@@ -26229,14 +26319,26 @@ function cwInit(){
     var box = document.getElementById('petPanel-parent'); if (!box) return;
     var s = ptGet();
     var q = s.parentQueue.filter(function (x) { return (x.status || 'pending') === 'pending'; });
+    var petsById = {}; (s.pets || []).forEach(function (p) { if (p && p.id) petsById[p.id] = p; });
     var html = q.length ? q.map(function (x) {
-      var act = (x.action === 'redeem') ? '兑换' : '抽卡';   /* vT112 抽卡即唤醒：draw/feed 都显示为抽卡 */
-      return '<div class="pet-row"><span>👪 ' + ptEsc(x.studentId || x.studentName || '') + ' · ' + act + (x.item ? (' · ' + ptEsc(x.item)) : '') + '</span>' +
+      /* vT137 提案分三类：抽灵杰卡 / 抽灵宠 / 喂养（喂养带上具体灵宠与食物） */
+      var line;
+      if (x.action === 'growfeed') {
+        var pp = petsById[x.petId] || null;
+        var fo = ptFoodOf(x.food || 'rice');
+        var pay = fo.v;
+        if (pp) { try { pay = Math.min(fo.v, ptGrowState(pp).left); } catch (e) {} }
+        line = '🍚 喂养「' + ptEsc(pp ? (pp.name || '灵宠') : (x.defId || '灵宠')) + '」' + fo.e + ptEsc(fo.n) + '（-' + pay + ' 分）';
+      } else if (x.action === 'growdraw') { line = '🐾 抽灵宠（-' + ptCost('petDraw') + ' 分）'; }
+      else if (x.action === 'redeem') { line = '兑换'; }
+      else { line = '🎴 抽灵杰卡（-' + ptCost('feed') + ' 分）'; }
+      return '<div class="pet-row"><span>👪 ' + ptEsc(x.studentId || x.studentName || '') + ' · ' + line + '</span>' +
         '<span class="pet-acts"><button class="btn2 sm primary" onclick="ptApproveParent(\'' + x.id + '\')">✅ 批准</button>' +
         '<button class="btn2 sm" onclick="ptRejectParent(\'' + x.id + '\')">❌ 驳回</button></span></div>';
     }).join('') : '<div class="pet-empty">暂无待处理的家长集卡提案</div>';
     /* vT111 自动批准设置 + 最近日志 */
     var c = ptCfg(), logs = ptAutoLog();
+    var perm = ptParentPerm();
     var acts = Array.isArray(c.autoActs) ? c.autoActs : ['draw', 'feed'];
     var autoOn = !!c.autoApprove;
     var logHtml = logs.length ? logs.slice().reverse().map(function (g) {
@@ -26247,14 +26349,24 @@ function cwInit(){
       '<span class="lbl">🤖 自动批准</span>' +
       '<label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" id="ptAutoOn"' + (autoOn ? ' checked' : '') + '> 开启</label>' +
       '<span class="lbl">每人每天</span><input class="search" style="width:56px" type="number" min="0" max="20" id="ptAutoLimit" value="' + (Number(c.autoLimit) || 0) + '"> 次' +
-      '<label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" id="ptAutoActFeed"' + (acts.indexOf('feed') >= 0 ? ' checked' : '') + '> 🎴 抽卡（含唤醒）</label>' +
+      '<label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" id="ptAutoActFeed"' + (acts.indexOf('feed') >= 0 ? ' checked' : '') + '> 🎴 抽灵杰卡</label>' +
+      '<label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" id="ptAutoActGrowDraw"' + (acts.indexOf('growdraw') >= 0 ? ' checked' : '') + '> 🐾 抽灵宠</label>' +
+      '<label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" id="ptAutoActGrow"' + (acts.indexOf('growfeed') >= 0 ? ' checked' : '') + '> 🍚 喂养</label>' +
       '<button class="btn2 primary" onclick="ptAutoCfgSave()">💾 保存</button>' +
       '<button class="btn2" onclick="ptAutoRunNow()">🔄 立即扫描</button>' +
       '<span class="sctip" id="ptaStatus">' + (autoOn ? '开启中：家长提交后约 5~20 秒自动入账（需本页或教室电脑保持打开）' : '未开启：家长提案需要你手动批准') + '</span>' +
       '</div>' +
-      '<div class="sub" style="margin-top:6px">自动批准只对「家长端提交 + 已开启的动作 + 每人每天未超额 + 积分足够」的提案生效，每一笔都会写进学生奖惩流水；关掉开关立即回到人工审批。</div>' +
+      '<div class="sub" style="margin-top:6px">自动批准只对「家长端提交 + 已开启的动作 + 每人每天未超额 + 积分足够」的提案生效，每一笔都会写进学生奖惩流水；关掉开关立即回到人工审批。抽卡与喂养的每日额度分开计算。</div>' +
+      /* vT137 家长端权限总开关：关掉后家长端连提案都提交不了 */
+      '<div class="gpset" style="margin-top:8px">' +
+      '<span class="lbl">👪 家长端权限</span>' +
+      '<label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" id="ptPermDraw"' + (perm.draw ? ' checked' : '') + '> 🎴 允许抽卡（每次 ' + ptCost('feed') + ' 分）</label>' +
+      '<label style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" id="ptPermFeed"' + (perm.feed ? ' checked' : '') + '> 🍚 允许喂养（1 点成长值 = 1 分）</label>' +
+      '<button class="btn2 primary" onclick="ptParentPermSave()">💾 保存权限</button>' +
+      '<span class="sctip">关掉后家长端按钮仍在，但点下去会提示「老师已关闭」；两项都开 + 自动批准开启 = 家长端自助消费。</span>' +
+      '</div>' +
       '<details style="margin:6px 0 10px"><summary style="cursor:pointer;color:#666">🤖 最近自动批准记录（' + logs.length + '）</summary>' + logHtml + '</details>';
-    box.innerHTML = '<div class="sub">家长在小程序 / 家长网页端提交的抽卡 / 兑换提案，老师批准后才真正入账（扣学生积分；抽卡抽到新灵杰会同时唤醒上墙）。' +
+    box.innerHTML = '<div class="sub">家长在小程序 / 家长网页端提交的抽卡 / 喂养提案，老师批准后才真正入账（扣学生积分；抽卡抽到新灵杰会同时唤醒上墙，喂养真正加成长值）。' +
       (ptPlayable() ? '' : ' <b style="color:#c33">⏸ 模块暂停中，批准后也不会消耗积分，建议先驳回或启用模块。</b>') + '</div>' + html + autoHtml;
     ptBadges();
   }
@@ -27269,6 +27381,35 @@ function cwInit(){
     p.updatedAt = Date.now();
     ptSave(s); PET_DB = s; toastMsg('🎓 毕业卡号：' + p.gradCode); ptRenderGrad(); ptRenderHome();
   }
+  /* vT137 家长喂养提案：把提案里的 petId + food 解析成「哪只灵宠 / 哪份食物 / 实际扣多少分」。
+     家长端没有写库权限，只有老师的批准动作（手动或自动）才会真正加成长值。 */
+  function ptParentFeedPlan(s, it) {
+    var who = it.studentName || it.studentId || '';
+    var pid = it.petId || '', defId = it.defId || '';
+    var pet = null;
+    (s.pets || []).forEach(function (p) {
+      if (!p || p.deleted || pet) return;
+      if (pid) { if (p.id === pid) pet = p; return; }
+      if (p.studentName === who && defId && p.defId === defId) pet = p;
+    });
+    if (!pet) return { ok: false, reason: '找不到要喂的灵宠（可能已被收回或毕业）' };
+    if ((pet.studentName || '') !== who) return { ok: false, reason: '灵宠主人对不上，已拦下' };
+    if (!ptGrowImgsOf(pet)) return { ok: false, reason: '「' + (pet.name || '灵杰') + '」不是成长灵宠，不能喂养' };
+    var gs = ptGrowState(pet);
+    if (gs.stage !== 'baby' && gs.stage !== 'teen') return { ok: false, reason: '「' + (pet.name || '') + '」已经成年，不用再喂' };
+    if (gs.left <= 0) return { ok: false, reason: '「' + (pet.name || '') + '」成长值已攒满，等你点进化' };
+    var food = ptFoodOf(it.food || 'rice');
+    return { ok: true, pet: pet, food: food, cost: Math.min(food.v, gs.left), gs: gs };
+  }
+  /* vT137 家长抽灵宠：与老师端 ptPetDraw 同一套规则（未成年只能养一只 / 不抽已有物种 / 扣 petDraw 分） */
+  function ptParentGrowDraw(s, who) {
+    var cost = ptCost('petDraw');
+    if (ptPetHasYoung(s, who)) return { ok: false, reason: who + ' 还有未成年的灵宠，先养到成年才能再抽一只' };
+    var owned = ptPetOwnedDefIds(s, who);
+    var pool = ptGrowthDrawPool(s).filter(function (p) { return !owned[p.id]; });
+    if (!pool.length) return { ok: false, reason: '没有可抽的成长灵宠了（已全部拥有）' };
+    return { ok: true, cost: cost, sp: ptGrowWeightedPick(pool) };
+  }
   /* vT111 审批核心：UI 手动批准与「自动批准」共用同一套入账逻辑（扣积分 + 唤醒/集卡 + 落库）。
      resolve 值 { ok, act, actName, who, cost, msg } ；已处理过的提案返回 { ok:true, dup:true }。 */
   function ptApproveParentCore(id, byAuto) {
@@ -27277,6 +27418,49 @@ function cwInit(){
     if (!it) return Promise.reject(new Error('提案不存在'));
     if ((it.status || 'pending') !== 'pending') return Promise.resolve({ ok: true, dup: true, msg: '该提案已处理过' });
     var who = it.studentName || it.studentId;
+    /* vT137 家长喂养：食物 1 点成长值 = 1 分，快攒满时只按剩余量收 */
+    if (it.action === 'growfeed') {
+      var c0 = ptCfg();
+      if (c0.parentFeed === false) return Promise.reject(new Error('家长端喂养已关闭'));
+      var plan = ptParentFeedPlan(s, it);
+      if (!plan.ok) return Promise.reject(new Error(plan.reason));
+      if (ptStuPoints(who) < plan.cost) return Promise.reject(new Error(who + ' 积分不足（这份「' + plan.food.n + '」需 ' + plan.cost + ' 分）'));
+      return ptAddManual(who, '成长灵宠 · 家长喂养（' + plan.food.n + '）' + (byAuto ? '（自动批准）' : ''), -plan.cost).then(function () {
+        var pet2 = plan.pet;
+        pet2.growExp = (Number(pet2.growExp) || 0) + plan.cost;
+        pet2.hunger = Math.min(100, (Number(pet2.hunger) || 80) + 6);
+        pet2.mood = Math.min(100, (Number(pet2.mood) || 90) + 2);
+        pet2.feedN = (Number(pet2.feedN) || 0) + 1;
+        pet2.lastFood = plan.food.k;
+        pet2.updatedAt = Date.now();
+        it.status = 'done'; it.doneAt = Date.now(); it.doneBy = byAuto ? 'auto' : 'teacher';
+        ptSave(s); PET_DB = s; ptKickSync();
+        ptRenderParent(); ptRenderHome(); ptRenderIncubator();
+        var g2 = ptGrowState(pet2);
+        var msg = '已批准家长喂「' + (pet2.name || '灵宠') + '」' + plan.food.e + plan.food.n +
+          '，+' + plan.cost + ' 成长值（' + g2.have + '/' + g2.need +
+          (g2.left <= 0 ? '，攒满了可以免费进化' : '，再攒 ' + g2.left + ' 点') + '）';
+        return { ok: true, act: 'growfeed', actName: '喂养', who: who, cost: plan.cost, msg: msg, cardMsg: '' };
+      });
+    }
+    /* vT137 家长抽灵宠：扣 petDraw 分，抽一只成长灵宠（奶团子态） */
+    if (it.action === 'growdraw') {
+      if (ptCfg().parentDraw === false) return Promise.reject(new Error('家长端抽灵宠已关闭'));
+      var g = ptParentGrowDraw(s, who);
+      if (!g.ok) return Promise.reject(new Error(g.reason));
+      if (ptStuPoints(who) < g.cost) return Promise.reject(new Error(who + ' 积分不足（抽灵宠需 ' + g.cost + ' 分）'));
+      return ptAddManual(who, '成长灵宠 · 家长抽取' + (byAuto ? '（自动批准）' : ''), -g.cost).then(function () {
+        var np = ptMkPet(who, g.sp); np.fromPetDraw = 1; np.fromParent = 1;
+        s.pets.push(np);
+        it.status = 'done'; it.doneAt = Date.now(); it.doneBy = byAuto ? 'auto' : 'teacher';
+        ptSave(s); PET_DB = s; ptKickSync();
+        ptRenderParent(); ptRenderHome(); ptRenderIncubator();
+        return {
+          ok: true, act: 'growdraw', actName: '抽灵宠', who: who, cost: g.cost,
+          msg: '已批准家长抽灵宠，抽到「' + g.sp.name + '」（奶团子态）'
+        };
+      });
+    }
     var pet = s.pets.filter(function (p) { return (p.studentId || p.studentName) === who && !p.deleted; })[0];
     /* vT112 抽卡即唤醒；vT124 兑换随商城下线，家长提案一律按「抽卡」入账 */
     var cost = ptCost('feed');
@@ -27315,12 +27499,15 @@ function cwInit(){
         if (old.status === 'done' || old.status === 'rejected') return;
         old.studentName = old.studentName || x.studentName || x.studentId;
         old.action = old.action || x.action; old.at = old.at || x.at;
+        if (!old.petId && x.petId) old.petId = x.petId;
+        if (!old.food && x.food) old.food = x.food;
         return;
       }
       s.parentQueue.push({
         id: x.id, parentId: x.parentId || '', studentId: x.studentId || x.studentName || '',
         studentName: x.studentName || x.studentId || '', action: x.action || 'draw',
-        item: x.item || '', at: x.at || Date.now(), atText: x.atText || '',
+        item: x.item || '', petId: x.petId || '', defId: x.defId || '', food: x.food || '',
+        at: x.at || Date.now(), atText: x.atText || '',
         status: 'pending', by: x.by || 'parent', ts: x.ts || x.at || Date.now(),
         updatedAt: Date.now(), updatedBy: 'parent'
       });
@@ -27339,16 +27526,38 @@ function cwInit(){
     if (!c.autoApprove) return { ok: false, reason: '自动批准未开启' };
     var who = it.studentName || it.studentId;
     var acts = Array.isArray(c.autoActs) ? c.autoActs : ['feed'];
-    /* vT124 家长端只剩抽卡一个动作，兑换已随商城下线 */
-    if (acts.indexOf('feed') < 0) return { ok: false, reason: '抽卡未开启自动批准' };
-    var cost = ptCost('feed');
-    /* 每人每天上限：只数「今天 + 自动批准」的已办件，老师手动批的不占额度 */
+    /* vT137 三种动作：feed=抽灵杰卡 · growdraw=抽成长灵宠 · growfeed=喂养 */
+    var act = (it.action === 'growfeed') ? 'growfeed' : (it.action === 'growdraw' ? 'growdraw' : 'feed');
+    var cost = 0;
+    if (act === 'feed' || act === 'growdraw') {
+      if (c.parentDraw === false) return { ok: false, reason: '家长端抽卡/抽灵宠已关闭' };
+      if (acts.indexOf(act) < 0) return { ok: false, reason: (act === 'growdraw' ? '抽灵宠' : '抽卡') + '未开启自动批准' };
+    }
+    if (act === 'growfeed') {
+      /* vT137 家长喂养：要老师开启「允许家长端喂养」+ 自动批准勾上「🍚 喂养」 */
+      if (c.parentFeed === false) return { ok: false, reason: '家长端喂养已关闭' };
+      if (acts.indexOf('growfeed') < 0) return { ok: false, reason: '喂养未开启自动批准' };
+      var plan = ptParentFeedPlan(s, it);
+      if (!plan.ok) return { ok: false, reason: plan.reason };
+      cost = plan.cost;
+    } else if (act === 'growdraw') {
+      var g = ptParentGrowDraw(s, who);
+      if (!g.ok) return { ok: false, reason: g.reason };
+      cost = g.cost;
+    } else {
+      /* vT124 家长端抽灵杰卡走 feed 这个动作名 */
+      cost = ptCost('feed');
+    }
+    /* 每人每天上限：只数「今天 + 自动批准」的已办件，老师手动批的不占额度；
+       vT137 抽灵杰 / 抽灵宠 / 喂养分开计数，喂满额度不影响抽卡 */
     var lim = Number(c.autoLimit); if (!(lim >= 0)) lim = 1;
     if (lim > 0) {
       var today = ptYmd(new Date()), used = 0;
       s.parentQueue.forEach(function (x) {
         if (x.status !== 'done' || x.doneBy !== 'auto') return;
         if ((x.studentName || x.studentId) !== who) return;
+        var xa = (x.action === 'growfeed') ? 'growfeed' : (x.action === 'growdraw' ? 'growdraw' : 'feed');
+        if (xa !== act) return;
         if (ptYmd(new Date(x.doneAt || x.updatedAt || 0)) === today) used++;
       });
       if (used >= lim) return { ok: false, reason: who + ' 今日自动批准已用完（' + used + '/' + lim + '）' };
@@ -27379,16 +27588,34 @@ function cwInit(){
     var on = document.getElementById('ptAutoOn');
     var lim = document.getElementById('ptAutoLimit');
     var fA = document.getElementById('ptAutoActFeed');
+    var fG = document.getElementById('ptAutoActGrow');
+    var fD = document.getElementById('ptAutoActGrowDraw');
     c.autoApprove = !!(on && on.checked);
     var v = lim ? Number(lim.value) : 1; if (!(v >= 0)) v = 1;
     c.autoLimit = Math.round(v);
-    var acts = []; if (fA && fA.checked) acts.push('feed');
-    if (!acts.length) acts = ['feed'];   /* 抽卡是唯一消耗动作，不允许空选 */
+    var acts = [];
+    if (fA && fA.checked) acts.push('feed');
+    if (fD && fD.checked) acts.push('growdraw');
+    if (fG && fG.checked) acts.push('growfeed');
+    if (!acts.length && fA) acts = ['feed'];   /* 默认至少保留抽灵杰卡 */
     c.autoActs = acts;
     c.updatedBy = 'web'; c.updatedAt = Date.now();
     ptSave(ptGet()); ptKickSync(); toastMsg('✅ 自动批准设置已保存');
     ptRenderParent();
     if (c.autoApprove && typeof window.ptaKick === 'function') window.ptaKick();
+  }
+  /* vT137 家长端权限保存（抽卡 / 喂养总开关） */
+  function ptParentPermSave() {
+    var c = ptCfg();
+    var d = document.getElementById('ptPermDraw');
+    var f = document.getElementById('ptPermFeed');
+    c.parentDraw = !!(d && d.checked);
+    c.parentFeed = !!(f && f.checked);
+    c.updatedBy = 'web'; c.updatedAt = Date.now();
+    ptSave(ptGet()); ptKickSync();
+    ptRenderParent();
+    toastMsg('✅ 家长端权限已保存：抽卡' + (c.parentDraw ? '开' : '关') + ' · 喂养' + (c.parentFeed ? '开' : '关'));
+    try { if (typeof ptwSchedule === 'function') ptwSchedule(); } catch (e) {}
   }
   function ptAutoRunNow() { if (typeof window.ptaScan === 'function') window.ptaScan(true); else toastMsg('⚠️ 自动批准引擎未就绪'); }
 
@@ -28273,6 +28500,11 @@ function cwInit(){
   window.ptAutoRunNow = ptAutoRunNow;
   window.ptAutoLog = ptAutoLog;
   window.ptAutoCfg = function () { var c = ptCfg(); return { on: !!c.autoApprove, limit: Number(c.autoLimit) || 0, acts: (c.autoActs || []).slice() }; };
+  /* vT137 家长端权限（抽卡 / 喂养）与喂养提案解析：网页端设置卡片与测试都要读 */
+  window.ptParentPerm = ptParentPerm;
+  window.ptParentPermSave = ptParentPermSave;
+  window.ptParentFeedPlan = ptParentFeedPlan;
+  window.ptParentGrowDraw = ptParentGrowDraw;
   window.ptRejectParent = ptRejectParent;
   window.ptApproveSub = ptApproveSub;
   window.ptRejectSub = ptRejectSub;
@@ -28566,9 +28798,19 @@ function cwInit(){
           if (gStage === 'grad') gStage = 'adult';
           var gRel = p.img || '';
           if (!gRel && gImgs) gRel = gImgs[gStage] || gImgs.baby || gImgs.teen || gImgs.adult || '';
+          /* vT137 成长值进度（家长端显示「🌱 30/60」并判断能不能喂） */
+          var gGrow = null;
+          if (gImgs && typeof window.ptGrowState === 'function') {
+            try { gGrow = window.ptGrowState(p) || null; } catch (_e) { gGrow = null; }
+          }
           codexPets[nm].push({
+            id: p.id || '',
             defId: p.defId || '', name: p.name || '', series: p.series || '', tier: p.tier || '普通',
             img: gRel, imgs: gImgs, stage: gStage,
+            /* vT137 家长端「真实喂养」要用：成长值进度 + 是否成长灵宠（灵杰卡不能喂） */
+            grow: !!gImgs,
+            gx: gGrow ? gGrow.have : 0,
+            gneed: gGrow ? gGrow.need : 0,
             blessing: p.blessing || '', hatchedAt: p.hatchedAt || '',
             stars: cardStars[nm + '|' + (p.defId || '')] || 1
           });
@@ -28663,11 +28905,50 @@ function cwInit(){
               return Math.max(0, Math.round(v2));
             } catch (_e2) { return 5; }
           })();
+          /* vT137 家长通道（提案仓库）：本机「家长端权限」里填的优先；没填就沿用仓库里已有的，
+             避免网页发布把小程序端设的令牌冲掉。以前这项只能在手机小程序「我的」里设，
+             只在电脑上用的老师永远开不通 → 家长端一直提示「老师还没开通」。 */
+          var peCh = (typeof paChannelGet === 'function') ? paChannelGet() : null;
+          if (peCh && peCh.owner) doc.parentEssayOwner = peCh.owner;
+          if (peCh && peCh.repo) doc.parentEssayRepo = peCh.repo;
+          if (peCh && peCh.token) doc.parentEssayToken = peCh.token;
           if (j) {
-            if (j.parentEssayOwner) doc.parentEssayOwner = j.parentEssayOwner;
-            if (j.parentEssayRepo) doc.parentEssayRepo = j.parentEssayRepo;
-            if (j.parentEssayToken) doc.parentEssayToken = j.parentEssayToken;
+            if (j.parentEssayOwner && !(peCh && peCh.owner)) doc.parentEssayOwner = j.parentEssayOwner;
+            if (j.parentEssayRepo && !(peCh && peCh.repo)) doc.parentEssayRepo = j.parentEssayRepo;
+            if (j.parentEssayToken && !(peCh && peCh.token)) doc.parentEssayToken = j.parentEssayToken;
           }
+          /* vT137 家长端能不能抽灵杰 / 抽灵宠 / 喂养，以及自动批准状态（家长页据此显示「秒到账」还是「等老师批」） */
+          doc.parentPerm = (function () {
+            var perm = { draw: true, feed: true };
+            try { if (typeof window.ptParentPerm === 'function') perm = window.ptParentPerm(); } catch (_e) {}
+            var foods = [];
+            try {
+              (window.PT_FOODS || []).forEach(function (f) { foods.push({ k: f.k, e: f.e, n: f.n, v: f.v }); });
+            } catch (_e2) {}
+            var petDraw = 20;
+            try {
+              var pdbP = JSON.parse(localStorage.getItem('wb_pet_db_v1') || 'null');
+              var cP = pdbP && (pdbP.petCfg || []).filter(function (x) { return x && x.id === 'cfg'; })[0];
+              var pv = Number(cP && cP.costs ? cP.costs.petDraw : NaN);
+              if (isFinite(pv) && pv >= 0) petDraw = Math.round(pv);
+            } catch (_e5) {}
+            return { draw: !!perm.draw, feed: !!perm.feed, petDraw: petDraw, foods: foods };
+          })();
+          doc.autoApprove = (function () {
+            try {
+              var pdbA = JSON.parse(localStorage.getItem('wb_pet_db_v1') || 'null');
+              var cA = pdbA && (pdbA.petCfg || []).filter(function (x) { return x && x.id === 'cfg'; })[0];
+              return !!(cA && cA.autoApprove);
+            } catch (_e3) { return false; }
+          })();
+          doc.autoLimit = (function () {
+            try {
+              var pdbL = JSON.parse(localStorage.getItem('wb_pet_db_v1') || 'null');
+              var cL = pdbL && (pdbL.petCfg || []).filter(function (x) { return x && x.id === 'cfg'; })[0];
+              var n = Number(cL && cL.autoLimit);
+              return isFinite(n) && n >= 0 ? n : 1;
+            } catch (_e4) { return 1; }
+          })();
           return ptwGiteeWrite(api, pr.token, doc, sha);
         });
       });
