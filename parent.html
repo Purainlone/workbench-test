@@ -97,9 +97,26 @@
   .pend{margin-top:10px;font-size:13px;padding:9px 11px;border-radius:10px;background:#eef6f1;color:#2f6b4f}
   .pend.wait{background:#fdf3dd;color:#8a6511}
   .pend.bad{background:#fdeaea;color:#b4382a}
+  /* vT129 作业等级统计 */
+  .stgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}
+  .stg{background:#f7faf8;border-radius:11px;padding:8px 3px;text-align:center}
+  .stg b{display:block;font-size:19px;line-height:1.25}
+  .stg span{font-size:11px;color:var(--ink2)}
+  .stg.g b{color:#2b7a4b}
+  .stg.y b{color:#a97a11}
+  .stg.z b{color:#5f6b7a}
+  .stg.r b{color:#b4382a}
+  .stg.x b{color:#dc2626}
+  .stbar{display:flex;height:9px;border-radius:6px;overflow:hidden;background:#eef2ef;margin:12px 0 11px}
+  .stbar i{display:block;height:100%;transition:width .4s}
+  .stbar .b-g{background:#4caf7d}
+  .stbar .b-y{background:#e0b552}
+  .stbar .b-z{background:#9aa8b5}
+  .stbar .b-r{background:#e06a5a}
+  .stbar .b-x{background:#d3402f}
+  .stfoot{font-size:11.5px;color:#9aa8a0;margin-top:9px;line-height:1.7}
   /* 成绩 */
-  .gr{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f1f5f2}
-  .gr:last-child{border-bottom:0}
+  .gr{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f1f5f2}  .gr:last-child{border-bottom:0}
   .gr .l{font-size:13px}
   .gr .l small{color:#9aa8a0;font-size:11px;margin-left:6px}
   .gr .r{display:flex;align-items:center;gap:8px}
@@ -122,7 +139,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT128）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT129）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -243,9 +260,34 @@
   }
 
   /* ---------- 视图：把快照里的孩子数据整理成页面要用的形状 ---------- */
+  /* vT129 作业等级统计：优先用快照里的 hwStats（近 120 天，老师端算好下发）；
+     老快照没有这个字段就用块里的 hw 现算（只覆盖近 30 天，但至少不会空白）。 */
+  function hwStatOf(per) {
+    var zero = { you: 0, liang: 0, zhong: 0, cha: 0, over: 0, total: 0 };
+    var h = per && per.hwStats;
+    if (h && typeof h === 'object') {
+      return {
+        you: Number(h.you) || 0, liang: Number(h.liang) || 0, zhong: Number(h.zhong) || 0,
+        cha: Number(h.cha) || 0, over: Number(h.over) || 0,
+        total: Number(h.total) || ((Number(h.you) || 0) + (Number(h.liang) || 0) + (Number(h.zhong) || 0) + (Number(h.cha) || 0) + (Number(h.over) || 0)),
+        from: per.hwStatFrom || '', to: per.hwStatTo || '', legacy: false
+      };
+    }
+    var o = zero, from = '', to = '';
+    (per && per.hw || []).forEach(function (r) {
+      var lv = r && r.level; if (!lv) return;
+      var d = dateOnly(r.date);
+      if (d && (!from || d < from)) from = d;
+      if (d && (!to || d > to)) to = d;
+      if (lv === '优') o.you++; else if (lv === '良') o.liang++; else if (lv === '中') o.zhong++;
+      else if (lv === '差') o.cha++; else if (lv === '超时未交') o.over++;
+      o.total++;
+    });
+    o.from = from; o.to = to; o.legacy = true;
+    return o;
+  }
   function buildView(per, name) {
-    var day = ymd();
-    var items = (per.hwItems || []).filter(function (x) { return dateOnly(x.date) === day; })
+    var day = ymd();    var items = (per.hwItems || []).filter(function (x) { return dateOnly(x.date) === day; })
       .sort(function (a, b) { return String(a.item).localeCompare(String(b.item)); });
     var LV = { '优': 'g', '良': 'y', '中': 'z', '差': 'r', '超时未交': 'r' };
     var hw = items.map(function (it) {
@@ -281,7 +323,10 @@
     return {
       day: day, hw: hw, hwDone: hw.filter(function (x) { return x.done; }).length, hwN: hw.length,
       rc: rcList, points: per.points || { hw: 0, manual: 0, total: 0 },
-      detain: (per.detain || []), grades: grades, comments: cmts, codex: per.codex || []
+      detain: (per.detain || []), grades: grades, comments: cmts,
+      hwStat: hwStatOf(per),
+      /* vT129 老师已收回（deleted）的灵宠绝不显示；老快照里也许还留着，这里再兜一层 */
+      codex: (per.codex || []).filter(function (p) { return p && !p.deleted && !p.purged; })
     };
   }
 
@@ -437,6 +482,37 @@
       }).join('') : '<div class="empty">今天老师还没布置作业</div>';
       h += '</div>';
     }
+    /* 作业等级统计（vT129）：优 / 良 / 中 / 差 / 超时未交 各几次 + 占比条 */
+    if (on('hwstat')) {
+      var st = v.hwStat || { you: 0, liang: 0, zhong: 0, cha: 0, over: 0, total: 0 };
+      var span = (st.from && st.to) ? (st.from.slice(5) + ' ~ ' + st.to.slice(5)) : '近 120 天';
+      h += '<div class="card"><h2>📊 作业等级统计 <em>' + esc(span) + '</em></h2>';
+      if (!st.total) {
+        h += '<div class="empty">这段时间还没有作业登记</div>';
+      } else {
+        var pct = function (n) { return (n * 100 / st.total).toFixed(1) + '%'; };
+        var goodRate = Math.round((st.you + st.liang) * 100 / st.total);
+        h += '<div class="stgrid">' +
+          '<div class="stg g"><b>' + st.you + '</b><span>优</span></div>' +
+          '<div class="stg y"><b>' + st.liang + '</b><span>良</span></div>' +
+          '<div class="stg z"><b>' + st.zhong + '</b><span>中</span></div>' +
+          '<div class="stg r"><b>' + st.cha + '</b><span>差</span></div>' +
+          '<div class="stg x"><b>' + st.over + '</b><span>超时未交</span></div>' +
+          '</div>';
+        h += '<div class="stbar">' +
+          (st.you ? '<i class="b-g" style="width:' + pct(st.you) + '"></i>' : '') +
+          (st.liang ? '<i class="b-y" style="width:' + pct(st.liang) + '"></i>' : '') +
+          (st.zhong ? '<i class="b-z" style="width:' + pct(st.zhong) + '"></i>' : '') +
+          (st.cha ? '<i class="b-r" style="width:' + pct(st.cha) + '"></i>' : '') +
+          (st.over ? '<i class="b-x" style="width:' + pct(st.over) + '"></i>' : '') +
+          '</div>';
+        h += '<div class="stfoot">共登记 ' + st.total + ' 次 · 优良率 ' + goodRate + '%' +
+          (st.over ? (' · 超时未交 ' + st.over + ' 次') : '') +
+          (st.legacy ? '<br>（这份数据是旧版快照，只统计到近 30 天；老师重新发布后会补全）' : '') +
+          '</div>';
+      }
+      h += '</div>';
+    }
     /* 诵读 */
     if (on('rc')) {
       h += '<div class="card"><h2>📖 今日诵读</h2>';
@@ -477,7 +553,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v128</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v129</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
@@ -590,6 +666,10 @@
   }
 
   /* ---------- 启动 ---------- */
+  /* 测试 / 自检钩子：把纯数据函数挂出来，方便离线核对统计口径（不参与页面渲染） */
+  window.__paHwStat = hwStatOf;
+  window.__paBuildView = buildView;
+  window.__paPetRel = petRel;
   function boot() {
     try {
       ST.access = localStorage.getItem(K_ACCESS) || '';
