@@ -2678,6 +2678,13 @@ table.paper td.l{text-align:left;font-weight:600}
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="essay" checked> 提交孩子作文</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="codex" checked> 📖 启灵图鉴</label>
       </div>
+      <div id="ptGradeModeBox" style="margin-top:12px;padding-top:10px;border-top:1px dashed #dde5ee">
+        <div class="syncdesc"><b>🏅 成绩显示方式（vT141）</b>：家长端「🏅 成绩记录」用哪种方式显示，由你决定。分数方式显示具体分数；等级方式只显示 A+ / A / B / C / D / E（A+ ≥95，A 90–94，B 80–89，C 70–79，D 60–69，E &lt;60）。</div>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:8px" id="ptGradeMode">
+          <label style="font-size:13px;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="ptGradeMode" value="score" checked> 显示分数（如 96 分）</label>
+          <label style="font-size:13px;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="ptGradeMode" value="level"> 显示等级（A+ / A / B / C / D / E）</label>
+        </div>
+      </div>
       <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center">
         <button class="btn2 primary" onclick="ptPanelsSave()">💾 保存并显示到家长端</button>
         <button class="btn2" onclick="ptwPublishNow()" title="把最新的作业、积分、灵宠（含已收回的）重新生成一次并上传，家长刷新就能看到">🚀 立即重发快照</button>
@@ -17908,14 +17915,19 @@ function paFallbackCopy(txt, done) {  try {
 }
 /* vT131 修复：hwstat（vT129 加的「📊 作业统计」）之前漏在默认表外 —— 勾选框压根不保存；
    本轮新增 hwtodo（⚠️ 未完成作业），一并补进默认表 */
-function ptPanelsDefault() { return { detain: true, points: true, hw: true, hwtodo: true, hwstat: true, rc: true, cmt: true, grade: true, essay: true, codex: true }; }
+function ptPanelsDefault() { return { detain: true, points: true, hw: true, hwtodo: true, hwstat: true, rc: true, cmt: true, grade: true, essay: true, codex: true, gradeMode: 'score' }; }
 function ptPanelsGet() {
   var d = ptPanelsDefault();
   try {
     var raw = localStorage.getItem('wb_pt_panels');
     if (raw) {
       var o = JSON.parse(raw);
-      if (o && typeof o === 'object') { for (var k in d) { if (typeof o[k] === 'boolean') d[k] = o[k]; } }
+      if (o && typeof o === 'object') {
+        for (var k in d) {
+          if (typeof o[k] === 'boolean') d[k] = o[k];
+          else if (k === 'gradeMode' && (o[k] === 'score' || o[k] === 'level')) d[k] = o[k];
+        }
+      }
     }
   } catch (e) {}
   return d;
@@ -17929,7 +17941,21 @@ function ptPanelsFill() {
     var pk = cbs[i].getAttribute('data-pk');
     if (pk && (pk in d)) cbs[i].checked = (d[pk] !== false);
   }
+  ptGradeFill(d.gradeMode);
 }
+/* vT141 成绩显示方式：分数 / 等级（单选，存进 wb_pt_panels.gradeMode，随快照下发给家长端） */
+function ptGradeFill(mode) {
+  var rs = document.querySelectorAll('#ptGradeMode input[name="ptGradeMode"]');
+  if (!rs.length) return;
+  for (var i = 0; i < rs.length; i++) rs[i].checked = (rs[i].value === (mode === 'level' ? 'level' : 'score'));
+}
+function ptGradeRead() {
+  var rs = document.querySelectorAll('#ptGradeMode input[name="ptGradeMode"]');
+  for (var i = 0; i < rs.length; i++) { if (rs[i].checked) return rs[i].value === 'level' ? 'level' : 'score'; }
+  return 'score';
+}
+/* vT141 进页面就把已保存的板块开关 / 成绩显示方式回填（以前要等点开「数据同步」页才回填） */
+try { ptPanelsFill(); } catch (e) {}
 function ptPanelsSave() {
   var d = ptPanelsDefault();
   var box = document.getElementById('ptPanels');
@@ -17940,9 +17966,10 @@ function ptPanelsSave() {
       if (pk && (pk in d)) d[pk] = !!cbs[i].checked;
     }
   }
+  d.gradeMode = ptGradeRead();
   try { localStorage.setItem('wb_pt_panels', JSON.stringify(d)); } catch (e) {}
   var st = document.getElementById('ptPanelsStatus');
-  if (st) st.textContent = '✅ 已保存';
+  if (st) st.textContent = '✅ 已保存（成绩：' + (d.gradeMode === 'level' ? '显示等级' : '显示分数') + '）';
   toastMsg('家长端显示设置已保存，正在发布…');
   try { if (typeof ptwPublish === 'function') ptwPublish(); } catch (e) {}
 }
@@ -18367,9 +18394,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v140';
-var WB_MY_VER = '优化版 vT140 · 集卡并进图鉴';
-var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.164';
+var WB_VER_TAG = 'v141';
+var WB_MY_VER = '优化版 vT141 · 图鉴两列 + 成绩显示方式';
+var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.165';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
