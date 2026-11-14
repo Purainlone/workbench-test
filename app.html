@@ -18260,9 +18260,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v132';
-var WB_MY_VER = '优化版 vT132 · 灵宠扩容77只';
-var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.156';
+var WB_VER_TAG = 'v133';
+var WB_MY_VER = '优化版 vT133 · 灵宠品级';
+var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.157';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -25735,12 +25735,34 @@ function cwInit(){
     [76,'文鳐'],
     [77,'灵蟹']
   ];
+  /* ---------------- vT133 成长灵宠品级：普通 / 稀有两档 ----------------
+     ｜稀有款初始 12 只（编号见下，老师可在后台「灵宠品级」自行增减）；
+     ｜加权抽取：普通权重 100、稀有权重 30 → 77 只池约 5% 出稀有。
+     ｜品级改动落在灵杰池定义上（origin==='seed'），随同步下发到小程序 / 桌面。 */
+  var PT_GROW_RARE_NOS = [11, 17, 20, 26, 32, 39, 47, 50, 56, 67, 72, 76];
+  var PT_GROW_TIER_WEIGHT = { 普通: 100, 稀有: 30 };
+  function ptGrowRareSet() {
+    var set = {}; PT_GROW_RARE_NOS.forEach(function (n) { set['gp' + ('00' + n).slice(-3)] = 1; });
+    return set;
+  }
+  function ptGrowWeightedPick(pool) {
+    var tot = 0;
+    pool.forEach(function (p) { tot += PT_GROW_TIER_WEIGHT[p.tier || '普通'] || 100; });
+    var r = Math.random() * tot;
+    for (var i = 0; i < pool.length; i++) {
+      r -= PT_GROW_TIER_WEIGHT[pool[i].tier || '普通'] || 100;
+      if (r < 0) return pool[i];
+    }
+    return pool[pool.length - 1];
+  }
   function ptBuildGrowSeed() {
     return PT_GROW_ROWS.map(function (r) {
       var nn = ('00' + r[0]).slice(-3);
+      var rare = PT_GROW_RARE_NOS.indexOf(r[0]) >= 0;
       var d = PetCore.buildPetDef({
         id: 'gp' + nn, name: r[1], series: '成长灵宠',
-        archetype: 'spirit', rarity: '普通', origin: 'seed', emoji: '🐾'
+        archetype: 'spirit', rarity: rare ? '稀有' : '普通', tier: rare ? '稀有' : '普通',
+        origin: 'seed', emoji: '🐾'
       });
       d.imgs = { baby: 'petimg/' + nn + '_1.png', teen: 'petimg/' + nn + '_2.png', adult: 'petimg/' + nn + '_3.png' };
       d.updatedAt = Date.now();
@@ -25882,6 +25904,24 @@ function cwInit(){
     if (n) console.log('[pet] vT127 隐藏款进池：' + n + ' 条灵杰升为隐藏');
     return true;
   }
+  /* ---------------- vT133 成长灵宠品级：普通 / 稀有两档（一次性） ----------------
+     ｜老库的灵杰池/已拥有的灵宠记录里 tier 都是「普通」，按名册把 12 只稀有款补上。
+     ｜之后老师可在后台「灵宠品级」自行增减，迁移只跑这一次，绝不覆盖老师改动。 */
+  var GROW_TIER_VER = 133;
+  function ptGrowTierV133(s) {
+    if (!s || (Number(s.growTierVer) || 0) >= GROW_TIER_VER) return false;
+    var rare = ptGrowRareSet(), now = Date.now(), n = 0;
+    function bump(rec) {
+      if (!rec || rec.deleted || !rare[rec.defId || rec.id]) return;
+      if ((rec.tier || '普通') === '稀有') return;
+      rec.tier = '稀有'; rec.rarity = '稀有'; rec.updatedAt = now; rec.tierV133 = 1; n++;
+    }
+    (s.petPool || []).forEach(function (d) { if (d && d.origin === 'seed') bump(d); });
+    (s.pets || []).forEach(bump);
+    s.growTierVer = GROW_TIER_VER;
+    if (n) console.log('[pet] vT133 灵宠品级：' + n + ' 只升为「稀有」');
+    return true;
+  }
   function wbPetSeed() {
     var s = ptGet();
     var dirty = false;
@@ -25895,6 +25935,8 @@ function cwInit(){
     if (ptGrowRestoreV121(s)) dirty = true;
     /* vT127：12 只灵杰升为「隐藏」并进随机池（一次性） */
     if (ptCodexHiddenV127(s)) dirty = true;
+    /* vT133：成长灵宠品级补齐（12 只稀有款，一次性） */
+    if (ptGrowTierV133(s)) dirty = true;
     if (!s.petPool.length) { s.petPool = ptBuildCodexSeed().concat(ptBuildGrowSeed()); dirty = true; }
     /* vT116+ 图鉴种子：按 id 增量补齐 200 只灵杰。老用户强刷后自动追加新增形象，
        旧种子、老师改过的品级/系列、已收回的条目全部保留；后台「重置灵杰池」可全量重建。 */
@@ -26469,6 +26511,25 @@ function cwInit(){
       '<div class="sub">只有<b>成长灵宠</b>能喂养（灵杰卡不参与）。一份食物加对应成长值，<b>1 点成长值 = 1 分</b>，' +
       '攒满「进化要求」就能免费进化；没攒满时进化只补差额，两条路等价、不会重复收费。食物与价格固定，不用另外设置。</div></div>' +
 
+      /* ---- 3.5 vT133 灵宠品级 ---- */
+      '<div class="pet-sec"><h3>🐾 灵宠品级（普通 / 稀有）</h3>' +
+      (function () {
+        var growDefs = (s.petPool || []).filter(function (x) { return x && x.origin === 'seed' && !x.deleted; })
+          .sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+        var rareN = growDefs.filter(function (d) { return (d.tier || '普通') === '稀有'; }).length;
+        var chips = growDefs.map(function (d) {
+          var rare = (d.tier || '普通') === '稀有';
+          return '<button class="btn2 sm' + (rare ? ' primary' : '') + '" style="font-size:11px" ' +
+            'title="点一下在 普通 / 稀有 之间切换" onclick="ptGrowTierToggle(\'' + d.id + '\')">' +
+            (rare ? '⭐ ' : '') + ptEsc(d.name) + '</button>';
+        }).join('');
+        return '<div class="gpset"><span class="lbl">当前稀有款</span><b>' + rareN + ' / ' + growDefs.length + ' 只</b>' +
+          '<span class="sctip">抽取概率：普通 100 : 稀有 30（77 只全池约 5% 出稀有）</span></div>' +
+          '<div class="gpset" style="flex-wrap:wrap;gap:6px">' + chips + '</div>' +
+          '<div class="sub">点名字即可在<b>普通 ⇄ 稀有</b>之间切换，改动立即生效并同步到小程序 / 桌面端；' +
+          '已抽到该灵宠的同学，图鉴里的品级显示也会一并更新。</div>';
+      })() + '</div>' +
+
       /* ---- 4 赠送积分 ---- */
       '<div class="pet-sec"><h3>🎁 直接赠送积分</h3>' +
       '<div class="gpset">' +
@@ -26488,6 +26549,23 @@ function cwInit(){
   }
 
   /* ---------------- 后台管理：动作 ---------------- */
+  /* vT133 灵宠品级切换：普通 ⇄ 稀有。改池定义 + 已拥有的灵宠记录一并更新 */
+  function ptGrowTierToggle(id) {
+    if (!ptNeedAdmin()) return;
+    var s = ptGet();
+    var d = (s.petPool || []).filter(function (x) { return x && x.id === id && x.origin === 'seed'; })[0];
+    if (!d) return;
+    var now = Date.now();
+    d.tier = (d.tier === '稀有') ? '普通' : '稀有';
+    d.rarity = d.tier;
+    d.updatedAt = now;
+    (s.pets || []).forEach(function (p) {
+      if (p && !p.deleted && p.defId === id) { p.tier = d.tier; p.rarity = d.tier; p.updatedAt = now; }
+    });
+    ptSave(s); PET_DB = s; ptKickSync();
+    toastMsg('🐾 ' + d.name + ' 已设为「' + d.tier + '」');
+    ptRenderAdmin();
+  }
   function ptCfgSave() {
     if (!ptNeedAdmin()) return;
     var s = ptGet(); var c = s.petCfg.filter(function (x) { return x.id === 'cfg'; })[0] || ptCfg();
@@ -26625,7 +26703,7 @@ function cwInit(){
     if (!pool.length) return toastMsg('⚠️ 没有可抽的成长灵宠了（已全部拥有 / 池为空）');
     var cost = ptCost('petDraw');
     if (ptStuPoints(who) < cost) return toastMsg('⚠️ ' + who + ' 积分不足（抽灵宠需 ' + cost + ' 分）');
-    var sp = pool[Math.floor(Math.random() * pool.length)];
+    var sp = ptGrowWeightedPick(pool);   /* vT133 普通100 : 稀有30 加权抽取 */
     var fx = ptFxBegin('pet', who);   /* vT125 抽灵宠同样有演出 */
     return ptAddManual(who, '成长灵宠 · 抽取', -cost).then(function () {
       var np = ptMkPet(who, sp); np.fromPetDraw = 1;
@@ -26941,7 +27019,7 @@ function cwInit(){
     var t = String(d.tier || ''), r = String(d.rarity || '');
     if (t === '典藏' || r === '传说') return 3;
     if (t === '隐藏' || r === '隐藏') return 2;
-    if (r === '稀有') return 1;
+    if (t === '稀有' || r === '稀有') return 1;   /* vT133 成长灵宠稀有款 */
     return 0;
   }
   /* 环境自检：真浏览器 + 有 rAF + 页面在前台 + 没开「减少动态效果」才演 */
@@ -28218,6 +28296,7 @@ function cwInit(){
   window.ptAdminLock = ptAdminLock;
   window.ptSetEnabled = ptSetEnabled;
   window.ptCfgSave = ptCfgSave;
+  window.ptGrowTierToggle = ptGrowTierToggle;   /* vT133 灵宠品级切换 */
   window.ptGiftGo = ptGiftGo;
   window.ptRenderAdmin = ptRenderAdmin;
   /* vT67 启灵图鉴 */
