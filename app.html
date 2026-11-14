@@ -18117,48 +18117,116 @@ function wbOwnerPinCopyCode() {
     alert('登记码已生成在下面的输入框里，请手动复制。');
   }
 }
+/* vT130 口令输入框：浏览器自带 prompt() 是明文输入，科任老师 / 学生站在旁边就能看见。
+   换成页面内小弹窗：type=password + 「👁」临时查看 + Enter 确认，取消返回 null。 */
+function wbAskPass(opt) {
+  opt = opt || {};
+  return new Promise(function (resolve) {
+    var old = document.getElementById('wbPassMask');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var mask = document.createElement('div');
+    mask.id = 'wbPassMask';
+    mask.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(18,28,23,.46);display:flex;align-items:center;justify-content:center;padding:16px';
+    var box = document.createElement('div');
+    box.style.cssText = 'width:min(360px,92vw);background:#fff;border-radius:16px;box-shadow:0 22px 64px rgba(16,36,26,.3);padding:20px 20px 14px;box-sizing:border-box;font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#2c3a33';
+    box.innerHTML =
+      '<div style="font-size:16px;font-weight:700;margin-bottom:6px">' + esc(opt.title || '输入口令') + '</div>' +
+      (opt.desc ? '<div style="font-size:12px;color:#7b8a82;line-height:1.7;margin-bottom:10px">' + esc(opt.desc) + '</div>' : '') +
+      '<div style="position:relative">' +
+      '<input id="wbPassIn" type="password" autocomplete="off" spellcheck="false" maxlength="' + (opt.max || 64) + '"' +
+      ' placeholder="' + esc(opt.ph || '') + '"' +
+      ' style="width:100%;box-sizing:border-box;height:44px;border:1px solid #d6e2da;border-radius:11px;padding:0 44px 0 13px;font-size:17px;letter-spacing:3px;outline:none">' +
+      '<button type="button" id="wbPassEye" title="显示 / 隐藏" style="position:absolute;right:5px;top:5px;width:34px;height:34px;border:0;border-radius:9px;background:#f1f6f2;color:#5d7a69;font-size:15px;cursor:pointer">👁</button>' +
+      '</div>' +
+      '<div id="wbPassErr" style="min-height:16px;margin-top:6px;font-size:12px;color:#c0392b"></div>' +
+      '<div style="display:flex;gap:9px;justify-content:flex-end;margin-top:2px">' +
+      '<button type="button" id="wbPassNo" style="height:36px;padding:0 16px;border:1px solid #d6e2da;background:#fff;color:#4b5b53;border-radius:10px;font-size:14px;cursor:pointer">取消</button>' +
+      '<button type="button" id="wbPassOk" style="height:36px;padding:0 18px;border:0;background:#2f8f5e;color:#fff;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">' + esc(opt.ok || '确定') + '</button>' +
+      '</div>';
+    mask.appendChild(box);
+    document.body.appendChild(mask);
+    var inp = document.getElementById('wbPassIn');
+    var eye = document.getElementById('wbPassEye');
+    var errEl = document.getElementById('wbPassErr');
+    function done(v) {
+      if (mask.parentNode) mask.parentNode.removeChild(mask);
+      document.removeEventListener('keydown', onKey, true);
+      resolve(v);
+    }
+    function submit() {
+      var v = String(inp.value || '').trim();
+      if (!v) { errEl.textContent = '不能为空'; try { inp.focus() } catch (e) {} return; }
+      if (opt.min && v.length < opt.min) { errEl.textContent = '至少 ' + opt.min + ' 位'; try { inp.focus() } catch (e) {} return; }
+      done(v);
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); done(null); }
+      else if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    }
+    eye.onclick = function () {
+      var show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password';
+      eye.textContent = show ? '🙈' : '👁';
+      try { inp.focus() } catch (e) {}
+    };
+    document.getElementById('wbPassNo').onclick = function () { done(null); };
+    document.getElementById('wbPassOk').onclick = submit;
+    mask.addEventListener('mousedown', function (e) { if (e.target === mask) done(null); });
+    document.addEventListener('keydown', onKey, true);
+    setTimeout(function () { try { inp.focus() } catch (e) {} }, 30);
+  });
+}
+window.wbAskPass = wbAskPass;
 /* 设置 / 修改口令：写本机 + 立刻写云端 */
 function wbOwnerPinSetFlow(oldPin) {
   var cur = wbOwnerPinGet();
-  function askOld(cb) {
-    if (!cur) return cb(true);
-    var o = prompt('修改口令需要先输入原口令（留空取消）：');
-    if (o === null) return false;
-    wbOwnerPinHash(cur.salt, cur.pepper || '', o).then(function (h) {
-      if (h !== cur.hash) { alert('原口令不对。'); return }
-      cb(true);
+  function askOld() {
+    if (!cur) return Promise.resolve(true);
+    return wbAskPass({
+      title: '验证原口令', desc: '修改班主任口令前，请先输入当前口令。', ph: '当前口令', ok: '下一步', max: 32
+    }).then(function (o) {
+      if (o === null) return false;
+      return wbOwnerPinHash(cur.salt, cur.pepper || '', o).then(function (h) {
+        if (h !== cur.hash) { toastMsg('⚠️ 原口令不对'); return false; }
+        return true;
+      });
     });
-    return true;
   }
-  askOld(function (ok) {
+  return askOld().then(function (ok) {
     if (!ok) return;
-    var np = prompt('设置班主任口令（至少 4 位，只有您自己知道；任何设备都不保存明文）：');
-    if (np === null) return;
-    np = String(np).trim();
-    if (np.length < 4) { alert('口令至少 4 位。'); return; }
-    var np2 = prompt('再输一次确认：');
-    if (np2 === null) return;
-    if (String(np2).trim() !== np) { alert('两次输入不一致。'); return; }
-    var salt = wbOwnerPinSalt(), pepper = wbOwnerPinSalt();
-    wbOwnerPinHash(salt, pepper, np).then(function (hash) {
-      var p = wbOwnerPinSet(salt, pepper, hash, Date.now());
-      /* 立刻写回云端（不等自动同步）
-         ⚠ 云端那份只带 {salt, hash, at, by}，不带 pepper —— 这是安全设计的核心 */
-      giteeGet().then(function (res) {
-        var doc = res.empty ? { rev: 0, syncVersion: SYNC_PROTO, tables: {}, deletes: [] } : res.doc;
-        if (!doc.tables) doc.tables = {};
-        doc.ownerAuth = { v: 1, salt: p.salt, hash: p.hash, at: p.at, by: 'web' };
-        return giteePut(doc, res.empty ? '' : res.sha);
-      }).then(function () {
-        alert('✅ 班主任口令已设置，并已写入云端。\n\n' +
-              '以后把这台设备（或同步过同一数据中心的手机）交给科任老师时，\n' +
-              '他点「退出科任模式」必须输入这个口令才能退回班主任视图。\n\n' +
-              '提示：手机要登记口令，请点旁边的「复制口令登记码」，\n把那串码粘到手机的「我的 → 班主任口令 → 粘贴口令登记码」。');
-        try { wbOwnerPinPaint(); } catch (e) {}
-      }, function (e) {
-        alert('口令已存在本机，但写回云端失败：' + ((e && e.message) || '写入失败') +
-              '\n\n稍后点「立即同步」即可补上（在此之前，手机端会因云端口令不一致而拒绝退出科任模式）。');
-        try { wbOwnerPinPaint(); } catch (e) {}
+    return wbAskPass({
+      title: '设置班主任口令', ph: '至少 4 位',
+      desc: '只有您自己知道；任何设备都不保存明文。学生就在旁边时也看不到输入内容。',
+      ok: '下一步', min: 4, max: 32
+    }).then(function (np) {
+      if (np === null) return;
+      np = String(np).trim();
+      if (np.length < 4) { alert('口令至少 4 位。'); return; }
+      return wbAskPass({ title: '再输一次确认', ph: '再输一遍', ok: '保存', min: 4, max: 32 }).then(function (np2) {
+        if (np2 === null) return;
+        if (String(np2).trim() !== np) { alert('两次输入不一致。'); return; }
+        var salt = wbOwnerPinSalt(), pepper = wbOwnerPinSalt();
+        return wbOwnerPinHash(salt, pepper, np).then(function (hash) {
+          var p = wbOwnerPinSet(salt, pepper, hash, Date.now());
+          /* 立刻写回云端（不等自动同步）
+             ⚠ 云端那份只带 {salt, hash, at, by}，不带 pepper —— 这是安全设计的核心 */
+          return giteeGet().then(function (res) {
+            var doc = res.empty ? { rev: 0, syncVersion: SYNC_PROTO, tables: {}, deletes: [] } : res.doc;
+            if (!doc.tables) doc.tables = {};
+            doc.ownerAuth = { v: 1, salt: p.salt, hash: p.hash, at: p.at, by: 'web' };
+            return giteePut(doc, res.empty ? '' : res.sha);
+          }).then(function () {
+            alert('✅ 班主任口令已设置，并已写入云端。\n\n' +
+                  '以后把这台设备（或同步过同一数据中心的手机）交给科任老师时，\n' +
+                  '他点「退出科任模式」必须输入这个口令才能退回班主任视图。\n\n' +
+                  '提示：手机要登记口令，请点旁边的「复制口令登记码」，\n把那串码粘到手机的「我的 → 班主任口令 → 粘贴口令登记码」。');
+            try { wbOwnerPinPaint(); } catch (e) {}
+          }, function (e) {
+            alert('口令已存在本机，但写回云端失败：' + ((e && e.message) || '写入失败') +
+                  '\n\n稍后点「立即同步」即可补上（在此之前，手机端会因云端口令不一致而拒绝退出科任模式）。');
+            try { wbOwnerPinPaint(); } catch (e) {}
+          });
+        });
       });
     });
   });
@@ -18189,9 +18257,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v129';
-var WB_MY_VER = '优化版 vT129 · 收回生效与作业统计';
-var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.153';
+var WB_VER_TAG = 'v130';
+var WB_MY_VER = '优化版 vT130 · 诵读进度与口令遮罩';
+var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.154';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -25030,17 +25098,23 @@ function cwInit(){
       alert('还没有设置班主任口令。\n\n请先到「👤 我的」→ 班主任口令 设置一个口令，\n之后才能进入宠物后台管理（定价 / 赠送 / 模块开关）。');
       return;
     }
-    var pin = prompt('请输入班主任口令，进入宠物后台管理：');
-    if (pin == null) return;
-    if (!pin) { toastMsg('口令不能为空'); return; }
-    Promise.resolve(wbOwnerPinHash(rec.salt, rec.pepper || '', pin)).then(function (h) {
-      if (h === rec.hash) {
-        try { sessionStorage.setItem(ADMIN_FLAG, '1'); } catch (e) {}
-        toastMsg('🔓 已进入后台管理');
-        ptRenderAdmin();
-        if (typeof ptRenderCodexAdmin === 'function') ptRenderCodexAdmin();
-      } else { alert('口令不对，再试一次。'); }
-    }).catch(function (e) { console.error('[pet] 口令校验失败', e); alert('口令校验失败：' + (e && e.message || e)); });
+    /* vT130 口令输入不再用 prompt()（明文会被旁边的学生看到），走页面内的密码弹窗 */
+    var ask = (typeof wbAskPass === 'function') ? wbAskPass
+      : function (o) { return Promise.resolve(window.prompt((o && o.title) || '请输入口令')); };
+    Promise.resolve(ask({ title: '🔑 进入宠物后台管理', desc: '输入班主任口令（输入内容不会显示）。', ph: '班主任口令', ok: '进入', max: 32 }))
+      .then(function (pin) {
+        if (pin == null) return;
+        if (!String(pin).trim()) { toastMsg('口令不能为空'); return; }
+        return Promise.resolve(wbOwnerPinHash(rec.salt, rec.pepper || '', String(pin).trim())).then(function (h) {
+          if (h === rec.hash) {
+            try { sessionStorage.setItem(ADMIN_FLAG, '1'); } catch (e) {}
+            toastMsg('🔓 已进入后台管理');
+            ptRenderAdmin();
+            if (typeof ptRenderCodexAdmin === 'function') ptRenderCodexAdmin();
+          } else { alert('口令不对，再试一次。'); }
+        });
+      })
+      .catch(function (e) { console.error('[pet] 口令校验失败', e); alert('口令校验失败：' + (e && e.message || e)); });
   }
   function ptAdminLock() {
     try { sessionStorage.removeItem(ADMIN_FLAG); } catch (e) {}
@@ -28288,6 +28362,19 @@ function cwInit(){
     });
     var hwStatFrom = lim120s, hwStatTo = today;
     var rcRows = (local.rc || []).map(function (r) { return { date: r.date, name: r.name, title: r.title }; });
+    /* vT130 家长端「📖 诵读进度」：需要完整篇目清单（老师本机 rc_titles_v1），
+       家长端才能算「已背几篇 / 还差哪几篇」。清单只有篇目名与类别，不含任何学生信息。
+       拿不到清单（极旧存档）时家长端自动退回「今日诵读」的旧展示。 */
+    var rcTitlesSnap = [];
+    try {
+      var rcTL = (typeof RC_TITLES !== 'undefined' && Array.isArray(RC_TITLES)) ? RC_TITLES : [];
+      rcTL.forEach(function (t) {
+        var nm = (t && typeof t === 'object') ? t.t : t;
+        nm = String(nm == null ? '' : nm).trim();
+        if (!nm) return;
+        rcTitlesSnap.push({ t: nm, k: (t && t.k === 'extra') ? 'extra' : 'core' });
+      });
+    } catch (e) {}
 
     /* 积分汇总（作业分 + 手动奖惩分） */
     var pmap = {};
@@ -28388,6 +28475,7 @@ function cwInit(){
       classId: (s2 && s2.classId) || '', className: '',
       exportedAt: new Date().toISOString(),
       students: stus, hwItems: items, hw: hwRows, rc: rcRows,
+      rcTitles: rcTitlesSnap,
       hwStats: hwStats, hwStatFrom: hwStatFrom, hwStatTo: hwStatTo,
       points: points, comments: comments, grades: grades, detain: detain,
       codexPool: codexPool, codexPets: codexPets
@@ -28425,6 +28513,8 @@ function cwInit(){
         hwItems: snap.hwItems || [],
         hw: (snap.hw || []).filter(function (r) { return r.name === st.name; }),
         rc: (snap.rc || []).filter(function (r) { return r.name === st.name; }),
+        /* vT130 篇目清单（全局同一份）随每个加密块下发：家长端据此算已背 / 未背篇目 */
+        rcTitles: snap.rcTitles || [],
         points: (snap.points || []).filter(function (r) { return r.name === st.name; })[0] || { hw: 0, manual: 0, total: 0 },
         comments: (snap.comments || []).filter(function (r) { return r.name === st.name; }),
         grades: (snap.grades || []).filter(function (r) { return r.name === st.name; }),
