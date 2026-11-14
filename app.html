@@ -18396,9 +18396,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v144';
-var WB_MY_VER = '优化版 vT144 · 改名跨端同步修复';
-var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.168';
+var WB_VER_TAG = 'v145';
+var WB_MY_VER = '优化版 vT145 · 成长值攒满自动进化';
+var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.169';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -26211,22 +26211,28 @@ function cwInit(){
     /* vT123 成长值：喂养累积，进化只补差额（图鉴卡 / 非成长灵宠不参与） */
     var gs = (!isCxPic && ptGrowImgsOf(pet)) ? ptGrowState(pet) : null;
     var canGrow = !!gs && (gs.stage === 'baby' || gs.stage === 'teen');
-    /* vT117 成长灵宠：非图鉴卡(codex)且处于奶团子/幼年态才显示进化按钮 */
+    /* vT117 成长灵宠：非图鉴卡(codex)且处于奶团子/幼年态才显示进化按钮
+       vT145 攒满自动进化 → 按钮只在「没攒满」时作为花钱提速的补充入口出现 */
     var evoBtn = '';
     if (!isCxPic && (stage === 'baby' || stage === 'teen')) {
-      var _need = canGrow ? gs.left : (stage === 'baby' ? ptCost('petEvoY') : ptCost('petEvoA'));
       var _to = stage === 'baby' ? '幼年' : '成年';
-      evoBtn = '<button class="btn2 sm primary" onclick="ptPetEvolve(\'' + pet.id + '\')"' + dis + '>' +
-        (_need > 0 ? ('🌟 进化→' + _to + '(-' + _need + ')') : ('🌟 进化→' + _to + '（免费）')) + '</button>';
+      if (!canGrow) {
+        var _need0 = stage === 'baby' ? ptCost('petEvoY') : ptCost('petEvoA');
+        evoBtn = '<button class="btn2 sm primary" onclick="ptPetEvolve(\'' + pet.id + '\')"' + dis + '>' +
+          '🌟 进化→' + _to + (_need0 > 0 ? ('(-' + _need0 + ')') : '（免费）') + '</button>';
+      } else if (gs.left > 0) {
+        evoBtn = '<button class="btn2 sm primary" onclick="ptPetEvolve(\'' + pet.id + '\')"' + dis +
+          ' title="成长值攒满会自动进化；这里是想让它现在就长大时，花积分补足差额">⚡ 补 ' + gs.left + ' 分→' + _to + '</button>';
+      }
     }
-    /* vT124 喂养：点开选食物（米饭 +5 / 胡萝卜 +10 / 肉干 +20），攒够成长值免费进化 */
+    /* vT124 喂养：点开选食物（米饭 +5 / 胡萝卜 +10 / 肉干 +20），攒满成长值自动进化 */
     var feedBtn = '';
     if (canGrow && gs.left > 0) {
       feedBtn = '<button class="btn2 sm" onclick="ptFoodPick(\'' + pet.id + '\')"' + dis +
-        ' title="喂一喂灵宠：🍚 米饭 +5 · 🥕 胡萝卜 +10 · 🍖 肉干 +20 成长值；攒满 ' + gs.need + ' 点就能免费进化">🍚 喂养</button>';
+        ' title="喂一喂灵宠：🍚 米饭 +5 · 🥕 胡萝卜 +10 · 🍖 肉干 +20 成长值；攒满 ' + gs.need + ' 点会自动进化">🍚 喂养</button>';
     }
     var growLine = canGrow
-      ? ('<div class="pet-grow' + (o.grouped ? ' ph-grow' : '') + '" title="成长值：喂养累积，攒满 ' + gs.need + ' 点即可免费进化（现在 ' + gs.have + '）">' +
+      ? ('<div class="pet-grow' + (o.grouped ? ' ph-grow' : '') + '" title="成长值：喂养累积，攒满 ' + gs.need + ' 点自动进化（现在 ' + gs.have + '）">' +
          '<span class="tr"><i style="width:' + gs.pct + '%"></i></span><b>🌱 ' + gs.have + '/' + gs.need + '</b></div>')
       : '';
     /* vT110 卡面信息行：Lv/EXP 改为集卡进度（升级肉眼无变化，学生看集卡数与星级更有感知）
@@ -26275,6 +26281,7 @@ function cwInit(){
   }
   function ptRenderHome() {
     var box = document.getElementById('petPanel-home'); if (!box) return;
+    ptAutoEvolveSweep();   /* vT145 攒满的先进化，再按新阶段渲染 */
     var list = ptPets();
     var cfg = ptStageCfg();
     var groups = {}, order = [];
@@ -26312,7 +26319,7 @@ function cwInit(){
       '<div class="ph-bar"><div class="gpset">' +
         '<input class="search" id="phQ" placeholder="搜学生名…" value="' + ptEsc(HOME_Q) + '" oninput="ptHomeSearch(this.value)" style="max-width:170px">' +
         '<span class="sctip" id="phCnt"></span>' +
-        '<span class="sctip" style="margin-left:6px">🍼 奶团子 ' + cnt.baby + ' · 🐥 幼年 ' + cnt.teen + ' · 🦁 成年 ' + cnt.adult + (cnt.grad ? ' · 🎓 毕业 ' + cnt.grad : '') + '　🍚 喂养可攒成长值，攒满免费进化</span>' +
+        '<span class="sctip" style="margin-left:6px">🍼 奶团子 ' + cnt.baby + ' · 🐥 幼年 ' + cnt.teen + ' · 🦁 成年 ' + cnt.adult + (cnt.grad ? ' · 🎓 毕业 ' + cnt.grad : '') + '　🍚 喂养攒成长值，攒满自动进化</span>' +
       '</div></div>' +
       '<div class="ph-grid">' + (homes || '<div class="ph-empty">还没有同学获得灵宠：去「🐣 灵宠唤醒」给同学发一只，或让同学在小程序里自己抽～</div>') + '</div>';
     ptHomeFilter();
@@ -26354,6 +26361,7 @@ function cwInit(){
   }
   function ptRenderIncubator() {
     var box = document.getElementById('petPanel-grow'); if (!box) return;
+    ptAutoEvolveSweep();   /* vT145 攒满自动进化，先结算再渲染 */
     var s = ptGet();
     var names = ptNames();
     /* 名单还没加载出来时，退化成「已唤醒过灵宠的学生」，至少不会空手 */
@@ -26677,7 +26685,7 @@ function cwInit(){
       '<div class="gpset">' +
       '<span class="lbl">抽卡一次</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgFeed" value="' + ptCost('feed') + '" title="抽一张灵杰卡要扣的启灵积分。默认 10 分；填 0 = 免费抽（做活动用）。改完点下面「保存定价」，网页 / 小程序 / 家长端同时生效。">' +
       '<span class="lbl">抽灵宠</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgPetDraw" value="' + ptCost('petDraw') + '" title="学生抽取一只成长灵宠要扣的启灵积分，默认 20 分；0 = 免费抽。">' +
-      '<span class="lbl">奶团子→幼年</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgPetEvoY" value="' + ptCost('petEvoY') + '" title="进化需要的成长值；喂养攒够就能免费进化，没攒够则补差额。">' +
+      '<span class="lbl">奶团子→幼年</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgPetEvoY" value="' + ptCost('petEvoY') + '" title="进化需要的成长值；喂养攒够就自动进化，没攒够想马上长大可按差额补分。">' +
       '<span class="lbl">幼年→成年</span><input class="search" style="width:64px" type="number" min="0" max="999" id="ptCfgPetEvoA" value="' + ptCost('petEvoA') + '">' +
       '<span class="lbl">成长期≥</span><input class="search" style="width:56px" type="number" min="1" id="ptCfgTeen" value="' + ptStageCfg().teen + '">' +
       '<span class="lbl">成年≥</span><input class="search" style="width:56px" type="number" min="1" id="ptCfgAdult" value="' + ptStageCfg().adult + '">' +
@@ -26694,7 +26702,7 @@ function cwInit(){
       '<div class="pet-sec"><h3>🍚 喂养食物</h3>' +
       '<div class="gpset">' + foodChips + '</div>' +
       '<div class="sub">只有<b>成长灵宠</b>能喂养（灵杰卡不参与）。一份食物加对应成长值，<b>1 点成长值 = 1 分</b>，' +
-      '攒满「进化要求」就能免费进化；没攒满时进化只补差额，两条路等价、不会重复收费。食物与价格固定，不用另外设置。</div></div>' +
+      '成长值攒满「进化要求」就自动进化；没攒满想马上长大，点卡片上的「⚡ 补 X 分」按差额补分，两条路等价、不会重复收费。食物与价格固定，不用另外设置。</div></div>' +
 
       /* ---- 3.5 vT133 灵宠品级 ---- */
       '<div class="pet-sec"><h3>🐾 灵宠品级（普通 / 稀有）</h3>' +
@@ -26838,7 +26846,7 @@ function cwInit(){
     ptFxBegin('hatch', studentName).reveal({ kind: 'hatch', name: sp.name, imgs: sp.imgs, img: sp.img,
       tier: sp.tier, rarity: sp.rarity, stage: 'baby', who: studentName, isNew: true });
     toastMsg(ptIsGrowDef(sp)
-      ? ('🐣 已唤醒「' + sp.name + '」（奶团子态）授予 ' + studentName + '，可在灵宠家园点「进化」')
+      ? ('🐣 已唤醒「' + sp.name + '」（奶团子态）授予 ' + studentName + '，成长值攒满会自动进化')
       : ('🐾 已唤醒「' + sp.name + '」授予 ' + studentName));
     ptRenderHome(); ptRenderIncubator();
   }
@@ -26950,6 +26958,56 @@ function cwInit(){
     var left = Math.max(0, need - have);
     return { stage: st, need: need, have: have, left: left, pct: need > 0 ? Math.min(100, Math.round(have * 100 / need)) : 100 };
   }
+  /* ---------------- vT145 自动进化 ----------------
+     · 规则：成长值攒满该阶段所需，就自动进化，老师不用再点「进化」；
+     · 喂养后立刻结算；进「唤醒台 / 灵宠家园 / 图鉴」时再扫一遍，
+       历史遗留「攒满却没进化」的记录也顺手自愈；
+     · 只碰成长灵宠（有阶段图）且处于奶团子 / 幼年态；积分早在喂养时就付过，这里不再扣分；
+     · 一次最多升两阶（奶团子→幼年→成年），成长值按阶扣减，超出的留着给下一阶。
+     返回 [{ id, name, who, from, to }]，供提示 / 演出使用。 */
+  function ptAutoEvolve(s) {
+    s = s || ptGet();
+    var cfg = ptStageCfg();
+    var teenLv = Number(cfg.teen) || 3, adultLv = Number(cfg.adult) || 6;
+    var out = [], dirty = false, now = Date.now();
+    (s.pets || []).forEach(function (pet) {
+      if (!pet || pet.deleted || pet.graduated) return;
+      if (pet.img && String(pet.img).indexOf('codeximg/') === 0 && !pet.imgs) return;  /* 图鉴灵杰卡不参与 */
+      if (!ptGrowImgsOf(pet)) return;                                                  /* 手绘 / 非成长灵宠不参与 */
+      for (var guard = 0; guard < 2; guard++) {
+        var st = PetCore.stageOf(pet.level, pet.graduated, cfg);
+        if (st !== 'baby' && st !== 'teen') return;
+        var need = st === 'baby' ? ptCost('petEvoY') : ptCost('petEvoA');
+        var have = Math.max(0, Math.round(Number(pet.growExp) || 0));
+        if (need > 0 && have < need) return;          /* 还没攒满，等下次喂养 */
+        pet.growExp = need > 0 ? (have - need) : have; /* 只扣这一阶所需的成长值 */
+        pet.level = Math.max(Number(pet.level) || 1, st === 'baby' ? teenLv : adultLv);
+        pet.updatedAt = now;
+        dirty = true;
+        var to = PetCore.stageOf(pet.level, pet.graduated, cfg);
+        out.push({ id: pet.id, name: pet.name || '灵宠', who: pet.studentName || '', from: st, to: to });
+        if (to !== 'teen' && to !== 'adult') return;
+      }
+    });
+    if (dirty) { ptSave(s); PET_DB = s; ptKickSync(); }
+    return out;
+  }
+  /* 渲染前自愈扫描（只汇总提示一次，避免每次重绘都弹） */
+  var _autoEvoBusy = false, _autoEvoToldAt = 0;
+  function ptAutoEvolveSweep() {
+    if (_autoEvoBusy || !ptPlayable()) return [];
+    _autoEvoBusy = true;
+    var got = [];
+    try { got = ptAutoEvolve(ptGet()); } catch (e) { console.error('[pet] 自动进化失败', e); }
+    _autoEvoBusy = false;
+    if (got.length && Date.now() - _autoEvoToldAt > 4000) {
+      _autoEvoToldAt = Date.now();
+      ptSfx('level');
+      var who = got.slice(0, 3).map(function (x) { return x.who || x.name; }).join('、');
+      toastMsg('🌟 成长值攒满，已自动进化：' + who + (got.length > 3 ? (' 等 ' + got.length + ' 只') : ''));
+    }
+    return got;
+  }
   function ptFoodPick(petId) {
     if (!ptPlayable()) return toastMsg('⏸ 图鉴模块已暂停 / 关停');
     var s = ptGet();
@@ -26958,7 +27016,12 @@ function cwInit(){
     if (!ptGrowImgsOf(pet)) return toastMsg('这只灵杰不是成长灵宠，不适用喂养');
     var gs = ptGrowState(pet);
     if (gs.stage !== 'baby' && gs.stage !== 'teen') return toastMsg('✅ 已经是成年态了，不用再喂');
-    if (gs.left <= 0) return toastMsg('🌱 成长值已经攒满，直接点「🌟 进化」就行');
+    if (gs.left <= 0) {
+      var ev1 = ptAutoEvolve(s).filter(function (x) { return x.id === pet.id; })[0];
+      ptRenderHome(); ptRenderIncubator();
+      return toastMsg(ev1 ? ('🌟 成长值攒满，已自动进化到「' + (ev1.to === 'adult' ? '成年' : '幼年') + '」')
+        : '🌱 成长值已经攒满，稍后自动进化');
+    }
     var pts = ptStuPoints(pet.studentName);
     var btns = PT_FOODS.map(function (f) {
       var give = Math.min(f.v, gs.left);   /* 快攒满只给到刚好够用，不多扣分 */
@@ -26980,7 +27043,7 @@ function cwInit(){
         '<span>' + ptEsc(pet.studentName) + ' · 成长值 ' + gs.have + '/' + gs.need + '</span></div>' +
       '<div class="pt-foodlist">' + btns + '</div>' +
       '<div class="pt-foodtip">一份食物 = 相应成长值（1 点 = 1 分）。攒满 ' + gs.need +
-        ' 点就能免费进化；' + ptEsc(pet.studentName) + ' 现在有 ' + pts + ' 分。</div>' +
+        ' 点就会自动进化；' + ptEsc(pet.studentName) + ' 现在有 ' + pts + ' 分。</div>' +
       '<button class="btn2" onclick="ptFoodClose()">取消</button></div>';
     ov.style.display = 'flex';
     return ov;
@@ -26999,7 +27062,12 @@ function cwInit(){
     if (!ptGrowImgsOf(pet)) return toastMsg('这只灵杰不是成长灵宠，不适用喂养');
     var gs = ptGrowState(pet);
     if (gs.stage !== 'baby' && gs.stage !== 'teen') { ptFoodClose(); return toastMsg('✅ 已经是成年态了，不用再喂'); }
-    if (gs.left <= 0) { ptFoodClose(); return toastMsg('🌱 成长值已经攒满，直接点「🌟 进化」就行'); }
+    if (gs.left <= 0) {   /* vT145 只在自动进化还没来得及跑时出现，顺手补一次 */
+      var ev0 = ptAutoEvolve(s).filter(function (x) { return x.id === pet.id; })[0];
+      ptRenderHome(); ptRenderIncubator();
+      return toastMsg(ev0 ? ('🌟 成长值攒满，已自动进化到「' + (ev0.to === 'adult' ? '成年' : '幼年') + '」')
+        : '✅ 已经是成年态了，不用再喂');
+    }
     var who = pet.studentName;
     var cost = Math.min(food.v, gs.left);
     if (cost > 0 && ptStuPoints(who) < cost) {
@@ -27015,10 +27083,16 @@ function cwInit(){
       ptSave(s); PET_DB = s; ptKickSync();
       ptFoodClose();
       ptSfx('eat');   /* vT125 喂养的「啊呜」一声 */
-      var g2 = ptGrowState(pet);
-      toastMsg(g2.left <= 0
-        ? (food.e + ' ' + who + ' 的「' + pet.name + '」成长值攒满了，可以免费进化！')
-        : (food.e + ' 喂了' + food.n + '，+' + cost + ' 成长值（' + g2.have + '/' + g2.need + '，再攒 ' + g2.left + ' 点可进化）'));
+      /* vT145 攒满就自动进化，不用老师点 */
+      var evo = ptAutoEvolve(s).filter(function (x) { return x.id === pet.id; })[0];
+      if (evo) {
+        ptSfx('level');
+        toastMsg('🌟 ' + who + ' 的「' + pet.name + '」成长值攒满，自动进化到「' +
+          (evo.to === 'adult' ? '成年' : '幼年') + '」！');
+      } else {
+        var g2 = ptGrowState(pet);
+        toastMsg(food.e + ' 喂了' + food.n + '，+' + cost + ' 成长值（' + g2.have + '/' + g2.need + '，再攒 ' + g2.left + ' 点自动进化）');
+      }
       ptRenderHome(); ptRenderIncubator();
       return pet;
     };
@@ -27471,7 +27545,7 @@ function cwInit(){
     if (!ptGrowImgsOf(pet)) return { ok: false, reason: '「' + (pet.name || '灵杰') + '」不是成长灵宠，不能喂养' };
     var gs = ptGrowState(pet);
     if (gs.stage !== 'baby' && gs.stage !== 'teen') return { ok: false, reason: '「' + (pet.name || '') + '」已经成年，不用再喂' };
-    if (gs.left <= 0) return { ok: false, reason: '「' + (pet.name || '') + '」成长值已攒满，等你点进化' };
+    if (gs.left <= 0) return { ok: false, reason: '「' + (pet.name || '') + '」成长值已攒满（会自动进化），不用再喂' };
     var food = ptFoodOf(it.food || 'rice');
     return { ok: true, pet: pet, food: food, cost: Math.min(food.v, gs.left), gs: gs };
   }
@@ -27509,11 +27583,13 @@ function cwInit(){
         pet2.updatedAt = Date.now();
         it.status = 'done'; it.doneAt = Date.now(); it.doneBy = byAuto ? 'auto' : 'teacher';
         ptSave(s); PET_DB = s; ptKickSync();
+        var evo2 = ptAutoEvolve(s).filter(function (x) { return x.id === pet2.id; })[0];   /* vT145 攒满自动进化 */
         ptRenderParent(); ptRenderHome(); ptRenderIncubator();
         var g2 = ptGrowState(pet2);
-        var msg = '已批准家长喂「' + (pet2.name || '灵宠') + '」' + plan.food.e + plan.food.n +
-          '，+' + plan.cost + ' 成长值（' + g2.have + '/' + g2.need +
-          (g2.left <= 0 ? '，攒满了可以免费进化' : '，再攒 ' + g2.left + ' 点') + '）';
+        var msg = evo2
+          ? ('已批准家长喂「' + (pet2.name || '灵宠') + '」' + plan.food.e + plan.food.n + '，成长值攒满，已自动进化到「' + (evo2.to === 'adult' ? '成年' : '幼年') + '」')
+          : ('已批准家长喂「' + (pet2.name || '灵宠') + '」' + plan.food.e + plan.food.n +
+            '，+' + plan.cost + ' 成长值（' + g2.have + '/' + g2.need + '，再攒 ' + g2.left + ' 点自动进化）');
         return { ok: true, act: 'growfeed', actName: '喂养', who: who, cost: plan.cost, msg: msg, cardMsg: '' };
       });
     }
@@ -28557,6 +28633,8 @@ function cwInit(){
   window.ptGrowAwakenRandom = ptGrowAwakenRandom;
   window.ptFeed = ptFeed;
   window.ptPetEvolve = ptPetEvolve;   /* vT123 修：卡片上的「进化」按钮此前没导出，点了没反应 */
+  window.ptAutoEvolve = ptAutoEvolve; /* vT145 攒满自动进化（测试与桌面自愈共用） */
+  window.ptGrowState = ptGrowState;
   window.ptPetFeed = ptPetFeed;
   window.ptFoodPick = ptFoodPick;   /* vT124 喂养选食物 */
   window.PT_FOODS = PT_FOODS;       /* 食物表（测试 / 调试可读） */
