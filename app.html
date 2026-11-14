@@ -18187,9 +18187,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v127';
-var WB_MY_VER = '优化版 vT127 · 抽卡悬念与隐藏保底';
-var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.151';
+var WB_VER_TAG = 'v128';
+var WB_MY_VER = '优化版 vT128 · 灵宠形象修复';
+var WB_BUILD_DATE = '11-13', WB_BUILD_NO = '2.6.152';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -28273,7 +28273,22 @@ function cwInit(){
           if (!p || p.deleted || p.purged || p.graduated) return;
           var nm = p.studentName || ''; if (!nm) return;
           if (!codexPets[nm]) codexPets[nm] = [];
-          codexPets[nm].push({ defId: p.defId || '', name: p.name || '', series: p.series || '', tier: p.tier || '普通', img: p.img || '', blessing: p.blessing || '', hatchedAt: p.hatchedAt || '', stars: cardStars[nm + '|' + (p.defId || '')] || 1 });
+          /* vT128 成长灵宠（gp001~gp060）没有 img，三阶段图在 imgs{baby,teen,adult}。
+             家长端原来只认 img → 这类灵宠显示成 🥚 / 旧形象。这里按当前成长阶段
+             把相对路径算好一起下发（同时带上 imgs + stage，家长端可自行兜底）。 */
+          var gImgs = p.imgs || null;
+          var gStage = '';
+          if (gImgs && typeof window.ptGrowState === 'function') {
+            try { gStage = (window.ptGrowState(p) || {}).stage || ''; } catch (_g) { gStage = ''; }
+          }
+          var gRel = p.img || '';
+          if (!gRel && gImgs) gRel = gImgs[gStage] || gImgs.baby || gImgs.teen || gImgs.adult || '';
+          codexPets[nm].push({
+            defId: p.defId || '', name: p.name || '', series: p.series || '', tier: p.tier || '普通',
+            img: gRel, imgs: gImgs, stage: gStage,
+            blessing: p.blessing || '', hatchedAt: p.hatchedAt || '',
+            stars: cardStars[nm + '|' + (p.defId || '')] || 1
+          });
         });
       }
     } catch (e) {}
