@@ -56,6 +56,17 @@
   .hw{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f1f5f2}
   .hw:last-child{border-bottom:0}
   .hw .nm{font-size:14px}
+  /* vT131 未完成作业清单：日期 + 科目 + 分组 */
+  .hw .hdt{font-style:normal;font-size:11.5px;color:#9aa8a0;margin-right:7px;font-variant-numeric:tabular-nums}
+  .hw .hsj{font-style:normal;font-size:11px;color:#5b6b62;background:#f1f5f2;border-radius:6px;padding:1px 6px;margin-right:6px}
+  .tsec{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#5b6b62;margin:15px 0 1px}
+  .tsec i{font-style:normal;font-weight:700;font-size:11px;color:#b4382a;background:#fdeaea;border-radius:999px;padding:1px 8px}
+  .tsec u{text-decoration:none;font-weight:400;font-size:11px;color:#9aa8a0;margin-left:auto}
+  .chip.c-x{background:#fee2e2;color:#b91c1c}
+  .hwfoot{font-size:11.5px;color:#9aa8a0;margin-top:11px;line-height:1.7}
+  .okbig{text-align:center;padding:14px 0 8px}
+  .okbig b{display:block;font-size:15px;color:#2b7a4b}
+  .okbig span{display:block;font-size:11.5px;color:#9aa8a0;margin-top:5px}
   .chip{font-size:11px;padding:2px 9px;border-radius:999px;font-weight:600}
   .c-g{background:#e6f4ea;color:#2b7a4b}
   .c-y{background:#fdf3dd;color:#a97a11}
@@ -154,7 +165,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT130）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT131）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -313,6 +324,39 @@
       var lv = rec ? (rec.level || '') : '';
       return { item: it.item, level: lv, cls: LV[lv] || 'r', done: !!rec };
     });
+    /* vT131 未完成 / 未交作业清单（跨天，不只今天）
+       快照里 hwItems 是近 30 天的作业列（日期 + 名称 + 科目），hw 是这孩子的登记记录。
+       两边一配：没有任何记录 = 未交；记录等级是「超时未交」= 超时未交。
+       今天的单独分组（可能还没到老师登记时间），历史日期算「逾期未交」。
+       注意：记录存在但等级为空 = 已交未评，不算未完成。 */
+    var recMap = {};
+    (per.hw || []).forEach(function (r) {
+      var nm = String((r && r.item) || '').trim();
+      var dt = dateOnly(r.date);
+      if (!nm || !dt) return;
+      var k = dt + '|' + nm;
+      if (!recMap[k]) recMap[k] = r;
+    });
+    var hwTodoPast = [], hwTodoOver = [], hwTodoToday = [], hwTodoSeen = {}, hwItemN = 0;
+    (per.hwItems || []).forEach(function (it) {
+      var dt = dateOnly(it && it.date), nm = String((it && it.item) || '').trim();
+      if (!dt || !nm || dt > day) return;          /* 未来日期的作业（提前布置）不算欠交 */
+      var k = dt + '|' + nm;
+      if (hwTodoSeen[k]) return;
+      hwTodoSeen[k] = 1; hwItemN++;
+      var rec = recMap[k], lv = rec ? String(rec.level || '') : '';
+      var row = { date: dt, md: dt.slice(5).replace('-', '/'), item: nm, subject: (it && it.subject) || '' };
+      if (lv === '超时未交') { row.st = 'over'; hwTodoOver.push(row); }
+      else if (!rec) {
+        row.st = 'miss';
+        (dt === day ? hwTodoToday : hwTodoPast).push(row);
+      }
+    });
+    var byDateDesc = function (a, b) { return String(b.date).localeCompare(String(a.date)) || String(a.item).localeCompare(String(b.item)); };
+    hwTodoPast.sort(byDateDesc); hwTodoOver.sort(byDateDesc);
+    hwTodoToday.sort(function (a, b) { return String(a.item).localeCompare(String(b.item)); });
+    var hwTodoN = hwTodoPast.length + hwTodoOver.length + hwTodoToday.length;
+
     var rcList = [], seen = {};
     (per.rc || []).filter(function (r) { return dateOnly(r.date) === day; }).forEach(function (r) {
       if (seen[r.title]) return; seen[r.title] = 1; rcList.push(r.title);
@@ -356,6 +400,9 @@
       });
     return {
       day: day, hw: hw, hwDone: hw.filter(function (x) { return x.done; }).length, hwN: hw.length,
+      /* vT131 未完成作业（跨天） */
+      hwTodoPast: hwTodoPast, hwTodoOver: hwTodoOver, hwTodoToday: hwTodoToday,
+      hwTodoN: hwTodoN, hwItemN: hwItemN,
       rc: rcList, points: per.points || { hw: 0, manual: 0, total: 0 },
       /* vT130 诵读进度 */
       rcPlanN: rcPlan.length, rcDoneN: rcDoneList.length, rcTodoN: rcTodoList.length,
@@ -520,8 +567,39 @@
       }).join('') : '<div class="empty">今天老师还没布置作业</div>';
       h += '</div>';
     }
-    /* 作业等级统计（vT129）：优 / 良 / 中 / 差 / 超时未交 各几次 + 占比条 */
-    if (on('hwstat')) {
+    /* 未完成作业清单（vT131）：具体是哪几项、哪天、什么科目 */
+    if (on('hwtodo')) {
+      h += '<div class="card"><h2>⚠️ 未完成作业 <em>' +
+        (v.hwTodoN ? ('共 ' + v.hwTodoN + ' 项 · 近 30 天') : '近 30 天') + '</em></h2>';
+      if (!v.hwItemN) {
+        h += '<div class="empty">这份快照里还没有作业清单<br>请老师在工作台点一次「🚀 立即重发快照」</div>';
+      } else if (!v.hwTodoN) {
+        h += '<div class="okbig"><b>✅ 全部交齐</b><span>近 30 天布置的 ' + v.hwItemN + ' 项作业都有记录</span></div>';
+      } else {
+        var tgroups = [
+          { cap: '逾期未交', list: v.hwTodoPast, hint: '布置后没有交上来' },
+          { cap: '超时未交', list: v.hwTodoOver, hint: '交晚了，老师登记为超时' },
+          { cap: '今天待交', list: v.hwTodoToday, hint: '今天布置的，还没登记' }
+        ];
+        tgroups.forEach(function (g) {
+          if (!g.list.length) return;
+          var shown = g.list.slice(0, 20);
+          h += '<div class="tsec">' + g.cap + '<i>' + g.list.length + ' 项</i><u>' + g.hint + '</u></div>';
+          h += shown.map(function (x) {
+            return '<div class="hw"><span class="nm"><i class="hdt">' + esc(x.md) + '</i>' +
+              (x.subject ? '<i class="hsj">' + esc(x.subject) + '</i>' : '') + esc(x.item) + '</span>' +
+              '<span class="chip c-' + (x.st === 'over' ? 'x' : 'r') + '">' + (x.st === 'over' ? '超时未交' : '未交') + '</span></div>';
+          }).join('');
+          if (g.list.length > shown.length) {
+            h += '<div class="hwfoot">这一组还有 ' + (g.list.length - shown.length) + ' 项未列出…</div>';
+          }
+        });
+        h += '<div class="hwfoot">按老师工作台的作业登记整理（近 30 天共 ' + v.hwItemN + ' 项作业）。' +
+          (v.hwStat && v.hwStat.cha ? '另有 ' + v.hwStat.cha + ' 项登记为「差」——已交，质量待提升。' : '') + '</div>';
+      }
+      h += '</div>';
+    }
+    if (on('hwstat')) {   /* 作业等级统计（vT129）：优 / 良 / 中 / 差 / 超时未交 各几次 + 占比条 */
       var st = v.hwStat || { you: 0, liang: 0, zhong: 0, cha: 0, over: 0, total: 0 };
       var span = (st.from && st.to) ? (st.from.slice(5) + ' ~ ' + st.to.slice(5)) : '近 120 天';
       h += '<div class="card"><h2>📊 作业等级统计 <em>' + esc(span) + '</em></h2>';
@@ -617,7 +695,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v130</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v131</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
