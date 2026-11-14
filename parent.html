@@ -165,6 +165,15 @@
   .gr .l small{color:#9aa8a0;font-size:11px;margin-left:6px}
   .gr .r{display:flex;align-items:center;gap:8px}
   .gr .sc{font-size:15px;font-weight:700}
+  /* vT141 成绩等级方式：只给字母，不给数字 */
+  .gr .lvb{font-size:14px;font-weight:800;letter-spacing:.4px;padding:2px 11px;border-radius:8px;font-variant-numeric:tabular-nums}
+  .gr .ga1{background:#d9f2e2;color:#1c7a46}
+  .gr .ga{background:#e6f4ea;color:#2b7a4b}
+  .gr .gb{background:#e6effa;color:#255d9e}
+  .gr .gc{background:#fdf3dd;color:#a97a11}
+  .gr .gd{background:#fdeedd;color:#b0691a}
+  .gr .ge{background:#fdeaea;color:#b4382a}
+  .gmode{font-size:11px;color:#9aa8a0;margin-top:9px;line-height:1.7}
   /* 点评 */
   .cmt{padding:9px 0;border-bottom:1px solid #f1f5f2}
   .cmt:last-child{border-bottom:0}
@@ -183,7 +192,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT140）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT141）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -330,6 +339,27 @@
     o.from = from; o.to = to; o.legacy = true;
     return o;
   }
+  /* vT141 成绩显示方式：老师在「家长端显示设置」里选「显示分数 / 显示等级」，随快照 parentPanels.gradeMode 下发。
+     等级档：A+ ≥95；A 90–94；B 80–89；C 70–79；D 60–69；E <60（按得分率算，满分不是 100 也能用）。 */
+  function gradeModeOf() {
+    var p = (ST.snap && ST.snap.parentPanels) || {};
+    return p.gradeMode === 'level' ? 'level' : 'score';
+  }
+  function gradeLetter(sc, full) {
+    var f = Number(full) || 100;
+    var s = Number(sc);
+    if (!isFinite(s)) return '—';
+    var pct = f > 0 ? (s / f) * 100 : s;
+    if (pct >= 95) return 'A+';
+    if (pct >= 90) return 'A';
+    if (pct >= 80) return 'B';
+    if (pct >= 70) return 'C';
+    if (pct >= 60) return 'D';
+    return 'E';
+  }
+  function gradeCls(l) {
+    return l === 'A+' ? 'ga1' : l === 'A' ? 'ga' : l === 'B' ? 'gb' : l === 'C' ? 'gc' : l === 'D' ? 'gd' : 'ge';
+  }
   function buildView(per, name) {
     var day = ymd();    var items = (per.hwItems || []).filter(function (x) { return dateOnly(x.date) === day; })
       .sort(function (a, b) { return String(a.item).localeCompare(String(b.item)); });
@@ -408,7 +438,8 @@
         var full = Number(r.full) || 100, sc = Number(r.score);
         var ratio = isNaN(sc) ? 0 : sc / full;
         var lv = ratio >= 0.85 ? '优' : ratio >= 0.7 ? '良' : ratio >= 0.6 ? '中' : '差';
-        return { exam: r.exam || '', subject: r.subject || '', score: sc, full: full, level: lv, cls: LV[lv] || 'r', date: dateOnly(r.date) };
+        var letter = gradeLetter(sc, full);
+        return { exam: r.exam || '', subject: r.subject || '', score: sc, full: full, level: lv, cls: LV[lv] || 'r', letter: letter, lcls: gradeCls(letter), date: dateOnly(r.date) };
       }).slice(0, 12);
     var cmts = (per.comments || []).filter(function (r) { return r && r.text; })
       .sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); }).slice(0, 8)
@@ -888,11 +919,16 @@
     }
     /* 成绩 */
     if (on('grade')) {
-      h += '<div class="card"><h2>🏅 成绩记录</h2>';
+      var gm = gradeModeOf();
+      h += '<div class="card"><h2>🏅 ' + (gm === 'level' ? '成绩等级' : '成绩记录') + '</h2>';
       h += v.grades.length ? v.grades.map(function (g) {
         return '<div class="gr"><span class="l">' + esc(g.exam || '考试') + '<small>' + esc(g.subject || '') + ' · ' + esc(g.date) + '</small></span>' +
-          '<span class="r"><span class="sc">' + g.score + '</span><span class="chip c-' + g.cls + '">' + esc(g.level) + '</span></span></div>';
+          (gm === 'level'
+            ? '<span class="r"><span class="lvb ' + g.lcls + '">' + esc(g.letter) + '</span></span>'
+            : '<span class="r"><span class="sc">' + g.score + '</span><span class="chip c-' + g.cls + '">' + esc(g.level) + '</span></span>') +
+          '</div>';
       }).join('') : '<div class="empty">还没有成绩记录</div>';
+      if (gm === 'level' && v.grades.length) h += '<div class="gmode">等级换算：A+ ≥95 · A 90–94 · B 80–89 · C 70–79 · D 60–69 · E 60 以下</div>';
       h += '</div>';
     }
     /* 点评 */
@@ -904,7 +940,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v140</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v141</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
