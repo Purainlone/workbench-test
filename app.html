@@ -18396,9 +18396,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v143';
-var WB_MY_VER = '优化版 vT143 · 家长提案入口恢复';
-var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.167';
+var WB_VER_TAG = 'v144';
+var WB_MY_VER = '优化版 vT144 · 改名跨端同步修复';
+var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.168';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -29042,7 +29042,21 @@ function cwInit(){
     try {
       var snap = ptwBuildSnap();
       if (!snap) return;
-      ptwPublishSnapToGitee(snap).catch(function (e) { console.error('[家长快照] 发布失败', e); });
+      /* vT144 发布失败自动补发一次：以前只 console.error，一次网络抖动
+         就让家长端一直看旧数据（改考试名后家长端还是旧名就是这么来的）。
+         30 秒后重试一次，仍失败才真正放弃（下次写盘操作还会再预约）。 */
+      ptwPublishSnapToGitee(snap).catch(function (e) {
+        console.error('[家长快照] 发布失败，30 秒后自动补发一次', e);
+        setTimeout(function () {
+          try {
+            var again = ptwBuildSnap();
+            if (!again) return;
+            ptwPublishSnapToGitee(again).then(function () {
+              try { toastMsg('✅ 家长端快照已补发成功'); } catch (_t) {}
+            }).catch(function (e2) { console.error('[家长快照] 补发仍失败', e2); });
+          } catch (_e) {}
+        }, 30000);
+      });
     } catch (e) { console.error('[家长快照] 构建/发布异常', e); }
   }
   /* 12 秒防抖：与小程序端 store.scheduleParentPublish 同源节奏 */
