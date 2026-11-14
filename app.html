@@ -18260,9 +18260,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v131';
-var WB_MY_VER = '优化版 vT131 · 未完成作业清单';
-var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.155';
+var WB_VER_TAG = 'v132';
+var WB_MY_VER = '优化版 vT132 · 灵宠扩容77只';
+var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.156';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -25649,11 +25649,13 @@ function cwInit(){
     });
   }
   /* ---------------- vT119 成长灵宠名册：60 只三阶段灵宠（2026-11-13 老师定稿） ----------------
+     ｜vT132 扩到 77 只：新增 61~77 山海经神兽（当康/耳鼠/驳马/鹿蜀/诸犍/霜毫兔/应龙/
+     ｜嘲风/蒲牢/椒图/鹓雏/白鵺/竦斯/神鸮/灵燕/文鳐/灵蟹），图源同 petimg/NNN_S.png。
      ｜图源 petimg/NNN_S.png（S=1 奶团子 / 2 幼年 / 3 成年，已抠图去水印）；
      ｜名字取自《灵宠名册.csv》。origin:'seed' → 自动进成长抽宠池（ptGrowthDrawPool），
-     ｜不进图鉴集卡（那里只认 origin==='codex'）。id=gp001~gp060，imgs 按阶段存图，
+     ｜不进图鉴集卡（那里只认 origin==='codex'）。id=gp001~gp077，imgs 按阶段存图，
      ｜抽灵宠/进化换阶段时渲染层自动切换对应图片与特效。 */
-  var PT_GROW60_ROWS = [
+  var PT_GROW_ROWS = [
     [1,'白泽'],
     [2,'火猿'],
     [3,'天马'],
@@ -25713,10 +25715,28 @@ function cwInit(){
     [57,'星纹豹'],
     [58,'素雪貂'],
     [59,'云瑞象'],
-    [60,'银霜狼']
+    [60,'银霜狼'],
+    /* vT132 新增：山海经神兽 17 只（2026-11-14 老师提供三阶段素材） */
+    [61,'当康'],
+    [62,'耳鼠'],
+    [63,'驳马'],
+    [64,'鹿蜀'],
+    [65,'诸犍'],
+    [66,'霜毫兔'],
+    [67,'应龙'],
+    [68,'嘲风'],
+    [69,'蒲牢'],
+    [70,'椒图'],
+    [71,'鹓雏'],
+    [72,'白鵺'],
+    [73,'竦斯'],
+    [74,'神鸮'],
+    [75,'灵燕'],
+    [76,'文鳐'],
+    [77,'灵蟹']
   ];
   function ptBuildGrowSeed() {
-    return PT_GROW60_ROWS.map(function (r) {
+    return PT_GROW_ROWS.map(function (r) {
       var nn = ('00' + r[0]).slice(-3);
       var d = PetCore.buildPetDef({
         id: 'gp' + nn, name: r[1], series: '成长灵宠',
@@ -27355,7 +27375,7 @@ function cwInit(){
     rd.readAsText(f);
   }
   function ptResetPool() {
-    if (!confirm('重置灵杰池为当前名录（200 只图鉴灵杰 + 60 只成长灵宠）？同学共创投稿会保留；\n旧种子灵宠（西游/哪吒/小王子那批 74 只）自 vT119 起已退役，不再放回池子。')) return;
+    if (!confirm('重置灵杰池为当前名录（200 只图鉴灵杰 + 77 只成长灵宠）？同学共创投稿会保留；\n旧种子灵宠（西游/哪吒/小王子那批 74 只）自 vT119 起已退役，不再放回池子。')) return;
     var s = ptGet();
     var keep = s.petPool.filter(function (x) { return x && x.origin === 'student' && !x.deleted; });
     s.petPool = ptBuildCodexSeed().concat(ptBuildGrowSeed()).concat(keep);   /* vT119 起不再含旧种子 */
