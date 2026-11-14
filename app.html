@@ -2704,7 +2704,7 @@ table.paper td.l{text-align:left;font-weight:600}
           <button class="btn2" onclick="paChannelTest()">🔍 检测连通</button>
         </div>
         <div class="syncstatus" id="paChStatus"></div>
-        <div class="syncdesc" style="margin-top:6px">权限开关在「🐾 班级宠物 → 👪 家长提案」面板里：允许抽卡 / 允许喂养 + 自动批准（勾上就秒到账，不勾就等你手动批）。</div>
+        <div class="syncdesc" style="margin-top:6px">权限开关在「📖 班级启灵图鉴 → 👪 家长提案」面板里：允许抽卡 / 允许喂养 + 自动批准（勾上就秒到账，不勾就等你手动批）。</div>
       </div>
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
@@ -3165,6 +3165,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2 sm active" data-pt="grow" onclick="ptTab('grow')">🐣 灵宠唤醒</button>
       <button class="btn2 sm" data-pt="home" onclick="ptTab('home')">🏡 灵宠家园</button>
       <button class="btn2 sm" data-pt="codex" onclick="ptTab('codex')">📖 启灵图鉴</button>
+      <button class="btn2 sm" data-pt="parent" onclick="ptTab('parent')">👪 家长提案<span id="petPQn" class="pet-badge"></span></button>
       <button class="btn2 sm" data-pt="sub" onclick="ptTab('sub')">🎨 学生投稿<span id="petSUBn" class="pet-badge"></span></button>
       <button class="btn2 sm" data-pt="grad" onclick="ptTab('grad')">🎓 毕业审批</button>
       <button class="btn2 sm" data-pt="admin" onclick="ptTab('admin')">⚙️ 后台管理</button>
@@ -3173,6 +3174,7 @@ table.paper td.l{text-align:left;font-weight:600}
     <div id="petPanel-grow" class="pet-panel"></div>
     <div id="petPanel-home" class="pet-panel" style="display:none"></div>
     <div id="petPanel-codex" class="pet-panel" style="display:none"></div>
+    <div id="petPanel-parent" class="pet-panel" style="display:none"></div>
     <div id="petPanel-sub" class="pet-panel" style="display:none"></div>
     <div id="petPanel-grad" class="pet-panel" style="display:none"></div>
     <div id="petPanel-admin" class="pet-panel" style="display:none"></div>
@@ -18394,9 +18396,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v142';
-var WB_MY_VER = '优化版 vT142 · 桌面真喂养';
-var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.166';
+var WB_VER_TAG = 'v143';
+var WB_MY_VER = '优化版 vT143 · 家长提案入口恢复';
+var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.167';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
