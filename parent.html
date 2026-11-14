@@ -112,9 +112,14 @@
   @keyframes ppFly{0%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,-30px) scale(1.3)}}
   .cx.bnc{animation:ppBob .5s ease}
   @keyframes ppBob{0%,100%{transform:none}30%{transform:translateY(-5px) scale(1.04)}60%{transform:translateY(-2px)}}
-  .ppmenu{position:fixed;z-index:999;display:flex;gap:6px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px;box-shadow:0 10px 28px rgba(0,0,0,.18)}
+  .ppmenu{position:fixed;z-index:999;display:flex;gap:6px;flex-wrap:wrap;max-width:252px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px;box-shadow:0 10px 28px rgba(0,0,0,.18)}
   .ppmenu button{border:none;background:#f2f8f4;border-radius:9px;padding:8px 11px;font-size:13px;font-weight:600;color:#24483a;font-family:inherit}
   .ppmenu button:active{background:#e2f1ea}
+  .ppmenu button.ppreal{background:#e8f6ee;color:#1f7a4d;box-shadow:inset 0 0 0 1px #bfe3cd}
+  .ppmenu.pfeed{max-width:280px}
+  .ppmenu.pfeed button{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:74px;line-height:1.35}
+  .ppmenu.pfeed button i{font-style:normal;font-size:11px;color:#c0563f;font-weight:700}
+  .ppmenu button.ppx{background:#f4f6f5;color:#8a9a92}
   .ppbub{position:fixed;z-index:999;background:#24483a;color:#fff;font-size:12px;font-weight:600;border-radius:11px 11px 11px 3px;padding:6px 10px;max-width:240px;box-shadow:0 6px 18px rgba(0,0,0,.2)}
   .cxtip{font-size:11px;color:#9aa8a0;margin-top:8px}
   @keyframes cxsheen{0%{background-position:130% 0}100%{background-position:-130% 0}}
@@ -178,7 +183,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT136）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT137）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -467,10 +472,16 @@
     /* vT136 灵宠卡可点击互动（灵杰卡不互动）；有互动记录的先带上 ❤ 角标 */
     var ispet = cxIsPet(p);
     var n = ispet ? petFunCntOf(p) : 0;
+    /* vT137 成长灵宠显示成长值进度（能不能真喂一看就知道） */
+    var sub = esc(p.series || '');
+    if (p.grow && Number(p.gneed) > 0) {
+      var stn = ({ baby: '奶团子', teen: '幼年', adult: '成年', grad: '成年' })[p.stage] || '';
+      sub = '🌱 ' + (Number(p.gx) || 0) + '/' + p.gneed + (stn ? (' · ' + stn) : '');
+    }
     return '<div class="cx ' + fx + (ispet ? ' ispet' : '') + '" data-pi="' + i + '">' + tier + inner + starHtml +
       (n ? '<span class="fheart">❤' + n + '</span>' : '') +
       '<div class="nm">' + esc(p.name || '灵杰') + '</div>' +
-      '<div class="sr">' + esc(p.series || '') + '</div></div>';
+      '<div class="sr">' + sub + '</div></div>';
   }
   window.__paImgErr = function (img) {
     var i = Number(img.getAttribute('data-i'));
@@ -502,6 +513,56 @@
     return Number(o.cnt[(p.name || '') + '|' + (p.defId || '')]) || 0;
   }
   function cxIsPet(p) { return !!(p && (p.stage || p.imgs)); }   /* 灵宠有阶段/三阶段图，灵杰没有 */
+  /* ---------- vT137 真实喂养（提案制）----------
+     家长端点「🍚 真喂」→ 选食物 → 写一条 growfeed 提案；老师批准 / 自动批准后才真正加成长值、扣积分。 */
+  var PP_FOODS_DEF = [
+    { k: 'rice', e: '🍚', n: '米饭', v: 5 },
+    { k: 'carrot', e: '🥕', n: '胡萝卜', v: 10 },
+    { k: 'meat', e: '🍖', n: '肉干', v: 20 }
+  ];
+  function feedFoods() {
+    var f = (ST.snap && ST.snap.parentPerm && ST.snap.parentPerm.foods) || [];
+    if (!f.length) return PP_FOODS_DEF;
+    return f;
+  }
+  function permOf() {
+    var p = (ST.snap && ST.snap.parentPerm) || {};
+    return { draw: p.draw !== false, feed: p.feed !== false, petDraw: Number(p.petDraw) || 20 };
+  }
+  /* 能不能喂：必须是成长灵宠、还没成年、成长值没攒满 */
+  function cxCanFeed(p) {
+    if (!p || !p.grow) return false;
+    if (!permOf().feed) return false;
+    var st = p.stage || '';
+    if (st === 'adult' || st === 'grad' || st === 'egg') return false;
+    var need = Number(p.gneed) || 0;
+    if (need > 0 && (Number(p.gx) || 0) >= need) return false;   /* 攒满等老师点进化 */
+    return true;
+  }
+  function ppFeedMenu(el, p) {
+    ppClosePop();
+    var r = el.getBoundingClientRect();
+    var foods = feedFoods();
+    var pop = document.createElement('div');
+    pop.className = 'ppmenu pfeed';
+    pop.style.left = Math.max(8, Math.min(window.innerWidth - 260, r.left)) + 'px';
+    pop.style.top = Math.min(window.innerHeight - 60, r.bottom + 6) + 'px';
+    pop.innerHTML = foods.map(function (f) {
+      return '<button data-food="' + f.k + '">' + f.e + ' ' + esc(f.n) + '<i>-' + f.v + ' 分</i></button>';
+    }).join('') + '<button data-food="" class="ppx">取消</button>';
+    pop.onclick = function (e) {
+      e.stopPropagation();
+      var b = e.target && e.target.closest ? e.target.closest('[data-food]') : null;
+      if (!b) return;
+      var k = b.getAttribute('data-food');
+      ppClosePop();
+      if (!k) return;
+      var f = foods.filter(function (x) { return x.k === k; })[0] || foods[0];
+      submitProposal('growfeed', f.v, { petId: p.id, defId: p.defId, food: f.k, petName: p.name });
+    };
+    document.body.appendChild(pop);
+    ppPop = pop;
+  }
   var PP_ACTS = {
     feed: { fly: '🍖', say: ['好好吃！', '再来一口～', '肚子饱饱的'] },
     pat: { fly: '💗', say: ['呼噜呼噜～', '好舒服～', '最喜欢你摸我'] },
@@ -529,11 +590,15 @@
     pop.setAttribute('data-for', (p.name || '') + '|' + (p.defId || ''));
     pop.style.left = Math.max(8, Math.min(window.innerWidth - 200, r.left)) + 'px';
     pop.style.top = Math.min(window.innerHeight - 60, r.bottom + 6) + 'px';
-    pop.innerHTML = '<button data-act="feed">🍖 喂食</button><button data-act="pat">✋ 摸摸</button><button data-act="play">🎾 玩耍</button>';
+    pop.innerHTML = '<button data-act="feed">🍖 喂食</button><button data-act="pat">✋ 摸摸</button><button data-act="play">🎾 玩耍</button>' +
+      (cxCanFeed(p) ? '<button data-act="realfeed" class="ppreal">🍚 真喂</button>' : '');
     pop.onclick = function (e) {
       e.stopPropagation();
       var b = e.target && e.target.closest ? e.target.closest('[data-act]') : null;
-      if (b) ppAct(el, p, b.getAttribute('data-act'));
+      if (!b) return;
+      var act = b.getAttribute('data-act');
+      if (act === 'realfeed') { ppFeedMenu(el, p); return; }
+      ppAct(el, p, act);
     };
     document.body.appendChild(pop);
     ppPop = pop;
@@ -646,9 +711,10 @@
 
   function pendText() {
     var p = ST.pending; if (!p) return '';
-    if (p.status === 'done') return '<div class="pend">✅ 已生效：' + esc(p.msg || '老师已批准') + '（下拉或点刷新查看）</div>';
-    if (p.status === 'held') return '<div class="pend bad">⚠️ ' + esc(p.msg || '老师需要手动处理') + '</div>';
-    return '<div class="pend wait">⏳ 已提交，正在等待入账…' + (ST.snap && ST.snap.autoApprove ? '（自动批准已开启，通常 10 秒内生效）' : '（需老师批准，批准后这里会变成已生效）') + '</div>';
+    var lb = p.label ? ('「' + esc(p.label) + '」') : '';
+    if (p.status === 'done') return '<div class="pend">✅ ' + lb + '已生效：' + esc(p.msg || '老师已批准') + '（点刷新查看）</div>';
+    if (p.status === 'held') return '<div class="pend bad">⚠️ ' + lb + esc(p.msg || '老师需要手动处理') + '</div>';
+    return '<div class="pend wait">⏳ ' + lb + '已提交，正在等待入账…' + (ST.snap && ST.snap.autoApprove ? '（自动批准已开启，通常 10 秒内生效）' : '（需老师批准，批准后这里会变成已生效）') + '</div>';
   }
 
   function renderMain() {
@@ -658,6 +724,9 @@
     var on = function (k) { return panels[k] !== false; };
     /* vT112 抽卡即唤醒：只剩一个动作，价格用抽卡单价（快照 codexFeedCost，vT113 起默认 10 分、老师可自定） */
     var feedCost = Number(ST.snap.codexFeedCost); if (!isFinite(feedCost) || feedCost < 0) feedCost = 10;
+    /* vT137 抽灵宠单价 / 家长端权限（快照 parentPerm，老师可随时关） */
+    var perm0 = permOf();
+    var petCost = perm0.petDraw;
     /* 集卡进度：已集 / 全图鉴总数（快照顶层 codexPool） */
     var poolN = (ST.snap.codexPool || []).length;
     var ts = ST.snap.ts ? new Date(ST.snap.ts) : null;
@@ -796,15 +865,25 @@
       h += '<div class="card"><h2>🎴 孩子的启灵图鉴 <em>' +
         (poolN ? ('已集 ' + (v.codex.length || 0) + ' / ' + poolN) : ('共 ' + (v.codex.length || 0) + ' 位')) + '</em></h2>';
       h += v.codex.length ? '<div class="cxgrid">' + v.codex.map(cxCard).join('') + '</div>' +
-        '<div class="cxtip">🐾 点灵宠卡片可以喂食、摸摸、玩耍 —— 给孩子的小惊喜演出，不会真的改变成长值。</div>'
+        '<div class="cxtip">🐾 点灵宠卡片：喂食 / 摸摸 / 玩耍是免费小演出，不会真的改变成长值；想真的长成长值，点菜单里的「🍚 真喂」（扣孩子积分，老师批准 / 自动批准后生效）。</div>'
         : '<div class="empty">还没抽到灵杰，第一次抽卡会从「？？？」里揭晓</div>';
-      h += '<div class="drawbox"><div class="t">🎴 帮孩子抽一张灵杰卡（扣孩子的启灵积分，每次 ' + feedCost + ' 分）</div>' +
-        '<div class="acts"><button class="btn2" id="btnFeed">🎴 抽一张（-' + feedCost + '）</button></div>' +
-        '<div class="note">抽到还没有的灵杰 = 同时唤醒，图鉴格子会跟着点亮；重复的卡自动升星（最高 ★5）。' +
-        '隐藏款也能抽到（比较稀有），典藏款由老师发放。<br>' +
-        '每次消耗的积分由老师在工作台里设定，价格变动这里会跟着变。<br>' +
-        (ST.snap.autoApprove ? '老师已开启自动批准，提交后约 10 秒自动入账；' : '提交后由老师批准；') +
-        '每人每天有次数上限，积分不够会自动作废。</div>' + pendText() + '</div>';
+      var chOK = !!(ST.snap.parentEssayToken && ST.snap.parentEssayRepo);
+      var chTip = chOK
+        ? (ST.snap.autoApprove
+          ? ('老师已开启自动批准：提交后约 10 秒自动入账' + (Number(ST.snap.autoLimit) > 0 ? ('（每人每天 ' + ST.snap.autoLimit + ' 次）') : '') + '。')
+          : '提交后由老师批准，批准后这里会显示已生效。')
+        : '⚠️ 老师还没开通家长通道：请老师在电脑工作台「家长端显示设置 → 家长端权限」里填提案仓库和令牌（以前只能在手机小程序里配，所以电脑端看着像没开通）。';
+      h += '<div class="drawbox"><div class="t">🎴🐾 帮孩子抽卡 / 喂养（扣孩子的启灵积分）</div>' +
+        '<div class="acts">' +
+        '<button class="btn2" id="btnFeed"' + (perm0.draw ? '' : ' disabled') + '>🎴 抽灵杰卡（-' + feedCost + '）</button>' +
+        '<button class="btn2" id="btnPet"' + (perm0.draw ? '' : ' disabled') + '>🐾 抽灵宠（-' + petCost + '）</button>' +
+        '</div>' +
+        '<div class="note">抽灵杰卡：抽到还没有的灵杰会同时唤醒上墙；重复的卡自动升星（最高 ★5）。<br>' +
+        '抽灵宠：抽一只成长灵宠（奶团子态）；<b>名下还有未成年灵宠时不能抽</b>，养到成年才能抽下一只。<br>' +
+        '喂养：点孩子的灵宠卡 →「🍚 真喂」，米饭 +5 / 胡萝卜 +10 / 肉干 +20 成长值（1 点 = 1 分），攒满免费进化。<br>' +
+        (perm0.draw ? '' : '⚠️ 老师关掉了家长端抽卡；') + (perm0.feed ? '' : '⚠️ 老师关掉了家长端喂养；') +
+        (perm0.draw || perm0.feed ? '' : '<br>') + chTip +
+        '<br>每人每天有次数上限，积分不够会自动作废。</div>' + pendText() + '</div>';
       h += '</div>';
     }
     /* 成绩 */
@@ -825,12 +904,13 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v136</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v137</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
     document.getElementById('btnOut').onclick = function () { goLogin(); };
     var bf = document.getElementById('btnFeed'); if (bf) bf.onclick = function () { submitProposal('feed', feedCost); };
+    var bp = document.getElementById('btnPet'); if (bp) bp.onclick = function () { submitProposal('growdraw', petCost); };
     wirePetFun();   /* vT136 灵宠卡互动：喂食 / 摸摸 / 玩耍 */
     if (ST.pending && ST.pending.status === 'pending') startPoll();
   }
@@ -871,17 +951,25 @@
     return GITEE + '/repos/' + enc(owner) + '/' + enc(repo) + '/contents/pq/' + enc(name) +
       (withToken ? ('?ref=master&access_token=' + enc(ST.snap.parentEssayToken || '')) : '');
   }
-  function submitProposal(action, cost) {
+  function submitProposal(action, cost, extra) {
     if (ST.busy) return;
-    if (!ST.snap.parentEssayToken || !ST.snap.parentEssayRepo) { toast('老师还没开通家长通道'); return; }
+    extra = extra || {};
+    if (!ST.snap.parentEssayToken || !ST.snap.parentEssayRepo) {
+      toast('老师还没开通家长通道：请老师在「家长端显示设置 → 家长端权限」里填仓库和令牌');
+      return;
+    }
     if (ST.pending && ST.pending.status === 'pending') { toast('上一笔还在等待，稍等再试'); return; }
-    var actName = '抽一张灵杰卡';   /* vT112 起抽卡即唤醒，只剩这一个动作 */
+    var food = extra.food ? (feedFoods().filter(function (x) { return x.k === extra.food; })[0]) : null;
+    var actName = (action === 'growdraw') ? '抽一只成长灵宠'
+      : (action === 'growfeed') ? ('给「' + (extra.petName || '灵宠') + '」喂一份' + (food ? food.n : '食物'))
+        : '抽一张灵杰卡';
     if (!confirm('帮「' + ST.name + '」' + actName + '，消耗 ' + cost + ' 启灵积分？\n（' +
       (ST.snap.autoApprove ? '老师已开启自动批准，提交后自动入账' : '需老师批准后生效') + '）')) return;
     ST.busy = true;
     var rec = {
       id: 'pq_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       studentId: ST.name, studentName: ST.name, action: action, item: '',
+      petId: extra.petId || '', defId: extra.defId || '', food: extra.food || '',
       at: Date.now(), atText: ymd(), status: 'pending', by: 'parent-web',
       ts: Date.now(), updatedAt: Date.now(), updatedBy: 'parent'
     };
@@ -899,7 +987,7 @@
       throw e;
     }).then(function () {
       ST.busy = false;
-      ST.pending = { id: rec.id, name: ST.name, action: action, at: rec.at, status: 'pending' };
+      ST.pending = { id: rec.id, name: ST.name, action: action, label: actName, at: rec.at, status: 'pending' };
       savePending(); renderMain(); startPoll();
     }).catch(function (e) {
       ST.busy = false;
