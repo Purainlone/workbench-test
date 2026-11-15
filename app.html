@@ -18403,9 +18403,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v152';
-var WB_MY_VER = '优化版 vT152 · 图鉴管理补齐';
-var WB_BUILD_DATE = '11-15', WB_BUILD_NO = '2.6.176';
+var WB_VER_TAG = 'v153';
+var WB_MY_VER = '优化版 vT153 · 祝贺窗约束';
+var WB_BUILD_DATE = '11-15', WB_BUILD_NO = '2.6.177';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -25350,6 +25350,7 @@ function cwInit(){
       emoji: sp.emoji, customSvg: sp.customSvg || null,
       level: 1, exp: 0, growExp: 0, hunger: 80, mood: 90, ownedItems: [], equipped: {},   /* vT123 growExp：喂养累积的成长值 */
       feedCntToday: 0, drawCntToday: 0, redeemCntToday: 0, lastFedDate: '', hatchedAt: ptYmd(new Date()), graduated: false,
+      obtainedAt: Date.now(),   /* vT153 获得时间：桌面祝贺窗按它判新旧 / 时效 */
       updatedAt: Date.now()
     };
   }
@@ -25419,7 +25420,7 @@ function cwInit(){
   }
   /* 还差几抽必出隐藏：保底计数 4 → 1（下一次就出） */
   function ptPityLeft(who, s) { return PT_CARD_PITY - ptPityOf(who, s); }
-  function ptCardDrawOne(s, who) {
+  function ptCardDrawOne(s, who, fromParent) {
     var pool = ptCardDrawPool(s);
     if (!pool.length) return null;
     var hidden = pool.filter(function (p) { return (p.tier || '普通') === '隐藏'; });
@@ -25454,6 +25455,7 @@ function cwInit(){
       if (!ptPetOfDef(s, who, sp.id)) {
         var np = ptMkPet(who, sp);
         np.fromCard = 1;
+        if (fromParent) np.fromParent = 1;   /* vT153 家长端抽到的：桌面只在早上窗口集中报喜 */
         (s.pets = s.pets || []).push(np);
         res.awakened = true;
       }
@@ -27632,7 +27634,7 @@ function cwInit(){
     var actName = '抽卡';
     return ptAddManual(who, '启灵图鉴 · 家长' + actName + (byAuto ? '（自动批准）' : ''), -cost).then(function () {
       var cardMsg = '';
-      var cr = ptCardDrawOne(s, who);
+      var cr = ptCardDrawOne(s, who, true);   /* 家长端提案：标记来源，桌面延迟到早上集中显示 */
       if (cr) {
         cardMsg = cr.isNew
           ? ('，抽到新卡「' + cr.def.name + '」' + (cr.awakened ? '并唤醒上墙' : ''))
