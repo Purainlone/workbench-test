@@ -996,7 +996,7 @@ table.sct td .del:hover{color:#c2410c}
 .uprev table.upt th{background:#eaf5ef}
 .uprev table.upt input{border:1px solid var(--line);border-radius:7px;padding:5px 7px;font-size:13px;width:78px;text-align:center;font-family:inherit}
 
-/* ---------- 作业登记：优/良/差 三档涂色 ---------- */
+/* ---------- 作业登记：优秀/不错/合格/欠佳 四档涂色 ---------- */
 .hwlv{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
 .hwlv button{border:0;background:none;padding:7px 16px;font-size:13.5px;cursor:pointer;color:var(--muted);font-family:inherit;border-right:1px solid var(--line)}
 .hwlv button:last-child{border-right:0}
@@ -1023,10 +1023,10 @@ table.hw tbody tr:nth-child(even) td.nm{background:#fafcfb}
 table.hw td.cell{height:38px;cursor:pointer;position:relative;background:#fff}
 table.hw td.cell:not(.g):not(.y):not(.r):not(.z):not(.x):after{content:"";position:absolute;inset:7px;border:1px dashed #d5e5dd;border-radius:5px}
 table.hw td.cell:hover{box-shadow:inset 0 0 0 1px #a9d9bf}
-table.hw td.cell .mk{font-size:15px;font-weight:800;line-height:1;display:block;color:#fff}
+table.hw td.cell .mk{font-size:11px;letter-spacing:-.5px;font-weight:800;line-height:1;display:block;color:#fff}   /* vT146 两字等级名 */
 table.hw td.cell.g{background:#1a9c5b}
 table.hw td.cell.y{background:#f0b429}
-/* 2.6.59 「中」改为浅蓝底 + 深蓝字（用户指定；与优绿/良黄/差红区分） */
+/* 2.6.59 「合格」改为浅蓝底 + 深蓝字（与优秀绿/不错黄/欠佳红区分） */
 table.hw td.cell.z{background:#cfe6fb}
 table.hw td.cell.z .mk{color:#1d5fbf}
 table.hw td.cell.r{background:#dc2626}
@@ -1787,7 +1787,7 @@ table.paper td.l{text-align:left;font-weight:600}
   <!-- ============ 作业登记 ============ -->
   <section class="section" id="s-hw">
     <h2>作业登记 <span style="font-size:13px;font-weight:400;color:#2d8f63;background:#e8f4ee;border-radius:8px;padding:2px 10px;vertical-align:middle">班主任兼语文</span> <span id="hwWeekTip" style="font-size:12px;font-weight:400;color:#6b7f74;background:#f4f7f5;border:1px solid #e3ede7;border-radius:8px;padding:2px 9px;vertical-align:middle;margin-left:6px;letter-spacing:.3px"></span></h2>
-    <div class="sub">本页登记、布置的作业<b>自动归入「语文」</b>（与科任端语文老师看到的是同一份数据） · 先选等级优 / 良 / 差，再点格子给学生涂色 · 优 +2 分，良 0 分，差 −2 分 · 登记实时同步到资料库，积分自动累计到学生管理</div>
+    <div class="sub">本页登记、布置的作业<b>自动归入「语文」</b>（与科任端语文老师看到的是同一份数据） · 先选等级 优秀 / 不错 / 合格 / 欠佳，再点格子给学生涂色 · 优秀 +2 分，不错 +1 分，合格 0 分，欠佳 −1 分 · 登记实时同步到资料库，积分自动累计到学生管理</div>
     <div class="rcmode browse" id="hwMode">
       <span id="hwModeTxt">👀 浏览模式 · 格子只读，不会误改</span>
       <button class="btn2 sm primary" id="hwModeBtn" onclick="toggleHWMode()">✍️ 开始登记</button>
@@ -1807,10 +1807,10 @@ table.paper td.l{text-align:left;font-weight:600}
     </div>
     <div class="gpset">
       <div class="hwlv" id="hwLv">
-        <button class="on g" data-lv="优" onclick="hwSetLv('优')">优 +2</button>
-        <button data-lv="良" onclick="hwSetLv('良')">良 +1</button>
-        <button data-lv="中" onclick="hwSetLv('中')">中 0</button>
-        <button data-lv="差" onclick="hwSetLv('差')">差 −1</button>
+        <button class="on g" data-lv="优" onclick="hwSetLv('优')">优秀 +2</button>
+        <button data-lv="良" onclick="hwSetLv('良')">不错 +1</button>
+        <button data-lv="中" onclick="hwSetLv('中')">合格 0</button>
+        <button data-lv="差" onclick="hwSetLv('差')">欠佳 −1</button>
         <button data-lv="超时未交" onclick="hwSetLv('超时未交')">超时 −2</button>
       </div>
       <span style="font-size:12px;font-weight:700;color:#2d5a45;background:#e8f4ee;border-radius:8px;padding:8px 12px;flex-shrink:0">语文</span>
@@ -1916,10 +1916,10 @@ table.paper td.l{text-align:left;font-weight:600}
       <div class="scnrow">
         <span class="scnlab">② 这批作业的等级</span>
         <div class="hwlv" id="scnLv">
-          <button class="on g" data-lv="优" type="button" onclick="scnSetLv('优')">优 +2</button>
-          <button data-lv="良" type="button" onclick="scnSetLv('良')">良 +1</button>
-          <button data-lv="中" type="button" onclick="scnSetLv('中')">中 0</button>
-          <button data-lv="差" type="button" onclick="scnSetLv('差')">差 −1</button>
+          <button class="on g" data-lv="优" type="button" onclick="scnSetLv('优')">优秀 +2</button>
+          <button data-lv="良" type="button" onclick="scnSetLv('良')">不错 +1</button>
+          <button data-lv="中" type="button" onclick="scnSetLv('中')">合格 0</button>
+          <button data-lv="差" type="button" onclick="scnSetLv('差')">欠佳 −1</button>
           <button data-lv="超时未交" type="button" onclick="scnSetLv('超时未交')">超时 −2</button>
         </div>
         <span class="sctip">整个班都交齐的作业，选一个等级扫一遍就行；个别不一样的分开扫</span>
@@ -13037,7 +13037,7 @@ function rcClearAll(){
    三张表：作业登记 fCfl0cuMIVzFDi0iDuAEv2
            小组活动 6WdxjXnbbwiitPJTmlS55m
            学生档案 2mthbbHsJeABzmnerNt6sK
-   积分口径：作业 优+2 / 良 0 / 差-2
+   积分口径：作业 优秀+2 / 不错+1 / 合格 0 / 欠佳-1
              小组 第1名+5 第2名+3 第3名+2 参与+1（组内按人数平分）
    ================================================================== */
 var HW_DB='fCfl0cuMIVzFDi0iDuAEv2';
@@ -13045,7 +13045,14 @@ var GA_DB='6WdxjXnbbwiitPJTmlS55m';
 var ST_DB='2mthbbHsJeABzmnerNt6sK';
 var HW_SCORE={'优':2,'良':1,'中':0,'差':-1,'超时未交':-2};   /* 2.6.35 四级赋分 + 超时未交 */
 var HW_CLS={'优':'g','良':'y','中':'z','差':'r','超时未交':'x'};
-var HW_MARK={'优':'优','良':'良','中':'中','差':'差','超时未交':'✕'};
+var HW_MARK={'优':'优秀','良':'不错','中':'合格','差':'欠佳','超时未交':'✕'};
+/* vT146 作业等级改名：界面统一叫 优秀 / 不错 / 合格 / 欠佳，
+   但数据表「等级」是飞书单选字段，历史记录与积分/统计都以 优良中差 为键，
+   所以只做「显示名映射 + 新词输入归一化」，绝不改存储值。 */
+var HW_LV_NAME={'优':'优秀','良':'不错','中':'合格','差':'欠佳','超时未交':'超时未交'};
+var HW_LV_ALIAS={'优秀':'优','不错':'良','合格':'中','欠佳':'差'};
+function hwLvNorm(v){var t=String(v==null?'':v).trim();return HW_LV_ALIAS[t]||t;}
+function hwLvName(v){var k=hwLvNorm(v);return HW_LV_NAME[k]||k||'';}
 var HW_LV_FIELD_ID='';          /* 飞书「等级」单选字段 id（读 schema 后填） */
 var HW_LV_SCHEMA=[];            /* 云端「等级」当前已有选项文本 */
 var GA_RANK_SCORE={1:5,2:3,3:2};
@@ -13236,7 +13243,7 @@ function toggleHWMode(){
   else toastMsg('✅ 已退出登记模式，格子恢复只读');
 }
 function hwSetLv(lv){
-  HW_LV=lv;
+  lv=hwLvNorm(lv);HW_LV=lv;   /* vT146 允许传「优秀」等新词 */
   var box=document.getElementById('hwLv');
   if(box)[].forEach.call(box.querySelectorAll('button'),function(b){
     var on=b.getAttribute('data-lv')===lv;
@@ -13337,7 +13344,7 @@ function hwMarkAllOverdue(){
 function hwItemLabel(r){return (fval(r,'作业名称')||'')+' ('+(fval(r,'日期')||'')+')'}
 
 /* ========== vT86 作业批量：全登记 / 反选 / 清空本列 ==========
-   典型用法：一摞作业收上来 → 选「优」→「✅ 全登记」→ 再把没交的几个同学
+   典型用法：一摞作业收上来 → 选「优秀」→「✅ 全登记」→ 再把没交的几个同学
    直接点格子取消（同等级再点一次 = 取消，沿用 hwToggleCell 的老逻辑）。
    批量写入与单格登记共用同一套规则：
    · 新增 → addRecord；取消 → 先写记录级墓碑再 deleteRecord
@@ -13734,7 +13741,7 @@ function renderHW(){
       var lv=rec?fval(rec,'等级'):'';
       if(lv)pts+=(HW_SCORE[lv]||0);
       var td=el('td','cell'+(lv?(' '+HW_CLS[lv]):''));
-      if(lv)td.appendChild(el('span','mk',HW_MARK[lv]));
+      if(lv){var _mk=el('span','mk',HW_MARK[hwLvNorm(lv)]||lv);_mk.title=hwLvName(lv);td.appendChild(_mk);}   /* vT146 */
       td.title=s.姓名+' · '+it.name+(lv?('（'+lv+'）'):'（未登记）');
       td.onclick=function(){hwToggleCell(this,s.姓名,it)};
       tr.appendChild(td);
@@ -13777,7 +13784,7 @@ function hwRenderStat(stu,m,items){
     stu.forEach(function(s){
       var rec=m[hwKey(s.姓名,it)];
       var lv=rec?fval(rec,'等级'):'';
-      if(lv&&c[lv]!=null)c[lv]++;
+      lv=hwLvNorm(lv);if(lv&&c[lv]!=null)c[lv]++;   /* vT146 兼容新词 */
     });
     var undone=stu.length-c['优']-c['良']-c['中']-c['差']-c['超时未交'];
     var card=el('div','pill b');
@@ -13789,10 +13796,10 @@ function hwRenderStat(stu,m,items){
       _pwEl.style.cssText='font-size:11px;color:#7c8894;font-weight:400';
       card.appendChild(_pwEl);
     }
-    card.appendChild(el('b',null,c['优']));card.appendChild(document.createTextNode(' 优 · '));
-    card.appendChild(el('b',null,c['良']));card.appendChild(document.createTextNode(' 良 · '));
-    card.appendChild(el('b',null,c['中']));card.appendChild(document.createTextNode(' 中 · '));
-    card.appendChild(el('b',null,c['差']));card.appendChild(document.createTextNode(' 差'));
+    card.appendChild(el('b',null,c['优']));card.appendChild(document.createTextNode(' 优秀 · '));
+    card.appendChild(el('b',null,c['良']));card.appendChild(document.createTextNode(' 不错 · '));
+    card.appendChild(el('b',null,c['中']));card.appendChild(document.createTextNode(' 合格 · '));
+    card.appendChild(el('b',null,c['差']));card.appendChild(document.createTextNode(' 欠佳'));
     if(c['超时未交']){
       card.appendChild(el('b','x',c['超时未交']));
       card.appendChild(document.createTextNode(' 超时'));
@@ -13808,7 +13815,7 @@ var SCN_STATE={lv:'优',busy:false,pending:[],done:[],files:0,noWasm:false};
 var SCN_CD=null,SCN_LOOP=null;
 
 function scnSetLv(lv){
-  SCN_STATE.lv=lv;
+  lv=hwLvNorm(lv);SCN_STATE.lv=lv;   /* vT146 */
   var box=document.getElementById('scnLv');
   if(box)[].forEach.call(box.querySelectorAll('button'),function(b){
     var on=b.getAttribute('data-lv')===lv;
@@ -14074,7 +14081,7 @@ function scnFiles(files){
     img.src=url;
   })();
 }
-/* 把识别到的人按当前等级写进作业登记（优+2 良0 差-2 自动累计） */
+/* 把识别到的人按当前等级写进作业登记（优秀+2 不错+1 合格0 欠佳-1 自动累计） */
 function scnCommit(){
   if(!SCN_STATE.pending.length){toastMsg('还没有识别到学生');return}
   var it=scnTargetItem();
@@ -15669,13 +15676,13 @@ function hmHwCha(){
   try{
     (typeof HW_ROWS!=='undefined'?HW_ROWS:[]).forEach(function(r){
       if(!r)return;
-      if(String(fval(r,'等级')||'')!=='差')return;
+      if(hwLvNorm(String(fval(r,'等级')||''))!=='差')return;   /* vT146 */
       add(fval(r,'学生姓名'),fval(r,'作业名称'),fval(r,'日期'));
     });
   }catch(e){}
   try{
     (typeof HW_GITEE_HW!=='undefined'&&HW_GITEE_HW?HW_GITEE_HW:[]).forEach(function(r){
-      if(!r||String(r.level||'')!=='差')return;
+      if(!r||hwLvNorm(String(r.level||''))!=='差')return;   /* vT146 */
       add(r.name,r.item,r.date);
     });
   }catch(e2){}
@@ -15902,7 +15909,7 @@ function renderHome(){
     }
   }catch(e){console.error('[首页] 未交作业卡片失败',e)}
 
-  /* ---------- vT53 本周作业「差」榜（周一至今按人计次，下周一自动清零） ----------
+  /* ---------- vT53 本周作业「欠佳」榜（周一至今按人计次，下周一自动清零） ----------
      与小程序首页 / 教室大屏同一口径。放在「未交作业」卡下面 —— 老师一眼能看到
      「本周谁被记了差」，点名字直接跳到作业登记去补登记/改等级。 */
   try{
@@ -15913,7 +15920,7 @@ function renderHome(){
       cCha.style.border='2px solid #e8a9a2';
       cCha.style.boxShadow='0 2px 12px rgba(192,57,43,.14)';
       var hdCha=el('div','hm-hd');
-      hdCha.appendChild(el('h4',null,'⚠️ 本周作业「差」'));
+      hdCha.appendChild(el('h4',null,'⚠️ 本周作业「欠佳」'));
       var chaRight=el('div');
       chaRight.style.cssText='display:flex;gap:8px;align-items:center';
       chaRight.appendChild(el('span','hm-cha-tag',cha.list.length+' 人 · '+cha.total+' 次'));
@@ -15937,7 +15944,7 @@ function renderHome(){
       cCha.appendChild(el('div','hm-cha-tip',cha.from+' 起统计（周一至今），下周一自动清零 · 与教室大屏、小程序首页同一口径'));
       gf.appendChild(cCha);
     }
-  }catch(e2){console.error('[首页] 本周作业「差」榜失败',e2)}
+  }catch(e2){console.error('[首页] 本周作业「欠佳」榜失败',e2)}
 
   /* ---------- vT57 自省补责（生效中：date<=今天<=due 且未完成/未删除） ----------
      只布置给部分同学的追加任务（违纪/未按要求完成）。与桌面标签、教室大屏、小程序首页同一口径。 */
@@ -18396,9 +18403,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v145';
-var WB_MY_VER = '优化版 vT145 · 成长值攒满自动进化';
-var WB_BUILD_DATE = '11-14', WB_BUILD_NO = '2.6.169';
+var WB_VER_TAG = 'v146';
+var WB_MY_VER = '优化版 vT146 · 作业等级改名';
+var WB_BUILD_DATE = '11-15', WB_BUILD_NO = '2.6.170';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -19657,7 +19664,7 @@ function mpToDesk(tables) {
     return { '姓名': mpTxt(s.name), '学号': mpTxt(s.no), '组别': mpTxt(s.group || ''), '职务': mpTxt(s.duty || ''), '备注': mpTxt(''), '奖惩事项': mpTxt(''), '奖惩分值': { number: 0 }, '小组职务': mpTxt(''), '日期': mpTxt('') };
   });
   recs(MP_SYNC.hw.table, tables.hw, function (r) {
-    /* 2.6.9 修复：云端「等级」是 select 字段（优/良/差），原来写成 {text:...}
+    /* 2.6.9 修复：云端「等级」是 select 字段（数据存储仍为 优/良/中/差，界面叫 优秀/不错/合格/欠佳），原来写成 {text:...}
        云端不认，整列等级变空（27 条全 None）。必须按 select 写。 */
     var _lv = String(r.level || '').trim();
     var p = { '作业名称': mpTxt(r.item), '学生姓名': mpTxt(r.name), '日期': mpTxt(r.date), '分值': mpNum(r.score || 0), '备注': mpTxt(r.note || '') };
@@ -28841,7 +28848,7 @@ function cwInit(){
 
     var hwRows = (local.hw || []).filter(function (r) { return (r.date || '') >= lim30; })
       .map(function (r) { return { date: r.date, item: r.item, name: r.name, level: r.level }; });
-    /* vT129 家长端「📊 作业等级统计」：优 / 良 / 中 / 差 / 超时未交 各几次。
+    /* vT129 家长端「📊 作业等级统计」：优秀 / 不错 / 合格 / 欠佳 / 超时未交 各几次（数据键仍是 优/良/中/差）。
        近 120 天（约一个学期），与成绩统计同窗口；按姓名汇总，随各自加密块下发。 */
     var lim120s = ptwDstr(new Date(now.getTime() - 120 * 86400000));
     var hwStats = {};
@@ -28849,7 +28856,7 @@ function cwInit(){
       if (!r || !r.name) return;
       var d = String(r.date || '').slice(0, 10);
       if (d < lim120s) return;
-      var lv = r.level || '';
+      var lv = hwLvNorm(r.level) || '';   /* vT146 兼容新词 */
       if (!lv) return;
       if (!hwStats[r.name]) hwStats[r.name] = { you: 0, liang: 0, zhong: 0, cha: 0, over: 0, total: 0 };
       var o = hwStats[r.name];
@@ -29029,7 +29036,7 @@ function cwInit(){
         comments: (snap.comments || []).filter(function (r) { return r.name === st.name; }),
         grades: (snap.grades || []).filter(function (r) { return r.name === st.name; }),
         detain: (snap.detain || []).filter(function (r) { return r.name === st.name; }),
-        /* vT129 作业等级统计（近 120 天）：优/良/中/差/超时未交 + 合计 + 统计区间 */
+        /* vT129 作业等级统计（近 120 天）：优秀/不错/合格/欠佳/超时未交 + 合计 + 统计区间 */
         hwStats: (snap.hwStats && snap.hwStats[st.name]) || { you: 0, liang: 0, zhong: 0, cha: 0, over: 0, total: 0 },
         hwStatFrom: snap.hwStatFrom || '', hwStatTo: snap.hwStatTo || '',
         codex: (snap.codexPets && snap.codexPets[st.name]) || []
@@ -29413,7 +29420,7 @@ function cwInit(){
     + '<button id="aiCfgBtn" title="设置模型与 Key">⚙️</button><button id="aiMinBtn" title="收起">✕</button></div>'
     + '<div id="aiLog"></div>'
     + '<div id="aiBar"><button id="aiMic" title="按住说话（Chrome / Edge）">🎤</button>'
-    + '<input id="aiInput" placeholder="例：发通知 明天带跳绳 / 作业 优 全登记 / 谁没交作业">'
+    + '<input id="aiInput" placeholder="例：发通知 明天带跳绳 / 作业 优秀 全登记 / 谁没交作业">'
     + '<button id="aiSend">发送</button></div>'
     + '<div id="aiTip">执行前会先给你看「要做什么」，点确认才动手。语音需 Chrome / Edge。</div>';
   document.body.appendChild(fab); document.body.appendChild(panel);
@@ -29552,7 +29559,7 @@ function cwInit(){
       '输出格式：{"say":"给老师看的一句话","actions":[动作…]}。没有明确要求就 actions 为空，并在 say 里追问。',
       '动作类型：',
       '1 发通知/叫人 {"type":"notice","text":"通知内容","student":"要叫的学生姓名(叫人时填)","arrive":"now 或 YYYY-MM-DD HH:MM","prio":"普通|紧急","tts":true}',
-      '2 登记作业 {"type":"homework","item":"作业名，可省略代表最近一列","level":"优|良|中|差|超时未交","scope":"all|missing|students","students":["姓名"],"exclude":["姓名"]}',
+      '2 登记作业 {"type":"homework","item":"作业名，可省略代表最近一列","level":"优秀|不错|合格|欠佳|超时未交","scope":"all|missing|students","students":["姓名"],"exclude":["姓名"]}',
       '   作业列不存在时系统会自动新建这一列再登记，不用先问老师、也不需要额外参数；登记前确认卡上会注明。',
       '   scope=all 表示全班没登记的补登记；exclude 里的同学会被取消登记（用于全部登记后排除没交的人）。',
       '   作业列名会模糊匹配（老师说「第四单元作文上交情况」也能匹配到「第四单元作文」列）；拿不准就输出最接近的名字。',
@@ -29649,8 +29656,8 @@ function cwInit(){
         (names.length ? '。现有作业列：' + names.join('、') : '') };
     }
     if (typeof dbReady !== 'undefined' && !dbReady) return { ok: false, msg: '数据表还没连上，稍后再试' };
-    var level = mustStr(a.level || '优');
-    if (!HW_SCORE || !(level in HW_SCORE)) return { ok: false, msg: '等级只能是 优 / 良 / 中 / 差 / 超时未交' };
+    var level = hwLvNorm(mustStr(a.level || '优'));   /* vT146 说「优秀」也能识别，落库仍是 优 */
+    if (!HW_SCORE || !(level in HW_SCORE)) return { ok: false, msg: '等级只能是 优秀 / 不错 / 合格 / 欠佳 / 超时未交' };
     HW_LV = level;
     try { if (typeof hwSetLv === 'function') hwSetLv(level); } catch (e) {}
     HW_MODE = true;
@@ -29762,7 +29769,7 @@ function cwInit(){
   function labelOf(a) {
     if (!a || !a.type) return '未知动作';
     if (a.type === 'notice') return '📢 发通知' + (a.student ? '（叫 ' + a.student + '）' : '') + '：' + mustStr(a.text || '到办公室') + (/^now$/i.test(mustStr(a.arrive || 'now')) ? '（立即）' : ('（' + a.arrive + ' 到达）'));
-    if (a.type === 'homework') return '✍️ 登记作业：' + mustStr(a.item || '最近一列') + ' → ' + mustStr(a.level || '优') +
+    if (a.type === 'homework') return '✍️ 登记作业：' + mustStr(a.item || '最近一列') + ' → ' + hwLvName(a.level || '优') +   /* vT146 卡片回显新词 */
       (a.scope === 'students' ? ('，指定 ' + (a.students || []).join('、')) : '，全班未登记的') +
       ((a.exclude || []).length ? ('，排除 ' + a.exclude.join('、')) : '') +
       '（列不存在会自动新建）';
