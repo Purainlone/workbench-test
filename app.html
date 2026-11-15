@@ -18403,9 +18403,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v148';
-var WB_MY_VER = '优化版 vT148 · 启灵家园改造';
-var WB_BUILD_DATE = '11-15', WB_BUILD_NO = '2.6.172';
+var WB_VER_TAG = 'v149';
+var WB_MY_VER = '优化版 vT149 · 回收站一日清理';
+var WB_BUILD_DATE = '11-15', WB_BUILD_NO = '2.6.173';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -28119,12 +28119,22 @@ function cwInit(){
         return '<option value="' + ptAt(p.id) + '">' + ptAt(p.studentName) + ' · ' + ptAt(p.name) + (p.deleted ? ' · 已删除' : '') + '</option>';
       }).join('');
   }
+  /* vT149 回收站只保留 1 天：只列出「已删除且未永久删除」且删除时间在 24 小时内的条目；
+     点「永久删除」的（purged 墓碑）立刻不再显示；超过 1 天的自动不再显示（数据保留墓碑防云端复活）。
+     小程序管理页用同一规则（按 deletedAt / updatedAt 判断），两端看到的一致。 */
+  function ptRecycleAlive(p) {
+    if (!p || !p.deleted || p.purged) return false;
+    var t = Number(p.deletedAt) || Number(p.updatedAt) || 0;
+    return t > 0 && (Date.now() - t) < 24 * 3600 * 1000;
+  }
   function ptRecycleOpts(s) {
-    var a = (s.petPool || []).filter(function (p) { return p && (p.purged || p.deleted); });
-    var b = (s.pets || []).filter(function (p) { return p && (p.purged || p.deleted); });
+    var a = (s.petPool || []).filter(ptRecycleAlive);
+    var b = (s.pets || []).filter(ptRecycleAlive);
     return a.concat(b).map(function (p) {
+      var t = Number(p.deletedAt) || Number(p.updatedAt) || 0;
+      var left = Math.max(1, Math.ceil((t + 24 * 3600 * 1000 - Date.now()) / 3600 / 1000));
       return '<option value="' + ptAt(p.id) + '">' + (p.studentName ? ptAt(p.studentName) + ' · ' : '') +
-        ptAt(p.name || '（已清除）') + (p.purged ? ' ☠ 永久' : ' 🗑 移除') + (p.studentName ? '（宠物记录）' : '（图鉴条目）') + '</option>';
+        ptAt(p.name || '（已清除）') + ' 🗑 移除 · 剩 ' + left + ' 小时' + (p.studentName ? '（宠物记录）' : '（图鉴条目）') + '</option>';
     }).join('');
   }
 
@@ -28219,11 +28229,11 @@ function cwInit(){
       '<div class="sub">删除的是某位同学名下这条「已唤醒灵杰」记录（含旧宠物），不会改动图鉴里的形象定义。删除后全班各端都不再显示。</div></div>' +
 
       /* ⑤ 回收站 */
-      '<div class="pet-sec"><h3>♻️ 回收站（已移除 / 已删除）</h3>' +
+      '<div class="pet-sec"><h3>♻️ 回收站（已移除 · 只保留 1 天）</h3>' +
       '<div class="gpset"><select class="search" id="cxRecycleSel" style="min-width:230px">' + (recOpts || '<option value="">（回收站是空的）</option>') + '</select>' +
       '<button class="btn2 sm" onclick="ptCodexRestore()">↩️ 恢复选中</button>' +
       '<button class="btn2 sm" onclick="ptPurgeEmpty()">🧹 清空回收站</button></div>' +
-      '<div class="sub">清空回收站会真正抹掉数据，不可恢复；被清空的图鉴编号会记入排除名单，不会被图鉴种子自动补回。</div></div>' +
+      '<div class="sub">回收站记录只保留 1 天，超过一天的自动不再显示；点「永久删除」的立刻消失不再显示（数据里留一条不可见的墓碑，防止云端同步与图鉴种子把它复活）。清空回收站会真正抹掉数据，不可恢复；被清空的图鉴编号会记入排除名单，不会被图鉴种子自动补回。</div></div>' +
 
       /* ⑤-b vT102 旧数据清理 + 全端校准 */
       '<div class="pet-sec"><h3>🧹 旧数据清理 · 🔄 全端校准</h3>' +
@@ -28415,7 +28425,7 @@ function cwInit(){
     var p = (s.petPool || []).filter(function (x) { return x && x.id === id && !x.purged; })[0];
     if (!p) return toastMsg('⚠️ 请先选择图鉴条目');
     if (permanent) {
-      if (!confirm('☠ 永久删除「' + p.name + '」？\n该形象不再出现在图鉴、随机唤醒与导出清单里，也不会被图鉴种子补回。\n可在「♻️ 回收站」恢复。')) return;
+      if (!confirm('☠ 永久删除「' + p.name + '」？\n该形象不再出现在图鉴、随机唤醒与导出清单里，也不会被图鉴种子补回；\n这条记录会立刻从回收站消失，不再显示。')) return;
       s.petPool = s.petPool.map(function (x) { return x && x.id === id ? ptTombstone(x) : x; });
     } else {
       if (p.deleted) return toastMsg('这条已经在回收站里了');
@@ -28433,7 +28443,7 @@ function cwInit(){
     var p = (s.pets || []).filter(function (x) { return x && x.id === id && !x.purged; })[0];
     if (!p) return toastMsg('⚠️ 请先选择宠物记录');
     if (permanent) {
-      if (!confirm('☠ 永久删除 ' + p.studentName + ' 的「' + p.name + '」？\n可在「♻️ 回收站」恢复。')) return;
+      if (!confirm('☠ 永久删除 ' + p.studentName + ' 的「' + p.name + '」？\n这条记录会立刻从回收站消失，不再显示。')) return;
       s.pets = s.pets.map(function (x) { return x && x.id === id ? ptTombstone(x) : x; });
     } else {
       if (p.deleted) return toastMsg('这条已经在回收站里了');
