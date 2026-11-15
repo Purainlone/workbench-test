@@ -312,6 +312,13 @@
     });
   }
 
+  /* vT146 作业等级改名：界面统一 优秀 / 不错 / 合格 / 欠佳；
+     快照里的数据键仍是 优/良/中/差（飞书单选字段、历史记录），只做显示映射。 */
+  var PA_LV_NAME = { '优': '优秀', '良': '不错', '中': '合格', '差': '欠佳', '超时未交': '超时未交' };
+  var PA_LV_ALIAS = { '优秀': '优', '不错': '良', '合格': '中', '欠佳': '差' };
+  function paLvNorm(v) { var t = String(v == null ? '' : v).trim(); return PA_LV_ALIAS[t] || t; }
+  function paLvName(v) { var k = paLvNorm(v); return PA_LV_NAME[k] || k || ''; }
+
   /* ---------- 视图：把快照里的孩子数据整理成页面要用的形状 ---------- */
   /* vT129 作业等级统计：优先用快照里的 hwStats（近 120 天，老师端算好下发）；
      老快照没有这个字段就用块里的 hw 现算（只覆盖近 30 天，但至少不会空白）。 */
@@ -328,7 +335,7 @@
     }
     var o = zero, from = '', to = '';
     (per && per.hw || []).forEach(function (r) {
-      var lv = r && r.level; if (!lv) return;
+      var lv = paLvNorm(r && r.level); if (!lv) return;   /* vT146 兼容新词 */
       var d = dateOnly(r.date);
       if (d && (!from || d < from)) from = d;
       if (d && (!to || d > to)) to = d;
@@ -370,7 +377,7 @@
         if (!rec && r.name === name && r.item === it.item && dateOnly(r.date) === dateOnly(it.date)) rec = r;
       });
       var lv = rec ? (rec.level || '') : '';
-      return { item: it.item, level: lv, cls: LV[lv] || 'r', done: !!rec };
+      return { item: it.item, level: paLvName(lv), cls: LV[paLvNorm(lv)] || 'r', done: !!rec };   /* vT146 显示新词 */
     });
     /* vT131 未完成 / 未交作业清单（跨天，不只今天）
        快照里 hwItems 是近 30 天的作业列（日期 + 名称 + 科目），hw 是这孩子的登记记录。
@@ -392,7 +399,7 @@
       var k = dt + '|' + nm;
       if (hwTodoSeen[k]) return;
       hwTodoSeen[k] = 1; hwItemN++;
-      var rec = recMap[k], lv = rec ? String(rec.level || '') : '';
+      var rec = recMap[k], lv = rec ? paLvNorm(String(rec.level || '')) : '';   /* vT146 */
       var row = { date: dt, md: dt.slice(5).replace('-', '/'), item: nm, subject: (it && it.subject) || '' };
       if (lv === '超时未交') { row.st = 'over'; hwTodoOver.push(row); }
       else if (!rec) {
@@ -437,9 +444,9 @@
       .map(function (r) {
         var full = Number(r.full) || 100, sc = Number(r.score);
         var ratio = isNaN(sc) ? 0 : sc / full;
-        var lv = ratio >= 0.85 ? '优' : ratio >= 0.7 ? '良' : ratio >= 0.6 ? '中' : '差';
+        var lv = ratio >= 0.85 ? '优秀' : ratio >= 0.7 ? '不错' : ratio >= 0.6 ? '合格' : '欠佳';   /* vT146 */
         var letter = gradeLetter(sc, full);
-        return { exam: r.exam || '', subject: r.subject || '', score: sc, full: full, level: lv, cls: LV[lv] || 'r', letter: letter, lcls: gradeCls(letter), date: dateOnly(r.date) };
+        return { exam: r.exam || '', subject: r.subject || '', score: sc, full: full, level: lv, cls: LV[paLvNorm(lv)] || 'r', letter: letter, lcls: gradeCls(letter), date: dateOnly(r.date) };
       }).slice(0, 12);
     var cmts = (per.comments || []).filter(function (r) { return r && r.text; })
       .sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); }).slice(0, 8)
@@ -824,11 +831,11 @@
           }
         });
         h += '<div class="hwfoot">按老师工作台的作业登记整理（近 30 天共 ' + v.hwItemN + ' 项作业）。' +
-          (v.hwStat && v.hwStat.cha ? '另有 ' + v.hwStat.cha + ' 项登记为「差」——已交，质量待提升。' : '') + '</div>';
+          (v.hwStat && v.hwStat.cha ? '另有 ' + v.hwStat.cha + ' 项登记为「欠佳」——已交，质量待提升。' : '') + '</div>';
       }
       h += '</div>';
     }
-    if (on('hwstat')) {   /* 作业等级统计（vT129）：优 / 良 / 中 / 差 / 超时未交 各几次 + 占比条 */
+    if (on('hwstat')) {   /* 作业等级统计（vT129）：优秀 / 不错 / 合格 / 欠佳 / 超时未交 各几次 + 占比条（vT146） */
       var st = v.hwStat || { you: 0, liang: 0, zhong: 0, cha: 0, over: 0, total: 0 };
       var span = (st.from && st.to) ? (st.from.slice(5) + ' ~ ' + st.to.slice(5)) : '近 120 天';
       h += '<div class="card"><h2>📊 作业等级统计 <em>' + esc(span) + '</em></h2>';
@@ -838,10 +845,10 @@
         var pct = function (n) { return (n * 100 / st.total).toFixed(1) + '%'; };
         var goodRate = Math.round((st.you + st.liang) * 100 / st.total);
         h += '<div class="stgrid">' +
-          '<div class="stg g"><b>' + st.you + '</b><span>优</span></div>' +
-          '<div class="stg y"><b>' + st.liang + '</b><span>良</span></div>' +
-          '<div class="stg z"><b>' + st.zhong + '</b><span>中</span></div>' +
-          '<div class="stg r"><b>' + st.cha + '</b><span>差</span></div>' +
+          '<div class="stg g"><b>' + st.you + '</b><span>优秀</span></div>' +
+          '<div class="stg y"><b>' + st.liang + '</b><span>不错</span></div>' +
+          '<div class="stg z"><b>' + st.zhong + '</b><span>合格</span></div>' +
+          '<div class="stg r"><b>' + st.cha + '</b><span>欠佳</span></div>' +
           '<div class="stg x"><b>' + st.over + '</b><span>超时未交</span></div>' +
           '</div>';
         h += '<div class="stbar">' +
@@ -851,7 +858,7 @@
           (st.cha ? '<i class="b-r" style="width:' + pct(st.cha) + '"></i>' : '') +
           (st.over ? '<i class="b-x" style="width:' + pct(st.over) + '"></i>' : '') +
           '</div>';
-        h += '<div class="stfoot">共登记 ' + st.total + ' 次 · 优良率 ' + goodRate + '%' +
+        h += '<div class="stfoot">共登记 ' + st.total + ' 次 · 优秀+不错 占比 ' + goodRate + '%' +
           (st.over ? (' · 超时未交 ' + st.over + ' 次') : '') +
           (st.legacy ? '<br>（这份数据是旧版快照，只统计到近 30 天；老师重新发布后会补全）' : '') +
           '</div>';
@@ -940,7 +947,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v144</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v146</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
