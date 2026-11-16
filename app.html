@@ -19390,6 +19390,15 @@ function syncCycleCore(manual) {
             });
           }
         } catch (_dterr) {}
+        /* vT170 双保险：远端 deletes 里若混入 9 个「恢复保护」墓碑（旧版手机推回），
+           写回时一并滤掉，绝不让它们经网页「过桥」存活 → 旧手机墓碑从此断根。 */
+        try {
+          var _d9 = out.deletes, _n9 = 0;
+          if (Array.isArray(_d9)) {
+            out.deletes = _d9.filter(function (x) { if (wbScoreTombBanned(x)) { _n9++; return false } return true });
+            if (_n9) try { console.info('[gitee-sync] 已滤除恢复保护墓碑 ' + _n9 + ' 个') } catch (_e9) {}
+          }
+        } catch (_d9err) {}
         /* 2.5.3 透传列表扩展：affairs/manual/hwItems 桌面端从不产生（mpFromDeskBuild 里恒为空），
            以前不在透传名单里 → 每次桌面同步都把小程序的班务记录/手动积分用空表覆盖掉，
            换手机或重装小程序后这些数据就丢了。现在全部透传远端。 */
@@ -19532,6 +19541,19 @@ function syncCycleCore(manual) {
           if (merged.length !== mineN) unionLog.push(k + ' ' + mineN + '∪' + remoteM + '→' + merged.length);
           out.tables[k] = merged;
         });
+        /* vT170 目标加分防清零闸（11-17 rev6133 事故复盘）：
+           st（奖惩）表由本机从飞书整表重建 —— 页面刚打开 loadST 还没回来、
+           或飞书读取失败时本机 st 是空数组，整表写回会把云端奖惩
+           （含「成绩达标」目标加分 51 条）清成 0 条。st 没有 mpBizKey、
+           不能进并集名单（会重复膨胀、还会让飞书里删掉的奖惩复活），
+           所以只挡最危险的「本机为空」：空而云端有货 → 以云端为准透传。 */
+        try {
+          if ((!Array.isArray(out.tables.st) || !out.tables.st.length) &&
+              Array.isArray(tables.st) && tables.st.length) {
+            out.tables.st = tables.st;
+            try { console.info('[gitee-sync] 本机奖惩表为空，写回以云端为准（' + tables.st.length + ' 条）') } catch (_eS) {}
+          }
+        } catch (_stG) {}
         /* vT83 班务记录单独处理：以前 affairs 也在上面的并集里，同键「本机(飞书版)无条件赢」，
            手机端改的跟进状态/内容/新增记录每轮都被飞书版打回（快照回滚），
            而飞书表又吸收不到手机的修改 —— 这就是「班务记录不同步」的根因。
