@@ -3391,13 +3391,18 @@ table.paper td.l{text-align:left;font-weight:600}
       if((Number(x.score)||0)>=0)return false;
       return !!(x.pet||/灵宠|启灵图鉴|成长灵宠/.test(String(x.reason||'')));
     };
+    /* 开学以来累计：与桌面端 rose 的时间口径一致（无日期的记录照常计入） */
+    var ts='';
+    try{ts=(typeof wbCfgTermStart==='function'?wbCfgTermStart():'')||''}catch(_e0){}
+    if(!ts){try{ts=String(SEMESTER_START||'')}catch(_e0b){}}
+    var inTerm=function(x){var d=String((x&&x.date)||'').slice(0,10);return (!ts||!d||d>=ts)};
     var t=0;
-    (c.hw||[]).forEach(function(x){if(!x||x.deleted)return;t+=Number(x.score)||0});
-    (c.hwadj||[]).forEach(function(x){if(!x||x.deleted)return;t+=Number(x.delta)||0});
+    (c.hw||[]).forEach(function(x){if(!x||x.deleted||!inTerm(x))return;t+=Number(x.score)||0});
+    (c.hwadj||[]).forEach(function(x){if(!x||x.deleted||!inTerm(x))return;t+=Number(x.delta)||0});
     /* 小组分按「组」记一条，全班求和正好等于平摊到每个人之后的总和 */
-    (c.ga||[]).forEach(function(x){if(!x||x.deleted)return;t+=Number(x.score)||0});
-    (c.st||[]).forEach(function(x){if(!x||isPet(x))return;t+=Number(x.score)||0});
-    (c.manual||[]).forEach(function(x){if(!x||isPet(x))return;t+=Number(x.score)||0});
+    (c.ga||[]).forEach(function(x){if(!x||x.deleted||!inTerm(x))return;t+=Number(x.score)||0});
+    (c.st||[]).forEach(function(x){if(!x||isPet(x)||!inTerm(x))return;t+=Number(x.score)||0});
+    (c.manual||[]).forEach(function(x){if(!x||isPet(x)||!inTerm(x))return;t+=Number(x.score)||0});
     return Math.round(t*10)/10;
   }
   function gdClassPoints(){
