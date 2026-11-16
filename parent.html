@@ -142,7 +142,7 @@
   .pend.wait{background:#fdf3dd;color:#8a6511}
   .pend.bad{background:#fdeaea;color:#b4382a}
   /* vT129 作业等级统计 */
-  .stgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}
+  .stgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
   .stg{background:#f7faf8;border-radius:11px;padding:8px 3px;text-align:center}
   .stg b{display:block;font-size:19px;line-height:1.25}
   .stg span{font-size:11px;color:var(--ink2)}
@@ -150,6 +150,7 @@
   .stg.y b{color:#a97a11}
   .stg.z b{color:#5f6b7a}
   .stg.r b{color:#b4382a}
+  .stg.p b{color:#7c3aed}
   .stg.x b{color:#dc2626}
   .stbar{display:flex;height:9px;border-radius:6px;overflow:hidden;background:#eef2ef;margin:12px 0 11px}
   .stbar i{display:block;height:100%;transition:width .4s}
@@ -157,6 +158,7 @@
   .stbar .b-y{background:#e0b552}
   .stbar .b-z{background:#9aa8b5}
   .stbar .b-r{background:#e06a5a}
+  .stbar .b-p{background:#8b5cf6}
   .stbar .b-x{background:#d3402f}
   .stfoot{font-size:11.5px;color:#9aa8a0;margin-top:9px;line-height:1.7}
   /* 成绩 */
@@ -192,7 +194,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT153）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT154）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -312,10 +314,10 @@
     });
   }
 
-  /* vT146 作业等级改名：界面统一 优秀 / 不错 / 合格 / 欠佳；
-     快照里的数据键仍是 优/良/中/差（飞书单选字段、历史记录），只做显示映射。 */
-  var PA_LV_NAME = { '优': '优秀', '良': '不错', '中': '合格', '差': '欠佳', '超时未交': '超时未交' };
-  var PA_LV_ALIAS = { '优秀': '优', '不错': '良', '合格': '中', '欠佳': '差' };
+  /* vT146 作业等级改名：界面统一 优秀 / 不错 / 合格 / 欠佳；vT154 增加「补交」（−1 分）；
+     快照里的数据键仍是 优/良/中/差/补（飞书单选字段、历史记录），只做显示映射。 */
+  var PA_LV_NAME = { '优': '优秀', '良': '不错', '中': '合格', '差': '欠佳', '补': '补交', '超时未交': '超时未交' };
+  var PA_LV_ALIAS = { '优秀': '优', '不错': '良', '合格': '中', '欠佳': '差', '补交': '补' };
   function paLvNorm(v) { var t = String(v == null ? '' : v).trim(); return PA_LV_ALIAS[t] || t; }
   function paLvName(v) { var k = paLvNorm(v); return PA_LV_NAME[k] || k || ''; }
 
@@ -323,13 +325,13 @@
   /* vT129 作业等级统计：优先用快照里的 hwStats（近 120 天，老师端算好下发）；
      老快照没有这个字段就用块里的 hw 现算（只覆盖近 30 天，但至少不会空白）。 */
   function hwStatOf(per) {
-    var zero = { you: 0, liang: 0, zhong: 0, cha: 0, over: 0, total: 0 };
+    var zero = { you: 0, liang: 0, zhong: 0, cha: 0, bu: 0, over: 0, total: 0 };
     var h = per && per.hwStats;
     if (h && typeof h === 'object') {
       return {
         you: Number(h.you) || 0, liang: Number(h.liang) || 0, zhong: Number(h.zhong) || 0,
-        cha: Number(h.cha) || 0, over: Number(h.over) || 0,
-        total: Number(h.total) || ((Number(h.you) || 0) + (Number(h.liang) || 0) + (Number(h.zhong) || 0) + (Number(h.cha) || 0) + (Number(h.over) || 0)),
+        cha: Number(h.cha) || 0, bu: Number(h.bu) || 0, over: Number(h.over) || 0,
+        total: Number(h.total) || ((Number(h.you) || 0) + (Number(h.liang) || 0) + (Number(h.zhong) || 0) + (Number(h.cha) || 0) + (Number(h.bu) || 0) + (Number(h.over) || 0)),
         from: per.hwStatFrom || '', to: per.hwStatTo || '', legacy: false
       };
     }
@@ -340,7 +342,7 @@
       if (d && (!from || d < from)) from = d;
       if (d && (!to || d > to)) to = d;
       if (lv === '优') o.you++; else if (lv === '良') o.liang++; else if (lv === '中') o.zhong++;
-      else if (lv === '差') o.cha++; else if (lv === '超时未交') o.over++;
+      else if (lv === '差') o.cha++; else if (lv === '补') o.bu++; else if (lv === '超时未交') o.over++;
       o.total++;
     });
     o.from = from; o.to = to; o.legacy = true;
@@ -831,12 +833,13 @@
           }
         });
         h += '<div class="hwfoot">按老师工作台的作业登记整理（近 30 天共 ' + v.hwItemN + ' 项作业）。' +
-          (v.hwStat && v.hwStat.cha ? '另有 ' + v.hwStat.cha + ' 项登记为「欠佳」——已交，质量待提升。' : '') + '</div>';
+          (v.hwStat && v.hwStat.cha ? '另有 ' + v.hwStat.cha + ' 项登记为「欠佳」——已交，质量待提升。' : '') +
+          (v.hwStat && v.hwStat.bu ? '另有 ' + v.hwStat.bu + ' 项是「补交」——晚交，已扣 1 分。' : '') + '</div>';
       }
       h += '</div>';
     }
-    if (on('hwstat')) {   /* 作业等级统计（vT129）：优秀 / 不错 / 合格 / 欠佳 / 超时未交 各几次 + 占比条（vT146） */
-      var st = v.hwStat || { you: 0, liang: 0, zhong: 0, cha: 0, over: 0, total: 0 };
+    if (on('hwstat')) {   /* 作业等级统计（vT129）：优秀 / 不错 / 合格 / 欠佳 / 补交 / 超时未交 各几次 + 占比条（vT154 六档） */
+      var st = v.hwStat || { you: 0, liang: 0, zhong: 0, cha: 0, bu: 0, over: 0, total: 0 };
       var span = (st.from && st.to) ? (st.from.slice(5) + ' ~ ' + st.to.slice(5)) : '近 120 天';
       h += '<div class="card"><h2>📊 作业等级统计 <em>' + esc(span) + '</em></h2>';
       if (!st.total) {
@@ -849,6 +852,7 @@
           '<div class="stg y"><b>' + st.liang + '</b><span>不错</span></div>' +
           '<div class="stg z"><b>' + st.zhong + '</b><span>合格</span></div>' +
           '<div class="stg r"><b>' + st.cha + '</b><span>欠佳</span></div>' +
+          '<div class="stg p"><b>' + (st.bu || 0) + '</b><span>补交</span></div>' +
           '<div class="stg x"><b>' + st.over + '</b><span>超时未交</span></div>' +
           '</div>';
         h += '<div class="stbar">' +
@@ -856,6 +860,7 @@
           (st.liang ? '<i class="b-y" style="width:' + pct(st.liang) + '"></i>' : '') +
           (st.zhong ? '<i class="b-z" style="width:' + pct(st.zhong) + '"></i>' : '') +
           (st.cha ? '<i class="b-r" style="width:' + pct(st.cha) + '"></i>' : '') +
+          (st.bu ? '<i class="b-p" style="width:' + pct(st.bu) + '"></i>' : '') +
           (st.over ? '<i class="b-x" style="width:' + pct(st.over) + '"></i>' : '') +
           '</div>';
         h += '<div class="stfoot">共登记 ' + st.total + ' 次 · 优秀+不错 占比 ' + goodRate + '%' +
@@ -947,7 +952,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v153</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v154</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
