@@ -45,6 +45,8 @@ nav button.active{background:linear-gradient(135deg,var(--primary),var(--primary
 .hm-hero .hm-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .hm-chip{background:rgba(255,255,255,.2);border-radius:8px;padding:5px 11px;font-size:12px;backdrop-filter:blur(4px)}
 .hm-chip b{font-size:15px;margin-right:2px}
+.hm-chip.hm-warn{background:rgba(255,214,140,.35);cursor:pointer;font-weight:600}
+.hm-chip.hm-warn:hover{background:rgba(255,198,90,.55)}
 
 .hm-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin-bottom:16px}
 @media(max-width:960px){.hm-grid{grid-template-columns:1fr}}
@@ -1764,6 +1766,13 @@ table.paper td.l{text-align:left;font-weight:600}
         #scp-bonus .bn-dup{font-size:11px;color:#b06a00;font-weight:700}
         #scp-bonus .bn-pts{font-weight:800;color:#b45309}
         #scp-bonus .na2{color:#b9c3cc}
+        #scp-bonus .bn-status{margin:8px 0 4px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fbfcfd;font-size:12px;line-height:1.9}
+        #scp-bonus .bn-status .bn-st-t{font-weight:700;color:var(--ink);margin-right:6px}
+        #scp-bonus .bn-tag{display:inline-block;padding:1px 8px;margin:2px 4px 2px 0;border-radius:10px;cursor:pointer;font-size:11px;white-space:nowrap}
+        #scp-bonus .bn-tag.done{background:#e7f5ec;color:#1f6b3a;border:1px solid #bfe3cd}
+        #scp-bonus .bn-tag.todo{background:#fff3e0;color:#9a5b00;border:1px solid #ffd9a0;font-weight:700}
+        #scp-bonus .bn-tag:hover{filter:brightness(.95);text-decoration:underline}
+        #scp-bonus .bn-empty{color:var(--muted)}
       </style>
       <div class="chartbox">
         <h3>🏆 目标达成加分</h3>
@@ -1774,6 +1783,7 @@ table.paper td.l{text-align:left;font-weight:600}
           <span style="font-size:13px">目标二 +</span><input id="scBonusP2" type="number" min="0" step="1" value="5" oninput="scBonusSavePts()">
           <span style="font-size:13px">目标三 +</span><input id="scBonusP3" type="number" min="0" step="1" value="8" oninput="scBonusSavePts()">
         </div>
+        <div id="scBonusStatus" class="bn-status"></div>
         <div class="bn-bar">
           <button class="btn2 sm" onclick="scBonusSelAll(true)">✅ 全选达成</button>
           <button class="btn2 sm ghost" onclick="scBonusSelAll(false)">🚫 清空勾选</button>
@@ -5964,15 +5974,19 @@ function pullScores(onDone,onFail){
 
 function loadScoresFromDB(){
   if(!db)return Promise.resolve();
-  return pullScores(function(rows){
-    SC_ROWS=rows.map(function(r){r._id=recId(r);return r});
-    SC_LOADED=true;
-    scRefreshNames();
-    scLoadTargets();
-    scFillFilters();
-    scRenderList();
-    scRenderAn();
-  },function(err){dbFail('成绩记录',err)});
+  return new Promise(function(resolve){
+    pullScores(function(rows){
+      SC_ROWS=rows.map(function(r){r._id=recId(r);return r});
+      SC_LOADED=true;
+      scRefreshNames();
+      scLoadTargets();
+      scFillFilters();
+      scRenderList();
+      scRenderAn();
+      if(typeof scMgRender==='function')scMgRender();
+      resolve();
+    },function(err){dbFail('成绩记录',err);resolve()});
+  });
 }
 
 /* ---------- 名单 ---------- */
@@ -6346,10 +6360,14 @@ function scSubmitGrid(){
 
 /* ---------- 筛选与列表 ---------- */
 function scFillFilters(){
-  var subs={},exams={};
+  var subs={},exams={},examDate={};
   SC_ROWS.forEach(function(r){
     var s=fval(r,'科目');if(s)subs[s]=1;
-    var e=fval(r,'考试名称');if(e)exams[e]=1;
+    var e=fval(r,'考试名称');if(e){
+      exams[e]=1;
+      var d=String(fval(r,'考试日期')||'').slice(0,10);
+      if(d&&(!examDate[e]||d<examDate[e]))examDate[e]=d;
+    }
   });
   var selSub=document.getElementById('scListSub');
   var selEx=document.getElementById('scListExam');
@@ -6365,7 +6383,12 @@ function scFillFilters(){
     var cur2=selEx.value;
     fill(selEx);
     selEx.appendChild(el('option','','全部考试')).value='';
-    Object.keys(exams).forEach(function(s){var o=el('option',null,s);o.value=s;selEx.appendChild(o)});
+    Object.keys(exams).sort(function(a,b){
+      var da=examDate[a]||'',db2=examDate[b]||'';
+      if(da&&db2&&da!==db2)return da<db2?-1:1;
+      if(da&&!db2)return -1; if(!da&&db2)return 1;
+      return a.localeCompare(b,'zh');
+    }).forEach(function(s){var o=el('option',null,s);o.value=s;selEx.appendChild(o)});
     selEx.value=cur2||'';
   }
   if(selAn){
@@ -8930,13 +8953,21 @@ function scExcelDownload() {
 function scMgRefresh(){
   var sel=document.getElementById('scMgExam');
   var cur=sel.value;
-  var keys=[],seen={};
+  var keys=[],seen={},keyDate={};
   SC_ROWS.forEach(function(r){
     var s=fval(r,'科目'),e=fval(r,'考试名称');
     if(!s||!e)return;
     if(SC_CUR_SUBJ && s!==SC_CUR_SUBJ)return;   /* 2.6.41 科目标签筛选 */
     var k=s+'｜'+e;
     if(!seen[k]){seen[k]=1;keys.push(k)}
+    var d=String(fval(r,'考试日期')||'').slice(0,10);
+    if(d&&(!keyDate[k]||d<keyDate[k]))keyDate[k]=d;
+  });
+  keys.sort(function(a,b){
+    var da=keyDate[a]||'',db2=keyDate[b]||'';
+    if(da&&db2&&da!==db2)return da<db2?-1:1;
+    if(da&&!db2)return -1; if(!da&&db2)return 1;
+    return a.localeCompare(b,'zh');
   });
   sel.innerHTML='';
   if(!keys.length){
@@ -9165,9 +9196,59 @@ function scBonusAwardedSet(meta) {
   });
   return set;
 }
+/* vT164：一场考试是否加过分，看 ST_ROWS 里有没有「成绩达标 · 科目 考试名」流水。
+   这些加分写在学生积分奖惩流水里（个人积分），不进小组活动记录（GA_ROWS），
+   所以不会摊进每周小组总分——符合「只算个人、不算小组」的口径。 */
+function scBonusExamStatus() {
+  var done = [], pending = [];
+  var list = scBonusExamList();
+  list.forEach(function (m) {
+    var set = scBonusAwardedSet(m);
+    var n = Object.keys(set).length;
+    (n > 0 ? done : pending).push({ subj: m.subj, exam: m.exam, date: m.date || '', n: n });
+  });
+  return { done: done, pending: pending, all: list };
+}
+/* vT164：在目标加分面板顶部画出「已加分 / 待加分」清单，点标签切到那场考试。
+   ST_ROWS 每次 loadST 后会重读，所以这里 Always 现算，反映真实流水（含之前手动加过的）。 */
+function scBonusRenderStatus() {
+  var box = document.getElementById('scBonusStatus'); if (!box) return;
+  var st = scBonusExamStatus();
+  fill(box);
+  var t = el('span', 'bn-st-t', '📋 目标加分状态：');
+  box.appendChild(t);
+  if (!st.all.length) { box.appendChild(el('span', 'bn-empty', '还没有考试记录')); return; }
+  box.appendChild(el('span', null, '已加 ' + st.done.length + ' 场 · 待加 '));
+  box.appendChild(el('b', null, String(st.pending.length)));
+  box.appendChild(el('span', null, ' 场'));
+  box.appendChild(el('br'));
+  function tag(x, cls, label) {
+    var e = el('span', 'bn-tag ' + cls, label + ' ' + x.subj + '·' + x.exam + (x.date ? '（' + x.date + '）' : ''));
+    e.title = '点这里切换到「' + x.subj + ' ' + x.exam + '」';
+    e.onclick = function () {
+      var k = x.subj + '｜' + x.exam;
+      SC_BONUS_EXAM = k;
+      var sel = document.getElementById('scBonusExam'); if (sel) sel.value = k;
+      scBonusRender();
+      try { var sc = document.getElementById('scBonusBox'); if (sc) sc.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}
+    };
+    return e;
+  }
+  if (st.pending.length) {
+    box.appendChild(el('span', 'bn-st-t', '⏳ 待加分：'));
+    st.pending.forEach(function (x) { box.appendChild(tag(x, 'todo', '')); });
+    box.appendChild(el('br'));
+  }
+  if (st.done.length) {
+    box.appendChild(el('span', 'bn-st-t', '✅ 已加分：'));
+    st.done.forEach(function (x) { box.appendChild(tag(x, 'done', x.n ? ('(' + x.n + '人) ') : '')); });
+  }
+  box.appendChild(el('div', 'bn-empty', '说明：加分写在学生个人积分（奖惩流水），不计入每周小组总分。若考试改过名，旧名加过分可能仍显示「待加」，请点进去按实际勾选核对，避免重复加。'));
+}
 function scBonusRender(opts) {
   opts = opts || {};
   var box = document.getElementById('scBonusBox'); if (!box) return;
+  try { scBonusRenderStatus() } catch (_e) {}
   var list = scBonusFillExams();
   var key = SC_BONUS_EXAM;
   var meta = list.filter(function (x) { return (x.subj + '｜' + x.exam) === key })[0];
@@ -9374,7 +9455,7 @@ function scRenameExamAsk(subj, exam){
 
 /* 真正执行改名：逐条改「考试名称」，并为旧业务键写墓碑 */
 function scRenameExamRun(subj,oldName,newName,rows){
-  var done=0,fail=0;
+  var done=0,fail=0,okRows=[];
   eachSeries(rows||[],function(r){
     var props={};
     /* 保留这条记录原有的全部字段，只换「考试名称」 */
@@ -9386,12 +9467,12 @@ function scRenameExamRun(subj,oldName,newName,rows){
     var sc=fnum(r,'分数'); if(sc!=null)props['分数']={number:sc};
     var fu=fnum(r,'满分'); if(fu!=null)props['满分']={number:fu};
     return db.updateRecord({databaseId:DATABASE_ID,recordId:r._id,properties:props})
-      .then(function(){done++},function(e){fail++;console.error(e)});
+      .then(function(){done++;okRows.push(r)},function(e){fail++;console.error(e)});
   }).then(function(){
     /* 旧名进墓碑：别的端那份「旧名」记录靠这个墓碑被清掉，不会变成两场。
        ⚠️ 同时撤掉【新名】的旧墓碑：A→B→A 改回来时，A 的墓碑还挂着，
           而记录的新名就是 A，会被当成「已删除」直接抹掉（数据静默丢失）。 */
-    rows.forEach(function(r){
+    okRows.forEach(function(r){
       tomDropScore(subj, newName, fval(r,'学生姓名'), fval(r,'考试日期'));
       tomAddScore(subj, oldName, fval(r,'学生姓名'), fval(r,'考试日期'));
     });
@@ -15870,6 +15951,25 @@ function renderHome(){
   chips.appendChild(chip(' 项待办',pending.length));
   if(lateN)chips.appendChild(chip(' 项已过期',lateN));
   chips.appendChild(chip(' 节我的课',todayMy.length));
+  /* vT164：有成绩未做目标加分，首页提醒（点一下跳到目标加分页） */
+  try {
+    if (typeof scBonusExamStatus === 'function') {
+      var _pend = scBonusExamStatus().pending;
+      if (_pend.length) {
+        var _bw = el('div', 'hm-chip hm-warn', ' 场成绩待加分');
+        _bw.insertBefore(el('b', null, String(_pend.length)), _bw.firstChild);
+        _bw.title = '这些考试还没做「目标达成加分」：\n' + _pend.map(function (x) { return '· ' + x.subj + ' ' + x.exam }).join('\n') + '\n\n点此前往处理';
+        _bw.onclick = function () {
+          try {
+            var navBtn = document.querySelector('#nav button[data-s="score"]');
+            if (navBtn) navBtn.click();
+          } catch (_) {}
+          try { if (typeof scTab === 'function') scTab('bonus'); } catch (_) {}
+        };
+        chips.appendChild(_bw);
+      }
+    }
+  } catch (_be) {}
   /* 第几周：与座位表"当前周"对齐，方便老师对得上 */
   var cwk=el('div','hm-chip');
   cwk.appendChild(document.createTextNode('第 '));
