@@ -187,6 +187,63 @@
   .toast.on{opacity:1}
   .skel{height:14px;background:#eef2ef;border-radius:7px;margin:8px 0;animation:sk 1.2s infinite}
   @keyframes sk{0%,100%{opacity:.6}50%{opacity:1}}
+  /* ===== vT155 家长端进化（升级）庆祝浮层 ===== */
+  .ppEvo{position:fixed;left:0;top:0;right:0;bottom:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 42%, rgba(22,20,44,.66) 0%, rgba(10,9,22,.94) 62%, rgba(5,5,12,.98) 100%);}
+  .ppEvo.out{opacity:0;transition:opacity .28s ease}
+  .eflash{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;opacity:0;
+    background:radial-gradient(circle at 50% 42%, #fff 0%, rgba(255,240,190,.8) 16%, rgba(255,255,255,0) 55%);
+    animation:ppEfFlash .55s ease-out .7s both}
+  .eshock{position:absolute;left:50%;top:42%;width:80px;height:80px;margin:-40px 0 0 -40px;border-radius:50%;
+    border:2px solid rgba(255,226,150,.85);opacity:0}
+  .eshock.s1{animation:ppEfShock 1s cubic-bezier(.2,.7,.3,1) .78s both}
+  .eshock.s2{animation:ppEfShock 1s cubic-bezier(.2,.7,.3,1) .98s both}
+  .ewrap{position:relative;display:flex;flex-direction:column;align-items:center;width:min(88vw,420px);text-align:center;padding:0 10px}
+  .ewho{color:#dfe9ff;font-size:14px;letter-spacing:.5px;margin-bottom:12px;animation:ppEfFade .5s ease .05s both}
+  .erow{display:flex;align-items:center;justify-content:center;gap:6px}
+  .eslot{position:relative;width:130px;height:150px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
+  .eslot img{width:112px;height:112px;object-fit:contain;filter:drop-shadow(0 10px 20px rgba(0,0,0,.45))}
+  .eph{font-size:56px;line-height:1.2}
+  .etag{margin-top:6px;font-size:12px;letter-spacing:1px;padding:2px 10px;border-radius:10px;
+    background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);color:#eaf2ff}
+  .eslot.old img{animation:ppEfOld .7s ease .72s both}
+  .eslot.new img,.eslot.new .eph{opacity:0;animation:ppEfNew .75s cubic-bezier(.16,.9,.24,1.12) .82s both}
+  .eslot.new .etag{opacity:0;background:rgba(255,214,120,.2);border-color:rgba(255,214,120,.52);
+    color:#ffe6a8;font-weight:700;animation:ppEfFade .4s ease 1.4s both}
+  .earrow{font-size:22px;color:#ffe6a8;opacity:0;text-shadow:0 0 14px rgba(255,214,120,.85);
+    animation:ppEfArrow .5s ease .9s both}
+  .etitle{margin-top:14px;font-size:24px;font-weight:800;letter-spacing:4px;opacity:0;
+    text-shadow:0 0 16px rgba(255,214,120,.9),0 3px 16px rgba(0,0,0,.7);
+    background:linear-gradient(90deg,#fff3c4,#ffd76a,#fff3c4);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    animation:ppEfTitle .7s cubic-bezier(.2,1.3,.4,1) 1.05s both}
+  .esub{margin-top:6px;color:#dfe9ff;font-size:13px;opacity:0;animation:ppEfFade .6s ease 1.3s both}
+  .etap{position:absolute;left:50%;bottom:6%;transform:translateX(-50%);color:rgba(255,255,255,.62);
+    font-size:12px;letter-spacing:1px;white-space:nowrap;animation:ppEfTap 1.8s ease-in-out infinite}
+  .egrid{display:flex;flex-wrap:wrap;justify-content:center;gap:12px 14px;max-width:min(88vw,420px)}
+  .ecell{width:92px;display:flex;flex-direction:column;align-items:center;opacity:0;
+    animation:ppEfPop .5s cubic-bezier(.2,1.3,.4,1) both}
+  .efig{width:78px;height:78px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle, rgba(255,214,120,.26), rgba(255,214,120,0) 70%);
+    box-shadow:0 0 0 2px rgba(255,214,120,.55), 0 0 18px rgba(255,214,120,.42)}
+  .efig img{width:64px;height:64px;object-fit:contain}
+  .efig .eph{font-size:38px}
+  .enm{font-size:12px;color:#fff;margin-top:5px;max-width:92px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .estg{font-size:10.5px;color:#ffe6a8}
+  @keyframes ppEfFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes ppEfFlash{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
+  @keyframes ppEfOld{0%{transform:scale(1);opacity:1}30%{transform:scale(1.06);opacity:1;filter:brightness(2.2)}
+    100%{transform:scale(.6);opacity:0;filter:blur(6px) brightness(3)}}
+  @keyframes ppEfNew{0%{transform:scale(.45);opacity:0;filter:blur(8px) brightness(2.4)}
+    55%{transform:scale(1.15);opacity:1;filter:blur(0) brightness(1.4)}78%{transform:scale(.97)}
+    100%{transform:scale(1);opacity:1;filter:none}}
+  @keyframes ppEfShock{0%{opacity:.95;transform:scale(.4)}100%{opacity:0;transform:scale(6.6)}}
+  @keyframes ppEfArrow{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+  @keyframes ppEfTitle{from{opacity:0;transform:scale(.75);letter-spacing:12px}
+    to{opacity:1;transform:scale(1);letter-spacing:4px}}
+  @keyframes ppEfPop{from{opacity:0;transform:translateY(12px) scale(.85)}to{opacity:1;transform:none}}
+  @keyframes ppEfTap{0%,100%{opacity:.55}50%{opacity:1}}
+  @media (prefers-reduced-motion: reduce){.ppEvo,.ppEvo *{animation:none !important}}
 </style>
 </head>
 <body>
@@ -553,6 +610,85 @@
     return Number(o.cnt[(p.name || '') + '|' + (p.defId || '')]) || 0;
   }
   function cxIsPet(p) { return !!(p && (p.stage || p.imgs)); }   /* 灵宠有阶段/三阶段图，灵杰没有 */
+  /* ---------- vT155 家长端进化（升级）庆祝 ----------
+     家长端自己不触发进化（提案由老师批准，进化发生在老师的屏幕上），
+     所以这里在每次数据渲染后检测孩子灵宠的阶段有没有前进，命中就弹一段轻量庆祝：
+     旧形象亮起 → 新形象弹出 + 金色标题，2.6 秒自动收，点任意处提前关。
+     手动批准 / 自动批准 / 家长晚一些才打开页面，都只演这一次（localStorage 按孩子分键记忆）。 */
+  function petEvoRank(st) { return ({ baby: 0, teen: 1, adult: 2, grad: 2 })[st]; }
+  function petEvoName(st) { return ({ baby: '奶团子', teen: '幼年', adult: '成年', grad: '成年' })[st] || st; }
+  function petEvoStoreKey() { return 'wb_parent_pet_stage_v1_' + (ST.name || ''); }
+  function petEvoLoadSeen() {
+    try { return JSON.parse(localStorage.getItem(petEvoStoreKey()) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function petEvoSaveSeen(o) { try { localStorage.setItem(petEvoStoreKey(), JSON.stringify(o)); } catch (e) {} }
+  function petStageRel(p, st) {   /* 取灵宠某个阶段的形象（老快照没有 imgs 时退回当前图） */
+    var imgs = p && p.imgs;
+    if (!imgs) return p ? petRel(p) : '';
+    return imgs[st] || petRel(p);
+  }
+  function ppEvoScan(v) {
+    if (!ST.per) return;
+    var pets = ((v && v.codex) || []).filter(function (p) { return cxIsPet(p) && p.stage && petEvoRank(p.stage) !== undefined; });
+    if (!pets.length) return;
+    var seen = petEvoLoadSeen(), hits = [];
+    pets.forEach(function (p) {
+      var id = p.id || ((p.name || '') + '|' + (p.defId || ''));
+      var prev = seen[id];
+      if (!prev || !prev.stage) { seen[id] = { stage: p.stage, at: Date.now() }; return; }   /* 首次只建档不庆祝 */
+      if (petEvoRank(p.stage) > petEvoRank(prev.stage) && Date.now() - (Number(prev.at) || 0) > 7000) {
+        hits.push({ pet: p, from: prev.stage, to: p.stage });
+        seen[id] = { stage: p.stage, at: Date.now() };
+      }
+    });
+    petEvoSaveSeen(seen);
+    if (hits.length) ppEvoShow(hits);
+  }
+  var PP_EVO_T = null;
+  function ppEvoShow(hits) {
+    var old = document.getElementById('ppEvo');
+    if (old && old.parentNode) old.parentNode.removeChild(old);   /* 同一时刻只演一场 */
+    function pic(p, st) {
+      var srcs = pickSrcs(petStageRel(p, st));
+      return srcs.length ? '<img src="' + esc(srcs[0]) + '" onerror="this.style.display=\'none\'" alt="">' : '<div class="eph">🐾</div>';
+    }
+    var one = hits.length === 1, h = hits[0], inner;
+    if (one) {
+      inner = '<div class="ewho">' + esc(ST.name) + ' 的「' + esc(h.pet.name || '灵宠') + '」</div>' +
+        '<div class="erow">' +
+        '<div class="eslot old">' + pic(h.pet, h.from) + '<div class="etag">' + esc(petEvoName(h.from)) + '</div></div>' +
+        '<div class="earrow">➜</div>' +
+        '<div class="eslot new">' + pic(h.pet, h.to) + '<div class="etag">' + esc(petEvoName(h.to)) + '</div></div>' +
+        '</div>';
+    } else {
+      inner = '<div class="ewho">' + hits.length + ' 只灵宠同时长大啦</div><div class="egrid">' +
+        hits.slice(0, 8).map(function (x, i) {
+          return '<div class="ecell" style="animation-delay:' + (0.15 + i * 0.1).toFixed(2) + 's">' +
+            '<div class="efig">' + pic(x.pet, x.to) + '</div>' +
+            '<div class="enm">' + esc(x.pet.name || '灵宠') + '</div>' +
+            '<div class="estg">' + esc(petEvoName(x.to)) + '</div></div>';
+        }).join('') + '</div>';
+    }
+    var el = document.createElement('div');
+    el.className = 'ppEvo';   /* 样式全挂类上，只设 id 的话整层不可见 */
+    el.id = 'ppEvo';
+    el.innerHTML = '<div class="eflash"></div><div class="eshock s1"></div><div class="eshock s2"></div>' +
+      '<div class="ewrap">' + inner +
+      '<div class="etitle">✨ 进化成功</div>' +
+      '<div class="esub">成长值攒满，' + (one ? '它' : '它们') + '长大了一点</div></div>' +
+      '<div class="etap">点击任意处继续</div>';
+    el.onclick = function () { ppEvoClose(el); };
+    document.body.appendChild(el);
+    PP_EVO_T = setTimeout(function () { ppEvoClose(el); }, 2600);
+  }
+  /* ⚠️ 按本次节点引用收场，不能按 id 再查一遍：否则延迟移除会把下一场刚建好的层误删 */
+  function ppEvoClose(el) {
+    if (!el) return;
+    if (PP_EVO_T) { clearTimeout(PP_EVO_T); PP_EVO_T = null; }
+    el.classList.add('out');
+    setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); }, 280);
+  }
+  window.__ppEvoTest = { scan: ppEvoScan, show: ppEvoShow, st: ST };   /* 冒烟测试用 */
   /* ---------- vT137 真实喂养（提案制）----------
      家长端点「🍚 喂食」→ 选食物 → 写一条 growfeed 提案；老师批准 / 自动批准后才真正加成长值、扣积分。 */
   var PP_FOODS_DEF = [
@@ -960,6 +1096,7 @@
     var bf = document.getElementById('btnFeed'); if (bf) bf.onclick = function () { submitProposal('feed', feedCost); };
     var bp = document.getElementById('btnPet'); if (bp) bp.onclick = function () { submitProposal('growdraw', petCost); };
     wirePetFun();   /* vT136 灵宠卡互动：捏捏 / 摸摸 / 玩耍 */
+    ppEvoScan(v);   /* vT155 孩子灵宠阶段前进 → 轻量进化庆祝 */
     if (ST.pending && ST.pending.status === 'pending') startPoll();
   }
 
