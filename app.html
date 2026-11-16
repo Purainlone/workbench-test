@@ -2676,6 +2676,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <div id="ptPanels" style="display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:8px">
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="detain" checked> 留堂通知</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="points" checked> 积分卡</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="weekly" checked> 📅 本周表现</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="hw" checked> 当天作业</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="hwtodo" checked> ⚠️ 未完成作业</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="hwstat" checked> 📊 作业统计</label>
@@ -17929,7 +17930,7 @@ function mpSyncFill() {
   try { paChannelFill(); } catch (e) {}
 }
 /* ================= vT59 家长端显示设置（后台控制：勾选家长端显示哪些板块） ================= */
-var PT_PANEL_KEYS = ['detain', 'points', 'hw', 'rc', 'cmt', 'grade', 'essay', 'codex'];
+var PT_PANEL_KEYS = ['detain', 'points', 'weekly', 'hw', 'rc', 'cmt', 'grade', 'essay', 'codex'];
 /* vT111 家长端网页：复制链接（家长点开填接入码即可，不用审核、不限人数） */
 function paCopyUrl() {
   var el = document.getElementById('paWebUrl');
@@ -18048,7 +18049,7 @@ function paFallbackCopy(txt, done) {  try {
 }
 /* vT131 修复：hwstat（vT129 加的「📊 作业统计」）之前漏在默认表外 —— 勾选框压根不保存；
    本轮新增 hwtodo（⚠️ 未完成作业），一并补进默认表 */
-function ptPanelsDefault() { return { detain: true, points: true, hw: true, hwtodo: true, hwstat: true, rc: true, rcclass: true, cmt: true, grade: true, gradeAna: true, essay: true, codex: true, gradeMode: 'score' }; }
+function ptPanelsDefault() { return { detain: true, points: true, weekly: true, hw: true, hwtodo: true, hwstat: true, rc: true, rcclass: true, cmt: true, grade: true, gradeAna: true, essay: true, codex: true, gradeMode: 'score' }; }
 function ptPanelsGet() {
   var d = ptPanelsDefault();
   try {
@@ -29274,6 +29275,62 @@ function cwInit(){
       points = stus.map(function (s) { var p = pmap[s.name] || { hw: 0, manual: 0, total: 0 }; return { name: s.name, hw: p.hw, manual: p.manual, total: p.total }; });
     }
 
+    /* vT163 家长端「本周表现」：三类奖惩带日期明细，下发最近 14 天，家长端按当前周过滤汇总。
+       cat: hw=作业(含科任调整) / class=课堂(教室桌面座位表加分) / manual=老师手动奖惩。
+       灵宠消费流水（reason 含「灵宠/启灵图鉴」）一律剔除，不算奖惩。 */
+    var lim14 = ptwDstr(new Date(now.getTime() - 14 * 86400000));
+    var weekly = [], weeklySeen = {};
+    function pushWeekly(nm, dt, cat, sc, why) {
+      nm = String(nm || '').trim(); dt = String(dt || '').slice(0, 10);
+      sc = Math.round((Number(sc) || 0) * 10) / 10;
+      if (!nm || !dt || dt < lim14 || !sc) return;
+      var why2 = String(why || '').slice(0, 40);
+      var k = nm + '|' + dt + '|' + cat + '|' + sc + '|' + why2;
+      if (weeklySeen[k]) return; weeklySeen[k] = 1;
+      weekly.push({ name: nm, date: dt, cat: cat, score: sc, reason: why2 });
+    }
+    /* ① 作业：飞书作业登记等级分（local.hw 已含 score） */
+    (local.hw || []).forEach(function (r) {
+      if (!r || r.deleted) return;
+      pushWeekly(r.name, r.date, 'hw', r.score, (r.item || '作业') + (r.level ? ('·' + r.level) : ''));
+    });
+    /* ①b 科任端作业积分加减（s-hwadj）并入作业类 */
+    try {
+      var _wNt = (typeof ntRows === 'function') ? ntRows('s-hwadj') : [];
+      _wNt.forEach(function (r) {
+        if (!r || r.deleted || !r.name) return;
+        pushWeekly(r.name, r.date, 'hw', Number(r.delta) || 0, '科任调整' + (r.subject ? ('·' + r.subject) : '') + (r.reason ? ('·' + r.reason) : ''));
+      });
+    } catch (_we) {}
+    /* ②③ 云端 manual：手机小程序手动奖惩 + 桌面座位表加分（reason 含「座位悬浮球」= 课堂） */
+    try {
+      var _wGc = (typeof gdCloud === 'function') ? gdCloud() : null;
+      var _wMn = (_wGc && Array.isArray(_wGc.manual)) ? _wGc.manual : [];
+      _wMn.forEach(function (x) {
+        if (!x || !x.name || x.deleted) return;
+        var rsn = String(x.reason || '');
+        if (/灵宠|启灵图鉴/.test(rsn)) return;   // 消费流水不算奖惩
+        var dt = String(x.date || '').slice(0, 10) || (x.ts ? ptwDstr(new Date(x.ts)) : '');
+        if (/座位悬浮球/.test(rsn)) pushWeekly(x.name, dt, 'class', x.score, rsn.replace('（座位悬浮球）', '') || '课堂加减');
+        else pushWeekly(x.name, dt, 'manual', x.score, rsn || '手动奖惩');
+      });
+    } catch (_we2) {}
+    /* ③b 学生档案里的手动奖惩（ST_ROWS） */
+    (local.manual || []).forEach(function (r) {
+      if (!r || r.deleted) return;
+      pushWeekly(r.name, r.date, 'manual', r.score, r.reason || '手动调整');
+    });
+    /* ③c 桌面工作台 NT 库的手动流水（课前展示等对老师的评价） */
+    try {
+      var _wNtM = (typeof ntRows === 'function') ? ntRows('manual') : [];
+      _wNtM.forEach(function (r) {
+        if (!r || r.deleted || !r.name) return;
+        var rsn = String(r.reason || '');
+        if (/灵宠|启灵图鉴/.test(rsn)) return;
+        pushWeekly(r.name, r.date, 'manual', r.score, rsn || '手动奖惩');
+      });
+    } catch (_we3) {}
+
     /* 教师点评（c-comment，最近 60 天） */
     var comments = [];
     try {
@@ -29397,7 +29454,8 @@ function cwInit(){
       rcTitles: rcTitlesSnap, rcClass: rcClass,
       hwStats: hwStats, hwStatFrom: hwStatFrom, hwStatTo: hwStatTo,
       points: points, comments: comments, grades: grades, gAvg: gAvg, detain: detain,
-      codexPool: codexPool, codexPets: codexPets
+      codexPool: codexPool, codexPets: codexPets,
+      weekly: weekly, weeklyFrom: lim14
     };
   }
 
@@ -29441,7 +29499,9 @@ function cwInit(){
         /* vT129 作业等级统计（近 120 天）：优秀/不错/合格/欠佳/超时未交 + 合计 + 统计区间 */
         hwStats: (snap.hwStats && snap.hwStats[st.name]) || { you: 0, liang: 0, zhong: 0, cha: 0, bu: 0, over: 0, total: 0 },
         hwStatFrom: snap.hwStatFrom || '', hwStatTo: snap.hwStatTo || '',
-        codex: (snap.codexPets && snap.codexPets[st.name]) || []
+        codex: (snap.codexPets && snap.codexPets[st.name]) || [],
+        /* vT163 本周表现：三类奖惩明细只下发这个孩子的，家长端按本周过滤 */
+        weekly: (snap.weekly || []).filter(function (r) { return r.name === st.name; })
       };
       blocks[st.name] = { code: String(st.code || '').toUpperCase(), data: seal(per, st.code || st.name) };
     });
