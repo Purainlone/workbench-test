@@ -25374,7 +25374,7 @@ function cwInit(){
   }
   /* vT114 大奖默认文案不再含毕业相关字样；面板已不显示奖励，此文案仅供 ptCardsClaim（暂不接入 UI） */
   var CARD_REWARD_DEFAULT = '🎴 典藏抽取券（找老师兑现）';
-  var GRAD_LEVEL = 10;            // 毕业等级默认阈值
+  var GRAD_LEVEL = 10;            /* vT168 已弃用：毕业不再按等级，改为「灵宠长成成年期」 */
   /* vT124 喂养食物：只有成长灵宠能喂，一份食物 = 相应成长值，1 点 = 1 分（不用另外定价） */
   var PT_FOODS = [
     { k: 'rice',   e: '🍚', n: '米饭',   v: 5,  d: '家常一口，稳稳长一点' },
@@ -25496,8 +25496,9 @@ function cwInit(){
     if (!isFinite(v) || v < 0) v = DEF_COST[kind] || 0;
     return Math.max(0, Math.round(v));
   }
-  function ptGradLevel() { var v = Number(ptCfg().gradLevel); return (isFinite(v) && v > 0) ? v : GRAD_LEVEL; }
   /* 同步：远端宠物表按 id 合并进本地（远端较新者优先） */
+  /* vT168 毕业不再看等级（灵宠只有三个阶段），此函数保留仅为兼容旧配置读取 */
+  function ptGradLevel() { var v = Number(ptCfg().gradLevel); return (isFinite(v) && v > 0) ? v : GRAD_LEVEL; }
   /* vT102 一键全端校准：立刻同步一轮（拉云端 → 合并 → 写回），然后刷新面板 */
   function ptForceSync() {
     toastMsg('🔄 正在同步…');
@@ -26578,8 +26579,7 @@ function cwInit(){
     var myCardN = 0;
     if (!o.grouped) myCardN = ptCardsOf(ptGet(), pet.studentName).length;
     var meta = o.grouped
-      ? ('<div class="ph-stage">' + (PT_STAGE_EMOJI[stage] || '') + ' ' + PetCore.stageName(stage) +
-         '<span class="ph-lv">Lv ' + (pet.level || 1) + '</span></div>')
+      ? ('<div class="ph-stage">' + (PT_STAGE_EMOJI[stage] || '') + ' ' + PetCore.stageName(stage) + '</div>')
       : ('<div class="pet-own">主人：' + ptEsc(pet.studentName) + (isPhoto ? ' <span class="pet-stu">手绘</span>' : '') + ' <span class="pet-stu">' + PetCore.stageName(stage) + '</span></div>' +
          '<div class="pet-lv">🎴 已集 ' + myCardN + ' 张卡</div>');
     /* vT162 灵宠卡片不再放「抽卡」按钮：这里是灵宠（成长/喂养/进化），抽卡抽的是图鉴灵杰，两者分开。
@@ -26590,7 +26590,10 @@ function cwInit(){
       acts = evoBtn + feedBtn + revokeBtn;
     } else {
       acts = evoBtn + feedBtn +
-        (pet.graduated ? '' : '<button class="btn2 sm" onclick="ptGradReq(\'' + pet.id + '\')">🎓 申请毕业</button>') +
+        /* vT168 灵宠只有三个阶段：长成「成年期」才出现申请毕业按钮，幼年态给提示 */
+        (pet.graduated ? '' : (stage === 'adult'
+          ? '<button class="btn2 sm" onclick="ptGradReq(\'' + pet.id + '\')">🎓 申请毕业</button>'
+          : '<span class="pet-stu" title="灵宠长成成年期后可申请毕业">🎓 成年期可毕业</span>')) +
         revokeBtn +
         (ptAdminUnlocked() ? '<button class="btn2 sm" onclick="ptPetRemove(false,\'' + pet.id + '\')" title="删除这条已发放记录（回收站可恢复）">🗑 删除</button>' : '');
     }
@@ -26602,7 +26605,7 @@ function cwInit(){
   /* ---------------- vT122 灵宠家园（原「灵杰墙」按同学分户陈列） ----------------
      ｜老师要看的不是「全班所有灵宠堆在一起」，而是「每个同学养了哪些、养到哪一阶段」。
      ｜所以按学生分组：一家一张卡（头像 + 姓名 + 各阶段计数 + 共几只），
-     ｜每只灵宠显示当前阶段（奶团子 / 幼年 / 成年 / 毕业）、等级和阶段专属特效；
+     ｜每只灵宠显示当前阶段（奶团子 / 幼年 / 成年 / 毕业）和阶段专属特效；
      ｜卡片动作只留「进化 / 喂养 / 收回」，不放抽卡（抽卡属灵杰集卡页），其它管理入口仍在后台与毕业审批。 */
   var HOME_Q = '';
   function ptHomeSearch(v) { HOME_Q = String(v || ''); ptHomeFilter(); }
@@ -26909,16 +26912,21 @@ function cwInit(){
   }
   function ptRenderGrad() {
     var box = document.getElementById('petPanel-grad'); if (!box) return;
-    var s = ptGet(); var lv = ptGradLevel();
-    var q = ptPets().filter(function (p) { return !p.graduated && (p.level || 1) >= lv; });
+    var s = ptGet();
+    /* vT168 灵宠只有三个阶段（奶团子→幼年→成年）：长成「成年期」即可申请毕业，
+       不再按「Lv.10」判断 —— 灵杰（图鉴卡）没有等级，能升级的只有灵宠。 */
+    var q = ptPets().filter(function (p) {
+      return !p.graduated && PetCore.stageOf(p.level, p.graduated, ptStageCfg()) === 'adult';
+    });
     var html = q.length ? q.map(function (p) {
-      return '<div class="pet-row"><span>🎓 ' + ptEsc(p.name) + ' · 主人 ' + ptEsc(p.studentName) + ' · Lv.' + (p.level || 1) + '</span>' +
+      var stg = PetCore.stageName(PetCore.stageOf(p.level, p.graduated, ptStageCfg()));
+      return '<div class="pet-row"><span>🎓 ' + ptEsc(p.name) + ' · 主人 ' + ptEsc(p.studentName) + ' · ' + ptEsc(stg) + '</span>' +
         '<span class="pet-acts">' +
         '<button class="btn2 sm" onclick="ptArcPrintCert(\'' + p.id + '\')" title="生成 A4 启灵档案">📜 档案</button>' +
         '<button class="btn2 sm" onclick="ptArcPrintSingleCard(\'' + p.id + '\')" title="生成纪念卡">🪪 纪念卡</button>' +
         '<button class="btn2 sm primary" onclick="ptGradApprove(\'' + p.id + '\')">🎓 批准毕业</button></span></div>';
-    }).join('') : '<div class="pet-empty">暂无达到毕业等级（Lv.' + lv + '）的灵杰</div>';
-    box.innerHTML = '<div class="sub">灵杰达到 Lv.' + lv + ' 可申请毕业，老师批准后生成毕业纪念卡号。' +
+    }).join('') : '<div class="pet-empty">暂无长成「成年期」、可申请毕业的灵宠</div>';
+    box.innerHTML = '<div class="sub">灵宠长成「成年期」（奶团子→幼年→成年）后可申请毕业，老师批准后生成毕业纪念卡号。' +
       '<button class="btn2 sm" style="margin-left:6px" onclick="ptArchiveOpen()">📜 启灵档案 / 毕业纪念</button></div>' + html;
   }
 
@@ -27358,7 +27366,7 @@ function cwInit(){
       '<span class="lbl">成长期≥</span><input class="search" style="width:56px" type="number" min="1" id="ptCfgTeen" value="' + ptStageCfg().teen + '">' +
       '<span class="lbl">成年≥</span><input class="search" style="width:56px" type="number" min="1" id="ptCfgAdult" value="' + ptStageCfg().adult + '">' +
       '</div>' +
-      '<div class="gpset"><span class="sctip">成长期 / 成年 = 灵杰换形态的等级线（奶团子→幼年→成年→毕业）</span>' +
+      '<div class="gpset"><span class="sctip">成长期 / 成年 = 灵宠换形态的等级线（奶团子→幼年→成年→毕业）</span>' +
       '<button class="btn2 primary" onclick="ptCfgSave()">💾 保存定价</button></div>' +
       /* vT127 抽卡悬念时长（本地演出，不进云同步也能生效） */
       '<div class="gpset"><span class="lbl">🎬 抽卡悬念</span>' +
