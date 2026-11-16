@@ -1826,7 +1826,11 @@ table.paper td.l{text-align:left;font-weight:600}
         <button data-lv="补" onclick="hwSetLv('补')">补交 −1</button>
         <button data-lv="超时未交" onclick="hwSetLv('超时未交')">超时 −2</button>
       </div>
-      <span style="font-size:12px;font-weight:700;color:#2d5a45;background:#e8f4ee;border-radius:8px;padding:8px 12px;flex-shrink:0">语文</span>
+      <select id="hwSubj" title="这一列作业的科目：语文 / 道德与法治 / 班务（班务用于班级任务）" style="font-size:12px;font-weight:700;color:#2d5a45;background:#e8f4ee;border:1px solid #c9e2d3;border-radius:8px;padding:8px 10px;flex-shrink:0;font-family:inherit;cursor:pointer">
+        <option value="语文">语文</option>
+        <option value="道德与法治">道德与法治</option>
+        <option value="班务">班务</option>
+      </select>
       <input id="hwName" placeholder="作业名称，如：第一单元听写" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit;width:220px">
       <input id="hwDate" type="date" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
       <button class="btn2 primary" onclick="hwAddItem()">➕ 新建作业列</button>
@@ -13684,7 +13688,9 @@ function hwCreateItem(name,date,subject){
 }
 window.aiHwCreate=function(name,date,subject){ return hwCreateItem(name,date,subject); };
 function hwAddItem(){
-  var r=hwCreateItem((document.getElementById('hwName').value||''),(document.getElementById('hwDate').value||''),'');
+  var subjEl=document.getElementById('hwSubj');
+  var subj=subjEl?subjEl.value:'语文';
+  var r=hwCreateItem((document.getElementById('hwName').value||''),(document.getElementById('hwDate').value||''),subj);
   if(!r.ok){toastMsg(r.msg);return}
   document.getElementById('hwName').value='';
   toastMsg(r.msg+'，去拍几本就登记好了');
@@ -13889,10 +13895,12 @@ function renderHW(){
   var m=hwMapRows();
   hwBuildItemsOnRender();
   var split=hwAutoSplit(),items=HW_SHOW_AUTO?HW_ITEMS:split.vis;
-  /* 学科隔离：班主任工作台只显示语文本列，科任各科目（道德与法治/数学…）不混入 */
-  items=items.filter(function(it){return hwSubjOf(it)==='语文'});
+  /* 学科隔离：班主任工作台显示「语文 / 道德与法治 / 班务」三类（班主任可自建这三类作业列），
+     其它科任科目（数学/英语/科学…）仍隔离不混入。 */
+  var HW_OWN_SUBJ={'语文':1,'道德与法治':1,'班务':1};
+  items=items.filter(function(it){return HW_OWN_SUBJ[hwSubjOf(it)]});
   var ab=document.getElementById('hwAutoBtn');
-  if(ab){ab.textContent='🙈 已自动隐藏 '+split.hid+' 列 · '+(HW_SHOW_AUTO?'恢复隐藏':'显示');ab.className='btn2 sm'+(HW_SHOW_AUTO?'':' ghost')}
+  if(ab){ab.textContent='🙈 已自动隐藏 '+split.hid.length+' 列 · '+(HW_SHOW_AUTO?'恢复隐藏':'显示');ab.className='btn2 sm'+(HW_SHOW_AUTO?'':' ghost')}
   if(!stu.length){
     box.textContent='';var tb=document.createElement('tbody');
     var tr=document.createElement('tr');var td=el('td','empty','还没有学生数据');
