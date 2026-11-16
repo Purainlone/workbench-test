@@ -244,6 +244,37 @@
   @keyframes ppEfPop{from{opacity:0;transform:translateY(12px) scale(.85)}to{opacity:1;transform:none}}
   @keyframes ppEfTap{0%,100%{opacity:.55}50%{opacity:1}}
   @media (prefers-reduced-motion: reduce){.ppEvo,.ppEvo *{animation:none !important}}
+  /* ===== vT157 成绩分析 ===== */
+  .anatop{display:flex;align-items:center;gap:12px;margin:2px 0 10px}
+  .anabig{font-size:30px;font-weight:800;line-height:1;color:var(--g)}
+  .anabig.ok{color:#2f9e6a}.anabig.mid{color:#c08a1e}.anabig.no{color:#c85a4a}
+  .anabig small{font-size:13px;font-weight:600;margin-left:2px;opacity:.7}
+  .anaside{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .anaside b{font-size:13px;color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .anaside span{font-size:12px;color:var(--ink2)}
+  .anadelta{margin-left:auto;font-size:15px;font-weight:800;color:#9aa8a0}
+  .anadelta.up{color:#2f9e6a}.anadelta.dn{color:#c85a4a}
+  .anabars{display:flex;align-items:flex-end;gap:8px;height:96px;padding:6px 2px 0;border-bottom:1px dashed var(--line);margin-bottom:10px}
+  .anabar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0}
+  .anabar i{display:block;width:100%;max-width:34px;border-radius:6px 6px 3px 3px;background:linear-gradient(180deg,#8fd8b2,#5cbb8a);transition:height .45s}
+  .anabar i.ok{background:linear-gradient(180deg,#8fd8b2,#5cbb8a)}
+  .anabar i.mid{background:linear-gradient(180deg,#ffe0a3,#e8b45a)}
+  .anabar i.no{background:linear-gradient(180deg,#f4b6ab,#d97362)}
+  .anabar span{font-size:11px;color:var(--ink2);margin-top:3px;font-weight:600}
+  .anabar em{font-size:10px;color:#9aa8a0;font-style:normal;text-align:center;line-height:1.25;margin-top:1px}
+  .anasubs{display:flex;flex-direction:column;gap:6px;margin:4px 0 8px}
+  .anasub{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink2)}
+  .anasub .k{width:56px;flex:0 0 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .anasub .bar{flex:1;height:8px;border-radius:5px;background:#eef2ef;overflow:hidden}
+  .anasub .bar i{display:block;height:100%;background:linear-gradient(90deg,#5cbb8a,#93d9b1);border-radius:5px}
+  .anasub .v{width:38px;text-align:right;font-weight:600;color:var(--ink)}
+  .anacls{font-size:12.5px;color:var(--ink2);background:#f4f8f5;border-radius:10px;padding:7px 10px;margin:2px 0 8px}
+  .anacls b.up{color:#2f9e6a}.anacls b.dn{color:#c85a4a}
+  .anatip{font-size:12.5px;color:#2f6b4f;background:#eef6f1;border-radius:10px;padding:8px 10px;line-height:1.65}
+  /* ===== vT157 班级诵读进度 ===== */
+  .rccls{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+  .rcbar.cls i{background:linear-gradient(90deg,#7cc4f0,#9fd8f5)}
+  .rctag b{font-weight:600;color:inherit;opacity:.8;margin-left:3px}
 </style>
 </head>
 <body>
@@ -251,7 +282,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT156）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT157）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -524,6 +555,8 @@
       rcDoneList: rcDoneList, rcTodoList: rcTodoList, rcExtraDone: rcExtraDone,
       rcTimes: (per.rc || []).length, rcLegacy: !rcPlan.length,
       detain: (per.detain || []), grades: grades, comments: cmts,
+      /* vT157 班级聚合（只有平均数 / 人数，不含别人姓名）：成绩分析 + 班级诵读进度 */
+      gAvg: (ST.snap && ST.snap.gAvg) || {}, rcClass: (ST.snap && ST.snap.rcClass) || null,
       hwStat: hwStatOf(per),
       /* vT129 老师已收回（deleted）的灵宠绝不显示；老快照里也许还留着，这里再兜一层 */
       codex: (per.codex || []).filter(function (p) { return p && !p.deleted && !p.purged; })
@@ -893,6 +926,82 @@
     return '<div class="pend wait">⏳ ' + lb + '已提交，正在等待入账…' + (ST.snap && ST.snap.autoApprove ? '（自动批准已开启，通常 10 秒内生效）' : '（需老师批准，批准后这里会变成已生效）') + '</div>';
   }
 
+  /* ---------------- vT157 成绩分析（家长端）----------------
+    只用「孩子自己的成绩 + 班级平均数」，做四件事：
+    ① 最近一次得分率；② 最近 6 次趋势；③ 各科平均得分率；④ 一句人话结论。
+    不显示排名、不显示别人分数 —— 家长看到的是自己孩子的位置和水位。 */
+  function anaOf(v) {
+    var list = (v.grades || []).filter(function (g) { return !isNaN(Number(g.score)); }).slice();
+    if (!list.length) return null;
+    /* buildView 里已按日期倒序，这里改成旧 → 新看趋势 */
+    list.sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
+    var rate = function (g) { var f = Number(g.full) || 100; return Math.round(Number(g.score) / f * 100); };
+    var bySub = {};
+    list.forEach(function (g) {
+      var k = g.subject || '其他';
+      (bySub[k] = bySub[k] || []).push(rate(g));
+    });
+    var subs = Object.keys(bySub).map(function (k) {
+      var arr = bySub[k], sum = 0;
+      arr.forEach(function (x) { sum += x; });
+      return { s: k, n: arr.length, rate: Math.round(sum / arr.length) };
+    }).sort(function (a, b) { return b.rate - a.rate; });
+    var last = list[list.length - 1];
+    var lastRate = rate(last);
+    var prev = list.length > 1 ? list[list.length - 2] : null;
+    var delta = prev ? (lastRate - rate(prev)) : 0;
+    var trend = list.slice(-6).map(function (g) {
+      return { d: String(g.date).slice(5), s: g.subject || '', rate: rate(g), score: Number(g.score), full: Number(g.full) || 100 };
+    });
+    /* 班级平均：快照按「科目|考试名称」聚合，取最近几次里有数据的平均 */
+    var acc = 0, accN = 0;
+    trend.forEach(function (t, i) {
+      var g = list.slice(-6)[i];
+      var a = v.gAvg && v.gAvg[(g.subject || '') + '|' + (g.exam || '')];
+      if (a && a.avg != null) { acc += Number(a.avg); accN++; }
+    });
+    var clsAvg = accN ? Math.round(acc / accN * 10) / 10 : null;
+    var tips = [];
+    if (delta >= 3) tips.push('最近一次比上次进步 ' + delta + ' 分');
+    else if (delta <= -3) tips.push('最近一次比上次回落 ' + Math.abs(delta) + ' 分，别松劲');
+    else if (prev) tips.push('最近两次基本持平');
+    if (subs.length > 1) {
+      tips.push(subs[0].s + '最稳（平均得分率 ' + subs[0].rate + '%）');
+      tips.push(subs[subs.length - 1].s + '还有提升空间（' + subs[subs.length - 1].rate + '%）');
+    }
+    return { list: list, n: list.length, subs: subs, last: last, lastRate: lastRate,
+             delta: delta, trend: trend, clsAvg: clsAvg, tips: tips };
+  }
+  function anaCard(v, a) {
+    var cls = a.lastRate >= 85 ? 'ok' : a.lastRate >= 60 ? 'mid' : 'no';
+    var dtxt = a.delta > 0 ? ('↑' + a.delta) : (a.delta < 0 ? ('↓' + Math.abs(a.delta)) : '→');
+    var h = '<div class="card"><h2>📈 成绩分析 <em>近 120 天 · ' + a.n + ' 次考试</em></h2>';
+    h += '<div class="anatop"><div class="anabig ' + cls + '">' + a.lastRate + '<small>%</small></div>' +
+      '<div class="anaside"><b>' + esc(a.last.subject || '考试') + ' · ' + esc(a.last.exam || '') + '</b>' +
+      '<span>' + a.last.score + ' / ' + (a.last.full || 100) + ' 分 · 得分率 ' + a.lastRate + '%</span></div>' +
+      '<div class="anadelta ' + (a.delta > 0 ? 'up' : (a.delta < 0 ? 'dn' : '')) + '">' + dtxt + '</div></div>';
+    /* 趋势柱：最近 6 次得分率 */
+    h += '<div class="anabars">' + a.trend.map(function (t) {
+      var cls2 = t.rate >= 85 ? 'ok' : t.rate >= 60 ? 'mid' : 'no';
+      return '<div class="anabar"><i class="' + cls2 + '" style="height:' + Math.max(6, Math.min(100, t.rate)) + '%"></i>' +
+        '<span>' + t.rate + '</span><em>' + esc(t.s.slice(0, 2)) + '<br>' + esc(t.d) + '</em></div>';
+    }).join('') + '</div>';
+    /* 各科平均 */
+    h += '<div class="anasubs">' + a.subs.map(function (x) {
+      return '<div class="anasub"><span class="k">' + esc(x.s) + '</span>' +
+        '<span class="bar"><i style="width:' + Math.max(2, Math.min(100, x.rate)) + '%"></i></span>' +
+        '<span class="v">' + x.rate + '%</span></div>';
+    }).join('') + '</div>';
+    if (a.clsAvg != null) {
+      var gap = Math.round((a.lastRate - a.clsAvg) * 10) / 10;
+      h += '<div class="anacls">班级平均得分率 ' + a.clsAvg + '% · 孩子 ' +
+        (gap >= 0 ? ('高于 <b class="up">+' + gap + '</b>') : ('低于 <b class="dn">' + gap + '</b>')) + ' 个百分点</div>';
+    }
+    h += '<div class="anatip">💡 ' + esc(a.tips.join('；')) + '</div>';
+    h += '<div class="rcfoot">按「得分率」比较不同满分/不同科目的成绩；只统计老师最近 120 天录入的考试。</div>';
+    h += '</div>';
+    return h;
+  }
   function renderMain() {
     var v = buildView(ST.per, ST.name);
     ST.view = v;
@@ -1023,6 +1132,21 @@
         h += '<div class="rcrow"><span class="rcdot ok"></span>已背 <b>' + v.rcDoneN + '</b> 篇' +
           '<span class="rcdot no"></span>未背 <b>' + v.rcTodoN + '</b> 篇' +
           '<span style="margin-left:auto;color:#9aa8a0">' + rcPct + '%</span></div>';
+        /* vT157 班级整体诵读进度（老师可关）：全班完成率 + 最靠后的几篇 */
+        if (on('rcclass') && v.rcClass && v.rcClass.perTitle && v.rcClass.perTitle.length) {
+          var rc2 = v.rcClass;
+          var lag = rc2.perTitle.slice().sort(function (a, b) { return a.n - b.n; }).slice(0, 3);
+          h += '<div class="rccls">' +
+            '<div class="rcsec">🏫 班级整体进度 <em>（全班 ' + rc2.stuN + ' 人 · 人均已背 ' + rc2.avg + ' 篇）</em></div>' +
+            '<div class="rcbar cls"><i style="width:' + Math.max(0, Math.min(100, rc2.pct)) + '%"></i></div>' +
+            '<div class="rcrow">全班完成率 <b>' + rc2.pct + '%</b>' +
+              '<span style="margin-left:auto;color:#9aa8a0">' + rc2.planN + ' 篇 × ' + rc2.stuN + ' 人</span></div>' +
+            '<div class="rcsec">⏳ 全班最靠后的篇目 <em>（背完人数较少）</em></div>' +
+            '<div class="rctags">' + lag.map(function (t) {
+              return '<span class="rctag no">' + esc(t.t) + ' <b>' + t.n + '/' + rc2.stuN + '</b></span>';
+            }).join('') + '</div>' +
+            '<div class="rcfoot">班级进度只统计篇目与人数，不显示其他孩子姓名。</div></div>';
+        }
         h += '<div class="rcsec">✅ 已背诵篇目 <em>（' + v.rcDoneN + ' 篇）</em></div>';
         h += v.rcDoneList.length ? '<div class="rctags">' + v.rcDoneList.map(function (t) {
           return '<span class="rctag' + (t.k === 'extra' ? ' ex' : '') + '">' + esc(t.t) + '</span>';
@@ -1080,6 +1204,11 @@
       if (gm === 'level' && v.grades.length) h += '<div class="gmode">等级换算：A+ ≥95 · A 90–94 · B 80–89 · C 70–79 · D 60–69 · E 60 以下</div>';
       h += '</div>';
     }
+    /* vT157 成绩分析（老师可在「数据同步 → 家长端显示」里关掉） */
+    if (on('gradeAna')) {
+      var ana = anaOf(v);
+      if (ana) h += anaCard(v, ana);
+    }
     /* 点评 */
     if (on('cmt')) {
       h += '<div class="card"><h2>💬 老师点评</h2>';
@@ -1089,7 +1218,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v156</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v157</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
@@ -1240,6 +1369,16 @@
       renderLogin((e && e.message) || '读取失败，请重试');
     });
   }
+  /* vT157 测试钩子：只有带 ?test=1 打开时才挂全局，正常家长使用不受影响。
+     给一份假快照就能整页渲染，方便截图核对成绩分析 / 班级诵读进度。 */
+  try {
+    if (String(location.search || '').indexOf('test=1') >= 0) {
+      window.__ppTest = {
+        set: function (nm, snap, per) { ST.access = 'test'; ST.name = nm; ST.snap = snap; ST.per = per; ST.code = 'TEST'; renderMain(); },
+        st: ST
+      };
+    }
+  } catch (e) {}
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })();
