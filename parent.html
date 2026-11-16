@@ -251,7 +251,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT155）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT156）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -925,9 +925,10 @@
     }
     /* 积分 */
     if (on('points')) {
-      h += '<div class="card"><h2>积分 <em>作业分 + 平时分</em></h2>' +
+      h += '<div class="card"><h2>积分 <em>作业 + 奖惩 + 小组</em></h2>' +
         '<div class="points"><div class="big">' + Math.round(v.points.total || 0) + '<small>分</small></div>' +
-        '<div class="side">作业 ' + Math.round(v.points.hw || 0) + ' · 平时 ' + Math.round(v.points.manual || 0) + '</div></div>' +
+        '<div class="side">作业 ' + Math.round(v.points.hw || 0) + ' · 平时 ' + Math.round(v.points.manual || 0) +
+        (v.points.ga ? ' · 小组 ' + Math.round(v.points.ga) : '') + '</div></div>' +
         '<div class="kpis"><div class="kpi"><b>' + v.hwDone + '/' + v.hwN + '</b><span>今日作业完成</span></div>' +
         '<div class="kpi"><b>' + (v.rcLegacy ? v.rc.length : (v.rcDoneN + '/' + v.rcPlanN)) + '</b><span>' + (v.rcLegacy ? '今日诵读' : '诵读进度') + '</span></div>' +
         '<div class="kpi"><b>' + (v.codex.length || 0) + '</b><span>已集灵杰卡</span></div></div></div>';
@@ -1088,7 +1089,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v155</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v156</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
