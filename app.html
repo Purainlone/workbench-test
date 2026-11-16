@@ -3317,7 +3317,7 @@ table.paper td.l{text-align:left;font-weight:600}
       @keyframes gdTw{0%,100%{opacity:.3;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
     </style>
     <h2>🛡️ 班级守护 <span style="font-size:12px;color:#76867e;font-weight:400;margin-left:8px">玫瑰随班级累计积分慢慢长大 · 狐狸与小王子陪伴</span></h2>
-    <div class="sub">玫瑰读的是全班「个人累计积分」之和（作业分 + 手动奖惩分），<b>与小程序 / 教室桌面 / 家长端同一本账</b>：积分涨、玫瑰就从花苞一点点舒展长大，高分段降下玻璃钟罩、点亮星光。每轮云同步后自动重算，也可点「🔄 立即同步并刷新」。狐狸 / 小王子点按钮切换神态，可投屏到教室当情绪小助手。「启灵图鉴」板块保留在旁边，随时可切回。</div>
+    <div class="sub">玫瑰读的是<b>全班所有学生的个人积分总和</b>（作业分 + 小组分 + 科任作业调整 + 奖惩加分与扣分），<b>学生抽灵宠 / 集灵杰 / 喂养灵宠的消费不计入</b>，<b>与小程序 / 教室桌面 / 家长端同一本账</b>：积分涨、玫瑰就从花苞一点点舒展长大，高分段降下玻璃钟罩、点亮星光。每轮云同步后自动重算，也可点「🔄 立即同步并刷新」。狐狸 / 小王子点按钮切换神态，可投屏到教室当情绪小助手。「启灵图鉴」板块保留在旁边，随时可切回。</div>
     <div class="gd-grid">
       <div class="gd-card">
         <h3>🌹 班级玫瑰</h3>
@@ -3375,27 +3375,29 @@ table.paper td.l{text-align:left;font-weight:600}
   }
   function gdCloudCache(tables){
     try{
-      var c={students:tables.students||[],hw:tables.hw||[],manual:tables.manual||[],st:tables.st||[],at:Date.now()};
+      var c={students:tables.students||[],hw:tables.hw||[],manual:tables.manual||[],st:tables.st||[],
+             hwadj:tables.hwadj||[],ga:tables.ga||[],at:Date.now()};
       window.__GD_CLOUD__=c;localStorage.setItem(GD_CLOUD_KEY,JSON.stringify(c));
     }catch(e){}
   }
   function gdCloudPoints(c){
-    /* vT156 玫瑰只记奖惩：档案奖惩（st，剔除备注=宠物的消费）+ 手动加减分
-       （manual，剔除「灵宠/启灵图鉴」类消费流水）。作业分、小组分不再计入，
-       孩子抽卡 / 喂养花钱也不会把玫瑰缩回去。 */
-    var names={},has=false,t=0,n,v,k;
-    (c.students||[]).forEach(function(x){n=String((x&&(x.name||x['姓名']))||'').trim();if(n){names[n]=0;has=true}});
-    (c.st||[]).forEach(function(x){
-      if(!x||x.pet)return;v=Number(x.score)||0;
-      n=String(x.name||'').trim();if(!has){t+=v;return}if(n in names)names[n]+=v;
-    });
-    (c.manual||[]).forEach(function(x){
-      if(!x)return;
-      if(/灵宠|启灵图鉴/.test(String(x.reason||'')))return;   /* 消费流水不进玫瑰 */
-      v=Number(x.score)||0;
-      n=String(x.name||'').trim();if(!has){t+=v;return}if(n in names)names[n]+=v;
-    });
-    if(has)for(k in names)t+=names[k];
+    /* vT167 班级守护口径（老师明确要求）：全班个人积分总和 ——
+       作业分 + 科任作业调整 + 小组分 + 奖惩（加分与扣分都算），
+       只剔除「灵宠 / 启灵图鉴 / 成长灵宠」这类消费（抽卡、喂养）。
+       等价于 sum(个人总分) − sum(灵宠消费)，与桌面端 rose 同一算法。 */
+    /* 消费只认「灵宠类 + 负分」：老师赠送的「灵宠 · 赠送积分」是加分，照常计入 */
+    var isPet=function(x){
+      if(!x)return false;
+      if((Number(x.score)||0)>=0)return false;
+      return !!(x.pet||/灵宠|启灵图鉴|成长灵宠/.test(String(x.reason||'')));
+    };
+    var t=0;
+    (c.hw||[]).forEach(function(x){if(!x||x.deleted)return;t+=Number(x.score)||0});
+    (c.hwadj||[]).forEach(function(x){if(!x||x.deleted)return;t+=Number(x.delta)||0});
+    /* 小组分按「组」记一条，全班求和正好等于平摊到每个人之后的总和 */
+    (c.ga||[]).forEach(function(x){if(!x||x.deleted)return;t+=Number(x.score)||0});
+    (c.st||[]).forEach(function(x){if(!x||isPet(x))return;t+=Number(x.score)||0});
+    (c.manual||[]).forEach(function(x){if(!x||isPet(x))return;t+=Number(x.score)||0});
     return Math.round(t*10)/10;
   }
   function gdClassPoints(){
@@ -3403,16 +3405,29 @@ table.paper td.l{text-align:left;font-weight:600}
     if(c&&((c.hw&&c.hw.length)||(c.manual&&c.manual.length))){window.__GD_SRC__='云端';window.__GD_AT__=c.at||0;return gdCloudPoints(c)}
     window.__GD_SRC__='本机';window.__GD_AT__=0;
     try{
-      /* vT156 兜底口径同步改为「只记奖惩」：飞书档案奖惩（剔备注=宠物）+ 云端 manual 非消费 */
+      /* 本地兜底同口径（vT167）：作业 + 小组 + 作业调整 + 奖惩，剔除灵宠消费 */
       var t=0;
+      HW_ROWS.forEach(function(r){
+        if(!r)return;
+        var sc=parseFloat(fval(r,'分数'));if(!isNaN(sc))t+=sc;
+        var lv=String(fval(r,'等级')||'');
+        var m=lv.match(/^([+-]?\d+(?:\.\d+)?)$/);if(m)t+=parseFloat(m[1])||0;   /* 等级写成数字的旧数据 */
+      });
+      GA_ROWS.forEach(function(r){var v=parseFloat(fval(r,'得分'));if(!isNaN(v))t+=v});
       ST_ROWS.forEach(function(r){
         if(fval(r,'备注')==='宠物')return;
         var v=parseFloat(fval(r,'奖惩分值'));if(isNaN(v))v=0;
         t+=v;
       });
+      try{
+        var _adjDb=JSON.parse(localStorage.getItem('wb_nt_v1')||'{}');
+        var _adj=Array.isArray(_adjDb['s-hwadj'])?_adjDb['s-hwadj']:[];
+        _adj.forEach(function(r){if(!r||r.deleted)return;t+=Number(r.delta)||0});
+      }catch(_e1){}
       var _c2=gdCloud();
       if(_c2&&Array.isArray(_c2.manual))_c2.manual.forEach(function(x){
-        if(!x||/灵宠|启灵图鉴/.test(String(x.reason||'')))return;
+        if(!x)return;
+        if((Number(x.score)||0)<0&&/灵宠|启灵图鉴|成长灵宠/.test(String(x.reason||'')))return;   /* 只剔负数消费 */
         t+=Number(x.score)||0;
       });
       return Math.round(t*10)/10;
