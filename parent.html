@@ -485,8 +485,8 @@
     var from = ymd(monday), to = ymd(now);
     var cats = {
       hw: { name: '作业', add: 0, sub: 0, cnt: 0 },
-      class: { name: '课堂', add: 0, sub: 0, cnt: 0 },
-      manual: { name: '手动奖惩', add: 0, sub: 0, cnt: 0 }
+      class: { name: '课堂参与', add: 0, sub: 0, cnt: 0 },
+      manual: { name: '老师奖惩', add: 0, sub: 0, cnt: 0 }
     };
     (per && per.weekly || []).forEach(function (r) {
       if (!r) return;
@@ -1143,7 +1143,7 @@
             '<small>' + c.cnt + ' 次 · +' + c.add + (c.sub ? (' / -' + c.sub) : '') + '</small></div>';
         }).join('') + '</div>';
       h += '<div class="wkfoot">共 ' + wk.cnt + ' 次加减分 · 累计 +' + wk.plus + (wk.minus ? (' / -' + wk.minus) : '') +
-        '　｜　课堂分来自教室桌面座位表，作业含科任调整，另计入老师手动奖惩；灵宠消费不计入。</div>';
+        '　｜　课堂参与分主要按教室桌面座位表记录（含积极发言等），作业含科任调整，另有老师奖惩；灵宠消费不计入。</div>';
       h += '</div>';
     }
     /* 作业 */
@@ -1306,14 +1306,14 @@
     /* 成绩 */
     if (on('grade')) {
       var gm = gradeModeOf();
-      h += '<div class="card"><h2>🏅 ' + (gm === 'level' ? '成绩等级' : '成绩记录') + '</h2>';
+      h += '<div class="card"><h2>🏅 素养评价 <em>' + (gm === 'level' ? '等级' : '分数') + '</em></h2>';
       h += v.grades.length ? v.grades.map(function (g) {
         return '<div class="gr"><span class="l">' + esc(g.exam || '考试') + '<small>' + esc(g.subject || '') + ' · ' + esc(g.date) + '</small></span>' +
           (gm === 'level'
             ? '<span class="r"><span class="lvb ' + g.lcls + '">' + esc(g.letter) + '</span></span>'
             : '<span class="r"><span class="sc">' + g.score + '</span><span class="chip c-' + g.cls + '">' + esc(g.level) + '</span></span>') +
           '</div>';
-      }).join('') : '<div class="empty">还没有成绩记录</div>';
+      }).join('') : '<div class="empty">还没有素养评价记录</div>';
       if (gm === 'level' && v.grades.length) h += '<div class="gmode">等级换算：A+ ≥95 · A 90–94 · B 80–89 · C 70–79 · D 60–69 · E 60 以下</div>';
       h += '</div>';
     }
