@@ -2998,7 +2998,7 @@ table.paper td.l{text-align:left;font-weight:600}
       #s-pet .ph-stage{font-size:11px;color:#6b7b73;margin:2px 0 4px;display:flex;align-items:center;justify-content:center;gap:4px}
       #s-pet .ph-lv{font-size:10px;color:#a4b0a9}
       #s-pet .ph-pet .pet-acts{gap:3px}
-      #s-pet .ph-pet .btn2{font-size:11px;padding:2px 6px}
+      #s-pet .ph-pet .btn2{font-size:10.5px;padding:2px 5px;white-space:nowrap;line-height:1.4}
       #s-pet .ph-empty{grid-column:1/-1;text-align:center;color:#87968e;padding:26px 10px;background:#fffdf9;border:1px dashed #e6ddcf;border-radius:14px}
       /* ---------- vT123 灵宠成长值（喂养累积，攒满免费进化） ---------- */
       #s-pet .pet-grow{display:flex;align-items:center;gap:5px;margin:3px 1px 4px}
@@ -26390,7 +26390,6 @@ function cwInit(){
                       : isCxPic ? ptCodexPetPicHtml(pet, 'pet-photo')
                       : PetCore.renderPet(def, { seed: pet.id, level: pet.level, graduated: pet.graduated, stageCfg: ptStageCfg() });
     var grad = pet.graduated ? '<span class="pet-grad">🎓 已毕业 · ' + ptEsc(pet.gradCode || '') + '</span>' : '';
-    var f = ptCost('feed');
     var dis = ptPlayable() ? '' : ' disabled title="模块已暂停/关停"';
     /* vT123 成长值：喂养累积，进化只补差额（图鉴卡 / 非成长灵宠不参与） */
     var gs = (!isCxPic && ptGrowImgsOf(pet)) ? ptGrowState(pet) : null;
@@ -26429,14 +26428,14 @@ function cwInit(){
          '<span class="ph-lv">Lv ' + (pet.level || 1) + '</span></div>')
       : ('<div class="pet-own">主人：' + ptEsc(pet.studentName) + (isPhoto ? ' <span class="pet-stu">手绘</span>' : '') + ' <span class="pet-stu">' + PetCore.stageName(stage) + '</span></div>' +
          '<div class="pet-lv">🎴 已集 ' + myCardN + ' 张卡</div>');
-    /* 家园卡片只留「进化 / 抽卡 / 收回」三个动作，其余入口在后台与毕业审批里，避免 100px 小卡塞满按钮 */
-    var cardBtn = '<button class="btn2 sm" onclick="ptFeed(\'' + pet.id + '\')"' + dis + ' title="花积分随机抽一张灵杰卡；抽到新的会同时唤醒、进家园、点亮图鉴">🎴 抽卡(-' + f + ')</button>';
+    /* vT162 灵宠卡片不再放「抽卡」按钮：这里是灵宠（成长/喂养/进化），抽卡抽的是图鉴灵杰，两者分开。
+       抽卡只在「灵杰集卡」页顶部入口（ptCardsDraw）进行，避免灵宠与灵杰混在一张卡上。 */
     var revokeBtn = '<button class="btn2 sm" onclick="ptRevoke(\'' + pet.id + '\')" title="误发了可以收回（可在后台赠送记录里恢复）">↩ 收回</button>';
     var acts;
     if (o.grouped) {
-      acts = evoBtn + feedBtn + cardBtn + revokeBtn;
+      acts = evoBtn + feedBtn + revokeBtn;
     } else {
-      acts = evoBtn + feedBtn + cardBtn +
+      acts = evoBtn + feedBtn +
         (pet.graduated ? '' : '<button class="btn2 sm" onclick="ptGradReq(\'' + pet.id + '\')">🎓 申请毕业</button>') +
         revokeBtn +
         (ptAdminUnlocked() ? '<button class="btn2 sm" onclick="ptPetRemove(false,\'' + pet.id + '\')" title="删除这条已发放记录（回收站可恢复）">🗑 删除</button>' : '');
@@ -26450,7 +26449,7 @@ function cwInit(){
      ｜老师要看的不是「全班所有灵宠堆在一起」，而是「每个同学养了哪些、养到哪一阶段」。
      ｜所以按学生分组：一家一张卡（头像 + 姓名 + 各阶段计数 + 共几只），
      ｜每只灵宠显示当前阶段（奶团子 / 幼年 / 成年 / 毕业）、等级和阶段专属特效；
-     ｜卡片动作只留「进化 / 抽卡 / 收回」，其它管理入口仍在后台与毕业审批。 */
+     ｜卡片动作只留「进化 / 喂养 / 收回」，不放抽卡（抽卡属灵杰集卡页），其它管理入口仍在后台与毕业审批。 */
   var HOME_Q = '';
   function ptHomeSearch(v) { HOME_Q = String(v || ''); ptHomeFilter(); }
   function ptHomeFilter() {
@@ -27825,7 +27824,7 @@ function cwInit(){
   /* vT112 抽卡即唤醒：一个动作搞定「抽卡 + 唤醒」。
      · 抽到新卡 → 灵杰墙上补一只、图鉴格子点亮、卡册记一张（store 层 ptCardDrawOne 里完成）
      · 重复卡 → 只记「已经有了」（vT124 起不再升星）
-     入口有两个：灵宠家园每张卡上的「🎴 抽卡」、灵杰集卡顶部的「🎴 抽一张」（没有灵杰的学生也能抽）。 */
+     入口：灵杰集卡顶部的「🎴 抽一张」（没有灵杰的学生也能抽）。vT162 起不再从灵宠家园卡片抽卡，灵宠与灵杰分开。 */
   function ptCardOpen(who) {
     if (!ptPlayable()) return toastMsg('⏸ 图鉴模块已暂停 / 关停');
     if (!who) return toastMsg('请先选择学生');
