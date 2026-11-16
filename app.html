@@ -2683,13 +2683,13 @@ table.paper td.l{text-align:left;font-weight:600}
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="rc" checked> 诵读打卡</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="rcclass" checked> 🏫 班级诵读进度</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="cmt" checked> 老师点评</label>
-        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="grade" checked> 成绩等级</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="grade" checked> 🏅 素养评价</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="gradeAna" checked> 📈 成绩分析</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="essay" checked> 提交孩子作文</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="codex" checked> 📖 启灵图鉴</label>
       </div>
       <div id="ptGradeModeBox" style="margin-top:12px;padding-top:10px;border-top:1px dashed #dde5ee">
-        <div class="syncdesc"><b>🏅 成绩显示方式（vT141）</b>：家长端「🏅 成绩记录」用哪种方式显示，由你决定。分数方式显示具体分数；等级方式只显示 A+ / A / B / C / D / E（A+ ≥95，A 90–94，B 80–89，C 70–79，D 60–69，E &lt;60）。</div>
+        <div class="syncdesc"><b>🏅 素养评价显示方式（vT141）</b>：家长端「🏅 素养评价」用哪种方式显示，由你决定。分数方式显示具体分数；等级方式只显示 A+ / A / B / C / D / E（A+ ≥95，A 90–94，B 80–89，C 70–79，D 60–69，E &lt;60）。</div>
         <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:8px" id="ptGradeMode">
           <label style="font-size:13px;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="ptGradeMode" value="score" checked> 显示分数（如 96 分）</label>
           <label style="font-size:13px;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="ptGradeMode" value="level"> 显示等级（A+ / A / B / C / D / E）</label>
@@ -29276,7 +29276,7 @@ function cwInit(){
     }
 
     /* vT163 家长端「本周表现」：三类奖惩带日期明细，下发最近 14 天，家长端按当前周过滤汇总。
-       cat: hw=作业(含科任调整) / class=课堂(教室桌面座位表加分) / manual=老师手动奖惩。
+       cat: hw=作业(含科任调整) / class=课堂参与(主要靠教室桌面座位表，含积极发言/举手/参与等) / manual=老师手动奖惩。
        灵宠消费流水（reason 含「灵宠/启灵图鉴」）一律剔除，不算奖惩。 */
     var lim14 = ptwDstr(new Date(now.getTime() - 14 * 86400000));
     var weekly = [], weeklySeen = {};
@@ -29302,7 +29302,9 @@ function cwInit(){
         pushWeekly(r.name, r.date, 'hw', Number(r.delta) || 0, '科任调整' + (r.subject ? ('·' + r.subject) : '') + (r.reason ? ('·' + r.reason) : ''));
       });
     } catch (_we) {}
-    /* ②③ 云端 manual：手机小程序手动奖惩 + 桌面座位表加分（reason 含「座位悬浮球」= 课堂） */
+    /* ②③ 云端 manual：手机小程序手动奖惩 + 桌面座位表加分。
+       课堂参与（class）：主要靠教室桌面座位表（reason 带「座位悬浮球」），
+       也含老师按课堂参与度录入的「积极发言 / 举手 / 课堂参与 / 课前展示」等。 */
     try {
       var _wGc = (typeof gdCloud === 'function') ? gdCloud() : null;
       var _wMn = (_wGc && Array.isArray(_wGc.manual)) ? _wGc.manual : [];
@@ -29311,8 +29313,9 @@ function cwInit(){
         var rsn = String(x.reason || '');
         if (/灵宠|启灵图鉴/.test(rsn)) return;   // 消费流水不算奖惩
         var dt = String(x.date || '').slice(0, 10) || (x.ts ? ptwDstr(new Date(x.ts)) : '');
-        if (/座位悬浮球/.test(rsn)) pushWeekly(x.name, dt, 'class', x.score, rsn.replace('（座位悬浮球）', '') || '课堂加减');
-        else pushWeekly(x.name, dt, 'manual', x.score, rsn || '手动奖惩');
+        if (/座位悬浮球|积极发言|举手|课堂参与|课堂加分|课堂扣分|课前展示/.test(rsn)) {
+          pushWeekly(x.name, dt, 'class', x.score, rsn.replace('（座位悬浮球）', '') || '课堂参与');
+        } else pushWeekly(x.name, dt, 'manual', x.score, rsn || '手动奖惩');
       });
     } catch (_we2) {}
     /* ③b 学生档案里的手动奖惩（ST_ROWS） */
@@ -29320,14 +29323,15 @@ function cwInit(){
       if (!r || r.deleted) return;
       pushWeekly(r.name, r.date, 'manual', r.score, r.reason || '手动调整');
     });
-    /* ③c 桌面工作台 NT 库的手动流水（课前展示等对老师的评价） */
+    /* ③c 桌面工作台 NT 库的手动流水：课前展示算课堂参与，其余算手动奖惩 */
     try {
       var _wNtM = (typeof ntRows === 'function') ? ntRows('manual') : [];
       _wNtM.forEach(function (r) {
         if (!r || r.deleted || !r.name) return;
         var rsn = String(r.reason || '');
         if (/灵宠|启灵图鉴/.test(rsn)) return;
-        pushWeekly(r.name, r.date, 'manual', r.score, rsn || '手动奖惩');
+        var _cat = /课前展示|积极发言|举手|课堂参与|课堂加分/.test(rsn) ? 'class' : 'manual';
+        pushWeekly(r.name, r.date, _cat, r.score, rsn || (_cat === 'class' ? '课堂参与' : '手动奖惩'));
       });
     } catch (_we3) {}
 
