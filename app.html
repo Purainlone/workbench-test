@@ -29447,6 +29447,10 @@ function cwInit(){
       blocks[st.name] = { code: String(st.code || '').toUpperCase(), data: seal(per, st.code || st.name) };
     });
     var doc = { app: '李老师工作台·家长端', ver: 3, ts: Date.now(), classId: snap.classId || '', className: snap.className || '', exportedAt: new Date().toISOString(), blocks: blocks };
+    /* vT158 修复：班级聚合数据（成绩分析 gAvg / 班级诵读 rcClass）此前只算进 snap、没写进发布的 doc，
+       家长端读 ST.snap.rcClass 永远是 null → 班级诵读进度 / 成绩对比都看不到。只有聚合数，无姓名。 */
+    doc.rcClass = snap.rcClass || null;
+    doc.gAvg = snap.gAvg || {};
     return ptwEnsureRepo(pr).then(function () {
       return fetch(api + '?access_token=' + encodeURIComponent(pr.token)).then(function (r) {
         return r.text().then(function (txt) {
