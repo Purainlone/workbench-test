@@ -107,6 +107,24 @@
   /* vT136 灵宠互动：点卡片捏捏 / 摸摸 / 玩耍（本地演出，不动成长值） */
   .cx.ispet{cursor:pointer}
   .cx.ispet:active{transform:scale(.97)}
+  /* vT162 家长端灵宠三阶段常驻动效：奶团子轻飘 + 奶泡星点 / 幼年小弹跳 + 脚边尘土 / 成年金色光晕 */
+  @keyframes ppPsFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  @keyframes ppPsHop{0%,100%{transform:translateY(0) scale(1)}28%{transform:translateY(-5px) scale(1.012)}55%{transform:translateY(0) scale(.998)}}
+  @keyframes ppPsGlow{0%,100%{filter:drop-shadow(0 0 4px rgba(255,214,102,.30))}50%{filter:drop-shadow(0 0 13px rgba(255,214,102,.72))}}
+  @keyframes ppPsPuff{0%,100%{opacity:.16;transform:translateY(0)}50%{opacity:.55;transform:translateY(-6px)}}
+  @keyframes ppPsDust{0%{opacity:0;transform:translate(0,0) scale(.7)}30%{opacity:.5}100%{opacity:0;transform:translate(-10px,-4px) scale(1.2)}}
+  .cx.ispet.ps-baby img{animation:ppPsFloat 3.8s ease-in-out infinite}
+  .cx.ispet.ps-teen img{animation:ppPsHop 2.8s ease-in-out infinite}
+  .cx.ispet.ps-adult img{animation:ppPsGlow 2.6s ease-in-out infinite}
+  .cx.ispet.ps-baby::before{content:'';position:absolute;left:0;right:0;top:6px;height:64px;pointer-events:none;z-index:1;
+    background-image:
+      radial-gradient(circle at 20% 40%,#fff 0 1.6px,transparent 2.4px),
+      radial-gradient(circle at 72% 24%,#e8f3ff 0 1.8px,transparent 2.6px),
+      radial-gradient(circle at 46% 70%,#fff 0 1.4px,transparent 2.2px);
+    animation:ppPsPuff 3.2s ease-in-out infinite}
+  .cx.ispet.ps-teen::before{content:'';position:absolute;left:18%;bottom:26px;width:9px;height:5px;border-radius:50%;
+    background:rgba(150,170,160,.5);pointer-events:none;z-index:1;animation:ppPsDust 1.4s ease-out infinite}
+  @media (prefers-reduced-motion:reduce){.cx.ispet img,.cx.ispet::before,.cx.ispet::after{animation:none !important}}
   .cx .fheart{position:absolute;right:5px;bottom:22px;font-size:9px;color:#c2416a;background:#fff0f4;border-radius:7px;padding:1px 5px;font-weight:700}
   .cx .fly{position:absolute;left:50%;top:18%;font-size:20px;transform:translateX(-50%);animation:ppFly .9s ease forwards;pointer-events:none}
   @keyframes ppFly{0%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,-30px) scale(1.3)}}
@@ -608,7 +626,10 @@
       var stn = ({ baby: '奶团子', teen: '幼年', adult: '成年', grad: '成年' })[p.stage] || '';
       sub = '🌱 ' + (Number(p.gx) || 0) + '/' + p.gneed + (stn ? (' · ' + stn) : '');
     }
-    return '<div class="cx ' + fx + (ispet ? ' ispet' : '') + '" data-pi="' + i + '">' + tier + inner + starHtml +
+    /* vT162 灵宠按阶段加动效 class：奶团子轻飘 / 幼年弹跳 / 成年(含毕业)金晕；灵杰卡(非灵宠)不动 */
+    var psCls = '';
+    if (ispet && p.stage) psCls = ' ps-' + (p.stage === 'grad' ? 'adult' : p.stage);
+    return '<div class="cx ' + fx + (ispet ? ' ispet' : '') + psCls + '" data-pi="' + i + '">' + tier + inner + starHtml +
       (n ? '<span class="fheart">❤' + n + '</span>' : '') +
       '<div class="nm">' + esc(p.name || '灵杰') + '</div>' +
       '<div class="sr">' + sub + '</div></div>';
