@@ -3358,20 +3358,24 @@ table.paper td.l{text-align:left;font-weight:600}
   }
   function gdCloudCache(tables){
     try{
-      var c={students:tables.students||[],hw:tables.hw||[],manual:tables.manual||[],at:Date.now()};
+      var c={students:tables.students||[],hw:tables.hw||[],manual:tables.manual||[],st:tables.st||[],at:Date.now()};
       window.__GD_CLOUD__=c;localStorage.setItem(GD_CLOUD_KEY,JSON.stringify(c));
     }catch(e){}
   }
   function gdCloudPoints(c){
+    /* vT156 玫瑰只记奖惩：档案奖惩（st，剔除备注=宠物的消费）+ 手动加减分
+       （manual，剔除「灵宠/启灵图鉴」类消费流水）。作业分、小组分不再计入，
+       孩子抽卡 / 喂养花钱也不会把玫瑰缩回去。 */
     var names={},has=false,t=0,n,v,k;
     (c.students||[]).forEach(function(x){n=String((x&&(x.name||x['姓名']))||'').trim();if(n){names[n]=0;has=true}});
-    (c.hw||[]).forEach(function(x){
-      if(!x)return;v=Number(x.score);
-      if(isNaN(v))v=(typeof HW_SCORE!=='undefined'&&HW_SCORE[x.level]!=null)?HW_SCORE[x.level]:0;
+    (c.st||[]).forEach(function(x){
+      if(!x||x.pet)return;v=Number(x.score)||0;
       n=String(x.name||'').trim();if(!has){t+=v;return}if(n in names)names[n]+=v;
     });
     (c.manual||[]).forEach(function(x){
-      if(!x)return;v=Number(x.score)||0;
+      if(!x)return;
+      if(/灵宠|启灵图鉴/.test(String(x.reason||'')))return;   /* 消费流水不进玫瑰 */
+      v=Number(x.score)||0;
       n=String(x.name||'').trim();if(!has){t+=v;return}if(n in names)names[n]+=v;
     });
     if(has)for(k in names)t+=names[k];
@@ -3382,8 +3386,18 @@ table.paper td.l{text-align:left;font-weight:600}
     if(c&&((c.hw&&c.hw.length)||(c.manual&&c.manual.length))){window.__GD_SRC__='云端';window.__GD_AT__=c.at||0;return gdCloudPoints(c)}
     window.__GD_SRC__='本机';window.__GD_AT__=0;
     try{
-      var p=stuPoints(),ro=stuRoster(),t=0;
-      ro.forEach(function(s){var n=fval(s,'姓名');if(n)t+=stuTotal(p,n);});
+      /* vT156 兜底口径同步改为「只记奖惩」：飞书档案奖惩（剔备注=宠物）+ 云端 manual 非消费 */
+      var t=0;
+      ST_ROWS.forEach(function(r){
+        if(fval(r,'备注')==='宠物')return;
+        var v=parseFloat(fval(r,'奖惩分值'));if(isNaN(v))v=0;
+        t+=v;
+      });
+      var _c2=gdCloud();
+      if(_c2&&Array.isArray(_c2.manual))_c2.manual.forEach(function(x){
+        if(!x||/灵宠|启灵图鉴/.test(String(x.reason||'')))return;
+        t+=Number(x.score)||0;
+      });
       return Math.round(t*10)/10;
     }catch(e){return 0;}
   }
@@ -14989,6 +15003,19 @@ function stuPoints(){
     if(isNaN(v))v=0;
     rwP[n]=(rwP[n]||0)+v;
   });
+  /* vT156 个人积分统一口径：云端 manual 流水（手机/桌面录入的奖惩 + 启灵消费扣分）
+     并进奖惩分。此前这张表只进小程序/桌面/家长端的账，工作台统计表看不到，
+     两处「个人积分」一直对不上；现在两端同账 = 作业 + 小组 + 奖惩（含消费扣分）。 */
+  (function(){ try{
+    var _gc=(typeof gdCloud==='function')?gdCloud():null;
+    if(_gc&&Array.isArray(_gc.manual)){
+      _gc.manual.forEach(function(x){
+        if(!x)return;
+        var n=String(x.name||'').trim();if(!n)return;
+        rwP[n]=(rwP[n]||0)+(Number(x.score)||0);
+      });
+    }
+  }catch(_rwe){} })();
   out={hw:hwP,ga:gaP,rw:rwP};
   return out;
 }
@@ -18498,9 +18525,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v155';
-var WB_MY_VER = '优化版 vT155 · 灵宠进化特效';
-var WB_BUILD_DATE = '11-16', WB_BUILD_NO = '2.6.179';
+var WB_VER_TAG = 'v156';
+var WB_MY_VER = '优化版 vT156 · 积分一本账 + 灵宠墙轮播';
+var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.180';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -20228,8 +20255,43 @@ function mpFromDeskBuild(o) {
       essayOut.push(r);
     });
   } catch (_ese) { essayOut = (typeof essayAll === 'function') ? essayAll() : [] }
+  /* vT156 小组结算 / 档案奖惩 / 作业积分调整 → 云端补表。
+     此前桌面大屏的「个人积分」只读到 hw + manual 两张表，缺小组分、档案奖惩和
+     科任作业调整（s-hwadj），跟工作台统计表的「总分」对不上。
+     现在随同步文档整表下发（网页端是飞书这三张表的唯一生产者，每轮整表覆盖，
+     不会像 hw/manual 那样需要并集）；飞书本轮拉空时透传远端旧表兜底。 */
+  var gaOut = [];
+  try {
+    GA_ROWS.forEach(function (r) {
+      var g = fval(r, '组别'); if (!g) return;
+      var v = parseFloat(fval(r, '得分')); if (isNaN(v)) v = 0;
+      gaOut.push({ id: recId(r) || '', date: syncDateOnly(fval(r, '日期')) || '', group: String(g), score: v });
+    });
+  } catch (_ge) {}
+  if (!gaOut.length && Array.isArray(o && o.ga) && o.ga.length) gaOut = o.ga;   /* 飞书拉空 → 透传远端 */
+  var stOut = [];
+  try {
+    ST_ROWS.forEach(function (r) {
+      var n = fval(r, '姓名'); if (!n) return;
+      var v = parseFloat(fval(r, '奖惩分值')); if (isNaN(v)) v = 0;
+      if (!v) return;
+      stOut.push({ id: recId(r) || '', name: n, score: v, reason: fval(r, '奖惩事项') || '',
+                   date: syncDateOnly(fval(r, '日期')) || '', pet: fval(r, '备注') === '宠物' });
+    });
+  } catch (_se) {}
+  if (!stOut.length && Array.isArray(o && o.st) && o.st.length) stOut = o.st;
+  var hwadjOut = [];
+  try {
+    var _adjDb = JSON.parse(localStorage.getItem('wb_nt_v1') || '{}');
+    var _adj = Array.isArray(_adjDb['s-hwadj']) ? _adjDb['s-hwadj'] : [];
+    _adj.forEach(function (r) {
+      if (!r || r.deleted || !r.name) return;
+      hwadjOut.push({ id: r.id || '', name: r.name, delta: Number(r.delta) || 0, reason: r.reason || '', date: r.date || '' });
+    });
+  } catch (_he) {}
+  if (!hwadjOut.length && Array.isArray(o && o.hwadj) && o.hwadj.length) hwadjOut = o.hwadj;
   return mpDropEmpty({ students: stu, hw: hw, hwItems: items, affairs: affairsOut, manual: [], scores: scores, rc: rc,
-                       memos: memos, duty: dutyRows2, essay: essayOut });
+                       memos: memos, duty: dutyRows2, essay: essayOut, ga: gaOut, st: stOut, hwadj: hwadjOut });
 }
 function mpTrim365(rows) {
   var lim = new Date(Date.now() - 365 * 86400000);
@@ -29138,13 +29200,27 @@ function cwInit(){
       });
     } catch (e) {}
 
-    /* 积分汇总（作业分 + 手动奖惩分） */
-    var pmap = {};
-    stus.forEach(function (s) { pmap[s.name] = { hw: 0, manual: 0, total: 0, no: s.no, group: s.group }; });
-    (local.hw || []).forEach(function (r) { if (pmap[r.name]) pmap[r.name].hw += Number(r.score) || 0; });
-    (local.manual || []).forEach(function (r) { if (pmap[r.name]) pmap[r.name].manual += Number(r.score) || 0; });
-    for (var n in pmap) pmap[n].total = pmap[n].hw + pmap[n].manual;
-    var points = stus.map(function (s) { var p = pmap[s.name] || { hw: 0, manual: 0, total: 0 }; return { name: s.name, hw: p.hw, manual: p.manual, total: p.total }; });
+    /* vT156 积分汇总改走统一口径 stuPoints()：作业（含科任调整）+ 小组平摊 + 奖惩
+       （含灵宠消费扣分，与桌面端 / 教师端统计表同一本账）。此前快照只有
+       作业 + manual，家长端看到的「总积分」总比别处少一截。 */
+    var points;
+    try {
+      var _sp = stuPoints();
+      points = stus.map(function (s) {
+        return { name: s.name,
+                 hw: Math.round((_sp.hw[s.name] || 0) * 10) / 10,
+                 manual: Math.round((_sp.rw[s.name] || 0) * 10) / 10,
+                 ga: Math.round((_sp.ga[s.name] || 0) * 10) / 10,
+                 total: stuTotal(_sp, s.name) };
+      });
+    } catch (_pe) {
+      var pmap = {};
+      stus.forEach(function (s) { pmap[s.name] = { hw: 0, manual: 0, total: 0, no: s.no, group: s.group }; });
+      (local.hw || []).forEach(function (r) { if (pmap[r.name]) pmap[r.name].hw += Number(r.score) || 0; });
+      (local.manual || []).forEach(function (r) { if (pmap[r.name]) pmap[r.name].manual += Number(r.score) || 0; });
+      for (var n in pmap) pmap[n].total = pmap[n].hw + pmap[n].manual;
+      points = stus.map(function (s) { var p = pmap[s.name] || { hw: 0, manual: 0, total: 0 }; return { name: s.name, hw: p.hw, manual: p.manual, total: p.total }; });
+    }
 
     /* 教师点评（c-comment，最近 60 天） */
     var comments = [];
