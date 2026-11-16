@@ -2680,8 +2680,10 @@ table.paper td.l{text-align:left;font-weight:600}
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="hwtodo" checked> ⚠️ 未完成作业</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="hwstat" checked> 📊 作业统计</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="rc" checked> 诵读打卡</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="rcclass" checked> 🏫 班级诵读进度</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="cmt" checked> 老师点评</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="grade" checked> 成绩等级</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="gradeAna" checked> 📈 成绩分析</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="essay" checked> 提交孩子作文</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="codex" checked> 📖 启灵图鉴</label>
       </div>
@@ -18046,7 +18048,7 @@ function paFallbackCopy(txt, done) {  try {
 }
 /* vT131 修复：hwstat（vT129 加的「📊 作业统计」）之前漏在默认表外 —— 勾选框压根不保存；
    本轮新增 hwtodo（⚠️ 未完成作业），一并补进默认表 */
-function ptPanelsDefault() { return { detain: true, points: true, hw: true, hwtodo: true, hwstat: true, rc: true, cmt: true, grade: true, essay: true, codex: true, gradeMode: 'score' }; }
+function ptPanelsDefault() { return { detain: true, points: true, hw: true, hwtodo: true, hwstat: true, rc: true, rcclass: true, cmt: true, grade: true, gradeAna: true, essay: true, codex: true, gradeMode: 'score' }; }
 function ptPanelsGet() {
   var d = ptPanelsDefault();
   try {
@@ -18525,9 +18527,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v156';
-var WB_MY_VER = '优化版 vT156 · 积分一本账 + 灵宠墙轮播';
-var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.180';
+var WB_VER_TAG = 'v157';
+var WB_MY_VER = '优化版 vT157 · 成绩分析 · 班级诵读 · 抽卡新规';
+var WB_BUILD_DATE = '11-16', WB_BUILD_NO = '2.6.181';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -25573,23 +25575,43 @@ function cwInit(){
   }
   /* 还差几抽必出隐藏：保底计数 4 → 1（下一次就出） */
   function ptPityLeft(who, s) { return PT_CARD_PITY - ptPityOf(who, s); }
+  /* ---------------- vT157 抽卡规则（老师要求） ----------------
+     ① 全班不重复：被任何同学拿到过的灵杰（卡册里有、或已唤醒在墙上）都不再进池子，
+        抽过的卡别人就抽不到了 —— 一个班集卡不会撞款；
+     ② 该生第一次抽以普通款为主（隐藏只留 8% 的口子，控制稀有数量）；
+     ③ 第二次抽明显提高稀有几率（35%），第三次起 45%；
+     ④ 5 抽保底照旧：连续 4 抽没出隐藏，第 5 抽必出（前提是池里还有隐藏）。
+     概率按「品级」先抽，再在品级内均匀挑 —— 比按品级权重铺袋子更好调、也更好解释。 */
+  function cardTakenDefIds(s) {
+    var set = {};
+    (s.petCards || []).forEach(function (c) { if (c && c.defId && !c.deleted) set[c.defId] = 1; });
+    (s.pets || []).forEach(function (p) { if (p && p.defId && !p.deleted) set[p.defId] = 1; });
+    return set;
+  }
+  function cardDrawCount(s, who) {
+    return (s.petCards || []).filter(function (c) { return c && c.studentName === who && !c.deleted; }).length;
+  }
+  function cardHiddenProb(n) {
+    if (n <= 0) return 0.08;      /* 首抽：以普通为主 */
+    if (n === 1) return 0.35;     /* 第二抽：稀有几率明显提高 */
+    return 0.45;                  /* 第三次起：稳定高一点，靠 5 抽保底兜底 */
+  }
   function ptCardDrawOne(s, who, fromParent) {
-    var pool = ptCardDrawPool(s);
+    var taken = cardTakenDefIds(s);
+    var pool = ptCardDrawPool(s).filter(function (p) { return !taken[p.id]; });
     if (!pool.length) return null;
     var hidden = pool.filter(function (p) { return (p.tier || '普通') === '隐藏'; });
+    var normals = pool.filter(function (p) { return (p.tier || '普通') !== '隐藏'; });
     var pity = ptPityOf(who, s);
     var force = hidden.length > 0 && pity >= PT_CARD_PITY - 1;   /* 第 5 抽：从隐藏池里直接挑 */
     var sp = null;
     if (force) {
       sp = hidden[Math.floor(Math.random() * hidden.length)];
     } else {
-      var bag = [];
-      pool.forEach(function (p) {
-        var w = cardTierWeight(p.tier);
-        for (var i = 0; i < w; i++) bag.push(p);
-      });
-      if (!bag.length) return null;
-      sp = bag[Math.floor(Math.random() * bag.length)];
+      var wantHidden = hidden.length > 0 && Math.random() < cardHiddenProb(cardDrawCount(s, who));
+      var pickFrom = wantHidden ? hidden : (normals.length ? normals : hidden);
+      if (!pickFrom.length) return null;
+      sp = pickFrom[Math.floor(Math.random() * pickFrom.length)];
     }
     var cid = ptCardIdOf(who, sp.id);
     var ex = (s.petCards || []).filter(function (c) { return c && c.id === cid; })[0];
@@ -26866,7 +26888,7 @@ function cwInit(){
       '<div class="gpset"><span class="lbl">🎬 抽卡悬念</span>' +
       '<input class="search" style="width:56px" type="number" min="0" max="8" id="ptCfgFxSec" value="' + ptFxSec() + '">' +
       '<span class="sctip">秒 · 抽卡 / 抽灵宠先演这么久再揭晓（0 = 不等直接翻；默认 3 秒）。' +
-      '隐藏款每 5 抽必出一只，抽到隐藏重新计数；典藏只由老师发放。</span></div></div>' +
+      '全班卡片不重复（被抽走的别人抽不到）；首抽以普通为主，第二次起稀有几率明显提高；隐藏款每 5 抽必出一只，典藏只由老师发放。</span></div></div>' +
 
       /* ---- 3 喂养食物 ---- */
       '<div class="pet-sec"><h3>🍚 喂养食物</h3>' +
@@ -27795,6 +27817,8 @@ function cwInit(){
   window.ptPityLeft = ptPityLeft;    /* vT127 还差几抽必出隐藏 */
   window.ptPityOf = ptPityOf;
   window.ptCardDrawOne = ptCardDrawOne;
+  window.cardHiddenProb = cardHiddenProb;   /* vT157 首抽 / 第二抽 / 后续的稀有几率（测试用） */
+  window.cardTakenDefIds = cardTakenDefIds;
   window.PT_CARD_PITY = PT_CARD_PITY;
   window.PT_HIDDEN_SEED = PT_HIDDEN_SEED;
 
@@ -27811,7 +27835,7 @@ function cwInit(){
     return ptAddManual(who, '启灵图鉴 · 抽卡', -cost).then(function () {
       var s = ptGet();
       var r = ptCardDrawOne(s, who);
-      if (!r) { fx.abort(); toastMsg('灵杰池为空，暂时抽不到卡'); ptRenderHome(); ptRenderCards(); ptCodexRefresh(); return null; }
+      if (!r) { fx.abort(); toastMsg('灵杰都被同学抽走了，等老师发放新卡'); ptRenderHome(); ptRenderCards(); ptCodexRefresh(); return null; }
       ptSave(s); PET_DB = s; ptKickSync();
       fx.reveal({ kind: 'card', name: r.def.name, img: r.def.img, tier: r.def.tier, rarity: r.def.rarity,
         series: r.def.series, isNew: r.isNew, dup: r.dup, awakened: r.awakened, who: who,
@@ -29199,6 +29223,35 @@ function cwInit(){
         rcTitlesSnap.push({ t: nm, k: (t && t.k === 'extra') ? 'extra' : 'core' });
       });
     } catch (e) {}
+    /* vT157 家长端「班级整体诵读进度」：只下发聚合数（每篇几人背完 / 班级整体完成率），
+       不含任何其他孩子的名字 —— 家长只知道自己孩子 + 全班水位。 */
+    var rcClass = null;
+    try {
+      if (rcTitlesSnap.length) {
+        var rcDoneSet = {}, rcNames = {};
+        (stus || []).forEach(function (q) { if (q && q.name) rcNames[q.name] = 1; });
+        rcRows.forEach(function (r) {
+          if (!r || !r.name || !r.title) return;
+          if (rcNames[r.name] === undefined) rcNames[r.name] = 1;   /* 已转走的也留在分母里，比例才不虚高 */
+          rcDoneSet[r.name + '|' + r.title] = 1;
+        });
+        var rcNamesArr = Object.keys(rcNames);
+        var rcPerT = rcTitlesSnap.map(function (t) {
+          var n = 0;
+          rcNamesArr.forEach(function (nm) { if (rcDoneSet[nm + '|' + t.t]) n++; });
+          return { t: t.t, k: t.k, n: n };
+        });
+        var rcStuN = rcNamesArr.length || 1;
+        var rcSum = 0;
+        rcPerT.forEach(function (x) { rcSum += x.n; });
+        rcClass = {
+          stuN: rcNamesArr.length, planN: rcTitlesSnap.length,
+          avg: Math.round(rcSum / rcStuN * 10) / 10,                       /* 人均已背篇数 */
+          pct: Math.round(rcSum * 100 / (rcStuN * rcTitlesSnap.length)),   /* 班级整体完成率 */
+          perTitle: rcPerT
+        };
+      }
+    } catch (e) {}
 
     /* vT156 积分汇总改走统一口径 stuPoints()：作业（含科任调整）+ 小组平摊 + 奖惩
        （含灵宠消费扣分，与桌面端 / 教师端统计表同一本账）。此前快照只有
@@ -29250,6 +29303,25 @@ function cwInit(){
         }
       });
       grades = Object.keys(gBest).map(function (k) { return gBest[k]; });
+    } catch (e) {}
+    /* vT157 家长端「成绩分析」要的班级平均数：按「科目+考试名称」聚合平均分 / 最高分 / 参考人数。
+       只有聚合数，不含任何别人姓名；取最近 120 天，与成绩记录同窗口。 */
+    var gAvg = {};
+    try {
+      var gAgg = {};
+      (window.SC_ROWS || []).forEach(function (r) {
+        var dt3 = String(fval(r, '考试日期') || '').slice(0, 10);
+        if (dt3 < lim120) return;
+        var sc3 = parseFloat(fval(r, '分数')); if (isNaN(sc3)) return;
+        var k3 = (fval(r, '科目') || '') + '|' + (fval(r, '考试名称') || '');
+        var a3 = gAgg[k3] || (gAgg[k3] = { s: 0, n: 0, max: -1e9, full: 100 });
+        a3.s += sc3; a3.n++; if (sc3 > a3.max) a3.max = sc3;
+        var f3 = parseFloat(fval(r, '满分')); if (!isNaN(f3) && f3 > 0) a3.full = f3;
+      });
+      Object.keys(gAgg).forEach(function (k4) {
+        var a4 = gAgg[k4];
+        gAvg[k4] = { avg: Math.round(a4.s / a4.n * 10) / 10, n: a4.n, max: a4.max, full: a4.full };
+      });
     } catch (e) {}
 
     /* 今日留堂（s-detain） */
@@ -29323,9 +29395,9 @@ function cwInit(){
       classId: (s2 && s2.classId) || '', className: '',
       exportedAt: new Date().toISOString(),
       students: stus, hwItems: items, hw: hwRows, rc: rcRows,
-      rcTitles: rcTitlesSnap,
+      rcTitles: rcTitlesSnap, rcClass: rcClass,
       hwStats: hwStats, hwStatFrom: hwStatFrom, hwStatTo: hwStatTo,
-      points: points, comments: comments, grades: grades, detain: detain,
+      points: points, comments: comments, grades: grades, gAvg: gAvg, detain: detain,
       codexPool: codexPool, codexPets: codexPets
     };
   }
