@@ -25639,6 +25639,7 @@ function cwInit(){
       level: 1, exp: 0, growExp: 0, hunger: 80, mood: 90, ownedItems: [], equipped: {},   /* vT123 growExp：喂养累积的成长值 */
       feedCntToday: 0, drawCntToday: 0, redeemCntToday: 0, lastFedDate: '', hatchedAt: ptYmd(new Date()), graduated: false,
       obtainedAt: Date.now(),   /* vT153 获得时间：桌面祝贺窗按它判新旧 / 时效 */
+      careN: 0, evoLog: [],     /* vT166 启灵档案：累计互动次数 / 进化时间轴 [{from,to,at}] */
       updatedAt: Date.now()
     };
   }
@@ -26892,9 +26893,13 @@ function cwInit(){
     var q = ptPets().filter(function (p) { return !p.graduated && (p.level || 1) >= lv; });
     var html = q.length ? q.map(function (p) {
       return '<div class="pet-row"><span>🎓 ' + ptEsc(p.name) + ' · 主人 ' + ptEsc(p.studentName) + ' · Lv.' + (p.level || 1) + '</span>' +
-        '<span class="pet-acts"><button class="btn2 sm primary" onclick="ptGradApprove(\'' + p.id + '\')">🎓 批准毕业</button></span></div>';
+        '<span class="pet-acts">' +
+        '<button class="btn2 sm" onclick="ptArcPrintCert(\'' + p.id + '\')" title="生成 A4 启灵档案">📜 档案</button>' +
+        '<button class="btn2 sm" onclick="ptArcPrintSingleCard(\'' + p.id + '\')" title="生成纪念卡">🪪 纪念卡</button>' +
+        '<button class="btn2 sm primary" onclick="ptGradApprove(\'' + p.id + '\')">🎓 批准毕业</button></span></div>';
     }).join('') : '<div class="pet-empty">暂无达到毕业等级（Lv.' + lv + '）的灵杰</div>';
-    box.innerHTML = '<div class="sub">灵杰达到 Lv.' + lv + ' 可申请毕业，老师批准后生成毕业纪念卡号。</div>' + html;
+    box.innerHTML = '<div class="sub">灵杰达到 Lv.' + lv + ' 可申请毕业，老师批准后生成毕业纪念卡号。' +
+      '<button class="btn2 sm" style="margin-left:6px" onclick="ptArchiveOpen()">📜 启灵档案 / 毕业纪念</button></div>' + html;
   }
 
   /* ---------------- vT140 抽卡条（原「灵杰集卡」整栏撤掉，并进启灵图鉴） ----------------
@@ -26939,6 +26944,325 @@ function cwInit(){
     ptSave(s); PET_DB = s; ptKickSync();
     toastMsg('🎉 已登记「' + who + '」的集卡大奖（' + series + '）\n奖励：' + reward);
     ptRenderCards(); ptRenderAdmin();
+  }
+
+  /* ================= vT166 启灵档案 · 毕业纪念卡 · 回忆册 =================
+     给每只灵宠留一份成长记录：哪天启灵、互动多少次、哪天进化到少年/成年。
+     毕业时可按学生生成「启灵档案（A4 证书）」和「纪念卡（可送印厂）」。
+     数据字段（随 pets 表同步）：
+       hatchedAt   启灵日期 YYYY-MM-DD
+       obtainedAt  启灵时间戳（毫秒，vT153 起）
+       careN       累计互动次数（喂养 / 抚摸）
+       evoLog      进化时间轴 [{from:'baby'|'teen', to:'teen'|'adult', at:毫秒}]
+       graduated / graduatedAt / gradCode  毕业标记 / 毕业日期 / 毕业卡号
+       wish        老师寄语（没填则用灵杰自带的祝福语） */
+  var PT_ARC_STAGE = { baby: '幼年期', teen: '少年期', adult: '成年期' };
+  var PT_ARC_CLS_KEY = 'wb_pt_arch_cls';
+  function ptArcCls() { try { return localStorage.getItem(PT_ARC_CLS_KEY) || '' } catch (e) { return '' } }
+  function ptArcSetCls(v) { try { localStorage.setItem(PT_ARC_CLS_KEY, String(v || '').trim()) } catch (e) {} }
+  function ptArcD(v) {
+    if (v == null || v === '') return '';
+    var d = null;
+    if (typeof v === 'number') d = new Date(v);
+    else {
+      var s = String(v);
+      var m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return Number(m[1]) + '年' + Number(m[2]) + '月' + Number(m[3]) + '日';
+      var n = Number(s);
+      if (isFinite(n) && n > 1e11) d = new Date(n);
+    }
+    if (!d || isNaN(d.getTime())) return '';
+    return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+  }
+  function ptArcDay(v) {
+    var d = null;
+    if (typeof v === 'number') d = new Date(v);
+    else { var m = String(v || '').match(/(\d{4})-(\d{2})-(\d{2})/); if (m) d = new Date(m[1] + '/' + m[2] + '/' + m[3]); }
+    return d && !isNaN(d.getTime()) ? d : null;
+  }
+  function ptArcDays(pet) {
+    var a = ptArcDay(pet.obtainedAt || pet.hatchedAt), b = ptArcDay(pet.graduatedAt) || new Date();
+    if (!a) return 0;
+    return Math.max(0, Math.round((b - a) / 86400000));
+  }
+  function ptArcCare(pet) { return Math.max(0, Number(pet.careN) || Number(pet.feedN) || 0) }
+  function ptArcEvoAt(pet, fromStage) {
+    var log = pet && pet.evoLog;
+    if (!log || !log.length) return '';
+    for (var i = 0; i < log.length; i++) if (log[i] && log[i].from === fromStage && log[i].at) return ptArcD(log[i].at);
+    return '';
+  }
+  function ptArcStageNow(pet) {
+    try { var st = PetCore.stageOf(pet.level, pet.graduated, ptStageCfg()); return st || 'adult' } catch (e) { return 'adult' }
+  }
+  /* 图片地址：图鉴卡走三级镜像；成长灵宠的 petimg/ 等相对路径走 Pages 根地址 */
+  function ptArcUrl(rel, tier) {
+    if (!rel) return '';
+    if (/^(https?:|data:)/i.test(rel)) return rel;
+    var a = ptCodexImgSrcs(rel, tier);
+    if (a.length) return a[0];
+    return PT_CODEX_BASE + rel + '?v=119';
+  }
+  function ptArcImgs(pet) {
+    var g = ptGrowImgsOf(pet), out = {};
+    if (g) {
+      ['baby', 'teen', 'adult'].forEach(function (k) { out[k] = ptArcUrl(g[k], pet.tier); });
+    }
+    if (!out.baby && !out.teen && !out.adult) {
+      var one = ptArcUrl(pet.img, pet.tier);
+      if (one) { out.baby = out.teen = out.adult = one; }
+    }
+    return out;
+  }
+  function ptArcWish(pet) {
+    var w = String(pet.wish || '').trim();
+    if (w) return w;
+    var b = String(pet.blessing || '').trim();
+    if (b) return b;
+    return '愿你带着这份勇气，去看更大的世界。';
+  }
+  function ptArcOrder(list) {
+    var order = {};
+    ptNames().forEach(function (n, i) { order[n] = i });
+    return list.sort(function (a, b) {
+      var x = order[a.studentName], y = order[b.studentName];
+      if (x == null) x = 9999; if (y == null) y = 9999;
+      if (x !== y) return x - y;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+  }
+  function ptArcList(mode) {
+    var s = ptGet();
+    var rows = (s.pets || []).filter(function (p) {
+      return p && !p.deleted && (mode !== 'grad' || p.graduated);
+    });
+    return ptArcOrder(rows);
+  }
+  /* ---- 纪念卡（92×132mm，一张 A4 放 4 张） ---- */
+  function ptArcCardHtml(pet) {
+    var im = ptArcImgs(pet), tier = pet.tier || '普通';
+    var d1 = ptArcD(pet.obtainedAt || pet.hatchedAt) || ptArcD(pet.hatchedAt) || '—';
+    var d2 = ptArcEvoAt(pet, 'baby') || '—';
+    var d3 = ptArcEvoAt(pet, 'teen') || '—';
+    var st = ptArcStageNow(pet);
+    function cell(k, label, date, mark) {
+      var src = im[k];
+      return '<div class="pcs">' +
+        (src ? '<img src="' + ptEsc(src) + '" alt="">' : '<div class="pcs-ph">' + (k === 'baby' ? '🥚' : k === 'teen' ? '🌱' : '🌟') + '</div>') +
+        '<b>' + label + (st === k ? '<i class="pc-now">此刻</i>' : '') + '</b>' +
+        '<span>' + (mark ? mark + ' ' : '') + ptEsc(date) + '</span></div>';
+    }
+    return '<div class="pcard">' +
+      '<div class="pc-top"><span class="pc-badge">' + ptEsc(tier) + '</span>' +
+      '<h2>' + ptEsc(pet.name || '灵宠') + '</h2><span class="pc-series">' + ptEsc(pet.series || '启灵灵宠') + '</span></div>' +
+      '<div class="pc-stages">' +
+        cell('baby', '启灵', d1, '🐣') +
+        cell('teen', '少年期', d2, '🌱') +
+        cell('adult', '成年期', d3, '🌟') +
+      '</div>' +
+      '<div class="pc-owner">主人 <b>' + ptEsc(pet.studentName || '') + '</b></div>' +
+      '<div class="pc-wish">“' + ptEsc(ptArcWish(pet)) + '”</div>' +
+      '<div class="pc-foot">' + ptEsc(ptArcCls() || '') + (pet.gradCode ? ' · ' + ptEsc(pet.gradCode) : '') +
+        '<span>启灵纪念 · ' + ptArcD(Date.now()) + '</span></div>' +
+    '</div>';
+  }
+  /* ---- 启灵档案证书（A4 一页一人） ---- */
+  function ptArcCertHtml(pet) {
+    var im = ptArcImgs(pet);
+    var d1 = ptArcD(pet.obtainedAt || pet.hatchedAt) || '—';
+    var d2 = ptArcEvoAt(pet, 'baby'), d3 = ptArcEvoAt(pet, 'teen');
+    var care = ptArcCare(pet), days = ptArcDays(pet);
+    var now = ptArcStageNow(pet);
+    var steps = '<div class="ac-step"><i>①</i><b>启灵之日</b><span>' + ptEsc(d1) + '　' + ptEsc(pet.studentName || '') + ' 与「' + ptEsc(pet.name || '') + '」初次相遇</span></div>' +
+      (d2 ? '<div class="ac-step"><i>②</i><b>少年期</b><span>' + ptEsc(d2) + '　成长值攒满，第一次进化</span></div>'
+          : '<div class="ac-step"><i>②</i><b>少年期</b><span>还在幼年期，等待成长</span></div>') +
+      (d3 ? '<div class="ac-step"><i>③</i><b>成年期</b><span>' + ptEsc(d3) + '　完成最后一次进化，长成 ' + ptEsc(pet.name || '') + '</span></div>'
+          : '<div class="ac-step"><i>③</i><b>成年期</b><span>' + (now === 'adult' ? '已长成' : '尚未进化到成年') + '</span></div>');
+    return '<div class="acert">' +
+      '<div class="ac-frame">' +
+        '<div class="ac-hd"><span>启 灵 档 案</span><i>SPIRIT COMPANION RECORD</i></div>' +
+        '<div class="ac-name"><b>' + ptEsc(pet.studentName || '') + '</b> 同学</div>' +
+        '<div class="ac-sub">与灵宠「' + ptEsc(pet.name || '') + '」共同走过的日子</div>' +
+        '<div class="ac-pics">' +
+          (im.baby ? '<img src="' + ptEsc(im.baby) + '">' : '') +
+          (im.teen ? '<img src="' + ptEsc(im.teen) + '">' : '') +
+          (im.adult ? '<img src="' + ptEsc(im.adult) + '">' : '') +
+        '</div>' +
+        '<div class="ac-steps">' + steps + '</div>' +
+        '<div class="ac-stat"><div><b>' + care + '</b><span>互动次数</span></div>' +
+          '<div><b>' + days + '</b><span>相伴天数</span></div>' +
+          '<div><b>' + ptEsc(PT_ARC_STAGE[now] || '—') + '</b><span>当前阶段</span></div>' +
+          '<div><b>' + ptEsc(pet.tier || '普通') + '</b><span>灵宠品级</span></div></div>' +
+        '<div class="ac-wish"><i>老师寄语</i><p>' + ptEsc(ptArcWish(pet)) + '</p></div>' +
+        '<div class="ac-ft"><span>' + ptEsc(ptArcCls() || '') + '</span>' +
+          '<span>' + (pet.gradCode ? '毕业卡号 ' + ptEsc(pet.gradCode) : '') + '</span>' +
+          '<span>' + ptArcD(Date.now()) + '</span></div>' +
+      '</div>' +
+    '</div>';
+  }
+  var PT_ARC_CSS = [
+    '@page{size:A4 portrait;margin:8mm}',
+    '*{box-sizing:border-box;margin:0;padding:0}',
+    'body{font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif;color:#3b2f24;background:#fff}',
+    '.pgrid{display:flex;flex-wrap:wrap}',
+    '.pcard{width:92mm;height:132mm;margin:2mm;padding:6mm 5mm;border:1.2mm solid #d9b96f;border-radius:5mm;' +
+      'background:linear-gradient(160deg,#fffdf7 0%,#fff8e9 60%,#fdf3dd 100%);display:flex;flex-direction:column;' +
+      'page-break-inside:avoid;break-inside:avoid;position:relative;overflow:hidden}',
+    '.pcard:before{content:"";position:absolute;inset:2mm;border:.3mm solid #ecd9a8;border-radius:3.6mm}',
+    '.pc-top{text-align:center;position:relative;z-index:1}',
+    '.pc-badge{display:inline-block;font-size:7pt;padding:.6mm 2.4mm;border-radius:9mm;background:#8a5a2b;color:#fff7e6;letter-spacing:.5pt}',
+    '.pc-top h2{font-size:19pt;letter-spacing:1.5pt;margin:1.6mm 0 .6mm;color:#5b3a17}',
+    '.pc-series{font-size:7.5pt;color:#9a7a52}',
+    '.pc-stages{display:flex;justify-content:space-between;margin:3mm 0 2mm;position:relative;z-index:1}',
+    '.pcs{width:26mm;text-align:center}',
+    '.pcs img,.pcs-ph{width:24mm;height:24mm;object-fit:contain;display:block;margin:0 auto}' +
+      '.pcs-ph{line-height:24mm;font-size:15pt;background:#f6ecd6;border-radius:3mm}',
+    '.pcs b{display:block;font-size:7.5pt;margin-top:.8mm;color:#6b4a22}',
+    '.pcs b .pc-now{font-style:normal;font-size:6pt;background:#e9b949;color:#fff;border-radius:6mm;padding:0 1.2mm;margin-left:.6mm}',
+    '.pcs span{display:block;font-size:6.2pt;color:#9b8158;line-height:1.35}',
+    '.pc-owner{text-align:center;font-size:9pt;margin-top:1mm;color:#6b4a22}',
+    '.pc-owner b{font-size:11.5pt;letter-spacing:1pt;color:#4a2f12}',
+    '.pc-wish{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;' +
+      'font-size:8pt;line-height:1.55;color:#7a5b34;padding:1.5mm 2mm;font-style:italic}',
+    '.pc-foot{border-top:.25mm dashed #dcc38c;padding-top:1.2mm;font-size:6.4pt;color:#a08457;' +
+      'display:flex;justify-content:space-between;gap:1mm}',
+    '.acert{page-break-after:always;break-after:page;padding:0}',
+    '.acert:last-child{page-break-after:auto;break-after:auto}',
+    '.ac-frame{border:1.4mm double #c9a45c;border-radius:4mm;padding:12mm 14mm;min-height:277mm;' +
+      'background:radial-gradient(circle at 50% 0%,#fffdf6,#fffaf0 70%);display:flex;flex-direction:column}',
+    '.ac-hd{text-align:center}',
+    '.ac-hd span{font-size:24pt;letter-spacing:8pt;color:#8a5a2b;font-weight:700}',
+    '.ac-hd i{display:block;font-size:7pt;letter-spacing:3pt;color:#b99a68;font-style:normal;margin-top:1.5mm}',
+    '.ac-name{text-align:center;margin:8mm 0 1mm;font-size:13pt;color:#6b4a22}',
+    '.ac-name b{font-size:20pt;letter-spacing:2pt;color:#4a2f12;border-bottom:.4mm solid #d9b96f;padding:0 3mm 1mm}',
+    '.ac-sub{text-align:center;font-size:9.5pt;color:#9a7a52;margin-bottom:6mm}',
+    '.ac-pics{display:flex;justify-content:center;gap:6mm;margin-bottom:7mm}',
+    '.ac-pics img{height:38mm;object-fit:contain}',
+    '.ac-steps{display:flex;flex-direction:column;gap:3.2mm;margin:0 4mm}',
+    '.ac-step{display:flex;align-items:baseline;gap:2.5mm;font-size:9.5pt;color:#5f4726;' +
+      'border-left:1mm solid #e7cf9c;padding:1mm 0 1mm 4mm}',
+    '.ac-step i{font-style:normal;color:#c49a4e;font-size:11pt;font-weight:700;width:6mm}',
+    '.ac-step b{width:22mm;color:#7a5322}',
+    '.ac-step span{flex:1;color:#6b5334}',
+    '.ac-stat{display:flex;justify-content:space-around;margin:8mm 0 6mm;padding:4mm 0;' +
+      'border-top:.25mm dashed #e2cda0;border-bottom:.25mm dashed #e2cda0}',
+    '.ac-stat div{text-align:center}',
+    '.ac-stat b{display:block;font-size:16pt;color:#8a5a2b}',
+    '.ac-stat span{font-size:7.5pt;color:#a08457}',
+    '.ac-wish{margin:2mm 6mm;text-align:center}',
+    '.ac-wish i{font-style:normal;font-size:8pt;color:#b99a68;letter-spacing:2pt}',
+    '.ac-wish p{margin-top:2mm;font-size:10pt;line-height:1.8;color:#5f4726}',
+    '.ac-ft{margin-top:auto;display:flex;justify-content:space-between;font-size:7.5pt;color:#a08457;' +
+      'border-top:.25mm solid #e8d6ae;padding-top:2.5mm}'
+  ].join('');
+
+  /* 打印：写进隐藏 iframe，图片加载完（或超时）再调起打印 */
+  function ptArcPrint(title, bodyHtml) {
+    var old = document.getElementById('ptArcFrame');
+    if (old) old.parentNode.removeChild(old);
+    var f = document.createElement('iframe');
+    f.id = 'ptArcFrame';
+    f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+    document.body.appendChild(f);
+    var doc = f.contentDocument || (f.contentWindow && f.contentWindow.document);
+    if (!doc) { toastMsg('⚠️ 当前浏览器不允许打印，请用 Chrome / Edge 打开'); return; }
+    doc.open();
+    doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + ptEsc(title) + '</title>' +
+      '<style>' + PT_ARC_CSS + '</style></head><body>' + bodyHtml + '</body></html>');
+    doc.close();
+    var imgs = doc.images || [], n = imgs.length, done = 0, fired = false;
+    function fire() {
+      if (fired) return; fired = true;
+      setTimeout(function () {
+        try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { toastMsg('⚠️ 打印失败：' + e.message); }
+      }, 350);
+    }
+    if (!n) return fire();
+    Array.prototype.forEach.call(imgs, function (im) {
+      var fin = false;
+      function one() { if (fin) return; fin = true; if (++done >= n) fire(); }
+      im.onload = one; im.onerror = one;
+      setTimeout(one, 6000);   /* 兜底：6 秒没加载完也照打，不留空白页 */
+    });
+  }
+  function ptArcPrintCards(mode) {
+    var list = ptArcList(mode);
+    if (!list.length) return toastMsg('还没有可生成纪念卡的灵宠');
+    var html = '<div class="pgrid">' + list.map(ptArcCardHtml).join('') + '</div>';
+    ptArcPrint('启灵纪念卡 · 全班', html);
+  }
+  function ptArcPrintCert(id) {
+    var s = ptGet(), pet = (s.pets || []).filter(function (p) { return p && p.id === id && !p.deleted })[0];
+    if (!pet) return toastMsg('找不到这只灵宠');
+    ptArcPrint('启灵档案 · ' + pet.studentName, ptArcCertHtml(pet));
+  }
+  function ptArcPrintBook(mode) {
+    var list = ptArcList(mode);
+    if (!list.length) return toastMsg('还没有可生成档案的灵宠');
+    ptArcPrint('启灵回忆册 · 全班', list.map(ptArcCertHtml).join(''));
+  }
+  function ptArchClose() {
+    var ov = document.getElementById('ptArcOv');
+    if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+  }
+  function ptArchWish(id) {
+    var s = ptGet(), pet = (s.pets || []).filter(function (p) { return p && p.id === id })[0];
+    if (!pet) return;
+    var v = window.prompt('给「' + (pet.name || '灵宠') + '」写一句寄语（会印在纪念卡和档案上）：', pet.wish || ptArcWish(pet));
+    if (v == null) return;
+    pet.wish = String(v).slice(0, 60); pet.updatedAt = Date.now();
+    ptSave(s); PET_DB = s; ptKickSync();
+    toastMsg('✅ 寄语已保存');
+    ptArchiveOpen();
+  }
+  function ptArchiveOpen() {
+    var ov = document.getElementById('ptArcOv');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'ptArcOv';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(25,18,10,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:14px';
+      ov.onclick = function (e) { if (e.target === ov) ptArchClose() };
+      document.body.appendChild(ov);
+    }
+    var list = ptArcList('all');
+    var rows = list.map(function (p) {
+      var st = ptArcStageNow(p);
+      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed #eadfcb;font-size:13px">' +
+        '<span style="width:70px;font-weight:700">' + ptEsc(p.studentName || '') + '</span>' +
+        '<span style="flex:1;min-width:110px">' + ptEsc(p.name || '') +
+          ' <i style="font-style:normal;color:#9a7a52;font-size:12px">' + ptEsc(PT_ARC_STAGE[st] || '') + ' · ' + ptEsc(p.tier || '普通') + '</i></span>' +
+        '<span style="width:96px;color:#8a7355;font-size:12px">' + (ptArcD(p.obtainedAt || p.hatchedAt) || '—') + '</span>' +
+        '<span style="width:70px;color:#8a7355;font-size:12px">互动 ' + ptArcCare(p) + ' 次</span>' +
+        '<span style="display:flex;gap:5px">' +
+          '<button class="btn2 sm" onclick="ptArcPrintCert(\'' + p.id + '\')">📜 档案</button>' +
+          '<button class="btn2 sm primary" onclick="ptArcPrintSingleCard(\'' + p.id + '\')">🪪 纪念卡</button>' +
+          '<button class="btn2 sm" onclick="ptArchWish(\'' + p.id + '\')" title="写寄语">✏️</button>' +
+        '</span></div>';
+    }).join('') || '<div class="pet-empty">还没有灵宠</div>';
+    ov.innerHTML = '<div style="background:#fff;border-radius:16px;width:100%;max-width:900px;max-height:86vh;overflow:auto;padding:18px 20px;box-shadow:0 18px 60px rgba(0,0,0,.3)">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">' +
+        '<b style="font-size:16px">📜 启灵档案 · 毕业纪念</b>' +
+        '<div style="display:flex;gap:8px;align-items:center">' +
+          '<input id="ptArcCls" value="' + ptEsc(ptArcCls()) + '" placeholder="班级（印在卡片上）" style="width:150px;padding:6px 8px;border:1px solid #e0d3b8;border-radius:8px;font-size:13px" onchange="ptArcSetCls(this.value)">' +
+          '<button class="btn2 sm" onclick="ptArchClose()">关闭</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="margin:10px 0 4px;color:#8a7355;font-size:12px;line-height:1.7">' +
+        '每个学生自动记录：启灵日期、互动次数、两次进化的时间。毕业时点「📜 档案」生成 A4 证书，点「🪪 纪念卡」生成 ' +
+        '92×132mm 纪念卡（A4 一版 4 张，可直接给印厂）。✏️ 可单独写寄语。</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px">' +
+        '<button class="btn2 primary" onclick="ptArcPrintCards(\'all\')">🖨 全班纪念卡（A4）</button>' +
+        '<button class="btn2" onclick="ptArcPrintBook(\'all\')">🖨 全班回忆册（A4）</button>' +
+        '<button class="btn2" onclick="ptArcPrintCards(\'grad\')">🎓 已毕业纪念卡</button>' +
+        '<button class="btn2" onclick="ptArcPrintBook(\'grad\')">🎓 已毕业回忆册</button>' +
+      '</div>' +
+      rows +
+    '</div>';
+  }
+  function ptArcPrintSingleCard(id) {
+    var s = ptGet(), pet = (s.pets || []).filter(function (p) { return p && p.id === id && !p.deleted })[0];
+    if (!pet) return toastMsg('找不到这只灵宠');
+    ptArcPrint('启灵纪念卡 · ' + pet.studentName, '<div class="pgrid">' + ptArcCardHtml(pet) + '</div>');
   }
 
   /* ---------------- 后台管理面板 ---------------- */
@@ -27062,7 +27386,12 @@ function cwInit(){
       '</div>' +
 
       '<div class="gpset"><button class="btn2" onclick="ptAdminLock()">🔒 退出后台管理</button>' +
-      '<span class="sctip">后台管理权限只在当前标签页有效，关掉标签页自动失效</span></div>';
+      '<span class="sctip">后台管理权限只在当前标签页有效，关掉标签页自动失效</span></div>' +
+
+      /* ---- 5 vT166 启灵档案 ---- */
+      '<div class="pet-sec"><h3>📜 启灵档案 · 毕业纪念</h3>' +
+      '<div class="gpset"><button class="btn2 primary" onclick="ptArchiveOpen()">📜 打开启灵档案 / 生成纪念卡</button>' +
+      '<span class="sctip">自动记录每只灵宠的启灵日期、互动次数、两次进化时间；可导出 A4 档案证书与 92×132mm 纪念卡（A4 一版 4 张）给印厂。</span></div></div>';
   }
 
   /* ---------------- 后台管理：动作 ---------------- */
@@ -27310,6 +27639,9 @@ function cwInit(){
         dirty = true;
         var to = PetCore.stageOf(pet.level, pet.graduated, cfg);
         out.push({ id: pet.id, name: pet.name || '灵宠', who: pet.studentName || '', from: st, to: to });
+        /* vT166 启灵档案：记下每一次进化的时间点（幼年→少年 / 少年→成年） */
+        if (!pet.evoLog) pet.evoLog = [];
+        pet.evoLog.push({ from: st, to: to, at: now });
         if (to !== 'teen' && to !== 'adult') return;
       }
     });
@@ -27535,6 +27867,7 @@ function cwInit(){
       pet.hunger = Math.min(100, (Number(pet.hunger) || 80) + 6);
       pet.mood = Math.min(100, (Number(pet.mood) || 90) + 2);
       pet.feedN = (Number(pet.feedN) || 0) + 1;
+      pet.careN = (Number(pet.careN) || 0) + 1;   /* vT166 启灵档案：累计互动 */
       pet.lastFood = food.k;
       pet.updatedAt = Date.now();
       ptSave(s); PET_DB = s; ptKickSync();
@@ -27992,6 +28325,7 @@ function cwInit(){
   function ptGradApprove(id) {
     var s = ptGet(); var p = s.pets.filter(function (x) { return x.id === id; })[0]; if (!p) return;
     p.graduated = true; p.gradCode = 'GR' + PetCore.hashStr(p.id + p.studentName).toString(36).slice(0, 8).toUpperCase();
+    p.graduatedAt = Date.now();   /* vT166 启灵档案：毕业日期 */
     p.updatedAt = Date.now();
     ptSave(s); PET_DB = s; toastMsg('🎓 毕业卡号：' + p.gradCode); ptRenderGrad(); ptRenderHome();
   }
@@ -28046,6 +28380,7 @@ function cwInit(){
         pet2.hunger = Math.min(100, (Number(pet2.hunger) || 80) + 6);
         pet2.mood = Math.min(100, (Number(pet2.mood) || 90) + 2);
         pet2.feedN = (Number(pet2.feedN) || 0) + 1;
+        pet2.careN = (Number(pet2.careN) || 0) + 1;   /* vT166 启灵档案：累计互动 */
         pet2.lastFood = plan.food.k;
         pet2.updatedAt = Date.now();
         it.status = 'done'; it.doneAt = Date.now(); it.doneBy = byAuto ? 'auto' : 'teacher';
@@ -29211,6 +29546,19 @@ function cwInit(){
   window.ptPlayable = ptPlayable;
   window.ptCfg = ptCfg;
   window.ptAdminUnlocked = ptAdminUnlocked;
+  /* vT166 启灵档案 / 毕业纪念卡 */
+  window.ptArchiveOpen = ptArchiveOpen;
+  window.ptArchClose = ptArchClose;
+  window.ptArchWish = ptArchWish;
+  window.ptArcSetCls = ptArcSetCls;
+  window.ptArcPrintCards = ptArcPrintCards;
+  window.ptArcPrintBook = ptArcPrintBook;
+  window.ptArcPrintCert = ptArcPrintCert;
+  window.ptArcPrintSingleCard = ptArcPrintSingleCard;
+  window.ptArcCardHtml = ptArcCardHtml;     /* 供预览 / 自测：单张纪念卡 HTML */
+  window.ptArcCertHtml = ptArcCertHtml;     /* 供预览 / 自测：单页档案证书 HTML */
+  window.ptArcList = ptArcList;
+  window.ptArcCss = function () { return PT_ARC_CSS };
   window.PET_TABLES = PET_TABLES;
 
   /* 页面加载即初始化（种子池 + 徽标 + 开关状态），不依赖打开标签页 */
