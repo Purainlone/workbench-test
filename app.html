@@ -17333,8 +17333,32 @@ function scoreDedupeLocal() {
    桌面删了一条成绩 → 云表没了 → 但手机本机还有 → 手机回写 Gitee → 桌面又并回来 → 删除「复活」。
    方案：删除时把 业务键(科目|考试|姓名|日期) 记进墓碑清单，随 Gitee doc.deletes 双向透传，
    各端拉取时按墓碑清掉本地/云端对应行，90 天后过期清理。 */
-function tomLoad() { try { return JSON.parse(localStorage.getItem('wb_mp_tombstones') || '[]') || [] } catch (e) { return [] } }
-function tomSave(a) { try { localStorage.setItem('wb_mp_tombstones', JSON.stringify(a.slice(-500))) } catch (e) {} }
+/* vT166 成绩恢复保护：2026-11-16 改考试名时误写了 9 条成绩墓碑，
+   那 9 条成绩已从 Gitee 历史找回并写回云端。墓碑机制「只加不删」，
+   任何一端的旧缓存都会在下一轮同步把这 9 条重新抹掉 —— 反复恢复、反复丢失。
+   这里对这 9 个业务键做永久过滤：读取、合并、应用、回写全部不认它们。
+   （只影响这 9 条误删记录，其余删除墓碑照常生效。） */
+var WB_RESTORE_SCORE_TOMBS = {
+  '语文|第一单元|蔡卓成|2026-09-24': 1,
+  '语文|第一单元|陈安然|2026-09-24': 1,
+  '语文|第一单元|陈发霖|2026-09-24': 1,
+  '语文|第二单元|管宣宣|2026-10-22': 1,
+  '语文|第二单元|胡婉芸|2026-10-22': 1,
+  '语文|第二单元|黄铎鸿|2026-10-22': 1,
+  '语文|第二单元|王铎玮|2026-10-22': 1,
+  '语文|第二单元|黄紫琦|2026-10-22': 1,
+  '语文|第二单元|郑思彤|2026-10-22': 1
+};
+function wbScoreTombBanned(x) { return !!(x && x.t === 'score' && x.k && WB_RESTORE_SCORE_TOMBS[x.k]) }
+function tomLoad() {
+  try {
+    var a = JSON.parse(localStorage.getItem('wb_mp_tombstones') || '[]') || [];
+    return a.filter(function (x) { return !wbScoreTombBanned(x) });
+  } catch (e) { return [] }
+}
+function tomSave(a) {
+  try { localStorage.setItem('wb_mp_tombstones', JSON.stringify((a || []).filter(function (x) { return !wbScoreTombBanned(x) }).slice(-500))) } catch (e) {}
+}
 /* 姓名规范化与小程序 nameKey 完全一致（含异体字表），保证两端算出的业务键相同 */
 var TOM_VARIANT = { '铖': '成', '玥': '月', '琪': '其', '萱': '宣', '怡': '宜', '涵': '含', '轩': '宣', '瑶': '摇' };
 function tomNorm(name) {
