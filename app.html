@@ -13697,6 +13697,26 @@ function hwCreateItem(name,date,subject){
   date=hwDateOnly(date)||ymd(new Date());
   var dup=HW_ITEMS.some(function(x){return x.name===name&&x.date===date});
   if(dup)return {ok:false,msg:'「'+name+'」（'+date+'）已经建过了'};
+  /* vT171 重建即复活：这一列如果以前被删过（整列删除墓碑还在本机墓碑或云端 deletes 里），
+     重建视为恢复意图 —— 清掉墓碑 + 登记复活标记随同步下发，否则新列一登记就被旧墓碑自动删掉。 */
+  try{
+    var _nk=String(name).replace(/\s+/g,'').toLowerCase(), _dk=hwDateKey(date), _ck=_nk+'|'+_dk;
+    if(_nk&&_dk){
+      var _was=false;
+      try{
+        var _ta=(typeof tomLoad==='function'?tomLoad():[]);
+        var _tf=_ta.filter(function(x){ if(x&&x.t==='hw'&&x.k==='|col|'+_nk+'|'+_dk){_was=true;return false} return true });
+        if(_was&&typeof tomSave==='function')tomSave(_tf);
+      }catch(_tE){}
+      if(window.__WB_HW_COL_TOMBS__&&window.__WB_HW_COL_TOMBS__[_ck]){_was=true;delete window.__WB_HW_COL_TOMBS__[_ck]}
+      if(_was){
+        var _rv=[]; try{_rv=JSON.parse(localStorage.getItem('wb_col_revives')||'[]')||[]}catch(_rE){}
+        if(_rv.indexOf(_ck)<0)_rv.push(_ck);
+        try{localStorage.setItem('wb_col_revives',JSON.stringify(_rv))}catch(_rE2){}
+        try{console.info('[hw] 已复活作业列：'+_ck)}catch(_rE3){}
+      }
+    }
+  }catch(_rvE){}
   subject=subject||'语文';
   HW_ITEMS.push({name:name,date:date,subject:subject,pending:true});   /* 新建作业列默认归入该科目 */
   hwSubjSet(name,date,subject);   /* 记住这一列的科目，工作台主页/桌面标签按科目显示 */
@@ -17272,6 +17292,13 @@ function recBizKey(tid, rec) {
   if (String(tid) === String(((window.MP_SYNC && MP_SYNC.stu && MP_SYNC.stu.table) || '2mthbbHsJeABzmnerNt6sK'))) {
     var sn = v('姓名').replace(/\s+/g, '');
     if (!sn) return '';
+    /* vT171 档案表里的奖惩流水行（目标加分 / 手动奖惩，奖惩事项非空）改用流水业务键：
+       原来与学生档案行共用 stu|姓名|学号 —— 同一个学生的多条奖惩互相撞键，
+       判重只剩一条，跨电脑合并时还会把奖惩行和学生行互相顶掉。 */
+    var _sj = v('奖惩事项');
+    /* 目标加分不含日期：同一学生同一场考试同一档只应有一条 —— 否则 11-11 与 11-16
+       两代记录并集后永远并存、重复计分（11-17 事故：21 组重复加分） */
+    if (_sj) return 'st|' + sn + '|' + _sj + (_sj.indexOf('成绩达标') === 0 ? '' : ('|' + v('日期'))) + '|' + (v('奖惩分值') || '0');
     return 'stu|' + sn + '|' + v('学号');
   }
   var _scoreTid = String((window.MP_SYNC && MP_SYNC.score && MP_SYNC.score.table) || 'SI9EURtanpWC0y4lVipmQQ');
@@ -19109,7 +19136,7 @@ function giteeMergeIntoLocal(mpTables) {
   if (!(window.__WB_LOCAL__ && window.__WB_LOCAL__ === true) && window.__SMART_PAGE__ && db) {
     return giteeMergeIntoCloud(pack);
   }
-  var local = mergeReadLocal(), plan = [], totalNew = 0;
+  var local = mergeReadLocal(), plan = [], totalNew = 0, replAll = [];
   Object.keys(pack.tables).forEach(function (id) { if (id === 'pets' || id === 'parentQueue' || id === 'petPool' || id === 'petSubmissions' || id === 'petShop' || id === 'petCoupon' || id === 'petCfg' || id === 'petGift') return;
     var incoming = pack.tables[id];
     if (!Array.isArray(incoming)) return;
@@ -19118,7 +19145,7 @@ function giteeMergeIntoLocal(mpTables) {
     mine.forEach(function (r) {
       if (r && r.id) byId[String(r.id)] = 1;
       byFp[recFingerprint(r)] = 1;
-      var bk = recBizKey(id, r); if (bk) byBiz[bk] = 1;
+      var bk = recBizKey(id, r); if (bk) byBiz[bk] = r;
     });
     /* vT29 墓碑过滤（与 giteeMergeIntoCloud 完全对称）：
        以前本机模式分支漏了这道闸，两边不对称才暴露成用户看到的现象 ——
@@ -19152,7 +19179,19 @@ function giteeMergeIntoLocal(mpTables) {
       var fp = recFingerprint(r);
       if (byFp[fp]) return;
       var bk2 = recBizKey(id, r);
-      if (bk2 && byBiz[bk2]) return;        /* 同场同人已在库里 → 跳过 */
+      if (bk2 && byBiz[bk2]) {
+        /* vT171 本地模式 LWW：同业务键、云端这份更新 → 替换本机旧内容。
+           原来一律跳过 —— 另一台电脑改的等级（欠佳→补交）/分数永远进不来，
+           两台电脑各把旧值推回云端，用户看到的就是「改了又倒回去」。 */
+        if (String(id) === _hwTid || String(id) === _scoreTid) {
+          var _cur = byBiz[bk2];
+          /* _wts 在记录里是 {text:'...'} 结构，必须走 dv 解包（Number(对象) 会得 NaN） */
+          var _nts = Number(dv(r.properties, '_wts')) || 0;
+          var _cts = Number(dv(_cur && _cur.properties, '_wts')) || 0;
+          if (_nts > _cts) { replAll.push({ tid: id, cur: _cur, props: r.properties || {} }); return }
+        }
+        return;        /* 同场同人已在库里 → 跳过 */
+      }
       if (bk2) byBiz[bk2] = 1;
       byFp[fp] = 1;
       var rec = r;
@@ -19161,8 +19200,19 @@ function giteeMergeIntoLocal(mpTables) {
     });
     if (add.length) { plan.push({ id: id, rows: add }); totalNew += add.length; }
   });
-  if (!totalNew) return 0;
+  if (!totalNew && !replAll.length) return 0;
   plan.forEach(function (p) { local[p.id] = (Array.isArray(local[p.id]) ? local[p.id] : []).concat(p.rows); });
+  /* vT171 应用 LWW 替换：保留本机记录 id（界面引用不断），只换字段内容 */
+  var _nrepl = 0;
+  replAll.forEach(function (x) {
+    var arr = local[x.tid];
+    if (!Array.isArray(arr)) return;
+    var i = arr.indexOf(x.cur);
+    if (i < 0) return;
+    arr[i] = { id: arr[i].id, properties: x.props };
+    _nrepl++;
+  });
+  totalNew += _nrepl;
   try { wbPurgeOldBackups(0) } catch (e) {}
   /* v133 关键修复：wbSafeSetDB 写不进时是「静默返回 false」而不是抛异常，
      以前这里只 catch 异常、不查返回值 —— 存储满了也当「合并成功」上报，
@@ -19302,6 +19352,42 @@ function syncCycleCore(manual) {
       /* 2.6.31 作业墓碑：远端某条登记被跨端移列/删除 → 各端按墓碑清掉本机残留。
          以前只有成绩/备忘有墓碑，作业没有 —— 正文本 12 条移列后，
          旧版设备回写直接把它们复活回生字本11课，墓碑还被旧版回写抹掉。 */
+      /* vT171 整列删除墓碑复活：重建同名同日的作业列 = 明确的恢复意图。
+         doc.colRevives（任意端登记）命中的墓碑一律作废：先从云端 deletes 里摘掉，
+         再清本机墓碑缓存 —— 否则新列一同步就被旧墓碑自动删掉（11-17「一登记就消失」）。 */
+      try {
+        var _crv = Array.isArray(doc.colRevives) ? doc.colRevives.slice() : [];
+        try {
+          (JSON.parse(localStorage.getItem('wb_col_revives') || '[]') || []).forEach(function (k) {
+            if (k && _crv.indexOf(k) < 0) _crv.push(k);
+          });
+        } catch (_crE0) {}
+        if (_crv.length) {
+          var _cset = {};
+          _crv.forEach(function (k) { if (k) _cset[String(k).toLowerCase()] = 1 });
+          var _colKeyOk = function (kk) {
+            var _p = String(kk || '').slice(5).split('|');
+            return !!_cset[(String(_p[0] || '').toLowerCase() + '|' + String(_p[1] || ''))];
+          };
+          var _dn0 = (doc.deletes || []).length;
+          doc.deletes = (doc.deletes || []).filter(function (x) {
+            if (!x || x.t !== 'hw' || !x.k || String(x.k).indexOf('|col|') !== 0) return true;
+            return !_colKeyOk(x.k);
+          });
+          if ((doc.deletes || []).length !== _dn0) {
+            try { console.info('[gitee-sync] 已作废 ' + (_dn0 - doc.deletes.length) + ' 个被复活的作业列墓碑') } catch (_crE1) {}
+          }
+          try {
+            var _ta0 = (typeof tomLoad === 'function') ? tomLoad() : [];
+            var _tf0 = _ta0.filter(function (x) {
+              if (!x || x.t !== 'hw' || !x.k || String(x.k).indexOf('|col|') !== 0) return true;
+              return !_colKeyOk(x.k);
+            });
+            if (_tf0.length !== _ta0.length && typeof tomSave === 'function') tomSave(_tf0);
+          } catch (_crE2) {}
+          try { localStorage.setItem('wb_col_revives', JSON.stringify(_crv)) } catch (_crE3) {}
+        }
+      } catch (_crvE) {}
       window.__WB_HW_TOMBS__ = {};
       window.__WB_HW_COL_TOMBS__ = {};   /* vT27 整列删除墓碑：键 = 作业名(去空格)|日期，来自任意端（小程序 2.6.40 格式对齐） */
       (doc.deletes || []).forEach(function (x) {
@@ -19365,6 +19451,12 @@ function syncCycleCore(manual) {
                     releaseVer: WB_VER_TAG,           /* 2.6.15 发布标记：随同步文件走，旧标签页据此自检 */
                     tables: {},
                     deletes: (doc.deletes || []).slice() };   /* 2.6.31 透传墓碑：以前桌面回写把 deletes 整个丢掉，手机端的作业墓碑一轮就被抹掉 */
+        /* vT171 随包下发「作业列复活」登记：其它端据此作废这些整列删除墓碑 */
+        try {
+          var _crvOut = JSON.parse(localStorage.getItem('wb_col_revives') || '[]');
+          if (Array.isArray(_crvOut) && _crvOut.length) out.colRevives = _crvOut;
+          else if (Array.isArray(doc.colRevives) && doc.colRevives.length) out.colRevives = doc.colRevives;
+        } catch (_crvOutE) { if (Array.isArray(doc.colRevives) && doc.colRevives.length) out.colRevives = doc.colRevives; }
         /* vT30 透传班主任口令记录（ownerAuth）：与 releaseVer 同款保护。
            网页端是这台数据中心的权威仲裁者 —— 它本地存着口令权威副本，
            写回时按 at 取较新的一份；科任老师拿 token 硬改云端，
@@ -19391,12 +19483,30 @@ function syncCycleCore(manual) {
           }
         } catch (_dterr) {}
         /* vT170 双保险：远端 deletes 里若混入 9 个「恢复保护」墓碑（旧版手机推回），
-           写回时一并滤掉，绝不让它们经网页「过桥」存活 → 旧手机墓碑从此断根。 */
+           写回时一并滤掉，绝不让它们经网页「过桥」存活 → 旧手机墓碑从此断根。
+           vT171 同处一并滤掉「已复活」的作业列墓碑（wb_col_revives 登记过的）。 */
         try {
           var _d9 = out.deletes, _n9 = 0;
+          var _crvSet9 = {};
+          try {
+            (JSON.parse(localStorage.getItem('wb_col_revives') || '[]') || []).forEach(function (k) {
+              if (k) _crvSet9[String(k).toLowerCase()] = 1;
+            });
+          } catch (_crE9) {}
           if (Array.isArray(_d9)) {
-            out.deletes = _d9.filter(function (x) { if (wbScoreTombBanned(x)) { _n9++; return false } return true });
-            if (_n9) try { console.info('[gitee-sync] 已滤除恢复保护墓碑 ' + _n9 + ' 个') } catch (_e9) {}
+            out.deletes = _d9.filter(function (x) {
+              if (wbScoreTombBanned(x)) { _n9++; return false }
+              if (x && x.t === 'hw' && x.k && String(x.k).indexOf('|col|') === 0) {
+                var _p9 = String(x.k).slice(5).split('|');
+                if (_crvSet9[(String(_p9[0] || '').toLowerCase() + '|' + String(_p9[1] || ''))]) {
+                  _n9++;
+                  try { delete window.__WB_HW_COL_TOMBS__[String(_p9[0] || '').toLowerCase() + '|' + String(_p9[1] || '')] } catch (_e99) {}
+                  return false;
+                }
+              }
+              return true;
+            });
+            if (_n9) try { console.info('[gitee-sync] 已滤除恢复保护/已复活墓碑 ' + _n9 + ' 个') } catch (_e9) {}
           }
         } catch (_d9err) {}
         /* 2.5.3 透传列表扩展：affairs/manual/hwItems 桌面端从不产生（mpFromDeskBuild 里恒为空），
@@ -19533,7 +19643,10 @@ function syncCycleCore(manual) {
         /* 2.6.12 并集回写：先把远端的记录并进来（同键取本机），再判断有没有真异常。
            顺序很重要 —— 先并集，条数就不会因为"本机少"而误判成残缺。 */
         var unionLog = [];
-        ['students', 'hw', 'hwItems', 'scores', 'rc', 'duty'].forEach(function (k) {
+        /* vT171 st / manual 也纳入并集：这两张表在「发布链接（本地模式）」下由各电脑各自
+           维护，推送时整表覆盖 → 另一台电脑的目标加分/手动积分被清掉（11-17 事故）。
+           并集后各端记录都能留在云端；同键 dedup 走 mpBizKey 的 st|/man| 业务键。 */
+        ['students', 'hw', 'hwItems', 'scores', 'rc', 'duty', 'st', 'manual'].forEach(function (k) {
           var mineN = (out.tables[k] || []).length;
           var remoteM = Array.isArray(tables[k]) ? tables[k].length : 0;
           if (!remoteM) return;
@@ -19968,6 +20081,9 @@ function mpToDesk(tables) {
     var _lv = String(r.level || '').trim();
     var p = { '作业名称': mpTxt(r.item), '学生姓名': mpTxt(r.name), '日期': mpTxt(r.date), '分值': mpNum(r.score || 0), '备注': mpTxt(r.note || '') };
     if (_lv) p['等级'] = { select: _lv };
+    /* vT171 本地模式：把源行同步时间戳带进来，供本机合并做 LWW（谁新用谁）。
+       没有它，另一台电脑改的等级/分数永远"并过来又被本机旧值顶回去"。 */
+    if (window.__WB_LOCAL__ === true && r.ts) p['_wts'] = mpTxt(String(r.ts));
     /* 记住科任各列的科目，工作台主页据此把非语文学科过滤掉（只留语文） */
     hwSubjSet(r.item, r.date, r.subject);
     return p;
@@ -19976,7 +20092,7 @@ function mpToDesk(tables) {
     return { '学生姓名': mpTxt(r.name), '打卡日期': mpTxt(r.date), '篇目': mpTxt(r.title) };
   });
   recs(MP_SYNC.score.table, tables.scores, function (r) {
-    return {
+    var _sp0 = {
       '学生姓名': mpTxt(r.name),
       '学号': mpTxt(r.no == null ? '' : String(r.no)),   /* 与桌面手工录入一致，用文本 */
       '科目': mpTxt(r.subject || ''),
@@ -19988,6 +20104,8 @@ function mpToDesk(tables) {
       '考试类型': mpTxt(scGuessType(r.exam)),
       '备注': mpTxt('小程序语音录入')
     };
+    if (window.__WB_LOCAL__ === true && r.ts) { _sp0['_wts'] = mpTxt(String(r.ts)); }
+    return _sp0;
   });
   /* 2.5.6 备忘提醒：小程序 ⇄ 桌面「工作台备忘录」表（qd0ZfL69wR0A4jjn3NbIUO）
      注意备忘录没有「学生姓名」，必须绕过 recs() 的空姓名过滤，单独写入 */
@@ -20070,6 +20188,27 @@ function mpToDesk(tables) {
     affRowsOut.push({ id: 'MPA_' + mpStableKey(MP_SYNC.aff.table, p), properties: p });
   });
   if (affRowsOut.length) out[MP_SYNC.aff.table] = affRowsOut;
+  /* vT171 本地模式跨电脑同步补桥（云端平台模式不动：那里 st 由飞书整表重建）：
+     st（奖惩 / 目标加分）此前完全没有映射 —— 拉取合并永远并不过来别的电脑的加分行，
+     推送时又拿本机整表覆盖 → 换电脑就「目标加分倒回去」「加过的显示没加」。
+     奖惩是只增流水，用 MPS_+流水业务键（姓名|事项|日期|分值）做稳定 id，
+     同键自动跳过 = 正确合并；档案表与学生档案行共用一张表，这里追加不覆盖。 */
+  if (window.__WB_LOCAL__ === true) {
+    var _stRows = [];
+    (Array.isArray(tables.st) ? tables.st : []).forEach(function (r) {
+      if (!r || !String(r.name || '').trim()) return;
+      var p = { '姓名': mpTxt(r.name), '奖惩事项': mpTxt(r.reason || ''),
+                '奖惩分值': mpNum(r.score || 0), '日期': mpTxt(String(r.date || '').slice(0, 10)),
+                '备注': mpTxt(r.pet ? '宠物' : String(r.note || '')) };
+      var _rs = String(r.reason || '');
+      var _ks = [dv(p, '姓名'), dv(p, '奖惩事项'),
+                 (_rs.indexOf('成绩达标') === 0 ? '' : dv(p, '日期')),
+                 String(Number(r.score) || 0)].join('|');
+      var _h = 5381; for (var _i = 0; _i < _ks.length; _i++) _h = ((_h << 5) + _h + _ks.charCodeAt(_i)) >>> 0;
+      _stRows.push({ id: 'MPS_' + _h.toString(36), properties: p });
+    });
+    if (_stRows.length) out[MP_SYNC.stu.table] = (out[MP_SYNC.stu.table] || []).concat(_stRows);
+  }
   return out;
 }
 /* 2.5.2 空记录过滤：姓名为空的学生/成绩/作业/诵读一律不推，
@@ -20102,6 +20241,10 @@ function mpBizKey(k, r) {
   if (k === 'rc') return (nm && s(r.title)) ? 'rc|' + nm + '|' + s(r.title) + '|' + s(r.date).slice(0, 10) : '';
   if (k === 'scores') return nm ? 'sc|' + s(r.subject) + '|' + s(r.exam) + '|' + nm + '|' + s(r.date).slice(0, 10) : '';
   if (k === 'duty') return s(r.date) ? 'duty|' + s(r.date).slice(0, 10) + '|' + s(r.slot) : '';
+  /* vT171 奖惩流水 / 手动积分：姓名+事项+日期+分值（原来没有键 → 推送并集不认，
+     两台电脑各自的加分行整表互相覆盖，谁后推谁赢 —— 目标加分「倒回去」根源之一） */
+  if (k === 'st') return nm ? 'st|' + nm + '|' + s(r.reason) + (s(r.reason).indexOf('成绩达标') === 0 ? '' : ('|' + s(r.date).slice(0, 10))) + '|' + (Number(r.score) || 0) : '';
+  if (k === 'manual') return nm ? 'man|' + nm + '|' + s(r.reason) + '|' + s(r.date).slice(0, 10) + '|' + (Number(r.score) || 0) : '';
   /* 2.6.82 班务记录：日期+类型+标题+学生姓名（与 recBizKey 的 aff| 键同构） */
   if (k === 'affairs') return (s(r.title) || s(r.body)) ? ('aff|' + s(r.date).slice(0, 10) + '|' + s(r.type) + '|' + s(r.title) + '|' + s(r.stu)) : '';
   if (k === 'hwItems') return s(r.item) ? 'hwi|' + s(r.item) + '|' + s(r.date).slice(0, 10) : '';
@@ -20111,12 +20254,20 @@ function mpUnionTable(k, mine, remote) {
   mine = Array.isArray(mine) ? mine : [];
   remote = Array.isArray(remote) ? remote : [];
   var out = [], seen = {}, idx = {};
+  /* vT171 作业/成绩同键 LWW：原来同键「本机无条件赢」——两台电脑各存一份同一条记录时，
+     谁后同步谁把对方的修改盖掉（欠佳改补交、改分数在另一台反复倒回去）。
+     现在两边都有 ts（mtStampAuto 盖的真实修改时间）就谁新用谁；没有 ts 的老数据维持本机优先。 */
+  var _lww = (k === 'hw' || k === 'scores');
+  function tsOf(r) { return Number(r && r.ts) || 0 }
   function push(r, from) {
     var bk = mpBizKey(k, r);
     if (!bk) { out.push(r); return }   /* 键算不出来（缺姓名/篇目等）→ 原样保留，绝不冒险丢数据 */
     if (seen[bk]) {
-      /* 同一条记录两边都有：本机优先（本机这份刚按 LWW 合并过） */
-      if (from === 'mine' && idx[bk] !== undefined) out[idx[bk]] = r;
+      /* 同一条记录两边都有 */
+      if (from === 'mine' && idx[bk] !== undefined) {
+        if (_lww && tsOf(r) > 0 && tsOf(out[idx[bk]]) > tsOf(r)) return;   /* 本机这份更旧 → 保留云端新版 */
+        out[idx[bk]] = r;
+      }
       return;
     }
     seen[bk] = 1; idx[bk] = out.length; out.push(r);
