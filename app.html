@@ -1639,13 +1639,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <button data-page-node-id="mSmCWCv1F7KRSNGGBZVXbX" data-t="an" onclick="scTab('an')"><!--pnid:z3RAVGhq6nZ40k0YPnO9MS-->📈 成绩分析</button>
       <button data-t="mg" onclick="scTab('mg')">🗂 成绩管理</button>
       <button data-t="bonus" onclick="scTab('bonus')">🏆 目标加分</button>
-    </div>
-
-    <!-- vT190 期末成绩已独立成「🏁 期末分析」看板；这里只留一个跳转，避免又混进成绩管理 -->
-    <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:0 0 10px;padding:8px 12px;border:1px solid #cfe0ef;background:#f5f9fd;border-radius:10px">
-      <span style="font-size:13px;color:#1d4f7c;font-weight:600">🏁 历次期末成绩</span>
-      <button class="btn2 sm primary" onclick="fnGoto()">去「成绩分析」看期末看板</button>
-      <span class="sctip">期末成绩单独成看板（趋势 / 科目对比 / 分数段 / 学生成长），不混进本页的日常成绩表</span>
+      <button data-t="final" onclick="scTab('final')">🏁 期末看板</button>
     </div>
 
     <div data-page-node-id="M4wvQ81PLgL6VNfInhtPc3" class="tabpane active" id="scp-ent">
@@ -1717,21 +1711,9 @@ table.paper td.l{text-align:left;font-weight:600}
     </div>
 
     <div data-page-node-id="ms8iyLWR2UjOLxkl7cjzVo" class="tabpane" id="scp-an">
-      <!-- vT191 期末成绩看板：老师提供的分析看板原样嵌入，作为成绩分析的主体 -->
-      <div class="chartbox" style="margin-bottom:14px;padding:0;overflow:hidden">
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--line);background:#f5f9fd">
-          <b style="font-size:14px;color:#1d4f7c">🏁 期末成绩看板</b>
-          <button class="btn2 sm primary" onclick="fnImportOpen()">📥 导入 / 追加期末成绩</button>
-          <button class="btn2 sm" onclick="fnReload(true)" title="导入新成绩后点这里，看板按最新数据重算">🔄 按新成绩重算</button>
-          <button class="btn2 sm ghost" style="color:#c2410c" onclick="fnCleanWrong()" title="删除此前误导入到「成绩管理」的期末记录">🧹 清除误导入成绩管理的记录</button>
-          <span class="sctip" id="fnTip"></span>
-        </div>
-        <iframe id="fnFrame" src="final-board.html" style="width:100%;height:860px;border:0;display:block" title="期末成绩分析看板"></iframe>
-      </div>
-
-      <details class="chartbox" style="margin-bottom:14px">
+      <details class="chartbox" style="margin-bottom:14px" open>
         <summary style="cursor:pointer;font-size:14px;font-weight:700">📊 日常考试详细分析（进退步 / 偏科 / 多科综合）—— 点开查看</summary>
-        <div class="sub" style="margin:8px 0">这部分针对平时单元测、期中期末的<b>每一次考试</b>，与上面的期末看板互补；与看板重复的图表以看板为准。</div>
+        <div class="sub" style="margin:8px 0">这部分针对平时单元测、期中期末的<b>每一次考试</b>；期末成绩的跨学期趋势请直接看「🏁 期末看板」。与看板重复的图表以看板为准。</div>
         <div class="chartbox" style="margin-bottom:14px">
           <h3>📥 以往成绩</h3>
           <div class="paperrow" style="margin-bottom:0">
@@ -1762,6 +1744,21 @@ table.paper td.l{text-align:left;font-weight:600}
         <div id="scWordBox"></div>
         <div id="scAnBox"></div>
       </details>
+    </div>
+
+    <div class="tabpane" id="scp-final">
+      <!-- vT191 期末成绩看板：老师提供的看板原样嵌入；切到本标签时才加载，避免每次打开工作台都拉 1MB -->
+      <div class="chartbox" style="margin-bottom:14px;padding:0;overflow:hidden">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--line);background:#f5f9fd">
+          <b style="font-size:14px;color:#1d4f7c">🏁 期末成绩看板</b>
+          <button class="btn2 sm primary" onclick="fnImportOpen()">📥 导入 / 追加期末成绩</button>
+          <button class="btn2 sm" onclick="fnReload(true)" title="导入新成绩后点这里，看板按最新数据重算">🔄 按新成绩重算</button>
+          <button class="btn2 sm ghost" style="color:#c2410c" onclick="fnCleanWrong()" title="删除此前误导入到「成绩管理」的期末记录">🧹 清除误导入成绩管理的记录</button>
+          <span class="sctip" id="fnTip"></span>
+        </div>
+        <iframe id="fnFrame" style="width:100%;height:860px;border:0;display:block" title="期末成绩分析看板"></iframe>
+      </div>
+
     </div>
 
     <div class="tabpane" id="scp-mg">
@@ -2824,9 +2821,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v191</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v192</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v191','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v192','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -6314,13 +6311,14 @@ function scRememberSubject(name){
 /* ---------- 页签 ---------- */
 function scTab(t){
   document.querySelectorAll('#scTabs button').forEach(function(b){b.classList.toggle('active',b.dataset.t===t)});
-  ['ent','an','mg','bonus'].forEach(function(k){
+  ['ent','an','mg','bonus','final'].forEach(function(k){
     var p=document.getElementById('scp-'+k);
     if(p)p.classList.toggle('active',k===t);
   });
   if(t==='an')scRenderAn();
   if(t==='mg')scMgRefresh();
   if(t==='bonus')scBonusRender();
+  if(t==='final'){ try{ fnReload(false); }catch(e){} }
 }
 /* 录入方式切换：手动 / 上传文件 */
 function scMode(m){
@@ -7925,13 +7923,10 @@ window.fnImportPreview = fnImportPreview; window.fnImportDo = fnImportDo; window
 /* 从别处跳过来：切到「成绩管理」页 →「📈 成绩分析」子标签 → 直接打开导入框 */
 window.fnGoto = function () {
   try { var b = document.querySelector('nav button[data-s="score"]'); if (b) b.click(); } catch (e) {}
-  setTimeout(function () {
-    try { scTab('an'); } catch (e) {}
-    try { fnImportOpen(); } catch (e) {}
-  }, 300);
+  setTimeout(function () { try { scTab('final'); } catch (e) {} }, 200);
 };
 window.fnBuildData = fnBuildData; window.fnRows = fnRows;
-try { setTimeout(function () { try { fnReload(false); } catch (e) {} }, 800); } catch (e) {}
+
 
 
 /* ---------- 成绩分析 ---------- */
@@ -19822,9 +19817,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v191';
-var WB_MY_VER = '优化版 vT191 · 期末看板并入成绩分析';
-var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.204';
+var WB_VER_TAG = 'v192';
+var WB_MY_VER = '优化版 vT192 · 期末看板独立标签';
+var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.205';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
