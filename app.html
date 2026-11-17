@@ -1879,6 +1879,10 @@ table.paper td.l{text-align:left;font-weight:600}
           <span style="font-size:13px;font-weight:700;color:#b3403a">选择学生</span>
           <button class="btn2 sm" onclick="asRdSelAll(true)">全选</button>
           <button class="btn2 sm ghost" onclick="asRdSelAll(false)">清空</button>
+          <!-- vT185 大屏显示权限：新布置的补责默认上大屏，可取消勾选；之后在下方列表逐条改 -->
+          <label title="只控制教室大屏是否显示这条；工作台首页和小程序仍保留完成登记" style="display:inline-flex;align-items:center;gap:4px;font-size:12.5px;cursor:pointer;user-select:none;color:#b3403a">
+            <input type="checkbox" id="asRdDesk" checked> 显示到教室大屏
+          </label>
           <span class="sctip">不设完成期限：勾选的同学全部标完成后，首页 / 桌面 / 大屏 / 小程序同时不再显示</span>
         </div>
         <div id="asRdGrid" style="display:flex;flex-wrap:wrap;gap:6px"></div>
@@ -2752,9 +2756,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v184</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v185</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v184','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v185','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -19267,9 +19271,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v184';
-var WB_MY_VER = '优化版 vT184 · 评价反馈有据';
-var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.198';
+var WB_VER_TAG = 'v185';
+var WB_MY_VER = '优化版 vT185 · 大屏作业收齐即隐';
+var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.199';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -23539,15 +23543,17 @@ function cwInit(){
       var names = Object.keys(asRdSel).filter(function (k) { return asRdSel[k]; });
       if (!names.length) { toastMsg('⚠️ 自省补责要先勾选至少 1 名同学'); return }
       /* vT154 不写 due（留空字段），各端按「是否全部完成」判定生效，不做期限判断 */
+      var deskEl = document.getElementById('asRdDesk');
+      var deskShow = !deskEl || !!deskEl.checked;   /* vT185 默认显示到教室大屏 */
       rec = { id: 'rd_' + Date.now() + Math.floor(Math.random() * 9000 + 1000),
         date: d, due: '', subject: '自省补责', content: txt, names: names,
-        done: false, by: '班主任', deleted: false,
+        done: false, by: '班主任', deleted: false, deskShow: deskShow,
         ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher' };
       ntUpsert('s-remedy', rec);
       document.getElementById('asText').value = '';
       asRdSel = {}; asRdRenderGrid();
       asRender(); ntChanged();
-      toastMsg('🎯 已布置自省补责（' + names.length + ' 人），首页/桌面标签/教室大屏/小程序首页将显示');
+      toastMsg('🎯 已布置自省补责（' + names.length + ' 人），' + (deskShow ? '首页/桌面标签/教室大屏/小程序首页将显示' : '大屏暂不显示，工作台/手机仍可登记完成'));
       return;
     }
     var subEl = document.getElementById('asSubj');
@@ -23635,6 +23641,19 @@ function cwInit(){
     ntUpsert('s-remedy', rec); asRender(); ntChanged();
     toastMsg('已删除这条自省补责');
   };
+  /* vT185 大屏显示权限：逐条决定这条自省补责要不要出现在教室桌面「今日作业」。
+     - 字段 deskShow=false 只挡教室大屏；工作台首页 / 桌面标签 / 小程序仍显示完成登记，
+       避免把待办藏起来后没法再改回。
+     - 老记录没有该字段，按 true 处理，升级后显示行为不变。
+     - 走 ntUpsert + ntChanged，和完成登记同一条近实时通道，约 2~5 秒同步到桌面。 */
+  window.asRdDeskToggle = function (id) {
+    var rec = ntGet('s-remedy', id); if (!rec) return;
+    rec.deskShow = rec.deskShow === false;
+    rec.ts = Date.now(); rec.updatedAt = new Date().toISOString(); rec.updatedBy = 'teacher';
+    ntUpsert('s-remedy', rec); asRender(); ntChanged();
+    toastMsg(rec.deskShow ? '🖥️ 已显示到教室大屏（约 2~5 秒生效）'
+      : '🙈 已从教室大屏隐藏（工作台/手机仍可登记完成）');
+  };
   window.asRender = function () {
     var box = document.getElementById('asList'); if (!box) return;
     var dEl = document.getElementById('asDate');
@@ -23665,10 +23684,12 @@ function cwInit(){
         '<span style="flex:1;min-width:0;font-size:13px">' + esc(r.content || '') +
         '<span style="font-size:11px;color:#b3403a;margin-left:6px">' +
         (r.done ? '全部完成（' + total + ' 人）' : '已完成 ' + dn.length + '/' + total + ' 人') +
-        (r.done ? '' : ' · 完成前各端一直显示') + '</span>' +
+        (r.done ? '' : ' · 完成前各端一直显示') +
+        (r.deskShow === false ? ' · 🖥️大屏已隐藏' : '') + '</span>' +
         '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">' +
         (chips || '<span style="font-size:11.5px;color:#93a89b">无学生名单</span>') + '</div></span>' +
         '<div style="display:flex;gap:4px;flex-shrink:0">' +
+        '<button class="btn2 sm ghost" style="color:' + (r.deskShow === false ? '#6b7280' : '#1d5c8f') + '" onclick="asRdDeskToggle(\'' + r.id + '\')" title="只控制教室大屏是否显示这条；工作台首页 / 小程序仍保留完成登记">' + (r.deskShow === false ? '大屏隐藏' : '大屏显示') + '</button>' +
         (r.done ? '' : '<button class="btn2 sm ghost" style="color:#2d7a4f" onclick="asRdDoneAll(\'' + r.id + '\')" title="把这条补责的所有人一次性标完成">全部完成</button>') +
         (dn.length ? '<button class="btn2 sm ghost" style="color:#1d5c8f" onclick="asRdToHw(\'' + r.id + '\')" title="把已完成的人登记进作业登记（记「良」+1 分）">登记</button>' : '') +
         '<button class="btn2 sm ghost" style="color:#c2410c" onclick="asRdDel(\'' + r.id + '\')">删</button>' +
