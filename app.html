@@ -2821,9 +2821,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v193</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v194</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v193','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v194','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -6130,7 +6130,10 @@ var SC_GOAL_SUBS = ['语文', '数学', '英语'];
 var SC_TARGETS_M = {};   /* 数学目标：姓名 → {t1,t2,t3}，默认空 */
 var SC_TARGETS_E = {};   /* 英语目标：姓名 → {t1,t2,t3}，默认空 */
 var SC_BONUS_SUBJ = '语文';   /* 目标加分面板当前科目 */
-function scGoalMapOf(sub) { return sub === '数学' ? SC_TARGETS_M : (sub === '英语' ? SC_TARGETS_E : SC_TARGETS); }
+function scGoalMapOf(sub) {
+  /* vT194 严格按科目取表：科学等其它科目没有目标体系，返回空表，绝不借用语文目标 */
+  return sub === '数学' ? SC_TARGETS_M : (sub === '英语' ? SC_TARGETS_E : (sub === '语文' ? SC_TARGETS : {}));
+}
 function scLoadGoals() {
   function rd(key) { try { var s = localStorage.getItem(key); if (s) return JSON.parse(s) || {} } catch (e) {} return {} }
   SC_TARGETS_M = rd('wb_goal_math_v1');
@@ -6140,7 +6143,8 @@ function scSaveGoalMap(sub) {
   try {
     if (sub === '数学') localStorage.setItem('wb_goal_math_v1', JSON.stringify(SC_TARGETS_M));
     else if (sub === '英语') localStorage.setItem('wb_goal_en_v1', JSON.stringify(SC_TARGETS_E));
-    else scSaveTargets();
+    else if (sub === '语文') scSaveTargets();
+    /* 其它科目没有目标表，忽略，避免把科学等目标写进语文 */
   } catch (e) {}
 }
 /* 按科目取某学生的目标：语文走老逻辑，数英走各自目标表（没设过返回 null = 该科不做达标加分） */
@@ -9818,6 +9822,7 @@ function scMgRender(){
   var tip=document.getElementById('scMgTip');
   fill(box);
   var subj=SC_CUR_SUBJ||'';
+  var goalSub=subj||'语文';   /* vT194 目标列编辑哪个科目：筛选了科目就编该科，全部科目时编语文 */
   /* 收集该科目（或全部）的考试，按日期升序 */
   var exams=[],seen={},meta={};
   SC_ROWS.forEach(function(r){
@@ -9871,14 +9876,15 @@ function scMgRender(){
     if(meta[k].date)thc.appendChild(el('div','exd',meta[k].date));
     trh.appendChild(thc);
   });
-  var tht=el('th','tgth','学生目标');tht.style.minWidth='150px';trh.appendChild(tht);
+  var tht=el('th','tgth','学生目标（'+goalSub+'）');tht.style.minWidth='150px';trh.appendChild(tht);
   th.appendChild(trh);tb.appendChild(th);
   var tbody=el('tbody');
   students.forEach(function(nm){
     var tr=el('tr');
     tr.appendChild(el('td','nm',nm));
-    var tgt=scTargetOf(nm);
+    var tgt=scTargetOfSub(nm, goalSub);
     exams.forEach(function(x){
+      var tgtx=scTargetOfSub(nm, x.subj);   /* vT194 数学/英语列不能再用语文目标上色 */
       var k=x.subj+'｜'+x.exam+'｜'+nm;
       var r=map[k];
       var td=el('td','sc');
@@ -9887,7 +9893,7 @@ function scMgRender(){
         var inp=el('input');inp.type='number';inp.step='0.5';inp.style.width='54px';inp.style.textAlign='center';
         inp.value=v!=null?v:'';
         inp.dataset.id=r._id;inp.dataset.orig=v!=null?v:'';
-        var bg=scTargetColor(v,tgt);
+        var bg=scTargetColor(v,tgtx);
         if(bg)inp.style.background=bg;
         td.appendChild(inp);
       }else{
@@ -9918,7 +9924,7 @@ function scMgRender(){
   wrap.appendChild(tb);
   box.appendChild(wrap);
   var lg=el('div','legend');
-  lg.innerHTML='<b>底色含义</b>：分数 ≥ 目标三 浅红，≥ 目标二 浅绿，≥ 目标一 浅蓝；未达目标一不染色。最右列「学生目标」一/二/三三个框<b>可直接手动修改</b>，改完点「保存修改」即写回（成绩同步云端资料库，目标存于本机）。保存后底色会按新目标重新计算。';
+  lg.innerHTML='<b>底色含义</b>：分数 ≥ 目标三 浅红，≥ 目标二 浅绿，≥ 目标一 浅蓝；未达目标一不染色。底色按<b>每一列自己的科目</b>取目标（数学列用数学目标、英语列用英语目标）。最右列「学生目标（当前科目）」一/二/三三个框<b>可直接手动修改</b>，改完点「保存修改」即写回该科目标（成绩同步云端资料库，目标存于本机）。切到某一科目再看，可分别设置语文 / 数学 / 英语的目标。';
   box.appendChild(lg);
 }
 
@@ -10478,16 +10484,19 @@ function scMgSave(){
   if(!scoreInputs.length && !tgtInputs.length){toastMsg('没有改动');return}
   /* 先写回目标（本地 localStorage，与成绩分属两个存储） */
   var tgtSaved=0;
+  /* vT194 目标按当前查看的科目写回：数学视图改的目标不能再写进语文表 */
+  var goalSub=SC_CUR_SUBJ||'语文';
+  var goalMap=scGoalMapOf(goalSub);
   tgtInputs.forEach(function(i){
     var nm=i.dataset.tname, fld=i.dataset.tfield;
-    var cur=SC_TARGETS[nm]||{};
+    var cur=goalMap[nm]||{};
     var v=String(i.value).trim();
     if(v===''){ delete cur[fld]; } else { var p=parseFloat(v); if(!isNaN(p))cur[fld]=p; }
-    if(cur.t1==null&&cur.t2==null&&cur.t3==null&&cur.no==null){ delete SC_TARGETS[nm]; }
-    else SC_TARGETS[nm]=cur;
+    if(cur.t1==null&&cur.t2==null&&cur.t3==null&&cur.no==null){ delete goalMap[nm]; }
+    else goalMap[nm]=cur;
     tgtSaved++;
   });
-  if(tgtSaved)scSaveTargets();
+  if(tgtSaved)scSaveGoalMap(goalSub);
   if(scoreInputs.length){
     eachSeries(scoreInputs,function(i){
       return db.updateRecord({databaseId:DATABASE_ID,recordId:i.dataset.id,properties:{'分数':{number:parseFloat(i.value)}}});
@@ -19850,9 +19859,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v193';
-var WB_MY_VER = '优化版 vT193 · 目标加分读取期末库';
-var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.206';
+var WB_VER_TAG = 'v194';
+var WB_MY_VER = '优化版 vT194 · 数英目标分独立';
+var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.207';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
