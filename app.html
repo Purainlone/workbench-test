@@ -1753,7 +1753,6 @@ table.paper td.l{text-align:left;font-weight:600}
           <b style="font-size:14px;color:#1d4f7c">🏁 期末成绩看板</b>
           <button class="btn2 sm primary" onclick="fnImportOpen()">📥 导入 / 追加期末成绩</button>
           <button class="btn2 sm" onclick="fnReload(true)" title="导入新成绩后点这里，看板按最新数据重算">🔄 按新成绩重算</button>
-          <button class="btn2 sm ghost" style="color:#c2410c" onclick="fnCleanWrong()" title="删除成绩管理里的三上~五下期末记录，看板数据保留">🧹 删除历史期末（成绩管理）</button>
           <span class="sctip" id="fnTip"></span>
         </div>
         <iframe id="fnFrame" style="width:100%;height:860px;border:0;display:block" title="期末成绩分析看板"></iframe>
@@ -2821,9 +2820,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v195</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v196</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v195','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v196','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -19877,9 +19876,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v195';
-var WB_MY_VER = '优化版 vT195 · 历史期末不干扰本学期';
-var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.208';
+var WB_VER_TAG = 'v196';
+var WB_MY_VER = '优化版 vT196 · 去掉一键清理按钮';
+var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.209';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
