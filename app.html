@@ -19267,9 +19267,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v179';
-var WB_MY_VER = '优化版 vT179 · 评价分析反馈';
-var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.193';
+var WB_VER_TAG = 'v180';
+var WB_MY_VER = '优化版 vT180 · 评价分析反馈';
+var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.194';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -30874,6 +30874,25 @@ function cwInit(){
         gAvg[k4] = { avg: Math.round(a4.s / a4.n * 10) / 10, n: a4.n, max: a4.max, full: a4.full };
       });
     } catch (e) {}
+    /* vT180 家长端「评价分析反馈」要参照孩子在班的位次，但对外只给定性反馈：
+       位次按「科目|考试名称」在班里从高到低排，同分并列；只写进每个孩子自己的加密块，公开顶层不放姓名。 */
+    var gRank = {};
+    try {
+      var rkAgg = {};
+      grades.forEach(function (g) {
+        var sc5 = parseFloat(g.score); if (isNaN(sc5)) return;
+        var k5 = (g.subject || '') + '|' + (g.exam || '');
+        (rkAgg[k5] = rkAgg[k5] || []).push({ name: g.name, score: sc5 });
+      });
+      Object.keys(rkAgg).forEach(function (k6) {
+        var arr6 = rkAgg[k6].slice().sort(function (a, b) { return b.score - a.score; });
+        var lastSc = null, lastRk = 0;
+        arr6.forEach(function (x, i) {
+          if (lastSc == null || x.score !== lastSc) { lastRk = i + 1; lastSc = x.score; }
+          gRank[k6 + '|' + x.name] = { rank: lastRk, n: arr6.length };
+        });
+      });
+    } catch (e) {}
 
     /* 今日留堂（s-detain） */
     var detain = [];
@@ -30948,7 +30967,7 @@ function cwInit(){
       students: stus, hwItems: items, hw: hwRows, rc: rcRows,
       rcTitles: rcTitlesSnap, rcClass: rcClass,
       hwStats: hwStats, hwStatFrom: hwStatFrom, hwStatTo: hwStatTo,
-      points: points, comments: comments, grades: grades, gAvg: gAvg, detain: detain,
+      points: points, comments: comments, grades: grades, gAvg: gAvg, gRank: gRank, detain: detain,
       codexPool: codexPool, codexPets: codexPets,
       weekly: weekly, weeklyFrom: lim14
     };
@@ -30989,7 +31008,15 @@ function cwInit(){
         rcTitles: snap.rcTitles || [],
         points: (snap.points || []).filter(function (r) { return r.name === st.name; })[0] || { hw: 0, manual: 0, total: 0 },
         comments: (snap.comments || []).filter(function (r) { return r.name === st.name; }),
-        grades: (snap.grades || []).filter(function (r) { return r.name === st.name; }),
+        /* vT180 每个孩子只拿到自己的位次，用于家长端生成定性反馈；不写公开顶层、不显示数字 */
+        grades: (snap.grades || []).filter(function (r) { return r.name === st.name; }).map(function (g) {
+          var out9 = {};
+          Object.keys(g).forEach(function (k9) { out9[k9] = g[k9]; });
+          var rk9 = (snap.gRank || {})[(g.subject || '') + '|' + (g.exam || '') + '|' + st.name];
+          out9.rank = rk9 ? rk9.rank : 0;
+          out9.rankN = rk9 ? rk9.n : 0;
+          return out9;
+        }),
         detain: (snap.detain || []).filter(function (r) { return r.name === st.name; }),
         /* vT129 作业等级统计（近 120 天）：优秀/不错/合格/欠佳/超时未交 + 合计 + 统计区间 */
         hwStats: (snap.hwStats && snap.hwStats[st.name]) || { you: 0, liang: 0, zhong: 0, cha: 0, bu: 0, over: 0, total: 0 },
@@ -31200,6 +31227,14 @@ function cwInit(){
         return cfg;
       });
   }
+  /* vT180：Gitee 返回 401 时给出可操作提示，不再只显示英文原文 */
+  function ptaErrText(e) {
+    var m = (e && e.message) || '扫描失败';
+    if (/401|Unauthorized|Access token does not exist/i.test(m)) {
+      return '家长通道令牌失效：请在「家长通道」重新保存新令牌，再点「立即重发快照」';
+    }
+    return m;
+  }
   function ptaList(cfg) {
     return fetch(ptaDir(cfg, 'pq')).then(function (r) {
       if (r.status === 404) return [];
@@ -31272,7 +31307,7 @@ function cwInit(){
       PTA.lastAt = Date.now();
       ptaBadge('上次扫描 ' + ptaHm(PTA.lastAt) + (n ? (' · 处理 ' + n + ' 条（自动批准 ' + okN + ' / 待你处理 ' + heldN + '）') : ' · 无新提案'));
     }).catch(function (e) {
-      ptaBadge('⚠️ ' + ((e && e.message) || '扫描失败'));
+      ptaBadge('⚠️ ' + ptaErrText(e));
     }).then(function () { PTA.busy = false; });
   }
   function ptaStart() {
