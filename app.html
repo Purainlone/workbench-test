@@ -1329,6 +1329,7 @@ table.paper td.l{text-align:left;font-weight:600}
     <button data-s="notice">📢 <span class="lbl">通知中心</span><span class="new">新</span></button>
     <button data-s="desk">🖥️ <span class="lbl">教室桌面</span><span class="new">新</span></button>
     <button data-s="classic">📜 <span class="lbl">经典内容</span><span class="new">新</span></button>
+    <button data-s="quiz">🧠 <span class="lbl">每日竞答</span><span class="new">新</span></button>
     <button data-s="detain">⏰ <span class="lbl">留堂名单</span><span class="new">新</span></button>
     <button data-s="comment">✍️ <span class="lbl">学生评语</span><span class="new">新</span></button>
 
@@ -1748,6 +1749,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <button class="btn2 sm primary" onclick="scMgSave()">💾 保存修改</button>
         <button class="btn2 sm ghost" onclick="scDedupePanel()" title="同一场同一人只保留一条（保留字段最全、分数最新的）">🧹 查重去重</button>
         <button class="btn2 sm ghost" onclick="scImportTargets()">📥 导入目标表</button>
+        <button class="btn2 sm" onclick="scHistOpen()" title="把历次期末成绩（如三年级至今每学期期末）一次导入，以后新成绩也能继续加">📥 导入历次期末成绩</button>
         <input type="file" id="scTargetFile" accept=".xlsx,.xls" style="display:none" onchange="scImportTargetsFile(event)">
         <span class="sctip" id="scMgTip"></span>
       </div>
@@ -1934,6 +1936,42 @@ table.paper td.l{text-align:left;font-weight:600}
       <summary style="cursor:pointer;font-size:14px;font-weight:700">💡 推荐内容 · <span id="clRecoKind">每日一句</span>（点一下就加进当前内容库，可再编辑 / 设为今天）</summary>
       <div id="clRecoList" style="margin-top:8px"></div>
     </details>
+  </section>
+
+  <!-- ============ vT187 每日竞答（家长端每日 N 题，答对 0.5 分，同一题只计一次） ============ -->
+  <section class="section" id="s-quiz">
+    <h2>每日竞答 <span style="font-size:13px;font-weight:400;color:#1d5c8f;background:#e8f0fb;border-radius:8px;padding:2px 10px;vertical-align:middle">家长端 · 答对 0.5 分</span></h2>
+    <div class="sub">家长端每天一套选择题（默认 6 题，可调 1~10），内容取自六上语文课内知识、常见古文词语、文学文化常识、快乐读书吧。答对一题 +0.5 分，答错当场给答案与解析；<b>同一题只算一次分</b>，答多少算多少，不要求答完。题目按日期自动更换，全班同一天题目一致。</div>
+
+    <div class="chartbox" style="margin:10px 0">
+      <h3 style="font-size:14px">⚙️ 竞答设置</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px">
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;user-select:none">
+          <input type="checkbox" id="qzOn"> 开启每日竞答（家长端显示这一栏）
+        </label>
+        <span style="font-size:13px">每天</span>
+        <input id="qzPerDay" type="number" min="1" max="10" value="6" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px">
+        <span style="font-size:13px">题（满分 <b id="qzFull">3</b> 分）</span>
+        <button class="btn2 primary" onclick="qzSaveCfg()">💾 保存设置</button>
+      </div>
+      <div id="qzStat" class="sub" style="margin-top:8px"></div>
+    </div>
+
+    <div class="chartbox" style="margin:10px 0">
+      <h3 style="font-size:14px">📚 题库管理</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+        <select id="qzCatFilter" onchange="qzRender()" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px"></select>
+        <button class="btn2 sm primary" onclick="qzAdd()">➕ 新增题目</button>
+        <button class="btn2 sm" onclick="qzOpenImport()">📥 批量导入</button>
+        <span class="sctip" id="qzBankTip"></span>
+      </div>
+      <div id="qzList" style="margin-top:8px"></div>
+    </div>
+
+    <div class="chartbox" style="margin:10px 0">
+      <h3 style="font-size:14px">👀 今日题目预览（家长端看到的就是这几题）</h3>
+      <div id="qzToday" style="margin-top:6px"></div>
+    </div>
   </section>
 
   <!-- ============ 今日留堂（作业未完成默认选中，同步教室大屏/家长端） ============ -->
@@ -2729,6 +2767,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="gradeAna" checked> 评价分析反馈</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="essay" checked> 提交孩子作文</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="codex" checked> 📖 启灵图鉴</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="quiz" checked> 🧠 每日竞答</label>
       </div>
       <div id="ptGradeModeBox" style="margin-top:12px;padding-top:10px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>🏅 素养评价显示方式（vT141）</b>：家长端「🏅 素养评价」用哪种方式显示，由你决定。分数方式显示具体分数；等级方式只显示 A+ / A / B / C / D / E（A+ ≥95，A 90–94，B 80–89，C 70–79，D 60–69，E &lt;60）。</div>
@@ -2761,9 +2800,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v186</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v187</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v186','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v187','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -7387,6 +7426,202 @@ function scCommitHist(){
     if(btn){btn.disabled=false;btn.textContent='✅ 并入分析'}
   });
 }
+
+/* ---------- vT187 历次期末成绩导入（看板 JSON / 通用表格） ----------
+   支持两种粘贴格式：
+   ① 成绩看板导出的 grades_data.json（meta.学期顺序 + studentPanel.data）
+   ② 每行一条：姓名|学期|科目|分数[|日期]
+   写入成绩表：考试类型=期末、考试名称=「三上期末」、学期=三上，按「姓名+学期+考试名称+科目」判重。 */
+var SC_HIST_BOX = null;
+function scHistTerms() { return ['三上', '三下', '四上', '四下', '五上', '五下', '六上', '六下']; }
+function scHistDateOf(term) {
+  var t = String(term || '').trim();
+  var m = t.match(/^([三四五六])[上下]$/);
+  if (!m) return '';
+  var base = { '三': 0, '四': 2, '五': 4, '六': 6 }[m[1]];
+  var idx = base + (t.indexOf('下') >= 0 ? 1 : 0);
+  if (idx < 0) return '';
+  var year = 2024 + Math.floor(idx / 2);
+  return year + (idx % 2 === 0 ? '-01-15' : '-06-25');
+}
+function scHistParseJson(txt) {
+  var d = JSON.parse(txt);
+  var terms = (d.meta && d.meta['学期顺序']) || [];
+  var subs = (d.meta && d.meta['科目']) || ['语文', '数学', '英语'];
+  var data = (d.studentPanel && d.studentPanel.data) || [];
+  var rows = [];
+  data.forEach(function (row) {
+    var name = String((row && row[0]) || '').trim();
+    if (!name) return;
+    var arr = row[1] || [];
+    terms.forEach(function (t, ti) {
+      var vals = arr[ti] || [];
+      subs.forEach(function (sub, si) {
+        var v = vals[si];
+        if (v == null || v === '' || isNaN(Number(v))) return;
+        rows.push({ name: name, term: t, subject: sub, score: Number(v) });
+      });
+    });
+  });
+  return { rows: rows, terms: terms.filter(Boolean) };
+}
+function scHistParseTable(txt) {
+  var rows = [], terms = [];
+  String(txt || '').split(/\r?\n/).forEach(function (line) {
+    var s = String(line || '').trim();
+    if (!s || s.charAt(0) === '#') return;
+    var p = s.split(/[|｜\t,，]/).map(function (x) { return x.trim(); });
+    if (p.length < 4) {
+      /* 从表格复制时也可能是空格分隔：仅当第二段像学期（三上/五下）才采用，避免误吃普通句子 */
+      var q = s.split(/\s+/).map(function (x) { return x.trim(); }).filter(Boolean);
+      if (q.length >= 4 && /^[三四五六][上下]$/.test(q[1] || '')) p = q;
+    }
+    if (p.length < 4) return;
+    var name = p[0], term = p[1], sub = p[2], score = parseFloat(p[3]);
+    if (!name || !term || !sub || isNaN(score)) return;
+    rows.push({ name: name, term: term, subject: sub, score: score, date: p[4] || '' });
+    if (terms.indexOf(term) < 0) terms.push(term);
+  });
+  return { rows: rows, terms: terms };
+}
+function scHistBuild() {
+  var txt = ((document.getElementById('scHistText') || {}).value || '').trim();
+  if (!txt) return { rows: [], terms: [], err: '先粘贴成绩数据' };
+  var out;
+  try {
+    out = (txt.charAt(0) === '{' || txt.charAt(0) === '[') ? scHistParseJson(txt) : scHistParseTable(txt);
+  } catch (e) {
+    return { rows: [], terms: [], err: 'JSON 解析失败：' + ((e && e.message) || '格式不对') };
+  }
+  if (!out.rows.length) return { rows: [], terms: out.terms, err: '没解析出分数，请检查格式' };
+  var names = {};
+  (DATA.seats || []).forEach(function (s) { if (s && s.姓名) names[s.姓名] = 1; });
+  var known = out.rows.filter(function (x) { return names[x.name]; }).length;
+  out.known = known;
+  out.unknownNames = Object.keys(out.rows.reduce(function (o, x) { if (!names[x.name]) o[x.name] = 1; return o; }, {}));
+  return out;
+}
+function scHistOpen() {
+  if (!SC_HIST_BOX) { SC_HIST_BOX = document.createElement('div'); SC_HIST_BOX.id = 'scHistBox'; document.body.appendChild(SC_HIST_BOX); }
+  SC_HIST_BOX.innerHTML =
+    '<div style="position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)scHistClose()">' +
+    '<div style="background:#fff;border-radius:14px;padding:20px;width:720px;max-width:94vw;max-height:90vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.25)">' +
+    '<h3 style="margin:0 0 8px;font-size:16px">📥 导入历次期末成绩</h3>' +
+    '<div class="sub" style="margin-bottom:8px">粘贴两种数据都可以：① 成绩看板导出的 <b>grades_data.json</b> 全文；② 每行一条 <b>姓名|学期|科目|分数</b>。导入后写入「成绩管理」，考试类型记为期末，以后有新期末成绩可再用这里继续加。</div>' +
+    '<textarea id="scHistText" rows="9" placeholder="蔡卓铖|三上|语文|80&#10;蔡卓铖|三上|数学|88&#10;……&#10;（或直接粘贴 grades_data.json 全文）" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:9px;font-size:13px;font-family:inherit"></textarea>' +
+    '<div id="scHistPreview" style="margin:10px 0;font-size:12.5px;color:#556;max-height:210px;overflow:auto"></div>' +
+    '<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:10px"><input type="checkbox" id="scHistOverwrite"> 覆盖已存在的同场同科分数（不勾选则跳过重复）</label>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn2" onclick="scHistClose()">取消</button>' +
+    '<button class="btn2 sm" onclick="scHistPreview()">👀 解析预览</button>' +
+    '<button class="btn2 primary" onclick="scHistDo()" id="scHistDoBtn">📥 确认导入</button></div>' +
+    '<div id="scHistStatus" class="sub" style="margin-top:8px"></div></div></div>';
+}
+function scHistClose() { if (SC_HIST_BOX) SC_HIST_BOX.innerHTML = ''; }
+function scHistPreview() {
+  var box = document.getElementById('scHistPreview'); if (!box) return null;
+  var b = scHistBuild();
+  if (b.err) { box.innerHTML = '<span style="color:#c2410c">' + esc(b.err) + '</span>'; return null }
+  var idx = {}, dupN = 0;
+  SC_ROWS.forEach(function (r) {
+    idx[fval(r, '学生姓名') + '|' + fval(r, '学期') + '|' + fval(r, '考试名称') + '|' + fval(r, '科目')] = 1;
+  });
+  var byTerm = {}, bySub = {};
+  b.rows.forEach(function (x) {
+    byTerm[x.term] = (byTerm[x.term] || 0) + 1;
+    bySub[x.subject] = (bySub[x.subject] || 0) + 1;
+    if (idx[x.name + '|' + x.term + '|' + x.term + '期末|' + x.subject]) dupN++;
+  });
+  var ow = !!(document.getElementById('scHistOverwrite') || {}).checked;
+  var willWrite = b.known - (ow ? 0 : dupN);
+  box.innerHTML = '<b>解析到 ' + b.rows.length + ' 条分数</b>（' + Object.keys(bySub).map(function (s) { return s + ' ' + bySub[s]; }).join(' / ') + '）' +
+    '<br>学期分布：' + Object.keys(byTerm).map(function (t) { return t + ' ' + byTerm[t]; }).join('　') +
+    '<br>已在库中：<b>' + dupN + '</b> 条（' + (ow ? '将覆盖' : '将跳过') + '）；待写入：<b>' + Math.max(0, willWrite) + '</b> 条' +
+    (b.unknownNames && b.unknownNames.length ? '<br><span style="color:#c2410c">名单里没有这些姓名，会被跳过：' + esc(b.unknownNames.slice(0, 10).join('、')) + (b.unknownNames.length > 10 ? ' 等' : '') + '</span>' : '') +
+    '<br><b>考试日期</b>（可改）：' + b.terms.map(function (t) {
+      return '<span style="display:inline-block;margin:3px 8px 3px 0">' + esc(t) + ' <input data-term="' + esc(t) + '" type="date" value="' + scHistDateOf(t) + '" style="border:1px solid var(--line);border-radius:7px;padding:4px 6px;font-size:12px"></span>';
+    }).join('');
+  return b;
+}
+function scHistPool(list, size, worker, onTick) {
+  return new Promise(function (resolve) {
+    var i = 0, ok = 0, bad = [], active = 0;
+    function next() {
+      if (i >= list.length && active === 0) return resolve({ ok: ok, bad: bad });
+      while (active < size && i < list.length) {
+        (function (item) {
+          active++;
+          Promise.resolve().then(function () { return worker(item); })
+            .then(function () { ok++; }, function () { bad.push(item); })
+            .then(function () { active--; if (onTick) onTick(ok, bad.length, list.length); next(); });
+        })(list[i++]);
+      }
+    }
+    next();
+  });
+}
+function scHistDo() {
+  if (!wbEnsureDB()) { toastMsg('⚠️ 数据接口不可用，无法写入成绩表'); return }
+  var b = scHistPreview();
+  if (!b || !b.rows.length) return;
+  var overwrite = !!(document.getElementById('scHistOverwrite') || {}).checked;
+  var dates = {};
+  [].slice.call(document.querySelectorAll('#scHistPreview input[data-term]')).forEach(function (i) { dates[i.dataset.term] = i.value || ''; });
+  var idx = {};
+  SC_ROWS.forEach(function (r) {
+    var k = fval(r, '学生姓名') + '|' + fval(r, '学期') + '|' + fval(r, '考试名称') + '|' + fval(r, '科目');
+    if (!idx[k]) idx[k] = r;
+  });
+  var seatNo = {};
+  (DATA.seats || []).forEach(function (s) { if (s && s.姓名) seatNo[s.姓名] = s.学号 || ''; });
+  var names = {};
+  (DATA.seats || []).forEach(function (s) { if (s && s.姓名) names[s.姓名] = 1; });
+  var todo = [], skip = 0;
+  b.rows.forEach(function (x) {
+    if (!names[x.name]) return;
+    var exam = x.term + '期末';
+    var k = x.name + '|' + x.term + '|' + exam + '|' + x.subject;
+    var old = idx[k];
+    if (old && !overwrite) { skip++; return }
+    todo.push({ name: x.name, term: x.term, subject: x.subject, exam: exam, score: x.score, old: old, date: x.date || dates[x.term] || scHistDateOf(x.term) });
+  });
+  if (!todo.length) { toastMsg('没有需要写入的记录（都已存在）'); return }
+  var btn = document.getElementById('scHistDoBtn'), st = document.getElementById('scHistStatus');
+  if (btn) { btn.disabled = true; btn.textContent = '导入中…'; }
+  if (st) st.textContent = '正在写入 0 / ' + todo.length + ' …';
+  scHistPool(todo, 6, function (t) {
+    var props = {
+      '学生姓名': { text: t.name },
+      '学号': { text: String(seatNo[t.name] || '') },
+      '科目': { text: t.subject },
+      '考试类型': { select: '期末' },
+      '考试名称': { text: t.exam },
+      '分数': { number: t.score },
+      '满分': { number: 100 },
+      '学期': { text: t.term },
+      '备注': { text: '历次期末导入' },
+      '考试日期': { text: t.date }
+    };
+    var run = (t.old && t.old._id)
+      ? db.updateRecord({ databaseId: DATABASE_ID, recordId: t.old._id, properties: props })
+      : db.addRecord({ databaseId: DATABASE_ID, properties: props });
+    return run.catch(function () { return run; });   /* 失败重试一次 */
+  }, function (ok, bad, total) {
+    if (st) st.textContent = '正在写入 ' + ok + ' / ' + total + (bad ? '（失败 ' + bad + '）' : '') + ' …';
+  }).then(function (r) {
+    if (btn) { btn.disabled = false; btn.textContent = '📥 确认导入'; }
+    toastMsg('✅ 导入完成：成功 ' + r.ok + ' 条' + (skip ? '，跳过已存在 ' + skip + ' 条' : '') + (r.bad.length ? '，失败 ' + r.bad.length + ' 条（可再点一次重试）' : ''));
+    if (st) st.textContent = '完成：成功 ' + r.ok + ' 条' + (skip ? '，跳过 ' + skip + ' 条' : '') + (r.bad.length ? '，失败 ' + r.bad.length + ' 条' : '');
+    return loadScoresFromDB();
+  }).then(function () {
+    try { renderSC(); } catch (e) {}
+    if (!skip) scHistClose();
+  }).catch(function (e) {
+    if (btn) { btn.disabled = false; btn.textContent = '📥 确认导入'; }
+    toastMsg('⚠️ 导入中断：' + ((e && e.message) || '请刷新后重试'));
+  });
+}
+window.scHistOpen = scHistOpen; window.scHistClose = scHistClose;
+window.scHistPreview = scHistPreview; window.scHistDo = scHistDo;
 
 /* ---------- 成绩分析 ---------- */
 function scAnRows(){
@@ -18797,7 +19032,7 @@ function paFallbackCopy(txt, done) {  try {
 }
 /* vT131 修复：hwstat（vT129 加的「📊 作业统计」）之前漏在默认表外 —— 勾选框压根不保存；
    本轮新增 hwtodo（⚠️ 未完成作业），一并补进默认表 */
-function ptPanelsDefault() { return { detain: true, points: true, weekly: true, hw: true, hwtodo: true, hwstat: true, rc: true, rcclass: true, cmt: true, grade: true, gradeAna: true, essay: true, codex: true, gradeMode: 'score' }; }
+function ptPanelsDefault() { return { detain: true, points: true, weekly: true, hw: true, hwtodo: true, hwstat: true, rc: true, rcclass: true, cmt: true, grade: true, gradeAna: true, essay: true, codex: true, quiz: true, gradeMode: 'score' }; }
 function ptPanelsGet() {
   var d = ptPanelsDefault();
   try {
@@ -19276,9 +19511,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v186';
-var WB_MY_VER = '优化版 vT186 · 经典内容批量导入';
-var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.200';
+var WB_VER_TAG = 'v187';
+var WB_MY_VER = '优化版 vT187 · 每日竞答与期末导入';
+var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.201';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -23007,7 +23242,7 @@ function cwInit(){
   if (window.__WB_NT_LOADED__) return; window.__WB_NT_LOADED__ = true;
 
   /* ---------- 数据层 ---------- */
-  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain', 's-train', 's-hwadj', 's-rcmd', 's-remedy'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 / s-train 展示训练营；vT17 + s-hwadj 科任端作业积分加减（并入作业积分汇总）；vT51 + s-rcmd 远程指令回执（桌面写、教师读）；vT57 + s-remedy 自省补责（指定学生 + 完成期限，网页/小程序布置，首页/桌面标签/教室大屏/小程序首页展示） */
+  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain', 's-train', 's-hwadj', 's-rcmd', 's-remedy', 's-quiz', 's-quizdone', 's-quizlog', 's-quizcfg'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 / s-train 展示训练营；vT17 + s-hwadj 科任端作业积分加减（并入作业积分汇总）；vT51 + s-rcmd 远程指令回执（桌面写、教师读）；vT57 + s-remedy 自省补责（指定学生 + 完成期限，网页/小程序布置，首页/桌面标签/教室大屏/小程序首页展示）；vT187 + s-quiz 竞答题库 / s-quizdone 每生每题只答一次 / s-quizlog 每日出题记录（60 天回避） / s-quizcfg 竞答设置 */
   var NT_STORE_KEY = 'wb_nt_v1';
   function ntLoad() {
     try { var o = JSON.parse(localStorage.getItem(NT_STORE_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} }
@@ -23016,6 +23251,8 @@ function cwInit(){
   function ntRows(tid) { var db = ntLoad(); return Array.isArray(db[tid]) ? db[tid] : [] }
   window.ntRows = ntRows;   /* vT17 暴露给班级档案/积分汇总等外部作用域读取 s-hwadj 等表 */
   function ntGet(tid, id) { var a = ntRows(tid); for (var i = 0; i < a.length; i++) if (a[i] && a[i].id === id) return a[i]; return null }
+  window.ntGet = ntGet;     /* vT187 竞答批准器（另一个作用域）要按 id 取记录 */
+  window.ntUpsert = function (tid, rec) { return ntUpsert(tid, rec) };   /* vT187 同上：写 s-quizdone */
   function ntUpsert(tid, rec) {
     if (!rec || !rec.id) return;
     rec.ts = rec.ts || Date.now();
@@ -24255,6 +24492,372 @@ function cwInit(){
   window.clWenReschedAll = clWenReschedAll; window.clParseWen = clParseWen;
   window.csSave = csSave; window.csDel = csDel;
   try { clRender(); csRender(); dtDetainRender(); renderTrain(); } catch (e) {}
+
+  /* ================= vT187 每日竞答（家长端）=================
+     数据表：s-quiz 题库 / s-quizdone 每生每题只答一次 / s-quizlog 每日出题记录 / s-quizcfg 设置。
+     规则（老师已确认）：每天 1~10 题（默认 6）；答对 0.5 分，答错给答案；同一题跨天也只计一次分；
+     普通题 60 天内不重复，高频错题可提前重复；同一天全班题目一致。 */
+  var QZ_CATS = ['课内知识', '古文词语', '文学文化常识', '快乐读书吧'];
+  var QZ_PER_SCORE = 0.5;
+  /* 首批内置题库（60 题，四类各 15）。老师可在题库管理里增删改，或批量导入扩充。 */
+  var QZ_SEED = [
+    /* ---- 课内知识 15 ---- */
+    { c: '课内知识', q: '《草原》一文的作者是谁？', o: ['老舍', '巴金', '朱自清', '冰心'], a: 0, e: '《草原》作者老舍，原名舒庆春，全文写草原风光与蒙汉情深。', s: '六上《草原》' },
+    { c: '课内知识', q: '《丁香结》的作者是谁？', o: ['宗璞', '铁凝', '迟子建', '王安忆'], a: 0, e: '《丁香结》作者宗璞，由丁香结写到人生结，借物抒情。', s: '六上《丁香结》' },
+    { c: '课内知识', q: '《七律·长征》中「五岭逶迤腾细浪」的「五岭」指的是什么？', o: ['五座山岭', '五条大河', '五个省份', '五座桥梁'], a: 0, e: '五岭指大庾岭、骑田岭、萌渚岭、都庞岭、越城岭五座山岭。', s: '六上《七律·长征》' },
+    { c: '课内知识', q: '《狼牙山五壮士》中，五位壮士最后跳崖的地点是？', o: ['棋盘陀', '平型关', '易水河畔', '雁门关'], a: 0, e: '五壮士把敌人引上狼牙山棋盘陀顶峰，弹尽粮绝后跳崖。', s: '六上《狼牙山五壮士》' },
+    { c: '课内知识', q: '《开国大典》描写的是哪一天？', o: ['1949年10月1日', '1949年9月21日', '1949年12月1日', '1950年10月1日'], a: 0, e: '1949年10月1日，中华人民共和国中央人民政府成立，在北京举行开国大典。', s: '六上《开国大典》' },
+    { c: '课内知识', q: '《灯光》一文的作者是？', o: ['王愿坚', '谈歌', '梁衡', '范锡林'], a: 0, e: '《灯光》作者王愿坚，由天安门灯光回忆郝副营长。', s: '六上《灯光》' },
+    { c: '课内知识', q: '《竹节人》的作者是？', o: ['范锡林', '铁凝', '宗璞', '苏金伞'], a: 0, e: '《竹节人》作者范锡林，写童年玩竹节人的乐趣。', s: '六上《竹节人》' },
+    { c: '课内知识', q: '《桥》中老支书在洪水来临时做了什么？', o: ['指挥村民过桥，自己和儿子最后牺牲', '独自先跑过桥', '带家人躲进山洞', '组织村民上山砍树'], a: 0, e: '老支书让村民先过桥，把儿子拉到队尾，最后父子俩被洪水吞没。', s: '六上《桥》' },
+    { c: '课内知识', q: '《穷人》的作者是哪国作家？', o: ['俄国', '法国', '英国', '美国'], a: 0, e: '《穷人》作者列夫·托尔斯泰，俄国作家。', s: '六上《穷人》' },
+    { c: '课内知识', q: '《夏天里的成长》一文的中心句是？', o: ['夏天是万物迅速生长的季节', '夏天是炎热的季节', '夏天是孩子最喜欢的季节', '夏天是农忙的季节'], a: 0, e: '全文围绕「夏天是万物迅速生长的季节」从植物、动物、人到事展开。', s: '六上《夏天里的成长》' },
+    { c: '课内知识', q: '《盼》的作者是？', o: ['铁凝', '宗璞', '范锡林', '梁容若'], a: 0, e: '《盼》作者铁凝，写「我」盼穿新雨衣的心情。', s: '六上《盼》' },
+    { c: '课内知识', q: '《少年闰土》选自鲁迅的哪篇小说？', o: ['《故乡》', '《社戏》', '《祝福》', '《孔乙己》'], a: 0, e: '《少年闰土》节选自鲁迅小说《故乡》。', s: '六上《少年闰土》' },
+    { c: '课内知识', q: '《我的伯父鲁迅先生》的作者是？', o: ['周晔', '臧克家', '巴金', '萧红'], a: 0, e: '作者周晔是鲁迅的侄女，以亲人视角回忆伯父。', s: '六上《我的伯父鲁迅先生》' },
+    { c: '课内知识', q: '《月光曲》中贝多芬为谁即兴弹奏了这首曲子？', o: ['盲姑娘和她的哥哥', '一位富商', '他的学生', '宫廷乐师'], a: 0, e: '贝多芬被盲姑娘懂音乐又家境贫寒所感动，即兴弹奏《月光曲》。', s: '六上《月光曲》' },
+    { c: '课内知识', q: '故宫博物院又被称为什么？', o: ['紫禁城', '颐和园', '圆明园', '天坛'], a: 0, e: '故宫是明清两代皇宫，旧称紫禁城。', s: '六上《故宫博物院》' },
+    /* ---- 古文词语 15 ---- */
+    { c: '古文词语', q: '「伯牙鼓琴」中「鼓」的意思是？', o: ['弹', '打鼓', '鼓励', '鼓起'], a: 0, e: '「鼓琴」即弹琴，「鼓」在这里是弹奏的意思。', s: '六上《伯牙鼓琴》' },
+    { c: '古文词语', q: '「方鼓琴而志在太山」中「志」的意思是？', o: ['心志、情志', '志向远大', '记住', '标记'], a: 0, e: '「志在太山」指心里想的是高山，志即心志、情志。', s: '六上《伯牙鼓琴》' },
+    { c: '古文词语', q: '「少选之间而志在流水」中「少选」的意思是？', o: ['一会儿', '很少的选择', '年少时', '稍微'], a: 0, e: '「少选」表示时间很短，一会儿。', s: '六上《伯牙鼓琴》' },
+    { c: '古文词语', q: '「汤汤乎若流水」中「汤汤」形容什么？', o: ['水流大而急', '水很温热', '水面平静', '水很清澈'], a: 0, e: '「汤汤」读 shāng shāng，形容水流大而急。', s: '六上《伯牙鼓琴》' },
+    { c: '古文词语', q: '「书戴嵩画牛」中「书」的意思是？', o: ['题写、写', '书本', '书写工具', '书信'], a: 0, e: '「书」在这里是动词，指题写、写下这篇文章。', s: '六上《书戴嵩画牛》' },
+    { c: '古文词语', q: '「所宝以百数」中「宝」的意思是？', o: ['珍藏', '宝贝', '宝贵', '宝藏'], a: 0, e: '「所宝」指所珍藏的书画，宝作动词，珍藏。', s: '六上《书戴嵩画牛》' },
+    { c: '古文词语', q: '「拊掌」的意思是？', o: ['拍手', '鼓掌加油', '手掌', '抚摸'], a: 0, e: '「拊掌」即拍手，文中表示牧童不以为然。', s: '六上《书戴嵩画牛》' },
+    { c: '古文词语', q: '「谬矣」中「谬」的意思是？', o: ['错、错误', '美妙', '荒谬可笑', '遗漏'], a: 0, e: '「谬矣」就是「错了」，牧童指出画中斗牛姿态有误。', s: '六上《书戴嵩画牛》' },
+    { c: '古文词语', q: '「一日曝书画」中「曝」的意思是？', o: ['晒', '暴露', '曝光', '展示'], a: 0, e: '「曝」读 pù，晒的意思，古人晒书画防潮防虫。', s: '六上《书戴嵩画牛》' },
+    { c: '古文词语', q: '「耕当问奴，织当问婢」中「婢」指？', o: ['婢女', '奴婢的主人', '织布机', '邻居'], a: 0, e: '婢指婢女，句意是耕种的事应问农夫，织布的事应问织女。', s: '六上《书戴嵩画牛》' },
+    { c: '古文词语', q: '「巍巍乎若太山」中「巍巍」形容？', o: ['高大的样子', '险峻的样子', '遥远的样子', '雄伟的声音'], a: 0, e: '「巍巍」形容山势高峻，钟子期听出伯牙心在高山。', s: '六上《伯牙鼓琴》' },
+    { c: '古文词语', q: '「终身不复鼓琴」中「复」的意思是？', o: ['再、又', '恢复', '重复', '回复'], a: 0, e: '「不复鼓琴」即不再弹琴，复表示再、又。', s: '六上《伯牙鼓琴》' },
+    { c: '古文词语', q: '「以为世无足复为鼓琴者」中「足」的意思是？', o: ['值得', '足够', '脚', '满足'], a: 0, e: '「无足」即不值得，伯牙认为世上再没有值得为之弹琴的人。', s: '六上《伯牙鼓琴》' },
+    { c: '古文词语', q: '「尾搐入两股间」中「股」的意思是？', o: ['大腿', '屁股', '股票', '一股'], a: 0, e: '「股」在古文中指大腿，牧童说斗牛时尾巴夹在两腿之间。', s: '六上《书戴嵩画牛》' },
+    { c: '古文词语', q: '「今乃掉尾而斗」中「掉」的意思是？', o: ['摇、摆动', '掉落', '丢掉', '调头'], a: 0, e: '「掉尾」即摇尾巴，牧童指出画中牛摇尾而斗不合实际。', s: '六上《书戴嵩画牛》' },
+    /* ---- 文学文化常识 15 ---- */
+    { c: '文学文化常识', q: '鲁迅的原名是？', o: ['周树人', '周作人', '周建人', '周恩来'], a: 0, e: '鲁迅原名周树人，浙江绍兴人，中国现代文学奠基人之一。', s: '文学常识' },
+    { c: '文学文化常识', q: '「西江月·夜行黄沙道中」中「西江月」是什么？', o: ['词牌名', '题目', '地名', '作者号'], a: 0, e: '「西江月」是词牌名，「夜行黄沙道中」才是这首词的题目。', s: '六上《西江月·夜行黄沙道中》' },
+    { c: '文学文化常识', q: '「唐宋八大家」之首是谁？', o: ['韩愈', '柳宗元', '欧阳修', '苏轼'], a: 0, e: '唐宋八大家以韩愈为首，他与柳宗元并称「韩柳」。', s: '文学常识' },
+    { c: '文学文化常识', q: '「文房四宝」指的是？', o: ['笔、墨、纸、砚', '琴、棋、书、画', '梅、兰、竹、菊', '诗、书、礼、乐'], a: 0, e: '文房四宝即笔、墨、纸、砚，是中国传统书写工具。', s: '文化常识' },
+    { c: '文学文化常识', q: '「岁寒三友」指的是？', o: ['松、竹、梅', '梅、兰、竹', '松、柏、竹', '桃、李、梅'], a: 0, e: '松竹梅经冬不凋，被称为岁寒三友。', s: '文化常识' },
+    { c: '文学文化常识', q: '「花中四君子」指的是？', o: ['梅、兰、竹、菊', '牡丹、荷花、菊花、梅花', '桃、杏、梨、李', '兰、荷、桂、菊'], a: 0, e: '梅兰竹菊被称为花中四君子，常用来比喻高洁品格。', s: '文化常识' },
+    { c: '文学文化常识', q: '中国古代「五音」指的是？', o: ['宫、商、角、徵、羽', '金、木、水、火、土', '东、西、南、北、中', '仁、义、礼、智、信'], a: 0, e: '五音是宫商角徵羽，中国传统五声音阶。', s: '文化常识' },
+    { c: '文学文化常识', q: '「五行」指的是？', o: ['金、木、水、火、土', '宫、商、角、徵、羽', '日、月、星、辰、风', '青、赤、黄、白、黑'], a: 0, e: '五行即金木水火土，古人用来说明万物构成与变化。', s: '文化常识' },
+    { c: '文学文化常识', q: '中国古典四大名著不包括下面哪一部？', o: ['《聊斋志异》', '《红楼梦》', '《水浒传》', '《西游记》'], a: 0, e: '四大名著是《红楼梦》《三国演义》《水浒传》《西游记》，《聊斋志异》不在其中。', s: '文学常识' },
+    { c: '文学文化常识', q: '「七律」指的是？', o: ['七言律诗', '七段律文', '第七种韵律', '七句诗'], a: 0, e: '七律即七言律诗，每句七字、共八句，讲究平仄对仗。', s: '六上《七律·长征》' },
+    { c: '文学文化常识', q: '辛弃疾是哪个朝代的词人？', o: ['南宋', '北宋', '唐代', '元代'], a: 0, e: '辛弃疾是南宋豪放派词人，与苏轼并称「苏辛」。', s: '六上《西江月》' },
+    { c: '文学文化常识', q: '苏轼的号是什么？', o: ['东坡居士', '六一居士', '易安居士', '青莲居士'], a: 0, e: '苏轼号东坡居士；六一居士是欧阳修，易安居士是李清照。', s: '文学常识' },
+    { c: '文学文化常识', q: '孟浩然是哪个朝代的诗人？', o: ['唐代', '宋代', '汉代', '明代'], a: 0, e: '孟浩然是唐代山水田园诗人，与王维并称「王孟」。', s: '六上《宿建德江》' },
+    { c: '文学文化常识', q: '「高山流水」这个典故常用来比喻什么？', o: ['知音难觅', '风景优美', '志向高远', '水流湍急'], a: 0, e: '伯牙鼓琴、钟子期善听，后以「高山流水」比喻知音难觅。', s: '六上《伯牙鼓琴》' },
+    { c: '文学文化常识', q: '《书戴嵩画牛》的作者是？', o: ['苏轼', '王安石', '欧阳修', '韩愈'], a: 0, e: '《书戴嵩画牛》是苏轼题写在戴嵩《斗牛图》上的一篇短文。', s: '六上《书戴嵩画牛》' },
+    /* ---- 快乐读书吧 15 ---- */
+    { c: '快乐读书吧', q: '《童年》的作者是？', o: ['高尔基', '托尔斯泰', '契诃夫', '普希金'], a: 0, e: '《童年》是苏联作家高尔基的自传体小说。', s: '六上快乐读书吧' },
+    { c: '快乐读书吧', q: '《童年》的主人公是？', o: ['阿廖沙', '安利柯', '雨来', '保尔'], a: 0, e: '《童年》以阿廖沙的视角写他三岁到十岁的童年生活。', s: '六上快乐读书吧' },
+    { c: '快乐读书吧', q: '《小英雄雨来》的作者是？', o: ['管桦', '徐光耀', '王愿坚', '梁衡'], a: 0, e: '《小英雄雨来》作者管桦，写抗日战争时期少年雨来的故事。', s: '六上快乐读书吧' },
+    { c: '快乐读书吧', q: '雨来是哪里的小英雄？', o: ['晋察冀边区芦花村', '陕北延安', '山东沂蒙', '东北松花江'], a: 0, e: '雨来生活在晋察冀边区北部的芦花村。', s: '六上快乐读书吧' },
+    { c: '快乐读书吧', q: '《爱的教育》的作者是？', o: ['亚米契斯', '高尔基', '安徒生', '笛福'], a: 0, e: '《爱的教育》是意大利作家亚米契斯的作品。', s: '六上快乐读书吧' },
+    { c: '快乐读书吧', q: '《爱的教育》的主人公是？', o: ['安利柯', '阿廖沙', '雨来', '汤姆'], a: 0, e: '全书以四年级学生安利柯的视角展开。', s: '六上快乐读书吧' },
+    { c: '快乐读书吧', q: '《爱的教育》采用的是什么体裁？', o: ['日记体', '章回体', '书信体', '游记体'], a: 0, e: '《爱的教育》以小学生安利柯的日记形式写成。', s: '六上快乐读书吧' },
+    { c: '快乐读书吧', q: '《童年》中给阿廖沙温暖与关爱最多的人是？', o: ['外祖母', '外祖父', '两个舅舅', '邻居'], a: 0, e: '外祖母慈爱善良，是阿廖沙童年里最重要的光。', s: '六上快乐读书吧' },
+    { c: '快乐读书吧', q: '《小英雄雨来》中，雨来掩护的是谁？', o: ['交通员李大叔', '八路军张连长', '村长', '自己的父亲'], a: 0, e: '雨来为掩护交通员李大叔，被敌人抓住仍不肯说出藏身之处。', s: '六上快乐读书吧' },
+    { c: '快乐读书吧', q: '高尔基自传体三部曲除《童年》外，另两部是？', o: ['《在人间》《我的大学》', '《母亲》《海燕》', '《复活》《安娜》', '《边城》《长河》'], a: 0, e: '三部曲为《童年》《在人间》《我的大学》。', s: '六上快乐读书吧' },
+    { c: '快乐读书吧', q: '《爱的教育》原名的意思是？', o: ['心', '爱', '童年', '学校'], a: 0, e: '《爱的教育》原名 Cuore，意大利语意为「心」。', s: '六上快乐读书吧' },
+    { c: '快乐读书吧', q: '《小英雄雨来》中，雨来最后是靠什么脱险的？', o: ['跳水游走', '乡亲营救', '敌人放走', '钻地道'], a: 0, e: '雨来水性极好，趁敌人不备跳入河中游走脱险。', s: '六上快乐读书吧' },
+    { c: '快乐读书吧', q: '《童年》中被称为「好事儿」的人是？', o: ['一位借住的房客', '外祖父的伙计', '街坊裁缝', '学校老师'], a: 0, e: '「好事儿」是一位善良的房客，常给阿廖沙讲道理。', s: '六上快乐读书吧' },
+    { c: '快乐读书吧', q: '「我们是中国人，我们爱自己的祖国」在《小英雄雨来》中出现在什么场景？', o: ['夜校识字课上', '雨来参军时', '村口集会时', '敌人审问时'], a: 0, e: '雨来在夜校跟老师念这句话，爱国种子由此埋下。', s: '六上快乐读书吧' },
+    { c: '快乐读书吧', q: '《爱的教育》中「每月故事」是谁讲给学生的？', o: ['老师', '校长', '父亲', '同学'], a: 0, e: '老师每月给学生讲一个感人故事，书中收录了这些故事。', s: '六上快乐读书吧' }
+  ];
+  function qzDayNum(ds) {
+    var p = String(ds || '').split('-');
+    if (p.length !== 3) return NaN;
+    return Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10)) / 86400000;
+  }
+  function qzDstr(n) { return new Date(n * 86400000).toISOString().slice(0, 10); }
+  function qzToday() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function qzHash(s) {
+    var h = 2166136261, i;
+    for (i = 0; i < String(s).length; i++) { h ^= String(s).charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+  function qzRand(seed) {
+    var t = (seed + 0x6D2B79F5) >>> 0;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  function qzCfg() {
+    var r = ntRows('s-quizcfg').filter(function (x) { return x && x.id === 'qz_cfg' && !x.deleted; })[0];
+    return r || {};
+  }
+  function qzPerDay() { var v = parseInt(qzCfg().perDay, 10); return (v >= 1 && v <= 10) ? v : 6; }
+  function qzEnabled() { return qzCfg().on !== false; }   /* 没设置过默认开启 */
+  function qzBank() {
+    return ntRows('s-quiz').filter(function (r) {
+      return r && !r.deleted && r.on !== false && r.stem && Array.isArray(r.opts) && r.opts.length >= 2 && r.ans != null;
+    });
+  }
+  function qzSeedIfEmpty() {
+    var cfg = qzCfg();
+    if (cfg.seeded) return 0;
+    if (ntRows('s-quiz').some(function (r) { return r && !r.deleted; })) return 0;
+    var now = Date.now();
+    QZ_SEED.forEach(function (x, i) {
+      ntUpsert('s-quiz', {
+        id: 'q_' + (now + i) + '_' + Math.floor(Math.random() * 900 + 100),
+        cat: x.c, stem: x.q, opts: x.o.slice(), ans: x.a, exp: x.e, src: x.s || '',
+        on: true, deleted: false, ts: now + i, updatedAt: new Date(now + i).toISOString(), updatedBy: 'seed'
+      });
+    });
+    var c = ntRows('s-quizcfg').filter(function (x) { return x && x.id === 'qz_cfg'; })[0] || { id: 'qz_cfg' };
+    c.seeded = true; c.on = (c.on !== false); c.perDay = c.perDay || 6;
+    c.ts = now; c.updatedAt = new Date(now).toISOString();
+    ntUpsert('s-quizcfg', c);
+    return QZ_SEED.length;
+  }
+  /* 抽题：同一天全班一致；普通题 60 天内不重复；高频错题可提前重复（最多占一半） */
+  function qzPickDay(dateStr, n) {
+    dateStr = dateStr || qzToday();
+    n = Math.max(1, Math.min(10, parseInt(n, 10) || qzPerDay()));
+    var bank = qzBank();
+    if (!bank.length) return [];
+    var from = qzDstr(qzDayNum(dateStr) - 60), recent = {};
+    ntRows('s-quizlog').forEach(function (r) {
+      if (!r || r.deleted || !r.date || String(r.date).slice(0, 10) < from) return;
+      (r.qids || []).forEach(function (q) { recent[q] = 1; });
+    });
+    var wrong = {};
+    ntRows('s-quizdone').forEach(function (r) {
+      if (r && !r.deleted && r.ok === false && r.qid) wrong[r.qid] = (wrong[r.qid] || 0) + 1;
+    });
+    var seed = qzHash(dateStr + '|' + n), rank = {};
+    bank.forEach(function (x) { rank[x.id] = qzRand(seed ^ qzHash(x.id)); });
+    var pool = bank.slice().sort(function (a, b) { return rank[a.id] - rank[b.id]; });
+    var fresh = pool.filter(function (x) { return !recent[x.id]; });
+    var stale = pool.filter(function (x) { return recent[x.id]; });
+    /* vT187 错题优先：很多人错的题不受 60 天回避限制，可按错误人数提前重复（最多占一半） */
+    var wrongAll = pool.filter(function (x) { return wrong[x.id] > 0; })
+      .sort(function (a, b) { return (wrong[b.id] || 0) - (wrong[a.id] || 0); });
+    var picks = wrongAll.slice(0, Math.min(wrongAll.length, Math.ceil(n / 2)));
+    fresh.forEach(function (x) { if (picks.length < n && picks.indexOf(x) < 0) picks.push(x); });
+    stale.forEach(function (x) { if (picks.length < n) picks.push(x); });
+    return picks.slice(0, n);
+  }
+  /* 记录当日出题（供 60 天回避使用）；题目没变则不写 */
+  function qzLogDay(dateStr, ids) {
+    var id = 'ql_' + dateStr, rec = ntRows('s-quizlog').filter(function (x) { return x && x.id === id; })[0];
+    if (rec && !rec.deleted && (rec.qids || []).join(',') === (ids || []).join(',')) return false;
+    if (!rec) rec = { id: id, date: dateStr, deleted: false };
+    rec.qids = (ids || []).slice(); rec.ts = Date.now(); rec.updatedAt = new Date().toISOString(); rec.updatedBy = 'teacher';
+    ntUpsert('s-quizlog', rec);
+    return true;
+  }
+  function qzTodaySet() { return qzPickDay(qzToday(), qzPerDay()); }
+  /* 某个孩子已答过的题号集合（跨天都算，保证只答一次） */
+  function qzDoneSet(name) {
+    var out = {};
+    ntRows('s-quizdone').forEach(function (r) {
+      if (r && !r.deleted && r.name === name && r.qid) out[r.qid] = 1;
+    });
+    return out;
+  }
+  window.qzPickDay = qzPickDay;
+  window.qzTodaySet = qzTodaySet;
+  window.qzBank = qzBank;
+  window.qzPerDay = qzPerDay;
+  window.qzEnabled = qzEnabled;
+  window.qzDoneSet = qzDoneSet;
+  window.qzCallable = true;
+
+  function qzCatOptions() {
+    var sel = document.getElementById('qzCatFilter'); if (!sel) return;
+    var cur = sel.value || '', bank = qzBank();
+    sel.innerHTML = ['<option value="">全部（' + bank.length + ' 题）</option>'].concat(QZ_CATS.map(function (c) {
+      var m = bank.filter(function (x) { return x.cat === c; }).length;
+      return '<option value="' + esc(c) + '">' + esc(c) + '（' + m + '）</option>';
+    })).join('');
+    sel.value = cur;
+  }
+  function qzRender() {
+    var list = document.getElementById('qzList'); if (!list) return;
+    qzCatOptions();
+    var cat = (document.getElementById('qzCatFilter') || {}).value || '';
+    var bank = qzBank().filter(function (x) { return !cat || x.cat === cat; });
+    var tip = document.getElementById('qzBankTip');
+    if (tip) tip.textContent = '题库共 ' + qzBank().length + ' 题 · 每天 ' + qzPerDay() + ' 题 · 约 ' + (qzBank().length ? Math.floor(qzBank().length / qzPerDay()) : 0) + ' 天不重复';
+    list.innerHTML = bank.length ? bank.map(function (r, i) {
+      return '<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed #e3ede7">' +
+        '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#eef4ff;color:#3b6fb0;flex-shrink:0">' + esc(r.cat || '未分类') + '</span>' +
+        '<div style="flex:1;min-width:0;font-size:13px">' + esc(r.stem || '') +
+        '<div style="font-size:11.5px;color:#6b7c72;margin-top:3px">答案：' + esc(String((r.opts || [])[r.ans] || '')) +
+        (r.src ? ' · ' + esc(r.src) : '') + (r.on === false ? ' · <span style="color:#c2410c">已停用</span>' : '') + '</div></div>' +
+        '<button class="btn2 sm" onclick="qzEdit(\'' + r.id + '\')">编辑</button>' +
+        '<button class="btn2 sm ghost" style="color:#c2410c" onclick="qzDel(\'' + r.id + '\')">删</button></div>';
+    }).join('') : '<div class="sub">这一类还没有题目，点「➕ 新增题目」或「📥 批量导入」。</div>';
+  }
+  function qzRenderToday() {
+    var box = document.getElementById('qzToday'); if (!box) return;
+    var rows = qzTodaySet();
+    if (!rows.length) { box.innerHTML = '<div class="sub">题库为空，先导入题目。</div>'; return; }
+    qzLogDay(qzToday(), rows.map(function (r) { return r.id; }));
+    box.innerHTML = '<div class="sub" style="margin-bottom:6px">' + qzToday() + ' · 共 ' + rows.length + ' 题 · 满分 ' + (rows.length * QZ_PER_SCORE) + ' 分</div>' +
+      rows.map(function (r, i) {
+        return '<div style="padding:7px 0;border-bottom:1px dashed #e3ede7">' +
+          '<div style="font-size:13px;font-weight:600">' + (i + 1) + '. ' + esc(r.stem || '') +
+          ' <span style="font-size:11px;font-weight:400;color:#3b6fb0">' + esc(r.cat || '') + '</span></div>' +
+          '<div style="font-size:12.5px;color:#445;margin-top:2px">' + (r.opts || []).map(function (o, k) {
+            return '<span style="display:inline-block;margin-right:12px">' + 'ABCD'.charAt(k) + '. ' + esc(o) + '</span>';
+          }).join('') + '</div>' +
+          '<div style="font-size:11.5px;color:#2d7a4f;margin-top:2px">✓ 正确答案：' + 'ABCD'.charAt(r.ans) + '．' + esc((r.opts || [])[r.ans] || '') + (r.exp ? '　解析：' + esc(r.exp) : '') + '</div>' +
+          '</div>';
+      }).join('');
+  }
+  function qzOpenForm(id) {
+    var rec = id ? ntRows('s-quiz').filter(function (x) { return x && x.id === id; })[0] : null;
+    var box = document.getElementById('qzFormBox');
+    if (!box) { box = document.createElement('div'); box.id = 'qzFormBox'; document.body.appendChild(box); }
+    var opts = (rec && rec.opts) ? rec.opts : ['', '', '', ''];
+    var ans = rec ? (parseInt(rec.ans, 10) || 0) : 0;
+    box.innerHTML =
+      '<div style="position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)qzCloseForm()">' +
+      '<div style="background:#fff;border-radius:14px;padding:20px;width:560px;max-width:94vw;max-height:90vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.25)">' +
+      '<h3 style="margin:0 0 12px;font-size:16px">' + (id ? '编辑题目' : '新增题目') + '</h3>' +
+      '<div style="margin-bottom:9px"><div style="font-size:12px;color:#7a8a80;margin-bottom:3px">分类</div>' +
+      '<select id="qzFCat" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:14px">' +
+      QZ_CATS.map(function (c) { return '<option value="' + esc(c) + '"' + (rec && rec.cat === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div style="margin-bottom:9px"><div style="font-size:12px;color:#7a8a80;margin-bottom:3px">题干</div>' +
+      '<textarea id="qzFStem" rows="2" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:14px;font-family:inherit">' + esc(rec ? rec.stem : '') + '</textarea></div>' +
+      [0, 1, 2, 3].map(function (k) {
+        return '<div style="margin-bottom:6px;display:flex;gap:6px;align-items:center">' +
+          '<span style="width:22px;font-size:13px;color:#445">' + 'ABCD'.charAt(k) + '</span>' +
+          '<input id="qzFOpt' + k + '" value="' + esc(opts[k] || '') + '" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13.5px"></div>';
+      }).join('') +
+      '<div style="margin:9px 0"><div style="font-size:12px;color:#7a8a80;margin-bottom:3px">正确答案</div>' +
+      '<select id="qzFAns" style="width:120px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13.5px">' +
+      [0, 1, 2, 3].map(function (k) { return '<option value="' + k + '"' + (k === ans ? ' selected' : '') + '>' + 'ABCD'.charAt(k) + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div style="margin-bottom:9px"><div style="font-size:12px;color:#7a8a80;margin-bottom:3px">解析（答错时给孩子看）</div>' +
+      '<textarea id="qzFExp" rows="2" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:13.5px;font-family:inherit">' + esc(rec ? (rec.exp || '') : '') + '</textarea></div>' +
+      '<div style="margin-bottom:12px"><div style="font-size:12px;color:#7a8a80;margin-bottom:3px">出处（可留空）</div>' +
+      '<input id="qzFSrc" value="' + esc(rec ? (rec.src || '') : '') + '" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13.5px"></div>' +
+      '<label style="display:flex;align-items:center;gap:5px;font-size:13px;margin-bottom:12px"><input type="checkbox" id="qzFOn"' + (!rec || rec.on !== false ? ' checked' : '') + '> 启用这道题</label>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn2" onclick="qzCloseForm()">取消</button>' +
+      '<button class="btn2 primary" onclick="qzSaveForm(\'' + (id || '') + '\')">💾 保存</button></div>' +
+      '</div></div>';
+  }
+  function qzCloseForm() { var b = document.getElementById('qzFormBox'); if (b) b.innerHTML = ''; }
+  function qzAdd() { qzOpenForm(null); }
+  function qzEdit(id) { qzOpenForm(id); }
+  function qzSaveForm(id) {
+    var stem = ((document.getElementById('qzFStem') || {}).value || '').trim();
+    var cat = (document.getElementById('qzFCat') || {}).value || QZ_CATS[0];
+    var opts = [0, 1, 2, 3].map(function (k) { return String((document.getElementById('qzFOpt' + k) || {}).value || '').trim(); });
+    var ans = parseInt((document.getElementById('qzFAns') || {}).value, 10) || 0;
+    var exp = ((document.getElementById('qzFExp') || {}).value || '').trim();
+    var src = ((document.getElementById('qzFSrc') || {}).value || '').trim();
+    var on = !!(document.getElementById('qzFOn') || {}).checked;
+    if (!stem) { toastMsg('⚠️ 请填题干'); return }
+    if (opts.filter(Boolean).length < 2) { toastMsg('⚠️ 至少填两个选项'); return }
+    if (!opts[ans]) { toastMsg('⚠️ 正确答案不能是空选项'); return }
+    var rec = id ? ntRows('s-quiz').filter(function (x) { return x && x.id === id; })[0] : null;
+    if (!rec) rec = { id: 'q_' + Date.now() + '_' + Math.floor(Math.random() * 900 + 100) };
+    rec.stem = stem; rec.cat = cat; rec.opts = opts; rec.ans = ans; rec.exp = exp; rec.src = src; rec.on = on;
+    rec.deleted = false; rec.ts = Date.now(); rec.updatedAt = new Date().toISOString(); rec.updatedBy = 'teacher';
+    ntUpsert('s-quiz', rec);
+    qzCloseForm(); qzRender(); qzRenderToday(); ntChanged();
+    toastMsg('已保存，约 2~5 秒同步；今天已是这一组题时，明天起生效');
+  }
+  function qzDel(id) {
+    if (!confirm('删除这道题？已答过的记录仍保留，不影响已加的分。')) return;
+    var rec = ntRows('s-quiz').filter(function (x) { return x && x.id === id; })[0]; if (!rec) return;
+    rec.deleted = true; rec.ts = Date.now(); rec.updatedAt = new Date().toISOString();
+    ntUpsert('s-quiz', rec); qzRender(); qzRenderToday(); ntChanged();
+    toastMsg('已删除');
+  }
+  /* 批量导入：每行一题，格式「题干|A|B|C|D|正确答案(A~D)|解析|分类|出处」；
+     也接受「题干|A|B|C|D|A|解析」这种省略分类的写法。 */
+  function qzParse(text) {
+    var out = [];
+    String(text || '').split(/\r?\n/).forEach(function (line) {
+      var s = String(line || '').trim();
+      if (!s || s.charAt(0) === '#') return;
+      var p = s.split(/[|｜\t]/).map(function (x) { return x.trim(); });
+      if (p.length < 6) return;
+      var ai = 'ABCD'.indexOf(String(p[5] || '').toUpperCase());
+      if (ai < 0) ai = parseInt(p[5], 10) - 1;
+      var cat = QZ_CATS.indexOf(p[7]) >= 0 ? p[7] : (/古文|文言/.test(p[0]) ? '古文词语' : '课内知识');
+      out.push({ stem: p[0], opts: [p[1], p[2], p[3], p[4]], ans: (ai >= 0 && ai < 4) ? ai : 0, exp: p[6] || '', cat: cat, src: p[8] || '' });
+    });
+    return out;
+  }
+  function qzOpenImport() {
+    var box = document.getElementById('qzImportBox');
+    if (!box) { box = document.createElement('div'); box.id = 'qzImportBox'; document.body.appendChild(box); }
+    box.innerHTML =
+      '<div style="position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)qzCloseImport()">' +
+      '<div style="background:#fff;border-radius:14px;padding:20px;width:700px;max-width:94vw;max-height:90vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.25)">' +
+      '<h3 style="margin:0 0 8px;font-size:16px">📥 批量导入题目</h3>' +
+      '<div class="sub" style="margin-bottom:8px">每行一题：<b>题干|A|B|C|D|正确答案|解析|分类|出处</b>。正确答案写 A~D 或 1~4；分类可写「课内知识 / 古文词语 / 文学文化常识 / 快乐读书吧」，不写则按题干自动归到课内知识。</div>' +
+      '<textarea id="qzImpText" rows="9" placeholder="《草原》的作者是谁？|老舍|巴金|朱自清|冰心|A|《草原》作者老舍。|课内知识|六上《草原》" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:9px;font-size:13px;font-family:inherit"></textarea>' +
+      '<div id="qzImpPrev" style="margin:10px 0;font-size:12.5px;color:#556;max-height:150px;overflow:auto"></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn2" onclick="qzCloseImport()">取消</button>' +
+      '<button class="btn2 sm" onclick="qzImportPreview()">👀 解析预览</button>' +
+      '<button class="btn2 primary" onclick="qzImportDo()">📥 确认导入</button></div></div></div>';
+  }
+  function qzCloseImport() { var b = document.getElementById('qzImportBox'); if (b) b.innerHTML = ''; }
+  function qzImportPreview() {
+    var box = document.getElementById('qzImpPrev'); if (!box) return;
+    var arr = qzParse((document.getElementById('qzImpText') || {}).value || '');
+    if (!arr.length) { box.innerHTML = '<span style="color:#c2410c">没解析出题目，请检查每行是否有 6 段以上（题干|A|B|C|D|答案）。</span>'; return }
+    box.innerHTML = '<b>解析到 ' + arr.length + ' 题：</b><br>' + arr.slice(0, 30).map(function (x, i) {
+      return (i + 1) + '. [' + esc(x.cat) + '] ' + esc(x.stem) + ' → ' + 'ABCD'.charAt(x.ans) + '．' + esc(x.opts[x.ans]);
+    }).join('<br>') + (arr.length > 30 ? '<br>…' : '');
+  }
+  function qzImportDo() {
+    var arr = qzParse((document.getElementById('qzImpText') || {}).value || '');
+    if (!arr.length) { toastMsg('⚠️ 没解析出题目，先点「解析预览」检查格式'); return }
+    var now = Date.now(), n = 0;
+    arr.forEach(function (x, i) {
+      ntUpsert('s-quiz', {
+        id: 'q_' + (now + i) + '_' + Math.floor(Math.random() * 900 + 100),
+        cat: x.cat, stem: x.stem, opts: x.opts, ans: x.ans, exp: x.exp, src: x.src,
+        on: true, deleted: false, ts: now + i, updatedAt: new Date(now + i).toISOString(), updatedBy: 'teacher'
+      });
+      n++;
+    });
+    qzCloseImport(); qzRender(); ntChanged();
+    toastMsg('📥 已导入 ' + n + ' 题，题库共 ' + qzBank().length + ' 题');
+  }
+  function qzSaveCfg() {
+    var on = !!(document.getElementById('qzOn') || {}).checked;
+    var v = parseInt((document.getElementById('qzPerDay') || {}).value, 10);
+    if (!(v >= 1)) v = 6; if (v > 10) v = 10;
+    var rec = ntRows('s-quizcfg').filter(function (x) { return x && x.id === 'qz_cfg'; })[0] || { id: 'qz_cfg', seeded: true };
+    rec.on = on; rec.perDay = v; rec.deleted = false; rec.ts = Date.now();
+    rec.updatedAt = new Date().toISOString(); rec.updatedBy = 'teacher';
+    ntUpsert('s-quizcfg', rec);
+    qzRender(); qzRenderToday(); ntChanged();
+    toastMsg('✅ 已保存：' + (on ? '每天 ' + v + ' 题（满分 ' + (v * QZ_PER_SCORE) + ' 分）' : '家长端已关闭竞答'));
+  }
+  function qzInit() {
+    var seeded = qzSeedIfEmpty();
+    var onEl = document.getElementById('qzOn'), perEl = document.getElementById('qzPerDay');
+    var cfg = qzCfg();
+    if (onEl) onEl.checked = cfg.on !== false;
+    if (perEl) perEl.value = qzPerDay();
+    var full = document.getElementById('qzFull'); if (full) full.textContent = qzPerDay() * QZ_PER_SCORE;
+    var stat = document.getElementById('qzStat');
+    if (stat) {
+      var doneN = ntRows('s-quizdone').filter(function (r) { return r && !r.deleted; }).length;
+      stat.innerHTML = '题库 <b>' + qzBank().length + '</b> 题 · 每天 <b>' + qzPerDay() + '</b> 题 · 每题 <b>0.5</b> 分 · 累计已答记录 <b>' + doneN + '</b> 条' +
+        (seeded ? '　<span style="color:#2d7a4f">已内置首批 ' + seeded + ' 题</span>' : '');
+    }
+    qzRender(); qzRenderToday();
+  }
+  window.qzRender = qzRender; window.qzRenderToday = qzRenderToday; window.qzAdd = qzAdd; window.qzEdit = qzEdit;
+  window.qzSaveForm = qzSaveForm; window.qzDel = qzDel; window.qzCloseForm = qzCloseForm;
+  window.qzOpenImport = qzOpenImport; window.qzCloseImport = qzCloseImport;
+  window.qzImportPreview = qzImportPreview; window.qzImportDo = qzImportDo; window.qzSaveCfg = qzSaveCfg;
+  try { qzInit(); } catch (e) { console.warn('[quiz] 初始化失败', e); }
 
   /* ================= vT14 学生评语 ================= */
   var CM_TPL_KEY = 'wb_cm_tpl_v1', CM_TRAIT_KEY = 'wb_cm_trait_v1', CM_AI_KEY = 'wb_cm_ai_v1';
@@ -29847,6 +30450,13 @@ function cwInit(){
       return { ok: true, msg: r.msg, cost: j.cost, who: j.who, act: r.actName, log: log };
     });
   }
+  /* vT187 竞答加分：直接写个人积分（奖惩表），与抽卡 / 喂养同一本账；0.5 分/题 */
+  window.ptQuizBonus = function (name, correctN) {
+    var n = Math.max(0, parseInt(correctN, 10) || 0);
+    if (!n) return Promise.resolve({ ok: true, add: 0 });
+    var add = Math.round(n * 0.5 * 10) / 10;
+    return ptAddManual(name, '每日竞答 · 答对 ' + n + ' 题', add).then(function () { return { ok: true, add: add }; });
+  };
   function ptAutoCfgSave() {
     var c = ptCfg();
     var on = document.getElementById('ptAutoOn');
@@ -31279,6 +31889,37 @@ function cwInit(){
       }
     } catch (e) {}
     var s2 = (typeof mpSyncSettings === 'function') ? mpSyncSettings() : {};
+    /* vT187 每日竞答：题库 + 今日题组 + 最近 60 天已出题 + 全班错题统计，放进快照公开层。
+       题目与答案必须下发（家长端要即时判卷、答错马上给答案）；不含任何学生隐私。 */
+    var quiz = null;
+    try {
+      if (typeof window.qzEnabled === 'function' && window.qzEnabled() && typeof window.qzBank === 'function') {
+        var qbank = window.qzBank() || [];
+        var qrows = (typeof window.qzTodaySet === 'function') ? (window.qzTodaySet() || []) : [];
+        var qFrom = ptwDstr(new Date(now.getTime() - 60 * 86400000));
+        var qRecent = [];
+        try {
+          (window.ntRows('s-quizlog') || []).forEach(function (r) {
+            if (!r || r.deleted || !r.date || String(r.date).slice(0, 10) < qFrom) return;
+            (r.qids || []).forEach(function (q) { if (qRecent.indexOf(q) < 0) qRecent.push(q); });
+          });
+        } catch (_q1) {}
+        var qWrong = {};
+        try {
+          (window.ntRows('s-quizdone') || []).forEach(function (r) {
+            if (r && !r.deleted && r.ok === false && r.qid) qWrong[r.qid] = (qWrong[r.qid] || 0) + 1;
+          });
+        } catch (_q2) {}
+        quiz = {
+          on: true, perDay: (typeof window.qzPerDay === 'function') ? window.qzPerDay() : 6,
+          score: 0.5, date: today, today: qrows.map(function (r) { return r.id; }),
+          recent: qRecent, wrong: qWrong,
+          bank: qbank.map(function (r) {
+            return { id: r.id, cat: r.cat || '', stem: r.stem || '', opts: r.opts || [], ans: r.ans, exp: r.exp || '', src: r.src || '' };
+          })
+        };
+      }
+    } catch (_q3) {}
     return {
       app: '李老师工作台·家长端', ver: 3, ts: Date.now(),
       classId: (s2 && s2.classId) || '', className: '',
@@ -31287,6 +31928,7 @@ function cwInit(){
       rcTitles: rcTitlesSnap, rcClass: rcClass,
       hwStats: hwStats, hwStatFrom: hwStatFrom, hwStatTo: hwStatTo,
       points: points, comments: comments, grades: grades, gAvg: gAvg, gRank: gRank, detain: detain,
+      quiz: quiz,
       codexPool: codexPool, codexPets: codexPets,
       weekly: weekly, weeklyFrom: lim14
     };
@@ -31344,7 +31986,17 @@ function cwInit(){
         hwStatFrom: snap.hwStatFrom || '', hwStatTo: snap.hwStatTo || '',
         codex: (snap.codexPets && snap.codexPets[st.name]) || [],
         /* vT163 本周表现：三类奖惩明细只下发这个孩子的，家长端按本周过滤 */
-        weekly: (snap.weekly || []).filter(function (r) { return r.name === st.name; })
+        weekly: (snap.weekly || []).filter(function (r) { return r.name === st.name; }),
+        /* vT187 竞答：这个孩子跨天累计已答过的题号（一题只答一次，家长端据此置灰） */
+        quizDone: (function () {
+          try {
+            var qd = [];
+            (window.ntRows('s-quizdone') || []).forEach(function (r) {
+              if (r && !r.deleted && r.name === st.name && r.qid) qd.push(r.qid);
+            });
+            return qd;
+          } catch (_qd) { return []; }
+        })()
       };
       blocks[st.name] = { code: String(st.code || '').toUpperCase(), data: seal(per, st.code || st.name) };
     });
@@ -31356,6 +32008,8 @@ function cwInit(){
     /* vT181 布置作业真源也放公开顶层（只有作业内容/科目/日期，无学生隐私）：
        老加密块还没重发时，家长端可先用顶层 assign 立即显示真正布置的作业。 */
     doc.assign = snap.assign || [];
+    /* vT187 竞答题库与今日题组（公开、无学生信息）：家长端据此出题与判卷 */
+    doc.quiz = snap.quiz || null;
     return ptwEnsureRepo(pr).then(function () {
       return fetch(api + '?access_token=' + encodeURIComponent(pr.token)).then(function (r) {
         return r.text().then(function (txt) {
@@ -31393,6 +32047,16 @@ function cwInit(){
           if (peCh && peCh.owner) doc.parentEssayOwner = peCh.owner;
           if (peCh && peCh.repo) doc.parentEssayRepo = peCh.repo;
           if (peCh && peCh.token) doc.parentEssayToken = peCh.token;
+          /* vT187 把提案仓库配置写给教室桌面（s-desktop.quiz_parent_channel）：
+             老师电脑没开时，由教室电脑接手竞答提案的自动批准。 */
+          try {
+            if (peCh && peCh.owner && peCh.repo && peCh.token) {
+              window.ntUpsert('s-desktop', {
+                id: 'quiz_parent_channel', owner: peCh.owner, repo: peCh.repo, token: peCh.token,
+                ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher'
+              });
+            }
+          } catch (_qpc) {}
           if (j) {
             if (j.parentEssayOwner && !(peCh && peCh.owner)) doc.parentEssayOwner = j.parentEssayOwner;
             if (j.parentEssayRepo && !(peCh && peCh.repo)) doc.parentEssayRepo = j.parentEssayRepo;
@@ -31588,6 +32252,46 @@ function cwInit(){
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     }).then(function (r) { if (!r.ok) throw new Error('回写状态失败 ' + r.status); return true; });
   }
+  /* vT187 竞答提案：服务端按题库复核答案（不信任前端传的 ok），按 0.5 分/题加个人积分，
+     并写 s-quizdone 保证「同一题跨天也只计一次分」。加分失败时不写已答记录，家长可重试。 */
+  function ptaQuizHandle(cfg, fname, sha, rec) {
+    var who = String(rec.studentName || rec.studentId || '').trim();
+    if (!who) return Promise.resolve({ ok: false, msg: '提案缺少学生姓名' });
+    var d = new Date(), today = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    var day = String(rec.date || '').slice(0, 10);
+    if (day !== today) return Promise.resolve({ ok: false, msg: '这不是今天的竞答题（提交日期 ' + (day || '空') + '）' });
+    var bank = {};
+    try { (window.qzBank ? window.qzBank() : []).forEach(function (q) { if (q && q.id) bank[q.id] = q; }); } catch (e) {}
+    if (!Object.keys(bank).length) return Promise.resolve({ ok: false, msg: '题库为空或被关闭' });
+    var doneSet = {};
+    try { doneSet = window.qzDoneSet ? (window.qzDoneSet(who) || {}) : {}; } catch (e2) {}
+    var todo = [], correct = 0;
+    (rec.answers || []).forEach(function (a) {
+      var q = a && bank[a.q]; if (!q) return;
+      if (doneSet[q.id]) return;                       /* 答过的题不再计分 */
+      var right = Number(a.a) === Number(q.ans);
+      todo.push({ qid: q.id, ok: right });
+      if (right) correct++;
+    });
+    if (!todo.length) return Promise.resolve({ ok: true, msg: '这些题之前已经答过，本次不重复加分' });
+    var add = Math.round(correct * 0.5 * 10) / 10;
+    var writeDone = function () {
+      var now = Date.now(), iso = new Date(now).toISOString();
+      todo.forEach(function (x, i) {
+        window.ntUpsert('s-quizdone', {
+          id: 'qd_' + who + '_' + x.qid, name: who, qid: x.qid, date: day, ok: x.ok,
+          ts: now + i, updatedAt: iso, updatedBy: 'auto'
+        });
+      });
+      try { window.ntChanged(); } catch (e3) {}
+      return { ok: true, msg: '答对 ' + correct + ' / ' + todo.length + ' 题' + (add ? ('，+' + add + ' 分') : '，本次没有新增得分') };
+    };
+    if (!add) return Promise.resolve(writeDone());     /* 全错也要记「已答」，避免反复刷同一题 */
+    if (typeof window.ptQuizBonus !== 'function') return Promise.resolve({ ok: false, msg: '积分模块未就绪' });
+    return window.ptQuizBonus(who, correct).then(writeDone).catch(function (e) {
+      return { ok: false, msg: '加分失败：' + ((e && e.message) || e) };
+    });
+  }
   function ptaScan(manual) {
     if (PTA.busy) return Promise.resolve();
     if (typeof window.ptAutoCfg !== 'function') return Promise.resolve();
@@ -31608,6 +32312,17 @@ function cwInit(){
               PTA.seen[got.sha] = 1;
               if ((rec.status || 'pending') !== 'pending') return null;
               n++;
+              /* vT187 竞答提案走独立分支：加分型，不扣分、不受「每人每天自动批准上限」限制 */
+              if (rec.action === 'quiz') {
+                return ptaQuizHandle(cfg, f.name, got.sha, rec).then(function (r) {
+                  if (r && r.ok) {
+                    okN++;
+                    return ptaMark(cfg, f.name, got.sha, rec, { status: 'done', doneAt: Date.now(), result: r.msg, doneBy: 'auto' });
+                  }
+                  heldN++;
+                  return ptaMark(cfg, f.name, got.sha, rec, { status: 'held', heldReason: (r && r.msg) || '竞答校验未通过', heldAt: Date.now() });
+                }).catch(function (e) { console.warn('[竞答提案] 处理失败', f.name, e); });
+              }
               try { window.ptIngestParentProposals([rec]); } catch (e) {}
               var v = window.ptAutoJudge(rec.id);
               if (!v.ok) {
