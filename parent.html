@@ -332,6 +332,19 @@
   .rccls{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
   .rcbar.cls i{background:linear-gradient(90deg,#7cc4f0,#9fd8f5)}
   .rctag b{font-weight:600;color:inherit;opacity:.8;margin-left:3px}
+
+/* vT198 喂养感谢特效（家长端）：宠物弹跳 + 爱心飘散 + 感谢语 */
+#petFeedFx{position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;pointer-events:none}
+#petFeedFx.out{opacity:0;transition:opacity .45s ease}
+#petFeedFx .pff-card{background:#fff;border:2px solid #f7c9d8;border-radius:22px;padding:18px 22px;box-shadow:0 18px 46px rgba(226,85,122,.22);display:flex;flex-direction:column;align-items:center;animation:pffIn .5s cubic-bezier(.34,1.56,.64,1);max-width:78vw}
+@keyframes pffIn{0%{opacity:0;transform:scale(.6) translateY(10px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+#petFeedFx .pff-pet{width:96px;height:96px;object-fit:contain;animation:pffHop .9s ease-in-out 2}
+@keyframes pffHop{0%,100%{transform:translateY(0) scale(1)}30%{transform:translateY(-10px) scale(1.08) rotate(-4deg)}60%{transform:translateY(0) scale(1.02) rotate(4deg)}}
+#petFeedFx .pff-emo{font-size:56px;line-height:1;animation:pffHop .9s ease-in-out 2}
+#petFeedFx .pff-say{margin-top:10px;font-size:15px;font-weight:600;color:#8a3a55;text-align:center;line-height:1.6}
+#petFeedFx .pff-sub{margin-top:4px;font-size:12px;color:#b07a8c;text-align:center}
+#petFeedFx .pff-h{position:absolute;left:50%;top:50%;font-size:20px;animation:pffFloat 1.6s ease-out forwards;opacity:0}
+@keyframes pffFloat{0%{opacity:0;transform:translate(0,0) scale(.5)}15%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(1.1) rotate(var(--rot))}}
 </style>
 </head>
 <body>
@@ -339,7 +352,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT197）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT198）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -1653,7 +1666,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v197</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v198</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
@@ -1701,6 +1714,40 @@
     return GITEE + '/repos/' + enc(owner) + '/' + enc(repo) + '/contents/pq/' + enc(name) +
       (withToken ? ('?ref=master&access_token=' + enc(ST.snap.parentEssayToken || '')) : '');
   }
+  /* vT198 喂养感谢特效：提交喂食后立刻给孩子一个可爱的反馈（不影响等待入账） */
+  function petFeedThanksFx(extra) {
+    try {
+      var old = document.getElementById('petFeedFx');
+      if (old && old.parentNode) old.parentNode.removeChild(old);
+      var codex = (ST.per && ST.per.codex) || [];
+      var hit = codex.filter(function (p) { return p && (p.name === (extra && extra.petName)); })[0];
+      var img = hit && (hit.img || (hit.imgs && (hit.imgs[hit.stage] || hit.imgs.baby || hit.imgs.teen || hit.imgs.adult)));
+      var d = document.createElement('div');
+      d.id = 'petFeedFx';
+      d.innerHTML = '<div class="pff-card">' +
+        (img ? '<img class="pff-pet" src="' + esc(img) + '" alt="">' : '<div class="pff-emo">🐾</div>') +
+        '<div class="pff-say">谢谢你喂我～<br>这口太香啦！</div>' +
+        '<div class="pff-sub">已经送到老师那边啦，通过后成长值就涨起来</div>' +
+        '</div>';
+      var icons = ['💗', '✨', '🍬', '💖', '⭐', '🌸'];
+      for (var i = 0; i < 12; i++) {
+        var h = document.createElement('span');
+        h.className = 'pff-h';
+        h.textContent = icons[i % icons.length];
+        h.style.left = (50 + (Math.random() * 40 - 20)) + '%';
+        h.style.top = (50 + (Math.random() * 16 - 8)) + '%';
+        h.style.fontSize = (14 + Math.random() * 12) + 'px';
+        h.style.setProperty('--dx', (Math.random() * 160 - 80) + 'px');
+        h.style.setProperty('--dy', (-90 - Math.random() * 90) + 'px');
+        h.style.setProperty('--rot', (Math.random() * 80 - 40) + 'deg');
+        h.style.animationDelay = (i * 60) + 'ms';
+        d.appendChild(h);
+      }
+      document.body.appendChild(d);
+      setTimeout(function () { d.classList.add('out'); }, 2100);
+      setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 2700);
+    } catch (e) {}
+  }
   function submitProposal(action, cost, extra) {
     if (ST.busy) return;
     extra = extra || {};
@@ -1738,6 +1785,7 @@
     }).then(function () {
       ST.busy = false;
       ST.pending = { id: rec.id, name: ST.name, action: action, label: actName, at: rec.at, status: 'pending' };
+      if (action === 'growfeed') petFeedThanksFx(extra);   /* vT198 喂养成功的小特效 */
       savePending(); renderMain(); startPoll();
     }).catch(function (e) {
       ST.busy = false;
