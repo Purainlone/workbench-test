@@ -1641,11 +1641,11 @@ table.paper td.l{text-align:left;font-weight:600}
       <button data-t="bonus" onclick="scTab('bonus')">🏆 目标加分</button>
     </div>
 
-    <!-- vT188 常驻入口：不切子标签也能看到，避免「导入历次期末成绩」藏在成绩管理页里找不到 -->
-    <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:0 0 10px;padding:8px 12px;border:1px solid #cfe7db;background:#f4faf7;border-radius:10px">
-      <span style="font-size:13px;color:#25574a;font-weight:600">📥 历次期末成绩</span>
-      <button class="btn2 sm primary" onclick="scHistOpen()">导入历次期末成绩</button>
-      <span class="sctip">三年级至今每学期期末一次导入；以后新的期末成绩也从这里加（支持粘贴看板 JSON 或「姓名|学期|科目|分数」）</span>
+    <!-- vT190 期末成绩已独立成「🏁 期末分析」看板；这里只留一个跳转，避免又混进成绩管理 -->
+    <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:0 0 10px;padding:8px 12px;border:1px solid #cfe0ef;background:#f5f9fd;border-radius:10px">
+      <span style="font-size:13px;color:#1d4f7c;font-weight:600">🏁 历次期末成绩</span>
+      <button class="btn2 sm primary" onclick="fnGoto()">去「成绩分析」看期末看板</button>
+      <span class="sctip">期末成绩单独成看板（趋势 / 科目对比 / 分数段 / 学生成长），不混进本页的日常成绩表</span>
     </div>
 
     <div data-page-node-id="M4wvQ81PLgL6VNfInhtPc3" class="tabpane active" id="scp-ent">
@@ -1717,35 +1717,51 @@ table.paper td.l{text-align:left;font-weight:600}
     </div>
 
     <div data-page-node-id="ms8iyLWR2UjOLxkl7cjzVo" class="tabpane" id="scp-an">
-      <div class="chartbox" style="margin-bottom:14px">
-        <h3>📥 以往成绩</h3>
-        <div class="paperrow" style="margin-bottom:0">
-          <label class="btn2 sm primary" for="scHistIn" style="margin:0">⬆️ 上传以往成绩表</label>
-          <input accept=".xlsx,.xls,.csv,.txt,.tsv,.docx,.doc,image/*" id="scHistIn" multiple onchange="scPickHist(event)" style="display:none" type="file">
-          <span class="sctip">支持 Excel / Word / 图片 / CSV；表头要有「姓名」，其余每列一个考试或一个科目</span>
+      <!-- vT191 期末成绩看板：老师提供的分析看板原样嵌入，作为成绩分析的主体 -->
+      <div class="chartbox" style="margin-bottom:14px;padding:0;overflow:hidden">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--line);background:#f5f9fd">
+          <b style="font-size:14px;color:#1d4f7c">🏁 期末成绩看板</b>
+          <button class="btn2 sm primary" onclick="fnImportOpen()">📥 导入 / 追加期末成绩</button>
+          <button class="btn2 sm" onclick="fnReload(true)" title="导入新成绩后点这里，看板按最新数据重算">🔄 按新成绩重算</button>
+          <button class="btn2 sm ghost" style="color:#c2410c" onclick="fnCleanWrong()" title="删除此前误导入到「成绩管理」的期末记录">🧹 清除误导入成绩管理的记录</button>
+          <span class="sctip" id="fnTip"></span>
         </div>
-        <div class="uprev" id="scHistState"></div>
-        <div class="uprev" id="scHistPreview"></div>
+        <iframe id="fnFrame" src="final-board.html" style="width:100%;height:860px;border:0;display:block" title="期末成绩分析看板"></iframe>
       </div>
-      <div class="paperrow">
-        <select id="scAnSub" onchange="scRenderAn()"><option>语文</option><option>数学</option><option>英语</option><option>科学</option><option>道德与法治</option><option>音乐</option><option>美术</option></select>
-        <select id="scAnRange" onchange="scRenderAn()">
-          <option value="all">全部考试</option>
-          <option value="term">只看本学期</option>
-          <option value="unit">只看单元测</option>
-        </select>
-        <span class="sctip" id="scAnTip"></span>
-        <button class="btn2 sm" onclick="scWordPanel()">📄 导出成绩表</button>
-      </div>
-      <!-- vT173 功能⑦：同一次考试的多科目综合分析（考试名称+日期确定一场，勾选科目看总分排名） -->
-      <div class="chartbox" id="scCmpPanel" style="margin-bottom:14px">
-        <h3>🧮 综合分析 <span style="font-size:12px;font-weight:400;color:#6b7f74">选一场考试，勾选多个科目一起看总分与排名</span></h3>
-        <div class="paperrow" id="scCmpBar" style="margin-bottom:0"></div>
-        <div id="scCmpOut" style="margin-top:10px"></div>
-      </div>
-      <div id="scAnExams"></div>
-      <div id="scWordBox"></div>
-      <div id="scAnBox"></div>
+
+      <details class="chartbox" style="margin-bottom:14px">
+        <summary style="cursor:pointer;font-size:14px;font-weight:700">📊 日常考试详细分析（进退步 / 偏科 / 多科综合）—— 点开查看</summary>
+        <div class="sub" style="margin:8px 0">这部分针对平时单元测、期中期末的<b>每一次考试</b>，与上面的期末看板互补；与看板重复的图表以看板为准。</div>
+        <div class="chartbox" style="margin-bottom:14px">
+          <h3>📥 以往成绩</h3>
+          <div class="paperrow" style="margin-bottom:0">
+            <label class="btn2 sm primary" for="scHistIn" style="margin:0">⬆️ 上传以往成绩表</label>
+            <input accept=".xlsx,.xls,.csv,.txt,.tsv,.docx,.doc,image/*" id="scHistIn" multiple onchange="scPickHist(event)" style="display:none" type="file">
+            <span class="sctip">支持 Excel / Word / 图片 / CSV；表头要有「姓名」，其余每列一个考试或一个科目</span>
+          </div>
+          <div class="uprev" id="scHistState"></div>
+          <div class="uprev" id="scHistPreview"></div>
+        </div>
+        <div class="paperrow">
+          <select id="scAnSub" onchange="scRenderAn()"><option>语文</option><option>数学</option><option>英语</option><option>科学</option><option>道德与法治</option><option>音乐</option><option>美术</option></select>
+          <select id="scAnRange" onchange="scRenderAn()">
+            <option value="all">全部考试</option>
+            <option value="term">只看本学期</option>
+            <option value="unit">只看单元测</option>
+          </select>
+          <span class="sctip" id="scAnTip"></span>
+          <button class="btn2 sm" onclick="scWordPanel()">📄 导出成绩表</button>
+        </div>
+        <!-- vT173 功能⑦：同一次考试的多科目综合分析（考试名称+日期确定一场，勾选科目看总分排名） -->
+        <div class="chartbox" id="scCmpPanel" style="margin-bottom:14px">
+          <h3>🧮 综合分析 <span style="font-size:12px;font-weight:400;color:#6b7f74">选一场考试，勾选多个科目一起看总分与排名</span></h3>
+          <div class="paperrow" id="scCmpBar" style="margin-bottom:0"></div>
+          <div id="scCmpOut" style="margin-top:10px"></div>
+        </div>
+        <div id="scAnExams"></div>
+        <div id="scWordBox"></div>
+        <div id="scAnBox"></div>
+      </details>
     </div>
 
     <div class="tabpane" id="scp-mg">
@@ -1756,7 +1772,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <button class="btn2 sm primary" onclick="scMgSave()">💾 保存修改</button>
         <button class="btn2 sm ghost" onclick="scDedupePanel()" title="同一场同一人只保留一条（保留字段最全、分数最新的）">🧹 查重去重</button>
         <button class="btn2 sm ghost" onclick="scImportTargets()">📥 导入目标表</button>
-        <button class="btn2 sm" onclick="scHistOpen()" title="把历次期末成绩（如三年级至今每学期期末）一次导入，以后新成绩也能继续加">📥 导入历次期末成绩</button>
+        <button class="btn2 sm" onclick="fnGoto()" title="期末成绩看板在「成绩分析」页，不写进本页成绩表">🏁 期末看板</button>
         <input type="file" id="scTargetFile" accept=".xlsx,.xls" style="display:none" onchange="scImportTargetsFile(event)">
         <span class="sctip" id="scMgTip"></span>
       </div>
@@ -2808,9 +2824,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v189</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v191</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v189','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v191','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -7630,6 +7646,293 @@ function scHistDo() {
 }
 window.scHistOpen = scHistOpen; window.scHistClose = scHistClose;
 window.scHistPreview = scHistPreview; window.scHistDo = scHistDo;
+
+/* ============ vT190 期末分析（独立看板） ============
+   数据存独立的 s-final 表，不再写进飞书成绩表，避免把 843 条期末记录混进日常「成绩管理」。
+   展示直接把老师提供的成绩分析看板（source/final-board.html）原样嵌入；
+   一旦 s-final 里有数据，就用它重算一份与原看板同结构的 DATA 注入 iframe，图表与交互完全不变。 */
+var FN_ORDER = ['三上', '三下', '四上', '四下', '五上', '五下', '六上', '六下'];
+var FN_SUBJ_KEY = { '语文': '语', '数学': '数', '英语': '英' };
+function fnRows() {
+  return (typeof window.ntRows === 'function' ? window.ntRows('s-final') : [])
+    .filter(function (r) { return r && !r.deleted && r.name && r.term && r.subject && r.score != null && !isNaN(Number(r.score)); });
+}
+function fnTerms(rows) {
+  rows = rows || fnRows();
+  var seen = {};
+  rows.forEach(function (r) { seen[r.term] = 1; });
+  return Object.keys(seen).sort(function (a, b) {
+    var ia = FN_ORDER.indexOf(a), ib = FN_ORDER.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || String(a).localeCompare(String(b));
+  });
+}
+function fnSubjects(rows) {
+  rows = rows || fnRows();
+  var seen = {}, out = [];
+  rows.forEach(function (r) { if (!seen[r.subject]) { seen[r.subject] = 1; out.push(r.subject); } });
+  return ['语文', '数学', '英语'].filter(function (s) { return seen[s]; })
+    .concat(out.filter(function (s) { return ['语文', '数学', '英语'].indexOf(s) < 0; }));
+}
+function fnR2(v) { return Math.round(v * 100) / 100; }
+/* 生成与原看板完全一致的数据结构：meta / statistics / trend / crossSubject / studentPanel */
+function fnBuildData(rowsIn) {
+  var rows = rowsIn || fnRows(), terms = fnTerms(rows), subs = fnSubjects(rows);
+  if (!rows.length || !terms.length || !subs.length) return null;
+  var by = {}, stu = {};
+  rows.forEach(function (r) {
+    var v = Number(r.score);
+    (by[r.term + '|' + r.subject] = by[r.term + '|' + r.subject] || []).push(v);
+    var st = stu[r.name] = stu[r.name] || {};
+    (st[r.term] = st[r.term] || {})[r.subject] = v;
+  });
+  var PASS = 60, EXC = 90;
+  var statistics = {}, trend = {}, crossSubject = {};
+  subs.forEach(function (s) { trend[s] = []; });
+  terms.forEach(function (t) {
+    statistics[t] = {};
+    subs.forEach(function (s) {
+      var arr = (by[t + '|' + s] || []).slice().sort(function (a, b) { return a - b; });
+      var n = arr.length, sum = 0, passN = 0, excN = 0;
+      var dist = { '<60': 0, '60-69': 0, '70-79': 0, '80-89': 0, '90-100': 0 };
+      arr.forEach(function (v) {
+        sum += v;
+        if (v >= PASS) passN++;
+        if (v >= EXC) excN++;
+        if (v < 60) dist['<60']++; else if (v < 70) dist['60-69']++;
+        else if (v < 80) dist['70-79']++; else if (v < 90) dist['80-89']++; else dist['90-100']++;
+      });
+      var avg = n ? fnR2(sum / n) : null;
+      var pr = n ? fnR2(passN * 100 / n) : null;
+      var er = n ? fnR2(excN * 100 / n) : null;
+      statistics[t][s] = {
+        '参考人数': n, '平均分': avg, '最高分': n ? arr[n - 1] : null, '最低分': n ? arr[0] : null,
+        '及格人数': passN, '及格率': pr, '优秀人数': excN, '优秀率': er, '分数段': dist
+      };
+      trend[s].push([avg, pr, er]);
+    });
+    var hi = '', lo = '';
+    subs.forEach(function (s) {
+      var a = statistics[t][s]['平均分']; if (a == null) return;
+      if (!hi || a > statistics[t][hi]['平均分']) hi = s;
+      if (!lo || a < statistics[t][lo]['平均分']) lo = s;
+    });
+    var cs = { '最高': hi, '最低': lo };
+    subs.forEach(function (s) {
+      var a = statistics[t][s]['平均分'];
+      var k = FN_SUBJ_KEY[s] || s;
+      cs[k] = a;
+    });
+    crossSubject[t] = cs;
+  });
+  var overall = {};
+  subs.forEach(function (s) {
+    var vs = terms.map(function (t) { return statistics[t][s]['平均分']; }).filter(function (v) { return v != null; });
+    overall[s] = vs.length ? fnR2(vs.reduce(function (a, b) { return a + b; }, 0) / vs.length) : null;
+  });
+  crossSubject['六学期总体平均'] = overall;
+  var names = Object.keys(stu).sort(function (a, b) { return a.localeCompare(b, 'zh-Hans-CN'); });
+  var data = names.map(function (nm) {
+    var arr = terms.map(function (t) {
+      var o = stu[nm][t] || {}, vals = [], allHave = true;
+      subs.forEach(function (s) {
+        if (o[s] == null) allHave = false; else vals.push(o[s]);
+      });
+      var total = vals.length ? fnR2(vals.reduce(function (a, b) { return a + b; }, 0)) : null;
+      if (!allHave) total = vals.length ? total : null;   /* 缺考不硬凑合计，但有一科就给出已知合计 */
+      return subs.map(function (s) { return o[s] == null ? null : o[s]; }).concat([total]);
+    });
+    var first = arr[0] || [], last = arr[arr.length - 1] || [];
+    var chg = [];
+    for (var k = 0; k <= subs.length; k++) {
+      chg.push((first[k] == null || last[k] == null) ? null : fnR2(last[k] - first[k]));
+    }
+    return [nm, arr, chg];
+  });
+  return {
+    meta: {
+      '学期顺序': terms, '科目': subs,
+      '满分': subs.reduce(function (o, s) { o[s] = 100; return o; }, {}),
+      '及格线': PASS, '优秀线': EXC,
+      '分数段': ['<60', '60-69', '70-79', '80-89', '90-100'],
+      '三科合计满分': subs.length * 100,
+      '说明': '数据来自工作台「期末分析」独立录入（s-final），与日常成绩管理分开；及格≥60、优秀≥90；null 表示缺考或未录入。'
+    },
+    statistics: statistics, trend: trend, crossSubject: crossSubject,
+    studentPanel: {
+      '格式': '[姓名,[各学期[各科...,三科合计]],[各科变化,合计变化]]；null=缺考',
+      '有成绩学生数': data.length, '全学期无有效成绩': [], data: data
+    }
+  };
+}
+/* 从看板自带的 DATA 还原成明细（studentPanel 里已有每个学生每学期每科分数），作为合并基线 */
+function fnBaselineFromBoard(txt) {
+  try {
+    var i = txt.indexOf('const DATA = ');
+    var j = txt.indexOf('\n};', i);
+    if (i < 0 || j < 0) return [];
+    var d = JSON.parse(txt.slice(i + 13, j + 2));
+    var terms = (d.meta && d.meta['学期顺序']) || [], subs = (d.meta && d.meta['科目']) || [];
+    var out = [];
+    ((d.studentPanel && d.studentPanel.data) || []).forEach(function (row) {
+      var nm = String(row[0] || '').trim(); if (!nm) return;
+      var arr = row[1] || [];
+      terms.forEach(function (t, ti) {
+        var vals = arr[ti] || [];
+        subs.forEach(function (sj, si) {
+          var v = vals[si];
+          if (v == null || v === '') return;
+          out.push({ name: nm, term: t, subject: sj, score: Number(v) });
+        });
+      });
+    });
+    return out;
+  } catch (e) { return [] }
+}
+var FN_LOADING = false;
+function fnReload(force) {
+  var fr = document.getElementById('fnFrame'); if (!fr) return;
+  var rows = fnRows(), terms = fnTerms(rows), tip = document.getElementById('fnTip');
+  if (tip) tip.textContent = rows.length
+    ? ('独立期末库：' + rows.length + ' 条 · ' + terms.join(' / '))
+    : '独立期末库还是空的，当前显示的是原看板自带的 6 个学期数据';
+  if (!rows.length) {
+    if (force) fr.src = 'final-board.html?t=' + Date.now();
+    else if (!fr.getAttribute('src')) fr.src = 'final-board.html';
+    return;
+  }
+  if (FN_LOADING) return;
+  FN_LOADING = true;
+  fetch('final-board.html?v=190').then(function (r) { return r.text(); }).then(function (txt) {
+    var i = txt.indexOf('const DATA = ');
+    var j = i >= 0 ? txt.indexOf('\n};', i) : -1;
+    if (i < 0 || j < 0) { fr.src = 'final-board.html'; return }
+    /* 以看板自带的 6 个学期为基线，叠加 s-final 里的新增/修改：同人同学期同科以 s-final 为准，
+       这样只导入「六上」也不会把三上~五下的历史弄丢。 */
+    var base = fnBaselineFromBoard(txt), merged = {}, order = [];
+    base.concat(rows).forEach(function (x) {
+      var k = x.name + '|' + x.term + '|' + x.subject;
+      if (!merged[k]) order.push(k);
+      merged[k] = x;
+    });
+    var data = fnBuildData(order.map(function (k) { return merged[k]; }));
+    if (!data) { fr.src = 'final-board.html'; return }
+    var html = txt.slice(0, i) + 'const DATA = ' + JSON.stringify(data) + ';' + txt.slice(j + 3);
+    fr.srcdoc = html;
+    if (force) toastMsg('🔄 已按最新期末成绩重算看板（历史学期保留）');
+  }).catch(function () {
+    fr.src = 'final-board.html' + (force ? ('?t=' + Date.now()) : '');
+  }).then(function () { FN_LOADING = false; });
+}
+/* ---------- 导入 / 追加期末成绩（写独立表，不进成绩管理） ---------- */
+function fnImportOpen() {
+  var box = document.getElementById('fnImportBox');
+  if (!box) { box = document.createElement('div'); box.id = 'fnImportBox'; document.body.appendChild(box); }
+  var latest = fnTerms();
+  box.innerHTML =
+    '<div style="position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)fnImportClose()">' +
+    '<div style="background:#fff;border-radius:14px;padding:20px;width:720px;max-width:94vw;max-height:90vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.25)">' +
+    '<h3 style="margin:0 0 8px;font-size:16px">📥 导入 / 追加期末成绩</h3>' +
+    '<div class="sub" style="margin-bottom:8px">支持 ① 成绩看板导出的 <b>grades_data.json</b> 全文；② 每行一条 <b>姓名|学期|科目|分数</b>。写进独立期末库，<b>不会出现在「成绩管理」</b>里。同一人同一学期同一科重复导入会覆盖分数。</div>' +
+    '<textarea id="fnText" rows="9" placeholder="蔡卓铖|六上|语文|92&#10;蔡卓铖|六上|数学|95&#10;……" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:9px;font-size:13px;font-family:inherit"></textarea>' +
+    '<div id="fnPreview" style="margin:10px 0;font-size:12.5px;color:#556;max-height:170px;overflow:auto"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn2" onclick="fnImportClose()">取消</button>' +
+    '<button class="btn2 sm" onclick="fnImportPreview()">👀 解析预览</button>' +
+    '<button class="btn2 primary" onclick="fnImportDo()">📥 确认导入</button></div>' +
+    '<div id="fnStatus" class="sub" style="margin-top:8px"></div></div></div>';
+  if (latest.length) {
+    var p = document.getElementById('fnPreview');
+    if (p) p.innerHTML = '当前独立期末库已有：' + latest.join(' / ');
+  }
+}
+function fnImportClose() { var b = document.getElementById('fnImportBox'); if (b) b.innerHTML = ''; }
+function fnParse(text) {
+  var t = String(text || '').trim();
+  if (!t) return { rows: [], err: '先粘贴成绩数据' };
+  try {
+    var out = (t.charAt(0) === '{' || t.charAt(0) === '[') ? scHistParseJson(t) : scHistParseTable(t);
+    out.rows.forEach(function (x) { x.subject = String(x.subject || '').trim(); });
+    return out;
+  } catch (e) { return { rows: [], err: 'JSON 解析失败：' + ((e && e.message) || '格式不对') } }
+}
+function fnImportPreview() {
+  var box = document.getElementById('fnPreview'); if (!box) return null;
+  var b = fnParse((document.getElementById('fnText') || {}).value || '');
+  if (b.err) { box.innerHTML = '<span style="color:#c2410c">' + esc(b.err) + '</span>'; return null }
+  if (!b.rows.length) { box.innerHTML = '<span style="color:#c2410c">没解析出分数</span>'; return null }
+  var byTerm = {};
+  b.rows.forEach(function (x) { byTerm[x.term] = (byTerm[x.term] || 0) + 1; });
+  box.innerHTML = '<b>解析到 ' + b.rows.length + ' 条</b>　' +
+    Object.keys(byTerm).map(function (t) { return esc(t) + ' ' + byTerm[t]; }).join('　');
+  return b;
+}
+function fnImportDo() {
+  var b = fnImportPreview();
+  if (!b) return;
+  var now = Date.now(), n = 0, add = 0, upd = 0;
+  var exist = {};
+  (typeof window.ntRows === 'function' ? window.ntRows('s-final') : []).forEach(function (r) {
+    if (r && !r.deleted) exist[r.name + '|' + r.term + '|' + r.subject] = r;
+  });
+  b.rows.forEach(function (x, i) {
+    var key = x.name + '|' + x.term + '|' + x.subject;
+    var rec = exist[key];
+    if (rec) { rec.score = Number(x.score); rec.date = x.date || rec.date || ''; rec.ts = now + i; rec.updatedAt = new Date(now + i).toISOString(); rec.updatedBy = 'teacher'; }
+    else {
+      rec = { id: 'fn_' + x.name + '_' + x.term + '_' + x.subject, name: x.name, term: x.term, subject: x.subject,
+        score: Number(x.score), date: x.date || '', full: 100, deleted: false,
+        ts: now + i, updatedAt: new Date(now + i).toISOString(), updatedBy: 'teacher' };
+      add++;
+    }
+    window.ntUpsert('s-final', rec);
+    if (!exist[key]) exist[key] = rec;
+    n++;
+  });
+  var st = document.getElementById('fnStatus');
+  if (st) st.textContent = '已写入 ' + n + ' 条（新增 ' + add + '，覆盖 ' + (n - add) + '）';
+  try { window.ntChanged(); } catch (e) {}
+  fnImportClose();
+  toastMsg('📥 已导入 ' + n + ' 条期末成绩（新增 ' + add + '，覆盖 ' + (n - add) + '），正在重算看板…');
+  fnReload(true);
+}
+/* 清除此前误导入「成绩管理」（飞书成绩表）的期末记录：只删备注=历次期末导入 的，日常单元测不动 */
+function fnCleanWrong() {
+  if (typeof SC_ROWS === 'undefined' || !Array.isArray(SC_ROWS)) { toastMsg('成绩数据还没加载完，稍后再试'); return }
+  var rows = SC_ROWS.filter(function (r) { return fval(r, '备注') === '历次期末导入'; });
+  if (!rows.length) { toastMsg('成绩管理里没有「历次期末导入」的记录，不需要清理'); return }
+  if (!confirm('从「成绩管理」删除 ' + rows.length + ' 条期末记录？\n\n只删除备注为「历次期末导入」的记录，日常单元测 / 期中成绩不受影响；\n期末分析看板用的是独立数据表，不会因此丢失。')) return;
+  if (typeof wbEnsureDB !== 'function' || !wbEnsureDB()) { toastMsg('⚠️ 数据接口不可用，无法删除'); return }
+  var btn = document.getElementById('fnTip');
+  if (btn) btn.textContent = '正在删除 0 / ' + rows.length + ' …';
+  var i = 0, okN = 0;
+  var next = function () {
+    if (i >= rows.length) {
+      toastMsg('🧹 已从成绩管理删除 ' + okN + ' 条期末记录' + (rows.length - okN ? '，失败 ' + (rows.length - okN) + ' 条' : ''));
+      if (btn) btn.textContent = '已清理 ' + okN + ' 条';
+      if (typeof loadScoresFromDB === 'function') loadScoresFromDB().then(function () { try { renderSC(); } catch (e) {} });
+      return;
+    }
+    var r = rows[i++];
+    if (!r || !r._id) return next();
+    db.deleteRecord({ databaseId: DATABASE_ID, recordId: r._id }).then(function () { okN++; }, function () {}).then(function () {
+      if (btn && i % 20 === 0) btn.textContent = '正在删除 ' + okN + ' / ' + rows.length + ' …';
+      next();
+    });
+  };
+  next();
+}
+window.fnReload = fnReload; window.fnImportOpen = fnImportOpen; window.fnImportClose = fnImportClose;
+window.fnImportPreview = fnImportPreview; window.fnImportDo = fnImportDo; window.fnCleanWrong = fnCleanWrong;
+/* 从别处跳过来：切到「成绩管理」页 →「📈 成绩分析」子标签 → 直接打开导入框 */
+window.fnGoto = function () {
+  try { var b = document.querySelector('nav button[data-s="score"]'); if (b) b.click(); } catch (e) {}
+  setTimeout(function () {
+    try { scTab('an'); } catch (e) {}
+    try { fnImportOpen(); } catch (e) {}
+  }, 300);
+};
+window.fnBuildData = fnBuildData; window.fnRows = fnRows;
+try { setTimeout(function () { try { fnReload(false); } catch (e) {} }, 800); } catch (e) {}
+
 
 /* ---------- 成绩分析 ---------- */
 function scAnRows(){
@@ -19519,9 +19822,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v189';
-var WB_MY_VER = '优化版 vT189 · 成绩导入入口外露';
-var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.203';
+var WB_VER_TAG = 'v191';
+var WB_MY_VER = '优化版 vT191 · 期末看板并入成绩分析';
+var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.204';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -23250,7 +23553,7 @@ function cwInit(){
   if (window.__WB_NT_LOADED__) return; window.__WB_NT_LOADED__ = true;
 
   /* ---------- 数据层 ---------- */
-  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain', 's-train', 's-hwadj', 's-rcmd', 's-remedy', 's-quiz', 's-quizdone', 's-quizlog', 's-quizcfg'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 / s-train 展示训练营；vT17 + s-hwadj 科任端作业积分加减（并入作业积分汇总）；vT51 + s-rcmd 远程指令回执（桌面写、教师读）；vT57 + s-remedy 自省补责（指定学生 + 完成期限，网页/小程序布置，首页/桌面标签/教室大屏/小程序首页展示）；vT187 + s-quiz 竞答题库 / s-quizdone 每生每题只答一次 / s-quizlog 每日出题记录（60 天回避） / s-quizcfg 竞答设置 */
+  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain', 's-train', 's-hwadj', 's-rcmd', 's-remedy', 's-quiz', 's-quizdone', 's-quizlog', 's-quizcfg', 's-final'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 / s-train 展示训练营；vT17 + s-hwadj 科任端作业积分加减（并入作业积分汇总）；vT51 + s-rcmd 远程指令回执（桌面写、教师读）；vT57 + s-remedy 自省补责（指定学生 + 完成期限，网页/小程序布置，首页/桌面标签/教室大屏/小程序首页展示）；vT187 + s-quiz 竞答题库 / s-quizdone 每生每题只答一次 / s-quizlog 每日出题记录（60 天回避） / s-quizcfg 竞答设置；vT190 + s-final 历次期末成绩（独立看板，不进日常成绩管理） */
   var NT_STORE_KEY = 'wb_nt_v1';
   function ntLoad() {
     try { var o = JSON.parse(localStorage.getItem(NT_STORE_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} }
