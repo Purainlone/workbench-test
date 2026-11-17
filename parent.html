@@ -336,7 +336,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT179）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT180）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -625,7 +625,7 @@
         var ratio = isNaN(sc) ? 0 : sc / full;
         var lv = ratio >= 0.85 ? '优秀' : ratio >= 0.7 ? '不错' : ratio >= 0.6 ? '合格' : '欠佳';   /* vT146 */
         var letter = gradeLetter(sc, full);
-        return { exam: r.exam || '', subject: r.subject || '', score: sc, full: full, level: lv, cls: LV[paLvNorm(lv)] || 'r', letter: letter, lcls: gradeCls(letter), date: dateOnly(r.date) };
+        return { exam: r.exam || '', subject: r.subject || '', score: sc, full: full, level: lv, cls: LV[paLvNorm(lv)] || 'r', letter: letter, lcls: gradeCls(letter), date: dateOnly(r.date), rank: Number(r.rank) || 0, rankN: Number(r.rankN) || 0 };
       }).slice(0, 12);
     var cmts = (per.comments || []).filter(function (r) { return r && r.text; })
       .sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); }).slice(0, 8)
@@ -1020,9 +1020,9 @@
     return '<div class="pend wait">⏳ ' + lb + '已提交，正在等待入账…' + (ST.snap && ST.snap.autoApprove ? '（自动批准已开启，通常 10 秒内生效）' : '（需老师批准，批准后这里会变成已生效）') + '</div>';
   }
 
-  /* ---------------- vT179 评价分析反馈（家长端）----------------
-    只输出反馈性结论，不做横向比较。三块：
-    ① 单科跟踪（进退步、波动）；② 阶段全科（偏科提示）；③ 整体状态反馈。 */
+  /* ---------------- vT180 评价分析反馈（家长端）----------------
+    只输出反馈性结论。单科跟踪内部参照得分表现与班级位次变化，但不直接暴露具体数据或刻度。
+    三块：① 单科跟踪（进退步、波动）；② 阶段全科（偏科提示）；③ 整体状态反馈。 */
   function anaOf(v) {
     var list = (v.grades || []).filter(function (g) {
       return g && !isNaN(Number(g.score));
@@ -1033,6 +1033,8 @@
         exam: String(g.exam || '最近一次评价').replace(/考试/g, '评价'),
         subject: g.subject || '其他',
         rate: Math.max(0, Math.min(100, r)),
+        rank: Number(g.rank) || 0,
+        rankN: Number(g.rankN) || 0,
         date: dateOnly(g.date || '')
       };
     }).sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
@@ -1052,12 +1054,29 @@
     var sDelta = sPrev == null ? 0 : sRates[sRates.length - 1] - sPrev;
     var sWin = sRates.slice(-6);
     var sVol = sWin.length > 1 ? Math.max.apply(null, sWin) - Math.min.apply(null, sWin) : 0;
-    var sState = sDelta >= 5 ? '有提升' : (sDelta <= -5 ? '需关注' : '基本稳定');
+    /* 班级位次只参与判断，不出现在文案里：越小越好，同分时 rank 相同。 */
+    var rPct = function (g) {
+      if (!g || !g.rank || !g.rankN || g.rankN < 2) return null;
+      return (g.rank - 1) / (g.rankN - 1);
+    };
+    var lastRk = sList.length ? rPct(sList[sList.length - 1]) : null;
+    var prevRk = sList.length > 1 ? rPct(sList[sList.length - 2]) : null;
+    var rTrend = (lastRk == null || prevRk == null) ? 0 : (lastRk - prevRk);
+    var rState = lastRk == null ? '待观察' : (lastRk <= 0.3 ? '跟得上' : (lastRk >= 0.7 ? '需跟进' : '基本同步'));
+    var rWord = lastRk == null ? '班级节奏还缺少参考'
+      : (lastRk <= 0.3 ? '和同学们一起看，优势保持得比较稳'
+        : (lastRk >= 0.7 ? '和同学们一起看，还需要再追一追' : '整体节奏基本同步'));
+    var sState = (sDelta >= 5 || (sDelta > 0 && rTrend <= -0.12)) ? '有提升'
+      : ((sDelta <= -5 || rTrend >= 0.12) ? '需关注' : '基本稳定');
     var sWave = sVol >= 15 ? '较明显' : '较小';
     var sTip;
-    if (sDelta >= 5) sTip = pickSub + '近期整体呈上升趋势，最近已有回升。保持现在的练习节奏，把优势稳定下来。';
-    else if (sDelta <= -5) sTip = pickSub + '近期有小幅回落，建议先回看最近的错题，找回状态再提速。';
-    else sTip = pickSub + '近期表现比较平稳。继续保持日常练习，逐步提高稳定度。';
+    if (sDelta >= 5 && rTrend <= -0.1) sTip = pickSub + '近期表现持续向好，' + rWord + '。保持现在的练习节奏。';
+    else if (sDelta >= 5) sTip = pickSub + '近期表现有回升，' + rWord + '，优势还要继续巩固。';
+    else if (sDelta <= -5 && rTrend >= 0.1) sTip = pickSub + '近期表现有回落，' + rWord + '。先把基础部分稳住。';
+    else if (sDelta <= -5) sTip = pickSub + '近期表现略有回落，' + rWord + '。建议回看最近的错题，找回状态再提速。';
+    else if (rTrend <= -0.1) sTip = pickSub + '近期表现比较平稳，' + rWord + '。说明方法有效，值得延续。';
+    else if (rTrend >= 0.1) sTip = pickSub + '近期表现基本稳定，' + rWord + '。建议把复习拆得更均衡一些。';
+    else sTip = pickSub + '近期表现比较平稳，' + rWord + '。继续保持日常练习。';
     if (sVol >= 15) sTip += '中间有过起伏，复习可以拆得更均衡一些。';
     if (pickSub === '语文') sTip += '朗读与书面表达保持得较好，阅读理解可以继续巩固。';
     var sTrend = sList.slice(-6).map(function (g) { return { rate: g.rate }; });
@@ -1118,7 +1137,7 @@
       (strongSub && strongSub.s !== weakSub.s ? strongSub.s + '的优势也要延续。' : '各科都要稳住节奏。');
 
     return {
-      n: list.length, sub: pickSub, sTrend: sTrend, sState: sState, sWave: sWave, sTip: sTip,
+      n: list.length, sub: pickSub, sTrend: sTrend, sState: sState, sWave: sWave, rState: rState, sTip: sTip,
       stage: stage, eTags: eTags, eTip: eTip,
       oState: oState, oCompare: oCompare, oFocus: oFocus, oTip: oTip
     };
@@ -1134,7 +1153,8 @@
     h += '<div style="font-size:11px;color:#9aa8a0;margin:-4px 0 8px">较早 → 最近</div>';
     h += '<div class="fbchips">' +
       '<span class="fbchip ' + (a.sState === '有提升' ? 'good' : (a.sState === '需关注' ? 'warn' : '')) + '">较上次：' + esc(a.sState) + '</span>' +
-      '<span class="fbchip ' + (a.sWave === '较明显' ? 'warn' : '') + '">波动：' + esc(a.sWave) + '</span></div>';
+      '<span class="fbchip ' + (a.sWave === '较明显' ? 'warn' : '') + '">波动：' + esc(a.sWave) + '</span>' +
+      '<span class="fbchip ' + (a.rState === '跟得上' ? 'good' : (a.rState === '需跟进' ? 'warn' : '')) + '">班级节奏：' + esc(a.rState) + '</span></div>';
     h += '<div class="anatip">' + esc(a.sTip) + '</div></div>';
 
     h += '<div class="fbsec"><div class="fbh">阶段全科 · ' + esc(a.stage) + '</div>';
@@ -1406,7 +1426,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v179</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v180</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
