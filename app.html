@@ -1912,6 +1912,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <span style="font-size:12px;color:#7a8a80">主题筛选</span>
       <select id="clThemeFilter" onchange="clRender()" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px"></select>
       <button class="btn2 sm primary" onclick="clAdd()">➕ 新增一条</button>
+      <!-- vT186 小古文专用：一次导入多篇 + 自动排期（每篇展示天数可调） -->
+      <button class="btn2 sm" id="clImportBtn" onclick="clOpenImport()" style="display:none">📥 批量导入小古文</button>
+      <button class="btn2 sm ghost" id="clReschedBtn" onclick="clWenReschedAll()" style="display:none" title="按当前顺序和每篇展示天数，从第一天起重新排期">🔄 重新排期</button>
     </div>
     <div id="clList" class="chartbox" style="margin:6px 0"></div>
 
@@ -1928,7 +1931,7 @@ table.paper td.l{text-align:left;font-weight:600}
     </div>
 
     <details class="chartbox" style="margin:10px 0">
-      <summary style="cursor:pointer;font-size:14px;font-weight:700">💡 推荐内容（点一下就加进内容库，可再编辑 / 设为今天）</summary>
+      <summary style="cursor:pointer;font-size:14px;font-weight:700">💡 推荐内容 · <span id="clRecoKind">每日一句</span>（点一下就加进当前内容库，可再编辑 / 设为今天）</summary>
       <div id="clRecoList" style="margin-top:8px"></div>
     </details>
   </section>
@@ -2758,9 +2761,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v185</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v186</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v185','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v186','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -19273,9 +19276,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v185';
-var WB_MY_VER = '优化版 vT185 · 大屏作业收齐即隐';
-var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.199';
+var WB_VER_TAG = 'v186';
+var WB_MY_VER = '优化版 vT186 · 经典内容批量导入';
+var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.200';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -23733,40 +23736,272 @@ function cwInit(){
   }
   /* 主题快选（新增/编辑时点一下就填） */
   var CL_THEMES = ['励志成长', '读书学习', '珍惜时间', '四季风光', '传统节日', '感恩亲情', '寓言故事', '毛主席诗词'];
-  /* 精选推荐内容库（公有领域，一键加入） */
+  /* 精选推荐内容库（公有领域，一键加入）
+     vT186：从 9 条扩到 60+ 条，覆盖名言 / 诗词 / 小古文；推荐区按当前标签筛选，
+     加入后立刻出现在当前列表，可直接「设为今天」。 */
   var CL_RECO = [
+    /* ---------- 每日一句 ---------- */
     { type: 'quote', content: '读书破万卷，下笔如有神。', src: '—— 杜甫《奉赠韦左丞丈二十二韵》', theme: '读书学习' },
     { type: 'quote', content: '少壮不努力，老大徒伤悲。', src: '—— 汉乐府《长歌行》', theme: '珍惜时间' },
     { type: 'quote', content: '问渠那得清如许？为有源头活水来。', src: '—— 朱熹《观书有感》', theme: '读书学习' },
+    { type: 'quote', content: '三人行，必有我师焉。', src: '—— 《论语·述而》', theme: '读书学习' },
+    { type: 'quote', content: '温故而知新，可以为师矣。', src: '—— 《论语·为政》', theme: '读书学习' },
+    { type: 'quote', content: '知之为知之，不知为不知，是知也。', src: '—— 《论语·为政》', theme: '读书学习' },
+    { type: 'quote', content: '敏而好学，不耻下问。', src: '—— 《论语·公冶长》', theme: '读书学习' },
+    { type: 'quote', content: '业精于勤，荒于嬉；行成于思，毁于随。', src: '—— 韩愈《进学解》', theme: '读书学习' },
+    { type: 'quote', content: '纸上得来终觉浅，绝知此事要躬行。', src: '—— 陆游《冬夜读书示子聿》', theme: '读书学习' },
+    { type: 'quote', content: '黑发不知勤学早，白首方悔读书迟。', src: '—— 颜真卿《劝学》', theme: '珍惜时间' },
+    { type: 'quote', content: '少年易老学难成，一寸光阴不可轻。', src: '—— 朱熹《劝学诗》', theme: '珍惜时间' },
+    { type: 'quote', content: '莫等闲，白了少年头，空悲切！', src: '—— 岳飞《满江红·写怀》', theme: '珍惜时间' },
+    { type: 'quote', content: '一万年太久，只争朝夕。', src: '—— 毛泽东《满江红·和郭沫若同志》', theme: '珍惜时间' },
+    { type: 'quote', content: '锲而不舍，金石可镂。', src: '—— 荀子《劝学》', theme: '励志成长' },
+    { type: 'quote', content: '千里之行，始于足下。', src: '—— 《老子·第六十四章》', theme: '励志成长' },
+    { type: 'quote', content: '天行健，君子以自强不息。', src: '—— 《周易·乾卦》', theme: '励志成长' },
+    { type: 'quote', content: '长风破浪会有时，直挂云帆济沧海。', src: '—— 李白《行路难·其一》', theme: '励志成长' },
+    { type: 'quote', content: '天生我材必有用，千金散尽还复来。', src: '—— 李白《将进酒》', theme: '励志成长' },
+    { type: 'quote', content: '会当凌绝顶，一览众山小。', src: '—— 杜甫《望岳》', theme: '励志成长' },
+    { type: 'quote', content: '宝剑锋从磨砺出，梅花香自苦寒来。', src: '—— 《警世贤文·勤奋篇》', theme: '励志成长' },
+    { type: 'quote', content: '勿以恶小而为之，勿以善小而不为。', src: '—— 《三国志·蜀书·先主传》', theme: '励志成长' },
+    { type: 'quote', content: '谁言寸草心，报得三春晖。', src: '—— 孟郊《游子吟》', theme: '感恩亲情' },
+    { type: 'quote', content: '海内存知己，天涯若比邻。', src: '—— 王勃《送杜少府之任蜀州》', theme: '感恩亲情' },
+    { type: 'quote', content: '落红不是无情物，化作春泥更护花。', src: '—— 龚自珍《己亥杂诗·其五》', theme: '感恩亲情' },
+    { type: 'quote', content: '春蚕到死丝方尽，蜡炬成灰泪始干。', src: '—— 李商隐《无题·相见时难别亦难》', theme: '感恩亲情' },
+    /* ---------- 古诗词 ---------- */
     { type: 'poem', title: '枫桥夜泊', content: '月落乌啼霜满天，江枫渔火对愁眠。\n姑苏城外寒山寺，夜半钟声到客船。', src: '唐·张继', theme: '写景抒情' },
     { type: 'poem', title: '望天门山', content: '天门中断楚江开，碧水东流至此回。\n两岸青山相对出，孤帆一片日边来。', src: '唐·李白', theme: '山河壮美' },
     { type: 'poem', title: '游子吟', content: '慈母手中线，游子身上衣。\n临行密密缝，意恐迟迟归。\n谁言寸草心，报得三春晖。', src: '唐·孟郊', theme: '感恩亲情' },
+    { type: 'poem', title: '静夜思', content: '床前明月光，疑是地上霜。\n举头望明月，低头思故乡。', src: '唐·李白', theme: '思乡怀人' },
+    { type: 'poem', title: '春晓', content: '春眠不觉晓，处处闻啼鸟。\n夜来风雨声，花落知多少。', src: '唐·孟浩然', theme: '四季风光' },
+    { type: 'poem', title: '登鹳雀楼', content: '白日依山尽，黄河入海流。\n欲穷千里目，更上一层楼。', src: '唐·王之涣', theme: '励志成长' },
+    { type: 'poem', title: '江雪', content: '千山鸟飞绝，万径人踪灭。\n孤舟蓑笠翁，独钓寒江雪。', src: '唐·柳宗元', theme: '四季风光' },
+    { type: 'poem', title: '相思', content: '红豆生南国，春来发几枝。\n愿君多采撷，此物最相思。', src: '唐·王维', theme: '思乡怀人' },
+    { type: 'poem', title: '九月九日忆山东兄弟', content: '独在异乡为异客，每逢佳节倍思亲。\n遥知兄弟登高处，遍插茱萸少一人。', src: '唐·王维', theme: '传统节日' },
+    { type: 'poem', title: '望庐山瀑布', content: '日照香炉生紫烟，遥看瀑布挂前川。\n飞流直下三千尺，疑是银河落九天。', src: '唐·李白', theme: '山河壮美' },
+    { type: 'poem', title: '绝句', content: '两个黄鹂鸣翠柳，一行白鹭上青天。\n窗含西岭千秋雪，门泊东吴万里船。', src: '唐·杜甫', theme: '四季风光' },
+    { type: 'poem', title: '村居', content: '草长莺飞二月天，拂堤杨柳醉春烟。\n儿童散学归来早，忙趁东风放纸鸢。', src: '清·高鼎', theme: '四季风光' },
+    { type: 'poem', title: '小池', content: '泉眼无声惜细流，树阴照水爱晴柔。\n小荷才露尖尖角，早有蜻蜓立上头。', src: '宋·杨万里', theme: '四季风光' },
+    { type: 'poem', title: '晓出净慈寺送林子方', content: '毕竟西湖六月中，风光不与四时同。\n接天莲叶无穷碧，映日荷花别样红。', src: '宋·杨万里', theme: '四季风光' },
+    { type: 'poem', title: '元日', content: '爆竹声中一岁除，春风送暖入屠苏。\n千门万户曈曈日，总把新桃换旧符。', src: '宋·王安石', theme: '传统节日' },
+    { type: 'poem', title: '清明', content: '清明时节雨纷纷，路上行人欲断魂。\n借问酒家何处有？牧童遥指杏花村。', src: '唐·杜牧', theme: '传统节日' },
+    { type: 'poem', title: '山行', content: '远上寒山石径斜，白云生处有人家。\n停车坐爱枫林晚，霜叶红于二月花。', src: '唐·杜牧', theme: '四季风光' },
+    { type: 'poem', title: '赠汪伦', content: '李白乘舟将欲行，忽闻岸上踏歌声。\n桃花潭水深千尺，不及汪伦送我情。', src: '唐·李白', theme: '感恩亲情' },
+    { type: 'poem', title: '回乡偶书', content: '少小离家老大回，乡音无改鬓毛衰。\n儿童相见不相识，笑问客从何处来。', src: '唐·贺知章', theme: '思乡怀人' },
+    { type: 'poem', title: '咏柳', content: '碧玉妆成一树高，万条垂下绿丝绦。\n不知细叶谁裁出，二月春风似剪刀。', src: '唐·贺知章', theme: '四季风光' },
+    { type: 'poem', title: '凉州词', content: '黄河远上白云间，一片孤城万仞山。\n羌笛何须怨杨柳，春风不度玉门关。', src: '唐·王之涣', theme: '山河壮美' },
+    { type: 'poem', title: '题西林壁', content: '横看成岭侧成峰，远近高低各不同。\n不识庐山真面目，只缘身在此山中。', src: '宋·苏轼', theme: '读书学习' },
+    /* ---------- 小古文 ---------- */
     { type: 'wen', title: '守株待兔', content: '宋人有耕者。田中有株。兔走触株，折颈而死。因释其耒而守株，冀复得兔。兔不可复得，而身为宋国笑。', src: '《韩非子》', theme: '寓言故事' },
     { type: 'wen', title: '揠苗助长', content: '宋人有闵其苗之不长而揠之者，芒芒然归，谓其人曰：今日病矣！予助苗长矣！其子趋而往视之，苗则槁矣。', src: '《孟子》', theme: '寓言故事' },
-    { type: 'wen', title: '掩耳盗铃', content: '范氏之亡也，百姓有得钟者，欲负而走，则钟大不可负；以椎毁之，钟况然有音。恐人闻之而夺己也，遽掩其耳。', src: '《吕氏春秋》', theme: '寓言故事' }
+    { type: 'wen', title: '掩耳盗铃', content: '范氏之亡也，百姓有得钟者，欲负而走，则钟大不可负；以椎毁之，钟况然有音。恐人闻之而夺己也，遽掩其耳。', src: '《吕氏春秋》', theme: '寓言故事' },
+    { type: 'wen', title: '刻舟求剑', content: '楚人有涉江者，其剑自舟中坠于水，遽契其舟，曰：是吾剑之所从坠。舟止，从其所契者入水求之。舟已行矣，而剑不行，求剑若此，不亦惑乎！', src: '《吕氏春秋》', theme: '寓言故事' },
+    { type: 'wen', title: '画蛇添足', content: '楚有祠者，赐其舍人卮酒。舍人相谓曰：数人饮之不足，一人饮之有余。请画地为蛇，先成者饮酒。一人蛇先成，引酒且饮之，乃左手持卮，右手画蛇，曰：吾能为之足。未成，一人之蛇成，夺其卮曰：蛇固无足，子安能为之足？遂饮其酒。', src: '《战国策》', theme: '寓言故事' },
+    { type: 'wen', title: '狐假虎威', content: '虎求百兽而食之，得狐。狐曰：子无敢食我也！天帝使我长百兽，今子食我，是逆天帝命也。子以我为不信，吾为子先行，子随我后，观百兽之见我而敢不走乎？虎以为然，故遂与之行。兽见之皆走。虎不知兽畏己而走也，以为畏狐也。', src: '《战国策》', theme: '寓言故事' },
+    { type: 'wen', title: '亡羊补牢', content: '杨子之邻人亡羊，既率其党，又请杨子之竖追之。杨子曰：嘻！亡一羊何追者之众？邻人曰：多歧路。既反，问：获羊乎？曰：亡之矣。曰：奚亡之？曰：歧路之中又有歧焉，吾不知所之，所以反也。', src: '《战国策》', theme: '寓言故事' },
+    { type: 'wen', title: '自相矛盾', content: '楚人有鬻盾与矛者，誉之曰：吾盾之坚，物莫能陷也。又誉其矛曰：吾矛之利，于物无不陷也。或曰：以子之矛陷子之盾，何如？其人弗能应也。夫不可陷之盾与无不陷之矛，不可同世而立。', src: '《韩非子》', theme: '寓言故事' },
+    { type: 'wen', title: '滥竽充数', content: '齐宣王使人吹竽，必三百人。南郭处士请为王吹竽，宣王说之，廪食以数百人。宣王死，湣王立，好一一听之，处士逃。', src: '《韩非子》', theme: '寓言故事' },
+    { type: 'wen', title: '郑人买履', content: '郑人有欲买履者，先自度其足，而置之其坐。至之市，而忘操之。已得履，乃曰：吾忘持度。反归取之。及反，市罢，遂不得履。人曰：何不试之以足？曰：宁信度，无自信也。', src: '《韩非子》', theme: '寓言故事' },
+    { type: 'wen', title: '买椟还珠', content: '楚人有卖其珠于郑者，为木兰之柜，薰以桂椒，缀以珠玉，饰以玫瑰，辑以翡翠。郑人买其椟而还其珠。此可谓善卖椟矣，未可谓善鬻珠也。', src: '《韩非子》', theme: '寓言故事' },
+    { type: 'wen', title: '南辕北辙', content: '今者臣来，见人于大行，方北面而持其驾，告臣曰：我欲之楚。臣曰：君之楚，将奚为北面？曰：吾马良。臣曰：马虽良，此非楚之路也。曰：吾用多。臣曰：用虽多，此非楚之路也。曰：吾御者善。此数者愈善，而离楚愈远耳。', src: '《战国策》', theme: '寓言故事' },
+    { type: 'wen', title: '精卫填海', content: '又北二百里，曰发鸠之山，其上多柘木。有鸟焉，其状如乌，文首，白喙，赤足，名曰精卫，其鸣自詨。是炎帝之少女，名曰女娃。女娃游于东海，溺而不返，故为精卫，常衔西山之木石，以堙于东海。', src: '《山海经·北山经》', theme: '神话传说' },
+    { type: 'wen', title: '夸父逐日', content: '夸父与日逐走，入日；渴，欲得饮，饮于河、渭；河、渭不足，北饮大泽。未至，道渴而死。弃其杖，化为邓林。', src: '《山海经·海外北经》', theme: '神话传说' },
+    { type: 'wen', title: '两小儿辩日', content: '孔子东游，见两小儿辩斗，问其故。一儿曰：我以日始出时去人近，而日中时远也。一儿以日初出远，而日中时近也。一儿曰：日初出大如车盖，及日中则如盘盂，此不为远者小而近者大乎？一儿曰：日初出沧沧凉凉，及其日中如探汤，此不为近者热而远者凉乎？孔子不能决也。两小儿笑曰：孰为汝多知乎？', src: '《列子·汤问》', theme: '寓言故事' },
+    { type: 'wen', title: '学弈', content: '弈秋，通国之善弈者也。使弈秋诲二人弈，其一人专心致志，惟弈秋之为听；一人虽听之，一心以为有鸿鹄将至，思援弓缴而射之。虽与之俱学，弗若之矣。为是其智弗若与？曰：非然也。', src: '《孟子·告子上》', theme: '读书学习' },
+    { type: 'wen', title: '伯牙鼓琴', content: '伯牙鼓琴，锺子期听之。方鼓琴而志在太山，锺子期曰：善哉乎鼓琴，巍巍乎若太山。少选之间而志在流水，锺子期又曰：善哉乎鼓琴，汤汤乎若流水。锺子期死，伯牙破琴绝弦，终身不复鼓琴，以为世无足复为鼓琴者。', src: '《吕氏春秋·本味》', theme: '感恩亲情' },
+    { type: 'wen', title: '囊萤夜读', content: '胤恭勤不倦，博学多通。家贫不常得油，夏月则练囊盛数十萤火以照书，以夜继日焉。', src: '《晋书·车胤传》', theme: '读书学习' },
+    { type: 'wen', title: '铁杵成针', content: '磨针溪，在象耳山下。世传李太白读书山中，未成，弃去。过是溪，逢老媪方磨铁杵。问之，曰：欲作针。太白感其意，还卒业。', src: '《方舆胜览》', theme: '读书学习' },
+    { type: 'wen', title: '杨氏之子', content: '梁国杨氏子九岁，甚聪惠。孔君平诣其父，父不在，乃呼儿出。为设果，果有杨梅。孔指以示儿曰：此是君家果。儿应声答曰：未闻孔雀是夫子家禽。', src: '《世说新语·言语》', theme: '励志成长' },
+    { type: 'wen', title: '陋室铭', content: '山不在高，有仙则名。水不在深，有龙则灵。斯是陋室，惟吾德馨。苔痕上阶绿，草色入帘青。谈笑有鸿儒，往来无白丁。可以调素琴，阅金经。无丝竹之乱耳，无案牍之劳形。南阳诸葛庐，西蜀子云亭。孔子云：何陋之有？', src: '唐·刘禹锡', theme: '励志成长' }
   ];
   function clRenderReco() {
     var box = document.getElementById('clRecoList'); if (!box) return;
-    box.innerHTML = CL_RECO.map(function (r, i) {
-      var done = ntRows('s-classic').some(function (x) {
-        return x && !x.deleted && (x.type || 'quote') === r.type && (r.type === 'quote' ? x.content === r.content : x.title === r.title);
+    var kind = document.getElementById('clRecoKind');
+    if (kind) kind.textContent = CL_TYPE_NAMES[clCurType];
+    /* vT186 只显示当前标签的推荐，索引保留原数组下标，clAddReco(i) 才能找对条目 */
+    var rows = CL_RECO.map(function (r, i) { return { r: r, i: i }; })
+      .filter(function (x) { return x.r.type === clCurType; });
+    box.innerHTML = rows.length ? rows.map(function (x) {
+      var r = x.r, i = x.i;
+      var done = ntRows('s-classic').some(function (y) {
+        return y && !y.deleted && (y.type || 'quote') === r.type && (r.type === 'quote' ? y.content === r.content : y.title === r.title);
       });
       var label = r.type === 'quote' ? ('“' + r.content + '” ' + r.src) : ('《' + r.title + '》 ' + r.src);
       return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed #e3ede7">' +
-        '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#eef4ff;color:#3b6fb0;flex-shrink:0">' + CL_TYPE_NAMES[r.type] + '</span>' +
         '<span style="flex:1;font-size:13px">' + esc(label) + (r.theme ? ' <span style="font-size:11px;color:#3b6fb0">· ' + esc(r.theme) + '</span>' : '') + '</span>' +
         (done ? '<span style="font-size:12px;color:#8aa79b;flex-shrink:0">已加入 ✓</span>'
               : '<button class="btn2 sm primary" onclick="clAddReco(' + i + ')">＋ 加入</button>') +
         '</div>';
-    }).join('');
+    }).join('') : '<div class="sub">这一类还没有推荐内容</div>';
   }
   function clAddReco(i) {
     var r = CL_RECO[i]; if (!r) return;
     var rec = { id: 'cl_' + Date.now() + Math.floor(Math.random() * 9000 + 1000),
       type: r.type, title: r.title || '', content: r.content, src: r.src || '', theme: r.theme || '',
       deleted: false, ts: Date.now(), updatedAt: new Date().toISOString(), updatedBy: 'teacher' };
-    ntUpsert('s-classic', rec); clRender(); ntChanged();
-    toastMsg('✅ 已加入内容库，可在列表里编辑或「设为今天」');
+    ntUpsert('s-classic', rec);
+    clTab(r.type); ntChanged();
+    toastMsg('✅ 已把「' + (r.title || String(r.content).slice(0, 12)) + '」加入' + CL_TYPE_NAMES[r.type] + '内容库，可直接点「设为今天」');
+  }
+
+  /* ============ vT186 小古文批量导入 + 自动排期（每篇可设展示天数） ============
+     记录新增两个字段：playDate（本篇开始播放日）、spanDays（连续展示天数，默认 1）。
+     大屏在当天没有 csched 手动指定时，按 playDate + spanDays 自动取篇，一篇到期自动换下一篇。 */
+  function clTodayStr() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function clDayNum(ds) {
+    var p = String(ds || '').split('-');
+    if (p.length !== 3) return NaN;
+    return Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10)) / 86400000;
+  }
+  function clDateAdd(ds, n) {
+    var t = clDayNum(ds);
+    if (isNaN(t)) ds = clTodayStr(), t = clDayNum(ds);
+    return new Date((t + (parseInt(n, 10) || 0)) * 86400000).toISOString().slice(0, 10);
+  }
+  function clSpanOf(r) { return Math.max(1, Math.min(365, parseInt(r && r.spanDays, 10) || 1)); }
+  function clWenRows() {
+    return ntRows('s-classic').filter(function (r) { return r && !r.deleted && (r.type || 'quote') === 'wen'; })
+      .sort(function (a, b) {
+        return String(a.playDate || '9999-99-99').localeCompare(String(b.playDate || '9999-99-99')) || (a.ts || 0) - (b.ts || 0);
+      });
+  }
+  /* 下一批的默认起始日：紧接着现有排期的最后一天；若现有排期已过期则从今天开始 */
+  function clWenNextStart() {
+    var last = '', today = clTodayStr();
+    clWenRows().forEach(function (r) {
+      if (!r.playDate) return;
+      var end = clDateAdd(r.playDate, clSpanOf(r) - 1);
+      if (end > last) last = end;
+    });
+    if (!last) return today;
+    var next = clDateAdd(last, 1);
+    return next < today ? today : next;
+  }
+  /* 从某天起按当前顺序 + 每篇 spanDays 重排；返回改动条数 */
+  function clWenResched(startDate, fromIndex) {
+    var rows = clWenRows(); if (!rows.length) return 0;
+    var i0 = Math.max(0, parseInt(fromIndex, 10) || 0);
+    var d = startDate || rows[i0].playDate || clTodayStr();
+    var n = 0, now = Date.now(), iso = new Date(now).toISOString();
+    for (var i = i0; i < rows.length; i++) {
+      var r = rows[i];
+      if (r.playDate !== d) {
+        r.playDate = d; r.ts = now + i; r.updatedAt = iso; r.updatedBy = 'teacher';
+        ntUpsert('s-classic', r); n++;
+      }
+      d = clDateAdd(d, clSpanOf(r));
+    }
+    return n;
+  }
+  function clWenReschedAll() {
+    var rows = clWenRows();
+    if (!rows.length) { toastMsg('还没有小古文可排期'); return }
+    var start = rows[0].playDate || clTodayStr();
+    var n = clWenResched(start, 0);
+    clRender(); if (n) ntChanged();
+    toastMsg(n ? ('🔄 已按当前顺序重新排期（' + n + ' 篇有调整），' + start + ' 起每天自动播放') : '排期已是最新的，没有变化');
+  }
+  function clWenReschedFrom(id) {
+    var rows = clWenRows(), idx = -1;
+    rows.forEach(function (r, i) { if (r.id === id) idx = i; });
+    if (idx < 0) return 0;
+    return clWenResched(rows[idx].playDate || clTodayStr(), idx);
+  }
+  /* 解析粘贴文本：支持《篇名》分行、空行分段、以及「篇名|正文|出处」三种格式 */
+  function clWenBlock(title, body) {
+    var lines = String(body || '').split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+    var from = '', out = [];
+    lines.forEach(function (l) {
+      var mm = l.match(/^(?:出处|来源)[:：]\s*(.+)$/) || l.match(/^[—－]{2,}\s*(.+)$/);
+      if (mm && !from) { from = mm[1].trim(); return }
+      out.push(l);
+    });
+    return { title: String(title || '').replace(/^《|》$/g, '').trim(), content: out.join('\n'), src: from };
+  }
+  function clParseWen(text) {
+    var src = String(text == null ? '' : text).replace(/\r\n?/g, '\n').trim();
+    if (!src) return [];
+    var lines = src.split('\n').filter(function (l) { return l.trim(); });
+    var out = [];
+    if (lines.length && lines.every(function (l) { return /[|｜\t]/.test(l); })) {
+      lines.forEach(function (l) {
+        var p = l.split(/[|｜\t]/).map(function (x) { return x.trim(); });
+        if (p[0] && p[1]) out.push(clWenBlock(p[0], p[1] + (p[2] ? '\n出处：' + p[2] : '')));
+      });
+      return out.filter(function (b) { return b.title && b.content; });
+    }
+    var re = /(^|\n)[ \t]*《\s*([^》]{1,60})\s*》/g, m, marks = [];
+    while ((m = re.exec(src))) marks.push({ i: m.index + m[1].length, end: m.index + m[0].length, title: m[2].trim() });
+    if (marks.length) {
+      marks.forEach(function (mk, k) {
+        out.push(clWenBlock(mk.title, src.slice(mk.end, k + 1 < marks.length ? marks[k + 1].i : src.length)));
+      });
+    } else {
+      src.split(/\n\s*\n+/).forEach(function (b) {
+        var ls = b.split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+        if (ls.length >= 2) out.push(clWenBlock(ls[0], ls.slice(1).join('\n')));
+      });
+    }
+    return out.filter(function (b) { return b.title && b.content; });
+  }
+  function clOpenImport() {
+    clTab('wen');
+    var box = document.getElementById('clImportBox');
+    if (!box) { box = document.createElement('div'); box.id = 'clImportBox'; document.body.appendChild(box); }
+    var start = clWenNextStart();
+    box.innerHTML =
+      '<div style="position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)clCloseImport()">' +
+      '<div style="background:#fff;border-radius:14px;padding:20px;width:660px;max-width:94vw;max-height:90vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.25)">' +
+      '<h3 style="margin:0 0 10px;font-size:16px">📥 批量导入小古文（自动每天播放一篇）</h3>' +
+      '<div class="sub" style="margin-bottom:10px">一篇一段，支持三种写法：<b>《篇名》换行正文</b> / <b>篇名 换行 正文（空行分隔多篇）</b> / <b>篇名|正文|出处</b>（每行一篇）。出处可写「出处：xxx」或「—— xxx」。</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">' +
+      '<span style="font-size:12px">起始日期</span><input id="clWenStart" type="date" value="' + start + '" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px">' +
+      '<span style="font-size:12px">每篇展示</span><input id="clWenDays" type="number" min="1" max="365" value="1" style="width:70px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px"><span style="font-size:12px">天（可逐篇再改）</span>' +
+      '<span style="font-size:12px">主题</span><input id="clWenTheme" value="小古文" style="width:100px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px">' +
+      '</div>' +
+      '<textarea id="clWenText" rows="10" placeholder="《守株待兔》\n宋人有耕者。田中有株。兔走触株，折颈而死。\n出处：《韩非子》\n\n《刻舟求剑》\n楚人有涉江者，其剑自舟中坠于水。\n出处：《吕氏春秋》" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:9px;font-size:13px;font-family:inherit"></textarea>' +
+      '<div id="clWenPreview" style="margin:10px 0;font-size:12.5px;color:#556;max-height:180px;overflow:auto"></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn2" onclick="clCloseImport()">取消</button>' +
+      '<button class="btn2 sm" onclick="clImportPreview()">👀 解析预览</button>' +
+      '<button class="btn2 primary" onclick="clImportWenDo()">📥 确认导入</button></div>' +
+      '</div></div>';
+  }
+  function clCloseImport() { var b = document.getElementById('clImportBox'); if (b) b.innerHTML = ''; }
+  function clImportPreview() {
+    var box = document.getElementById('clWenPreview'); if (!box) return;
+    var items = clParseWen((document.getElementById('clWenText') || {}).value || '');
+    if (!items.length) { box.innerHTML = '<span style="color:#c2410c">没识别到内容，请检查格式（每篇要有篇名和正文）</span>'; return }
+    var d = (document.getElementById('clWenStart') || {}).value || clWenNextStart();
+    var days = Math.max(1, parseInt((document.getElementById('clWenDays') || {}).value, 10) || 1);
+    var exist = {};
+    ntRows('s-classic').forEach(function (r) { if (r && !r.deleted && (r.type || 'quote') === 'wen' && r.title) exist[r.title] = 1; });
+    box.innerHTML = '<b>识别到 ' + items.length + ' 篇：</b><br>' + items.map(function (x, i) {
+      var dup = !!exist[x.title];
+      return (i + 1) + '. 《' + esc(x.title) + '》 ' + String(x.content).length + ' 字' + (x.src ? ' · ' + esc(x.src) : '') +
+        ' · ' + esc(d) + ' 起 ' + days + ' 天' + (dup ? ' <span style="color:#c2410c">（已存在，导入时会跳过）</span>' : '');
+    }).join('<br>');
+  }
+  function clImportWenDo() {
+    var items = clParseWen((document.getElementById('clWenText') || {}).value || '');
+    if (!items.length) { toastMsg('⚠️ 没识别到可导入的内容，请先点「解析预览」检查格式'); return }
+    var d = (document.getElementById('clWenStart') || {}).value || clWenNextStart();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { toastMsg('⚠️ 起始日期格式不对'); return }
+    var days = Math.max(1, Math.min(365, parseInt((document.getElementById('clWenDays') || {}).value, 10) || 1));
+    var theme = String((document.getElementById('clWenTheme') || {}).value || '').trim() || '小古文';
+    var exist = {}, now = Date.now();
+    ntRows('s-classic').forEach(function (r) { if (r && !r.deleted && (r.type || 'quote') === 'wen' && r.title) exist[r.title] = 1; });
+    var added = 0, skipped = 0, first = '';
+    items.forEach(function (x) {
+      if (exist[x.title]) { skipped++; return }
+      exist[x.title] = 1;
+      if (!first) first = d;
+      ntUpsert('s-classic', { id: 'cl_' + (now + added) + '_' + Math.floor(Math.random() * 9000 + 1000),
+        type: 'wen', title: x.title, content: x.content, src: x.src || '', theme: theme,
+        playDate: d, spanDays: days, deleted: false,
+        ts: now + added, updatedAt: new Date(now + added).toISOString(), updatedBy: 'teacher' });
+      added++; d = clDateAdd(d, days);
+    });
+    if (!added) { toastMsg('⚠️ 这些篇名都已存在，没有新增'); return }
+    clCloseImport(); clRender(); ntChanged();
+    toastMsg('📥 已导入 ' + added + ' 篇' + (skipped ? '，跳过重复 ' + skipped + ' 篇' : '') + '，' + first + ' 起每 ' + days + ' 天自动换一篇');
   }
   /* ================= vT16 今日留堂（s-detain，同步教室大屏 + 16:05 提醒 + 家长端） ================= */
   var dtDetainSel = {}, dtDetainAuto = false;
@@ -23856,6 +24091,8 @@ function cwInit(){
   };
   function clRender() {
     var list = document.getElementById('clList'); if (!list) return;
+    var ib = document.getElementById('clImportBtn'); if (ib) ib.style.display = clCurType === 'wen' ? '' : 'none';
+    var rb = document.getElementById('clReschedBtn'); if (rb) rb.style.display = clCurType === 'wen' ? '' : 'none';
     var tf = document.getElementById('clThemeFilter');
     var theme = tf ? tf.value : '';
     if (tf) {
@@ -23871,7 +24108,10 @@ function cwInit(){
         ? '<div style="font-size:14px">“' + esc(r.content || '') + '”<span style="color:#93a89b;font-size:12px"> —— ' + esc(r.src || '') + '</span></div>'
         : '<div style="font-size:14px;font-weight:700">《' + esc(r.title || '') + '》</div>' +
           '<div style="font-size:13px;color:#445;margin-top:2px">' + esc(String(r.content || '').replace(/\n/g, ' / ')) + '</div>' +
-          '<div style="font-size:12px;color:#93a89b;margin-top:2px">' + esc(r.src || '') + '</div>';
+          '<div style="font-size:12px;color:#93a89b;margin-top:2px">' + esc(r.src || '') +
+          (clCurType === 'wen' && r.playDate
+            ? '　🗓 ' + esc(String(r.playDate).slice(5)) + ' 起 · 每篇展示 ' + clSpanOf(r) + ' 天' + (r.playDate <= clTodayStr() && clTodayStr() <= clDateAdd(r.playDate, clSpanOf(r) - 1) ? ' · <b style="color:#2d7a4f">今日播放</b>' : '')
+            : (clCurType === 'wen' ? '　<span style="color:#c2410c">未排期（导入或编辑后会自动排期）</span>' : '')) + '</div>';
       return '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed #e3ede7">' +
         '<div style="flex:1;min-width:0">' + main +
         (r.theme ? ' <span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#eef4ff;color:#3b6fb0;white-space:nowrap">' + esc(r.theme) + '</span>' : '') + '</div>' +
@@ -23901,6 +24141,8 @@ function cwInit(){
       '<textarea id="clFContent" rows="4" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px;font-family:inherit">' + esc(rec ? (rec.content || '') : '') + '</textarea></div>' +
       '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">出处 / 作者</div>' +
       '<input id="clFSrc" value="' + esc(rec ? (rec.src || '') : '') + '" placeholder="如：—— 《沁园春·雪》 或 唐·李白" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px"></div>' +
+      (type === 'wen' ? '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">每篇展示天数（1=每天换一篇，3=每篇展示 3 天；改后自动顺延后面的篇目）</div>' +
+      '<input id="clFSpan" type="number" min="1" max="365" value="' + (rec ? clSpanOf(rec) : 1) + '" style="width:100px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px"></div>' : '') +
       '<div style="margin-bottom:8px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">主题标签（可点下面的推荐主题快速填写）</div>' +
       '<input id="clFTheme" value="' + esc(rec ? (rec.theme || '') : '') + '" placeholder="可留空" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px"></div>' +
       '<div style="margin-bottom:14px;display:flex;gap:6px;flex-wrap:wrap">' +
@@ -23924,10 +24166,21 @@ function cwInit(){
     var rec = id ? ntGet('s-classic', id) : null;
     if (!rec) rec = { id: 'cl_' + Date.now() + Math.floor(Math.random() * 9000 + 1000) };
     rec.type = type; rec.title = title; rec.content = content; rec.src = src; rec.theme = theme;
+    var spanChanged = false;
+    if (type === 'wen') {
+      var se = document.getElementById('clFSpan');
+      var newSpan = Math.max(1, Math.min(365, parseInt(se && se.value, 10) || 1));
+      spanChanged = (clSpanOf(rec) !== newSpan) || !rec.playDate;
+      rec.spanDays = newSpan;
+      if (!rec.playDate) rec.playDate = clWenNextStart();
+    }
     rec.deleted = false; rec.ts = Date.now(); rec.updatedAt = new Date().toISOString(); rec.updatedBy = 'teacher';
     ntUpsert('s-classic', rec);
+    if (spanChanged) clWenReschedFrom(rec.id);
     clCloseForm(); clRender(); ntChanged();
-    toastMsg('已保存，约 2~5 秒同步到教室大屏');
+    toastMsg(type === 'wen'
+      ? ('已保存，' + rec.playDate + ' 起每 ' + clSpanOf(rec) + ' 天自动换一篇，约 2~5 秒同步到教室大屏')
+      : '已保存，约 2~5 秒同步到教室大屏');
   }
   function clDel(id) {
     if (!confirm('删除这条内容？若教室大屏当天正显示它，会回退到内置轮换。')) return;
@@ -23996,6 +24249,10 @@ function cwInit(){
   }
   window.clTab = clTab; window.clRender = clRender; window.clAdd = clAdd; window.clEdit = clEdit;
   window.clDel = clDel; window.clSetToday = clSetToday; window.clCloseForm = clCloseForm; window.clSaveForm = clSaveForm;
+  /* vT186 推荐按钮与批量导入：全部挂在 window，内联 onclick 才找得到（之前漏了 clAddReco 导致点击无反应） */
+  window.clAddReco = clAddReco; window.clOpenImport = clOpenImport; window.clCloseImport = clCloseImport;
+  window.clImportPreview = clImportPreview; window.clImportWenDo = clImportWenDo;
+  window.clWenReschedAll = clWenReschedAll; window.clParseWen = clParseWen;
   window.csSave = csSave; window.csDel = csDel;
   try { clRender(); csRender(); dtDetainRender(); renderTrain(); } catch (e) {}
 
