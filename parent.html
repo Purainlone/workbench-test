@@ -339,7 +339,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT183）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT184）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -1115,15 +1115,14 @@
       : ((sDelta <= -5 || rTrend >= 0.12) ? '需关注' : '基本稳定');
     var sWave = sVol >= 15 ? '较明显' : '较小';
     var sTip;
-    if (sDelta >= 5 && rTrend <= -0.1) sTip = pickSub + '近期表现持续向好，' + rWord + '。保持现在的练习节奏。';
-    else if (sDelta >= 5) sTip = pickSub + '近期表现有回升，' + rWord + '，优势还要继续巩固。';
-    else if (sDelta <= -5 && rTrend >= 0.1) sTip = pickSub + '近期表现有回落，' + rWord + '。先把基础部分稳住。';
-    else if (sDelta <= -5) sTip = pickSub + '近期表现略有回落，' + rWord + '。建议回看最近的错题，找回状态再提速。';
-    else if (rTrend <= -0.1) sTip = pickSub + '近期表现比较平稳，' + rWord + '。说明方法有效，值得延续。';
-    else if (rTrend >= 0.1) sTip = pickSub + '近期表现基本稳定，' + rWord + '。建议把复习拆得更均衡一些。';
-    else sTip = pickSub + '近期表现比较平稳，' + rWord + '。继续保持日常练习。';
-    if (sVol >= 15) sTip += '中间有过起伏，复习可以拆得更均衡一些。';
-    if (pickSub === '语文') sTip += '朗读与书面表达保持得较好，阅读理解可以继续巩固。';
+    if (sDelta >= 5 && rTrend <= -0.1) sTip = pickSub + '近期表现持续向好，' + rWord + '。建议保持当前节奏。';
+    else if (sDelta >= 5) sTip = pickSub + '近期表现有回升，' + rWord + '。建议继续观察后续表现。';
+    else if (sDelta <= -5 && rTrend >= 0.1) sTip = pickSub + '近期表现有回落，' + rWord + '。建议复核最近几次的作答情况。';
+    else if (sDelta <= -5) sTip = pickSub + '近期表现略有回落，' + rWord + '。建议回看最近几次的评价记录。';
+    else if (rTrend <= -0.1) sTip = pickSub + '近期表现基本稳定，' + rWord + '。建议延续当前做法。';
+    else if (rTrend >= 0.1) sTip = pickSub + '近期表现基本稳定，' + rWord + '。建议继续观察。';
+    else sTip = pickSub + '近期表现比较平稳，' + rWord + '。';
+    if (sVol >= 15) sTip += '期间有过起伏，建议结合几次记录一起看。';
     var sTrend = sList.slice(-6).map(function (g) { return { rate: g.rate }; });
 
     /* 阶段全科：优先最近的期中 / 期末 / 中段 / 阶段评价，否则用最近一次评价 */
@@ -1152,10 +1151,10 @@
     var eTip;
     if (eSub.length < 2) eTip = '这次阶段评价记录较少，暂不做全科判断，先按单科反馈跟进。';
     else {
-      eTip = '各科基础整体平稳。';
-      if (weak && weak.d <= -8) eTip += weak.s + '相对薄弱，建议把重点放在基础巩固和错题回看。';
-      else eTip += '没有明显的薄弱项，继续保持均衡。';
-      if (strong && strong.d >= 8) eTip += strong.s + '有积极表现，值得保持。';
+      eTip = '';
+      if (weak && weak.d <= -8) eTip += weak.s + '相对本次其他学科低一些，建议优先回看这一科。';
+      else eTip += '本次各学科表现比较接近，继续保持均衡。';
+      if (strong && strong.d >= 8) eTip += strong.s + '相对突出，值得保持。';
     }
 
     /* 整体状态：用近期三段与前三段的平均走势，只输出定性反馈 */
@@ -1175,11 +1174,11 @@
     });
     var weakSub = subsAvg.length ? subsAvg.slice().sort(function (a, b) { return a.rate - b.rate; })[0] : null;
     var strongSub = subsAvg.length ? subsAvg.slice().sort(function (a, b) { return b.rate - a.rate; })[0] : null;
-    var oFocus = weakSub ? (weakSub.s + (weakSub.rate < 70 ? '基础巩固' : '稳定性')) : '作业质量';
-    var oTip = (oDelta >= 0 ? '对照班级整体学习要求，基础目标完成得比较扎实。'
-      : '对照班级整体学习要求，近期还有提升空间。') +
-      '建议继续保持作业质量，重点巩固' + oFocus + '，' +
-      (strongSub && strongSub.s !== weakSub.s ? strongSub.s + '的优势也要延续。' : '各科都要稳住节奏。');
+    var oFocus = weakSub ? (weakSub.s + (weakSub.rate < 70 ? '基础巩固' : '稳定性')) : '整体稳定性';
+    var oTip = (oDelta >= 5 ? '近期整体表现有积极变化。'
+      : (oDelta <= -5 ? '近期整体表现需要多跟进。' : '近期整体表现保持平稳。')) +
+      '建议保持当前节奏，重点巩固' + oFocus + '，' +
+      (strongSub && strongSub.s !== weakSub.s ? strongSub.s + '的表现也要延续。' : '各科都要稳住节奏。');
 
     return {
       n: list.length, sub: pickSub, sTrend: sTrend, sState: sState, sWave: sWave, rState: rState, sTip: sTip,
@@ -1218,7 +1217,7 @@
       '<div class="fbcell"><span>关注点</span><b class="warn">' + esc(a.oFocus) + '</b></div></div>';
     h += '<div class="anatip">' + esc(a.oTip) + '</div></div>';
 
-    h += '<div class="rcfoot">反馈依据老师录入的评价记录生成，供家庭沟通参考。</div>';
+    h += '<div class="rcfoot">反馈仅依据老师已录入的评价记录和班级位次变化生成；未记录的内容不作判断，也不展示具体数值。</div>';
     h += '</div>';
     return h;
   }
@@ -1473,7 +1472,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v183</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v184</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
