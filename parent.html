@@ -284,7 +284,7 @@
   @keyframes ppEfPop{from{opacity:0;transform:translateY(12px) scale(.85)}to{opacity:1;transform:none}}
   @keyframes ppEfTap{0%,100%{opacity:.55}50%{opacity:1}}
   @media (prefers-reduced-motion: reduce){.ppEvo,.ppEvo *{animation:none !important}}
-  /* ===== vT157 成绩分析 ===== */
+  /* ===== vT179 评价分析反馈 ===== */
   .anatop{display:flex;align-items:center;gap:12px;margin:2px 0 10px}
   .anabig{font-size:30px;font-weight:800;line-height:1;color:var(--g)}
   .anabig.ok{color:#2f9e6a}.anabig.mid{color:#c08a1e}.anabig.no{color:#c85a4a}
@@ -311,6 +311,20 @@
   .anacls{font-size:12.5px;color:var(--ink2);background:#f4f8f5;border-radius:10px;padding:7px 10px;margin:2px 0 8px}
   .anacls b.up{color:#2f9e6a}.anacls b.dn{color:#c85a4a}
   .anatip{font-size:12.5px;color:#2f6b4f;background:#eef6f1;border-radius:10px;padding:8px 10px;line-height:1.65}
+  /* ===== vT179 评价分析反馈 ===== */
+  .fbsec{padding:2px 0 12px;margin-bottom:12px;border-bottom:1px dashed var(--line)}
+  .fbsec:last-of-type{border-bottom:0;margin-bottom:4px;padding-bottom:2px}
+  .fbh{font-size:13px;font-weight:600;color:var(--ink);margin:0 0 8px}
+  .fbchips{display:flex;flex-wrap:wrap;gap:7px;margin:2px 0 8px}
+  .fbchip{font-size:11.5px;color:var(--ink2);background:#f4f8f5;border-radius:999px;padding:3px 9px}
+  .fbchip.good{background:#eaf6ee;color:#2f7a5a}
+  .fbchip.warn{background:#fdf4df;color:#a97a11}
+  .fbgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:2px 0 9px}
+  .fbcell{background:#f7faf8;border-radius:11px;padding:8px 6px;text-align:center}
+  .fbcell span{display:block;font-size:10.5px;color:var(--ink2)}
+  .fbcell b{display:block;font-size:12.5px;color:var(--ink);line-height:1.45;margin-top:2px}
+  .fbcell b.good{color:#2f7a5a}.fbcell b.warn{color:#a97a11}
+  .anasub .v.tag{font-size:11.5px;width:46px}
   /* ===== vT157 班级诵读进度 ===== */
   .rccls{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
   .rcbar.cls i{background:linear-gradient(90deg,#7cc4f0,#9fd8f5)}
@@ -322,7 +336,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT178）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT179）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -630,7 +644,7 @@
       rcDoneList: rcDoneList, rcTodoList: rcTodoList, rcExtraDone: rcExtraDone,
       rcTimes: (per.rc || []).length, rcLegacy: !rcPlan.length,
       detain: (per.detain || []), grades: grades, comments: cmts,
-      /* vT157 班级聚合（只有平均数 / 人数，不含别人姓名）：成绩分析 + 班级诵读进度 */
+      /* vT157 班级聚合（只有平均数 / 人数，不含别人姓名）：班级诵读进度；vT179 评价分析反馈不再用 gAvg */
       gAvg: (ST.snap && ST.snap.gAvg) || {}, rcClass: (ST.snap && ST.snap.rcClass) || null,
       hwStat: hwStatOf(per),
       /* vT129 老师已收回（deleted）的灵宠绝不显示；老快照里也许还留着，这里再兜一层 */
@@ -1006,79 +1020,140 @@
     return '<div class="pend wait">⏳ ' + lb + '已提交，正在等待入账…' + (ST.snap && ST.snap.autoApprove ? '（自动批准已开启，通常 10 秒内生效）' : '（需老师批准，批准后这里会变成已生效）') + '</div>';
   }
 
-  /* ---------------- vT157 成绩分析（家长端）----------------
-    只用「孩子自己的成绩 + 班级平均数」，做四件事：
-    ① 最近一次得分率；② 最近 6 次趋势；③ 各科平均得分率；④ 一句人话结论。
-    不显示排名、不显示别人分数 —— 家长看到的是自己孩子的位置和水位。 */
+  /* ---------------- vT179 评价分析反馈（家长端）----------------
+    只输出反馈性结论，不做横向比较。三块：
+    ① 单科跟踪（进退步、波动）；② 阶段全科（偏科提示）；③ 整体状态反馈。 */
   function anaOf(v) {
-    var list = (v.grades || []).filter(function (g) { return !isNaN(Number(g.score)); }).slice();
+    var list = (v.grades || []).filter(function (g) {
+      return g && !isNaN(Number(g.score));
+    }).map(function (g) {
+      var full = Number(g.full) || 100;
+      var r = Math.round(Number(g.score) / full * 100);
+      return {
+        exam: String(g.exam || '最近一次评价').replace(/考试/g, '评价'),
+        subject: g.subject || '其他',
+        rate: Math.max(0, Math.min(100, r)),
+        date: dateOnly(g.date || '')
+      };
+    }).sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
     if (!list.length) return null;
-    /* buildView 里已按日期倒序，这里改成旧 → 新看趋势 */
-    list.sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
-    var rate = function (g) { var f = Number(g.full) || 100; return Math.round(Number(g.score) / f * 100); };
+
     var bySub = {};
-    list.forEach(function (g) {
-      var k = g.subject || '其他';
-      (bySub[k] = bySub[k] || []).push(rate(g));
-    });
-    var subs = Object.keys(bySub).map(function (k) {
-      var arr = bySub[k], sum = 0;
-      arr.forEach(function (x) { sum += x; });
-      return { s: k, n: arr.length, rate: Math.round(sum / arr.length) };
-    }).sort(function (a, b) { return b.rate - a.rate; });
-    var last = list[list.length - 1];
-    var lastRate = rate(last);
-    var prev = list.length > 1 ? list[list.length - 2] : null;
-    var delta = prev ? (lastRate - rate(prev)) : 0;
-    var trend = list.slice(-6).map(function (g) {
-      return { d: String(g.date).slice(5), s: g.subject || '', rate: rate(g), score: Number(g.score), full: Number(g.full) || 100 };
-    });
-    /* 班级平均：快照按「科目|考试名称」聚合，取最近几次里有数据的平均 */
-    var acc = 0, accN = 0;
-    trend.forEach(function (t, i) {
-      var g = list.slice(-6)[i];
-      var a = v.gAvg && v.gAvg[(g.subject || '') + '|' + (g.exam || '')];
-      if (a && a.avg != null) { acc += Number(a.avg); accN++; }
-    });
-    var clsAvg = accN ? Math.round(acc / accN * 10) / 10 : null;
-    var tips = [];
-    if (delta >= 3) tips.push('最近一次比上次进步 ' + delta + ' 分');
-    else if (delta <= -3) tips.push('最近一次比上次回落 ' + Math.abs(delta) + ' 分，别松劲');
-    else if (prev) tips.push('最近两次基本持平');
-    if (subs.length > 1) {
-      tips.push(subs[0].s + '最稳（平均得分率 ' + subs[0].rate + '%）');
-      tips.push(subs[subs.length - 1].s + '还有提升空间（' + subs[subs.length - 1].rate + '%）');
+    list.forEach(function (g) { (bySub[g.subject] = bySub[g.subject] || []).push(g); });
+
+    /* 单科跟踪：默认语文；没有语文记录时取记录最多的科目 */
+    var subKeys = Object.keys(bySub);
+    var pickSub = bySub['语文'] ? '语文' : subKeys.sort(function (a, b) {
+      return bySub[b].length - bySub[a].length;
+    })[0];
+    var sList = bySub[pickSub] || [];
+    var sRates = sList.map(function (g) { return g.rate; });
+    var sPrev = sRates.length > 1 ? sRates[sRates.length - 2] : null;
+    var sDelta = sPrev == null ? 0 : sRates[sRates.length - 1] - sPrev;
+    var sWin = sRates.slice(-6);
+    var sVol = sWin.length > 1 ? Math.max.apply(null, sWin) - Math.min.apply(null, sWin) : 0;
+    var sState = sDelta >= 5 ? '有提升' : (sDelta <= -5 ? '需关注' : '基本稳定');
+    var sWave = sVol >= 15 ? '较明显' : '较小';
+    var sTip;
+    if (sDelta >= 5) sTip = pickSub + '近期整体呈上升趋势，最近已有回升。保持现在的练习节奏，把优势稳定下来。';
+    else if (sDelta <= -5) sTip = pickSub + '近期有小幅回落，建议先回看最近的错题，找回状态再提速。';
+    else sTip = pickSub + '近期表现比较平稳。继续保持日常练习，逐步提高稳定度。';
+    if (sVol >= 15) sTip += '中间有过起伏，复习可以拆得更均衡一些。';
+    if (pickSub === '语文') sTip += '朗读与书面表达保持得较好，阅读理解可以继续巩固。';
+    var sTrend = sList.slice(-6).map(function (g) { return { rate: g.rate }; });
+
+    /* 阶段全科：优先最近的期中 / 期末 / 中段 / 阶段评价，否则用最近一次评价 */
+    var stage = '';
+    for (var i = list.length - 1; i >= 0; i--) {
+      if (/期中|期末|中段|阶段|检测/.test(list[i].exam)) { stage = list[i].exam; break; }
     }
-    return { list: list, n: list.length, subs: subs, last: last, lastRate: lastRate,
-             delta: delta, trend: trend, clsAvg: clsAvg, tips: tips };
+    if (!stage) stage = list[list.length - 1].exam || '最近一次评价';
+    var eRows = list.filter(function (g) { return g.exam === stage; });
+    var eSeen = {}, eSub = [];
+    for (var j = eRows.length - 1; j >= 0; j--) {
+      if (eSeen[eRows[j].subject]) continue;
+      eSeen[eRows[j].subject] = 1;
+      eSub.unshift(eRows[j]);
+    }
+    var eSum = 0;
+    eSub.forEach(function (g) { eSum += g.rate; });
+    var eAvg = eSub.length ? Math.round(eSum / eSub.length) : 0;
+    var weak = null, strong = null;
+    var eTags = eSub.map(function (g) {
+      var d = g.rate - eAvg;
+      if (!weak || d < weak.d) weak = { s: g.subject, d: d };
+      if (!strong || d > strong.d) strong = { s: g.subject, d: d };
+      return { s: g.subject, rate: g.rate, tag: d <= -10 ? '需关注' : (d >= 8 ? '有优势' : '稳定') };
+    });
+    var eTip;
+    if (eSub.length < 2) eTip = '这次阶段评价记录较少，暂不做全科判断，先按单科反馈跟进。';
+    else {
+      eTip = '各科基础整体平稳。';
+      if (weak && weak.d <= -8) eTip += weak.s + '相对薄弱，建议把重点放在基础巩固和错题回看。';
+      else eTip += '没有明显的薄弱项，继续保持均衡。';
+      if (strong && strong.d >= 8) eTip += strong.s + '有积极表现，值得保持。';
+    }
+
+    /* 整体状态：用近期三段与前三段的平均走势，只输出定性反馈 */
+    var rates = list.map(function (g) { return g.rate; });
+    var avgOf = function (arr) {
+      if (!arr.length) return 0;
+      var s = 0; arr.forEach(function (x) { s += x; });
+      return s / arr.length;
+    };
+    var recent = rates.slice(-3), before = rates.slice(-6, -3);
+    var oDelta = before.length ? (avgOf(recent) - avgOf(before))
+      : (rates.length > 1 ? (rates[rates.length - 1] - rates[rates.length - 2]) : 0);
+    var oState = oDelta >= 5 ? '稳步向上' : (oDelta <= -5 ? '需要跟进' : '保持稳定');
+    var oCompare = oDelta >= 5 ? '有积极变化' : (oDelta <= -5 ? '需要多关注' : '基本持平');
+    var subsAvg = subKeys.map(function (k) {
+      return { s: k, rate: Math.round(avgOf(bySub[k].map(function (g) { return g.rate; }))) };
+    });
+    var weakSub = subsAvg.length ? subsAvg.slice().sort(function (a, b) { return a.rate - b.rate; })[0] : null;
+    var strongSub = subsAvg.length ? subsAvg.slice().sort(function (a, b) { return b.rate - a.rate; })[0] : null;
+    var oFocus = weakSub ? (weakSub.s + (weakSub.rate < 70 ? '基础巩固' : '稳定性')) : '作业质量';
+    var oTip = (oDelta >= 0 ? '对照班级整体学习要求，基础目标完成得比较扎实。'
+      : '对照班级整体学习要求，近期还有提升空间。') +
+      '建议继续保持作业质量，重点巩固' + oFocus + '，' +
+      (strongSub && strongSub.s !== weakSub.s ? strongSub.s + '的优势也要延续。' : '各科都要稳住节奏。');
+
+    return {
+      n: list.length, sub: pickSub, sTrend: sTrend, sState: sState, sWave: sWave, sTip: sTip,
+      stage: stage, eTags: eTags, eTip: eTip,
+      oState: oState, oCompare: oCompare, oFocus: oFocus, oTip: oTip
+    };
   }
   function anaCard(v, a) {
-    var cls = a.lastRate >= 85 ? 'ok' : a.lastRate >= 60 ? 'mid' : 'no';
-    var dtxt = a.delta > 0 ? ('↑' + a.delta) : (a.delta < 0 ? ('↓' + Math.abs(a.delta)) : '→');
-    var h = '<div class="card"><h2>📈 成绩分析 <em>近 120 天 · ' + a.n + ' 次考试</em></h2>';
-    h += '<div class="anatop"><div class="anabig ' + cls + '">' + a.lastRate + '<small>%</small></div>' +
-      '<div class="anaside"><b>' + esc(a.last.subject || '考试') + ' · ' + esc(a.last.exam || '') + '</b>' +
-      '<span>' + a.last.score + ' / ' + (a.last.full || 100) + ' 分 · 得分率 ' + a.lastRate + '%</span></div>' +
-      '<div class="anadelta ' + (a.delta > 0 ? 'up' : (a.delta < 0 ? 'dn' : '')) + '">' + dtxt + '</div></div>';
-    /* 趋势柱：最近 6 次得分率 */
-    h += '<div class="anabars">' + a.trend.map(function (t) {
-      var cls2 = t.rate >= 85 ? 'ok' : t.rate >= 60 ? 'mid' : 'no';
-      return '<div class="anabar"><i class="' + cls2 + '" style="height:' + Math.max(6, Math.min(100, t.rate)) + '%"></i>' +
-        '<span>' + t.rate + '</span><em>' + esc(t.s.slice(0, 2)) + '<br>' + esc(t.d) + '</em></div>';
+    var h = '<div class="card"><h2>评价分析反馈 <em>近期表现 · 以反馈为主</em></h2>';
+
+    h += '<div class="fbsec"><div class="fbh">单科跟踪 · ' + esc(a.sub) + '</div>';
+    h += '<div class="anabars">' + a.sTrend.map(function (t) {
+      var c = t.rate >= 85 ? 'ok' : (t.rate >= 60 ? 'mid' : 'no');
+      return '<div class="anabar"><i class="' + c + '" style="height:' + Math.max(8, Math.min(100, t.rate)) + '%"></i></div>';
     }).join('') + '</div>';
-    /* 各科平均 */
-    h += '<div class="anasubs">' + a.subs.map(function (x) {
+    h += '<div style="font-size:11px;color:#9aa8a0;margin:-4px 0 8px">较早 → 最近</div>';
+    h += '<div class="fbchips">' +
+      '<span class="fbchip ' + (a.sState === '有提升' ? 'good' : (a.sState === '需关注' ? 'warn' : '')) + '">较上次：' + esc(a.sState) + '</span>' +
+      '<span class="fbchip ' + (a.sWave === '较明显' ? 'warn' : '') + '">波动：' + esc(a.sWave) + '</span></div>';
+    h += '<div class="anatip">' + esc(a.sTip) + '</div></div>';
+
+    h += '<div class="fbsec"><div class="fbh">阶段全科 · ' + esc(a.stage) + '</div>';
+    h += '<div class="anasubs">' + a.eTags.map(function (x) {
+      var c = x.tag === '需关注' ? 'warn' : (x.tag === '有优势' ? 'good' : '');
       return '<div class="anasub"><span class="k">' + esc(x.s) + '</span>' +
-        '<span class="bar"><i style="width:' + Math.max(2, Math.min(100, x.rate)) + '%"></i></span>' +
-        '<span class="v">' + x.rate + '%</span></div>';
+        '<span class="bar"><i style="width:' + Math.max(4, Math.min(100, x.rate)) + '%"></i></span>' +
+        '<span class="v tag ' + c + '">' + esc(x.tag) + '</span></div>';
     }).join('') + '</div>';
-    if (a.clsAvg != null) {
-      var gap = Math.round((a.lastRate - a.clsAvg) * 10) / 10;
-      h += '<div class="anacls">班级平均得分率 ' + a.clsAvg + '% · 孩子 ' +
-        (gap >= 0 ? ('高于 <b class="up">+' + gap + '</b>') : ('低于 <b class="dn">' + gap + '</b>')) + ' 个百分点</div>';
-    }
-    h += '<div class="anatip">💡 ' + esc(a.tips.join('；')) + '</div>';
-    h += '<div class="rcfoot">按「得分率」比较不同满分/不同科目的成绩；只统计老师最近 120 天录入的考试。</div>';
+    h += '<div class="anatip">' + esc(a.eTip) + '</div></div>';
+
+    h += '<div class="fbsec"><div class="fbh">整体状态反馈</div>';
+    h += '<div class="fbgrid">' +
+      '<div class="fbcell"><span>整体状态</span><b class="' + (a.oState === '稳步向上' ? 'good' : (a.oState === '需要跟进' ? 'warn' : '')) + '">' + esc(a.oState) + '</b></div>' +
+      '<div class="fbcell"><span>与上次相比</span><b class="' + (a.oCompare === '有积极变化' ? 'good' : (a.oCompare === '需要多关注' ? 'warn' : '')) + '">' + esc(a.oCompare) + '</b></div>' +
+      '<div class="fbcell"><span>关注点</span><b class="warn">' + esc(a.oFocus) + '</b></div></div>';
+    h += '<div class="anatip">' + esc(a.oTip) + '</div></div>';
+
+    h += '<div class="rcfoot">反馈依据老师录入的评价记录生成，供家庭沟通参考。</div>';
     h += '</div>';
     return h;
   }
@@ -1317,7 +1392,7 @@
       if (gm === 'level' && v.grades.length) h += '<div class="gmode">等级换算：A+ ≥95 · A 90–94 · B 80–89 · C 70–79 · D 60–69 · E 60 以下</div>';
       h += '</div>';
     }
-    /* vT157 成绩分析（老师可在「数据同步 → 家长端显示」里关掉） */
+    /* vT179 评价分析反馈（老师可在「数据同步 → 家长端显示」里关掉） */
     if (on('gradeAna')) {
       var ana = anaOf(v);
       if (ana) h += anaCard(v, ana);
@@ -1331,7 +1406,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v178</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v179</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
@@ -1458,6 +1533,7 @@
   /* 测试 / 自检钩子：把纯数据函数挂出来，方便离线核对统计口径（不参与页面渲染） */
   window.__paHwStat = hwStatOf;
   window.__paBuildView = buildView;
+  window.__paAnaFeedback = anaOf;
   window.__paPetRel = petRel;
   function boot() {
     try {
@@ -1483,7 +1559,7 @@
     });
   }
   /* vT157 测试钩子：只有带 ?test=1 打开时才挂全局，正常家长使用不受影响。
-     给一份假快照就能整页渲染，方便截图核对成绩分析 / 班级诵读进度。 */
+     给一份假快照就能整页渲染，方便截图核对评价分析反馈 / 班级诵读进度。 */
   try {
     if (String(location.search || '').indexOf('test=1') >= 0) {
       window.__ppTest = {
