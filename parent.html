@@ -336,7 +336,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT180）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT181）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -547,39 +547,66 @@
     return l === 'A+' ? 'ga1' : l === 'A' ? 'ga' : l === 'B' ? 'gb' : l === 'C' ? 'gc' : l === 'D' ? 'gd' : 'ge';
   }
   function buildView(per, name) {
-    var day = ymd();    var items = (per.hwItems || []).filter(function (x) { return dateOnly(x.date) === day; })
-      .sort(function (a, b) { return String(a.item).localeCompare(String(b.item)); });
-    var LV = { '优': 'g', '良': 'y', '中': 'z', '差': 'r', '超时未交': 'r' };
-    var hw = items.map(function (it) {
-      var rec = null;
-      (per.hw || []).forEach(function (r) {
-        if (!rec && r.name === name && r.item === it.item && dateOnly(r.date) === dateOnly(it.date)) rec = r;
+    var day = ymd();
+    var LV = { '优': 'g', '良': 'y', '中': 'z', '差': 'r', '超时未交': 'r', '补': 'p' };
+    /* vT181 今日作业 / 未完成作业真源 = 老师「布置作业」写的 s-assign（快照 assign 字段）。
+       旧快照没有 assign 时才退回 hwItems；hwItems 里从登记记录反推的列不再冒充「今天布置的作业」。 */
+    function hwKey(s) { return String(s == null ? '' : s).replace(/[\s，,。、：:；;（）()【】\[\]《》<>"'·_\-]/g, ''); }
+    var hwRecs = (per.hw || []).filter(function (r) { return r && r.name === name; });
+    function hwFindRec(dt, nm) {
+      var i, r, k = hwKey(nm), rk;
+      for (i = 0; i < hwRecs.length; i++) {
+        r = hwRecs[i];
+        if (dateOnly(r.date) === dt && String(r.item || '').trim() === nm) return r;
+      }
+      if (!k) return null;
+      for (i = 0; i < hwRecs.length; i++) {
+        r = hwRecs[i];
+        if (dateOnly(r.date) !== dt) continue;
+        rk = hwKey(r.item);
+        if (rk && (rk.indexOf(k) >= 0 || k.indexOf(rk) >= 0)) return r;
+      }
+      return null;
+    }
+    var assignRaw = Array.isArray(per.assign) ? per.assign
+      : (Array.isArray(ST.snap && ST.snap.assign) ? ST.snap.assign : null);   /* vT181 老加密块用公开顶层兜底 */
+    var hwItemsAll = [];
+    if (assignRaw) {
+      assignRaw.forEach(function (a) {
+        var dt = dateOnly(a && a.date), nm = String((a && (a.content || a.item)) || '').trim();
+        if (dt && nm) hwItemsAll.push({ date: dt, item: nm, subject: (a && a.subject) || '' });
       });
+    } else {
+      (per.hwItems || []).forEach(function (it) {
+        var dt = dateOnly(it && it.date), nm = String((it && it.item) || '').trim();
+        if (dt && nm) hwItemsAll.push({ date: dt, item: nm, subject: (it && it.subject) || '' });
+      });
+    }
+    hwItemsAll.sort(function (a, b) {
+      return String(a.date).localeCompare(String(b.date)) || String(a.item).localeCompare(String(b.item));
+    });
+    var hwSeen = {}, items = [];
+    hwItemsAll.forEach(function (it) {
+      var k = it.date + '|' + hwKey(it.item);
+      if (hwSeen[k]) return;
+      hwSeen[k] = 1; items.push(it);
+    });
+    var hw = items.filter(function (x) { return x.date === day; }).map(function (it) {
+      var rec = hwFindRec(it.date, it.item);
       var lv = rec ? (rec.level || '') : '';
-      return { item: it.item, level: paLvName(lv), cls: LV[paLvNorm(lv)] || 'r', done: !!rec };   /* vT146 显示新词 */
+      return { item: it.item, subject: it.subject, level: paLvName(lv), cls: LV[paLvNorm(lv)] || 'r',
+               done: !!rec, label: rec ? paLvName(lv) : '待登记' };   /* vT181 未登记不写成「未交」 */
     });
-    /* vT131 未完成 / 未交作业清单（跨天，不只今天）
-       快照里 hwItems 是近 30 天的作业列（日期 + 名称 + 科目），hw 是这孩子的登记记录。
-       两边一配：没有任何记录 = 未交；记录等级是「超时未交」= 超时未交。
-       今天的单独分组（可能还没到老师登记时间），历史日期算「逾期未交」。
-       注意：记录存在但等级为空 = 已交未评，不算未完成。 */
-    var recMap = {};
-    (per.hw || []).forEach(function (r) {
-      var nm = String((r && r.item) || '').trim();
-      var dt = dateOnly(r.date);
-      if (!nm || !dt) return;
-      var k = dt + '|' + nm;
-      if (!recMap[k]) recMap[k] = r;
-    });
+    /* vT131 + vT181：未完成清单与今日作业同源（assign 优先），不再把登记记录当成作业本身。 */
     var hwTodoPast = [], hwTodoOver = [], hwTodoToday = [], hwTodoSeen = {}, hwItemN = 0;
-    (per.hwItems || []).forEach(function (it) {
-      var dt = dateOnly(it && it.date), nm = String((it && it.item) || '').trim();
+    items.forEach(function (it) {
+      var dt = it.date, nm = it.item;
       if (!dt || !nm || dt > day) return;          /* 未来日期的作业（提前布置）不算欠交 */
-      var k = dt + '|' + nm;
+      var k = dt + '|' + hwKey(nm);
       if (hwTodoSeen[k]) return;
       hwTodoSeen[k] = 1; hwItemN++;
-      var rec = recMap[k], lv = rec ? paLvNorm(String(rec.level || '')) : '';   /* vT146 */
-      var row = { date: dt, md: dt.slice(5).replace('-', '/'), item: nm, subject: (it && it.subject) || '' };
+      var rec = hwFindRec(dt, nm), lv = rec ? paLvNorm(String(rec.level || '')) : '';
+      var row = { date: dt, md: dt.slice(5).replace('-', '/'), item: nm, subject: it.subject };
       if (lv === '超时未交') { row.st = 'over'; hwTodoOver.push(row); }
       else if (!rec) {
         row.st = 'miss';
@@ -1245,8 +1272,10 @@
     if (on('hw')) {
       h += '<div class="card"><h2>📝 今日作业 <em>' + esc(v.day) + '</em></h2>';
       h += v.hw.length ? v.hw.map(function (x) {
-        var label = x.done ? (x.level || '已交') : '未交';
-        return '<div class="hw"><span class="nm">' + esc(x.item) + '</span><span class="chip c-' + x.cls + '">' + esc(label) + '</span></div>';
+        var label = x.label || (x.done ? (x.level || '已交') : '待登记');
+        return '<div class="hw"><span class="nm">' + esc(x.item) +
+          (x.subject ? '<small style="color:#9aa8a0;margin-left:6px">' + esc(x.subject) + '</small>' : '') +
+          '</span><span class="chip c-' + x.cls + '">' + esc(label) + '</span></div>';
       }).join('') : '<div class="empty">今天老师还没布置作业</div>';
       h += '</div>';
     }
@@ -1426,7 +1455,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v180</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v181</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
