@@ -1888,6 +1888,8 @@ table.paper td.l{text-align:left;font-weight:600}
         <div id="asRdGrid" style="display:flex;flex-wrap:wrap;gap:6px"></div>
       </div>
       <div id="asList" style="margin-top:8px"></div>
+      <!-- vT185 大屏显示权限：跨日期列出所有仍生效的自省补责，逐条决定上不上教室大屏 -->
+      <div id="asRdDeskList" style="margin-top:10px;border-top:1px dashed var(--line);padding-top:8px"></div>
     </div>
     <div class="hwstat" id="hwStat"></div>
     <div class="rcwrap" id="hwWrap" style="max-height:min(72vh,660px)">
@@ -23654,6 +23656,24 @@ function cwInit(){
     toastMsg(rec.deskShow ? '🖥️ 已显示到教室大屏（约 2~5 秒生效）'
       : '🙈 已从教室大屏隐藏（工作台/手机仍可登记完成）');
   };
+  /* vT185 跨日期的大屏显示权限清单：只列「还生效」的补责（含已被大屏隐藏的），
+     老师不必切日期找旧任务；这里只改 deskShow，不影响完成登记和别的端。 */
+  window.asRdDeskRender = function () {
+    var box = document.getElementById('asRdDeskList'); if (!box) return;
+    var rows = (typeof rdActiveRows === 'function') ? rdActiveRows() : [];
+    if (!rows.length) { box.innerHTML = '<div class="sub">当前没有生效中的自省补责</div>'; return; }
+    box.innerHTML = '<div style="font-size:12.5px;font-weight:700;color:#b3403a;margin-bottom:6px">🖥️ 教室大屏显示权限（跨日期，' + rows.length + ' 条生效中）</div>' +
+      rows.map(function (r) {
+        var hidden = r.deskShow === false;
+        var remain = (typeof rdRemain === 'function') ? rdRemain(r) : [];
+        return '<div style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed #f0d5d1">' +
+          '<span style="font-size:11px;color:#93a89b;flex-shrink:0">' + esc(String(r.date || '').slice(5)) + '</span>' +
+          '<span style="flex:1;min-width:0;font-size:12.5px">' + esc(r.content || '') +
+          '<span style="font-size:11px;color:#b3403a;margin-left:6px">还剩 ' + remain.length + ' 人</span></span>' +
+          '<button class="btn2 sm ghost" style="color:' + (hidden ? '#6b7280' : '#1d5c8f') + '" onclick="asRdDeskToggle(\'' + r.id + '\')" title="只控制教室大屏是否显示这条；工作台/手机仍可登记完成">' + (hidden ? '大屏隐藏' : '大屏显示') + '</button>' +
+          '</div>';
+      }).join('');
+  };
   window.asRender = function () {
     var box = document.getElementById('asList'); if (!box) return;
     var dEl = document.getElementById('asDate');
@@ -23696,6 +23716,7 @@ function cwInit(){
         '</div></div>';
     }));
     box.innerHTML = html.join('') || '<div class="sub">这一天还没有布置作业</div>';
+    try { window.asRdDeskRender(); } catch (e) {}
   };
 
   /* ================= vT15 经典内容管理（每日一句/古诗词/小古文：s-classic 内容库 + s-csched 每日安排，随 nt 同步到教室大屏） ================= */
