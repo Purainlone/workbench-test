@@ -2821,9 +2821,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v192</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v193</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v192','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v193','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -6090,6 +6090,7 @@ function loadScoresFromDB(){
       scRefreshNames();
       scLoadTargets();
       scLoadGoals();   /* vT173 功能⑥：数英目标与本机缓存一并加载 */
+      try { scBonusNotice(true); } catch (_bn) {}   /* vT193 更新「目标加分」待加场次角标 */
       scFillFilters();
       scRenderList();
       scRenderAn();
@@ -7636,6 +7637,7 @@ function scHistDo() {
     return loadScoresFromDB();
   }).then(function () {
     try { renderSC(); } catch (e) {}
+    try { scBonusNotice(false); } catch (e) {}
     if (!skip) scHistClose();
   }).catch(function (e) {
     if (btn) { btn.disabled = false; btn.textContent = '📥 确认导入'; }
@@ -7891,6 +7893,7 @@ function fnImportDo() {
   fnImportClose();
   toastMsg('📥 已导入 ' + n + ' 条期末成绩（新增 ' + add + '，覆盖 ' + (n - add) + '），正在重算看板…');
   fnReload(true);
+  setTimeout(function () { try { scBonusNotice(false); } catch (e) {} }, 800);
 }
 /* 清除此前误导入「成绩管理」（飞书成绩表）的期末记录：只删备注=历次期末导入 的，日常单元测不动 */
 function fnCleanWrong() {
@@ -9969,9 +9972,39 @@ function scBonusRepaintPts() {
   });
   SC_BONUS_ROWS.forEach(function (r) { r.pts = scBonusPtsOf(r.lv); });
 }
+/* vT193 目标加分也要能读「期末看板」的独立期末库（s-final）：
+   以前只读飞书成绩表，从期末看板导入的成绩在目标加分里看不到、也不提醒。 */
+function scBonusRows() {
+  var out = (SC_ROWS || []).slice();
+  try {
+    if (typeof fnRows === 'function') {
+      fnRows().forEach(function (r) {
+        out.push({
+          '学生姓名': r.name, '科目': r.subject, '考试名称': r.term + '期末',
+          '分数': Number(r.score),
+          '考试日期': r.date || (typeof scHistDateOf === 'function' ? scHistDateOf(r.term) : ''),
+          _fn: 1
+        });
+      });
+    }
+  } catch (e) {}
+  return out;
+}
+/* 在「🏆 目标加分」标签上标出还有几场没加分，并把提醒说清楚 */
+function scBonusNotice(silent) {
+  try {
+    var st = scBonusExamStatus();
+    var btn = document.querySelector('#scTabs button[data-t="bonus"]');
+    if (btn) btn.textContent = '🏆 目标加分' + (st.pending.length ? (' · ' + st.pending.length) : '');
+    if (silent || !st.pending.length) return st;
+    var names = st.pending.slice(0, 3).map(function (x) { return x.subj + ' ' + x.exam; }).join('、');
+    toastMsg('🏆 有 ' + st.pending.length + ' 场考试还没做目标加分：' + names + (st.pending.length > 3 ? ' 等' : '') + '，可到「🏆 目标加分」一键加');
+    return st;
+  } catch (e) { return null }
+}
 function scBonusExamList() {
   var out = [], seen = {};
-  (SC_ROWS || []).forEach(function (r) {
+  scBonusRows().forEach(function (r) {
     var s = fval(r, '科目'), e = fval(r, '考试名称');
     if (!s || !e) return;
     var k = s + '｜' + e;
@@ -10112,7 +10145,7 @@ function scBonusRender(opts) {
   }
   /* 本场分数 */
   var score = {};
-  (SC_ROWS || []).forEach(function (r) {
+  scBonusRows().forEach(function (r) {
     if (fval(r, '科目') !== meta.subj || fval(r, '考试名称') !== meta.exam) return;
     var n = fval(r, '学生姓名'); if (!n) return;
     var v = fnum(r, '分数');
@@ -19817,9 +19850,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v192';
-var WB_MY_VER = '优化版 vT192 · 期末看板独立标签';
-var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.205';
+var WB_VER_TAG = 'v193';
+var WB_MY_VER = '优化版 vT193 · 目标加分读取期末库';
+var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.206';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
