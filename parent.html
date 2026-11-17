@@ -339,7 +339,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT182）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT183）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -600,9 +600,24 @@
       return { item: it.item, subject: it.subject, level: paLvName(lv), cls: LV[paLvNorm(lv)] || 'r',
                done: !!rec, label: rec ? paLvName(lv) : '待登记' };   /* vT181 未登记不写成「未交」 */
     });
-    /* vT131 + vT181：未完成清单与今日作业同源（assign 优先），不再把登记记录当成作业本身。 */
+    /* vT182 未完成清单恢复按「作业登记列 hwItems」判断。
+       vT181 曾让它也跟着 assign 走，但老师布置作业写的是整段任务描述，
+       登记时用的是短列名，名称/日期都对不上 → 已全部完成的孩子被误报一堆欠交。
+       今日作业仍读 assign；未完成清单按登记列 + 这孩子的记录算，保持原口径。 */
+    var todoItems = [], todoRawSeen = {};
+    (per.hwItems || []).forEach(function (it) {
+      var dt = dateOnly(it && it.date), nm = String((it && it.item) || '').trim();
+      if (!dt || !nm) return;
+      var k = dt + '|' + hwKey(nm);
+      if (todoRawSeen[k]) return;
+      todoRawSeen[k] = 1;
+      todoItems.push({ date: dt, item: nm, subject: (it && it.subject) || '' });
+    });
+    todoItems.sort(function (a, b) {
+      return String(a.date).localeCompare(String(b.date)) || String(a.item).localeCompare(String(b.item));
+    });
     var hwTodoPast = [], hwTodoOver = [], hwTodoToday = [], hwTodoSeen = {}, hwItemN = 0;
-    items.forEach(function (it) {
+    todoItems.forEach(function (it) {
       var dt = it.date, nm = it.item;
       if (!dt || !nm || dt > day) return;          /* 未来日期的作业（提前布置）不算欠交 */
       var k = dt + '|' + hwKey(nm);
@@ -1458,7 +1473,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v182</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v183</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
