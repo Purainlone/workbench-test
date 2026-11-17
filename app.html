@@ -1729,6 +1729,12 @@ table.paper td.l{text-align:left;font-weight:600}
         <span class="sctip" id="scAnTip"></span>
         <button class="btn2 sm" onclick="scWordPanel()">📄 导出成绩表</button>
       </div>
+      <!-- vT173 功能⑦：同一次考试的多科目综合分析（考试名称+日期确定一场，勾选科目看总分排名） -->
+      <div class="chartbox" id="scCmpPanel" style="margin-bottom:14px">
+        <h3>🧮 综合分析 <span style="font-size:12px;font-weight:400;color:#6b7f74">选一场考试，勾选多个科目一起看总分与排名</span></h3>
+        <div class="paperrow" id="scCmpBar" style="margin-bottom:0"></div>
+        <div id="scCmpOut" style="margin-top:10px"></div>
+      </div>
       <div id="scAnExams"></div>
       <div id="scWordBox"></div>
       <div id="scAnBox"></div>
@@ -1777,6 +1783,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div class="chartbox">
         <h3>🏆 目标达成加分</h3>
         <div class="bn-bar">
+          <span style="font-size:13px;font-weight:700">科目</span>
+          <!-- vT173 功能⑥：目标按科目分开管理，语文保留现状，数学/英语默认无目标 -->
+          <select id="scBonusSubj" onchange="scBonusSubjChange()" style="min-width:88px;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:13px;font-family:inherit"><option>语文</option><option>数学</option><option>英语</option></select>
           <span style="font-size:13px;font-weight:700">考试</span>
           <select id="scBonusExam" onchange="scBonusExamChange()" style="min-width:260px;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:13px;font-family:inherit"></select>
           <span style="font-size:13px">达目标一 +</span><input id="scBonusP1" type="number" min="0" step="1" value="3" oninput="scBonusSavePts()">
@@ -1788,9 +1797,19 @@ table.paper td.l{text-align:left;font-weight:600}
           <button class="btn2 sm" onclick="scBonusSelAll(true)">✅ 全选达成</button>
           <button class="btn2 sm ghost" onclick="scBonusSelAll(false)">🚫 清空勾选</button>
           <button class="btn2 primary" onclick="scBonusApply()">🏆 给勾选同学加分</button>
+          <button class="btn2 sm ghost" onclick="scGoalPanelToggle()">🎯 设定目标分</button>
           <span class="sctip" id="scBonusTip">选一场考试，按学生的目标一 / 二 / 三自动判断谁达标，勾选后一次写入积分</span>
         </div>
         <div class="scroll" id="scBonusBox" style="max-height:min(58vh,540px);margin-top:8px"></div>
+      </div>
+      <!-- vT173 功能⑥：按科目设定目标分（语文/数学/英语），留空 = 该科不做达标加分 -->
+      <div class="chartbox" id="scGoalPanel" style="display:none">
+        <h3>🎯 按科目设定目标分 <span id="scGoalTeacher" style="font-size:12px;font-weight:400;color:#2d8f63"></span></h3>
+        <div class="bn-bar">
+          <span class="sctip" id="scGoalTip">科目跟随上面的科目选择 · 目标一 / 二 / 三都可以留空，三档全空 = 该生该科不做达标加分</span>
+          <button class="btn2 sm primary" onclick="scGoalSave()">💾 保存目标</button>
+        </div>
+        <div class="scroll" id="scGoalBox" style="max-height:min(48vh,460px);margin-top:8px"></div>
       </div>
     </div>
 
@@ -6004,6 +6023,7 @@ function loadScoresFromDB(){
       SC_LOADED=true;
       scRefreshNames();
       scLoadTargets();
+      scLoadGoals();   /* vT173 功能⑥：数英目标与本机缓存一并加载 */
       scFillFilters();
       scRenderList();
       scRenderAn();
@@ -6033,6 +6053,49 @@ function scLoadTargets(){
 }
 function scSaveTargets(){ try{localStorage.setItem(SC_TARGETS_KEY,JSON.stringify(SC_TARGETS))}catch(e){} }
 function scTargetOf(name){ return SC_TARGETS[String(name||'').trim()]||null; }
+
+/* ===== vT173 功能⑥：目标分扩展到数学 / 英语 =====
+   语文目标沿用原 SC_TARGETS（sc_targets_v1，含内置种子）不动；
+   数学 / 英语目标默认【全部留空】（不预设任何目标），由老师手动设定后才参与达标加分。
+   为什么存本机 localStorage：语文目标本来就是本机数据（成绩管理口径「目标存于本机」），
+   数英照此办理，云端表结构一概不动。键名按需求约定 wb_goal_math_v1 / wb_goal_en_v1。 */
+var SC_GOAL_SUBS = ['语文', '数学', '英语'];
+var SC_TARGETS_M = {};   /* 数学目标：姓名 → {t1,t2,t3}，默认空 */
+var SC_TARGETS_E = {};   /* 英语目标：姓名 → {t1,t2,t3}，默认空 */
+var SC_BONUS_SUBJ = '语文';   /* 目标加分面板当前科目 */
+function scGoalMapOf(sub) { return sub === '数学' ? SC_TARGETS_M : (sub === '英语' ? SC_TARGETS_E : SC_TARGETS); }
+function scLoadGoals() {
+  function rd(key) { try { var s = localStorage.getItem(key); if (s) return JSON.parse(s) || {} } catch (e) {} return {} }
+  SC_TARGETS_M = rd('wb_goal_math_v1');
+  SC_TARGETS_E = rd('wb_goal_en_v1');
+}
+function scSaveGoalMap(sub) {
+  try {
+    if (sub === '数学') localStorage.setItem('wb_goal_math_v1', JSON.stringify(SC_TARGETS_M));
+    else if (sub === '英语') localStorage.setItem('wb_goal_en_v1', JSON.stringify(SC_TARGETS_E));
+    else scSaveTargets();
+  } catch (e) {}
+}
+/* 按科目取某学生的目标：语文走老逻辑，数英走各自目标表（没设过返回 null = 该科不做达标加分） */
+function scTargetOfSub(name, sub) {
+  var m = scGoalMapOf(sub);
+  return m[String(name || '').trim()] || null;
+}
+/* 关联科任教师（只展示，无登录/权限逻辑）：
+   s-teachers 表本身就有 subject 字段（{id,name,subject,…}），不用另做科目映射；
+   云端表经 ntFillOut 同步进本机缓存 wb_tc_v1，这里只读缓存。 */
+function scBonusTeacherOf(sub) {
+  try {
+    var db = JSON.parse(localStorage.getItem('wb_tc_v1') || '{}');
+    var a = Array.isArray(db['s-teachers']) ? db['s-teachers'] : [];
+    for (var i = 0; i < a.length; i++) {
+      var t = a[i];
+      if (!t || t.state === 'off') continue;
+      if (String(t.subject || '') === String(sub) && t.name) return String(t.name);
+    }
+  } catch (e) {}
+  return '';
+}
 /* 按达到的目标线上色：≥目标三 浅红 / ≥目标二 浅绿 / ≥目标一 浅蓝；未达不染色 */
 function scTargetColor(v,t){
   if(v==null||!t)return '';
@@ -7822,6 +7885,201 @@ function scRenderAn(){
   } catch (eAn) {
     try { console.warn('[成绩分析增强] 渲染失败', eAn) } catch (_e) {}
   }
+
+  /* vT173 功能⑦：综合分析面板跟着成绩数据一起刷新（自身勾选状态保存在模块变量里） */
+  try { scCmpRender() } catch (_eCmp) { try { console.warn('[综合分析] 渲染失败', _eCmp) } catch (_e2) {} }
+}
+
+/* ===== vT173 功能⑦：同场考试多科目综合分析 =====
+   一场考试 = 考试名称 + 考试日期（同名不同日期算两场，防止上学期同名考试混进来）。
+   输出：每人各科分数 + 总分 + 班级总分平均 + 总分排名（含并列）；每科班级平均/最高/最低。
+   只分析有分的科目；缺考（无记录）学生该科不计入总分，但按总分参与排名。 */
+var SC_CMP_KEY = '';      /* 选中的考试 key：名称@日期 */
+var SC_CMP_SUBS = null;   /* 勾选的科目集合 {科目:1}；null = 默认全选该场已有科目 */
+function scCmpExamList() {
+  var seen = {}, out = [];
+  (SC_ROWS || []).forEach(function (r) {
+    var e = fval(r, '考试名称');
+    if (!e) return;
+    var d = syncDateOnly(fval(r, '考试日期')) || '';
+    var k = e + '@' + d;
+    if (!seen[k]) { seen[k] = 1; out.push({ name: e, date: d, key: k }); }
+  });
+  /* 新考的排前面，与目标加分面板同一习惯 */
+  out.sort(function (a, b) {
+    if (a.date && b.date && a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return a.name.localeCompare(b.name, 'zh');
+  });
+  return out;
+}
+/* 该场考试的全部成绩行：名称与日期必须同时相等才算同一场 */
+function scCmpRowsOf(meta) {
+  return (SC_ROWS || []).filter(function (r) {
+    if (fval(r, '考试名称') !== meta.name) return false;
+    return (syncDateOnly(fval(r, '考试日期')) || '') === meta.date;
+  });
+}
+function scCmpRender() {
+  var bar = document.getElementById('scCmpBar'), out = document.getElementById('scCmpOut');
+  if (!bar || !out) return;
+  fill(bar); fill(out);
+  var list = scCmpExamList();
+  if (!list.length) { out.appendChild(el('div', 'sctip', '还没有成绩记录，先到「成绩录入」录一场。')); return; }
+  var meta = list.filter(function (x) { return x.key === SC_CMP_KEY })[0];
+  if (!meta) { meta = list[0]; SC_CMP_KEY = meta.key; SC_CMP_SUBS = null; }
+  /* 控件行：考试下拉 + 科目勾选（默认全选该场已有科目） */
+  var sel = el('select');
+  sel.style.cssText = 'min-width:220px;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:13px;font-family:inherit';
+  list.forEach(function (x) {
+    var o = el('option', null, x.name + (x.date ? ('（' + x.date + '）') : ''));
+    o.value = x.key;
+    sel.appendChild(o);
+  });
+  sel.value = SC_CMP_KEY;
+  sel.onchange = function () { SC_CMP_KEY = this.value; SC_CMP_SUBS = null; scCmpRender(); };
+  bar.appendChild(el('span', 'sctip', '考试'));
+  bar.appendChild(sel);
+  var rows = scCmpRowsOf(meta);
+  var subs = [], subSeen = {};
+  rows.forEach(function (r) { var s = fval(r, '科目'); if (s && !subSeen[s]) { subSeen[s] = 1; subs.push(s); } });
+  subs.sort();
+  if (!subs.length) { out.appendChild(el('div', 'sctip', '这场考试还没有带科目的成绩记录。')); return; }
+  if (SC_CMP_SUBS === null) { SC_CMP_SUBS = {}; subs.forEach(function (s) { SC_CMP_SUBS[s] = 1; }); }
+  bar.appendChild(el('span', 'sctip', '　科目'));
+  subs.forEach(function (s) {
+    var lb = el('label');
+    lb.style.cssText = 'font-size:13px;display:inline-flex;align-items:center;gap:4px;margin-left:10px;cursor:pointer';
+    var cb = el('input');
+    cb.type = 'checkbox';
+    cb.checked = !!SC_CMP_SUBS[s];
+    cb.onchange = function () {
+      if (this.checked) SC_CMP_SUBS[s] = 1; else delete SC_CMP_SUBS[s];
+      scCmpRender();   /* 状态存模块变量，重画后勾选不丢 */
+    };
+    lb.appendChild(cb);
+    lb.appendChild(document.createTextNode(s));
+    bar.appendChild(lb);
+  });
+  var clr = el('button', 'btn2 sm ghost', '全选');
+  clr.title = '勾选该场全部科目';
+  clr.onclick = function () { SC_CMP_SUBS = {}; subs.forEach(function (s) { SC_CMP_SUBS[s] = 1; }); scCmpRender(); };
+  bar.appendChild(clr);
+  scCmpBuildOut(meta, subs, rows, out);
+}
+function scCmpBuildOut(meta, subs, rows, out) {
+  /* 只分析「有分」的科目：每科每人取最高分（同一人同一场重复登记时取高分，与其它口径一致） */
+  var bySub = {};
+  rows.forEach(function (r) {
+    var s = fval(r, '科目'), nm = fval(r, '学生姓名'), v = fnum(r, '分数');
+    if (!s || !nm || v == null || SC_CMP_SUBS[s] == null) return;
+    var m = bySub[s] = bySub[s] || {};
+    if (m[nm] == null || v > m[nm]) m[nm] = v;
+  });
+  var useSubs = subs.filter(function (s) { return bySub[s] && Object.keys(bySub[s]).length; });
+  if (!useSubs.length) { out.appendChild(el('div', 'sctip', '勾选的科目在这场考试里都还没有分数。')); return; }
+
+  /* 每科班级平均 / 最高 / 最低 */
+  var sum1 = el('div', 'chartbox');
+  sum1.style.padding = '10px';
+  sum1.appendChild(el('h3', null, '📊 各科目概况 · ' + meta.name + (meta.date ? ('（' + meta.date + '）') : '')));
+  var t1 = el('table', 'sct');
+  var th1 = el('thead'), tr1 = el('tr');
+  ['科目', '参考人数', '班级平均', '最高', '最低'].forEach(function (h) { tr1.appendChild(el('th', null, h)) });
+  th1.appendChild(tr1); t1.appendChild(th1);
+  var tb1 = el('tbody');
+  useSubs.forEach(function (s) {
+    var a = Object.keys(bySub[s]).map(function (k) { return bySub[s][k] });
+    var avg = a.reduce(function (x, y) { return x + y }, 0) / a.length;
+    var r = el('tr');
+    r.appendChild(el('td', 'nm', s));
+    r.appendChild(el('td', 'num', String(a.length)));
+    r.appendChild(el('td', 'num', avg.toFixed(1)));
+    r.appendChild(el('td', 'num', String(Math.max.apply(null, a))));
+    r.appendChild(el('td', 'num', String(Math.min.apply(null, a))));
+    tb1.appendChild(r);
+  });
+  t1.appendChild(tb1);
+  sum1.appendChild(t1);
+  out.appendChild(sum1);
+
+  /* 每个学生：各科分数 + 总分 + 排名（含并列） */
+  var names = (SC_NAMES || []).slice();
+  Object.keys(bySub).forEach(function (s) {
+    Object.keys(bySub[s]).forEach(function (nm) { if (names.indexOf(nm) < 0) names.push(nm); });
+  });
+  names.sort(function (a, b) { return a.localeCompare(b, 'zh'); });
+  var stu = names.map(function (nm) {
+    var o = { name: nm, vals: {}, total: 0, n: 0 };
+    useSubs.forEach(function (s) {
+      var v = bySub[s][nm];
+      if (v != null) { o.vals[s] = v; o.total += v; o.n++; }   /* 缺考不计该科 */
+    });
+    o.total = Math.round(o.total * 10) / 10;
+    return o;
+  });
+  stu.sort(function (a, b) { return (b.total - a.total) || a.name.localeCompare(b.name, 'zh'); });
+  /* 并列排名：同总分同名次，下一名跳过对应人数（1,1,3 式） */
+  var lastT = null, lastR = 0;
+  stu.forEach(function (x, i) {
+    if (lastT !== null && x.total === lastT) { x.rank = lastR; return }
+    x.rank = i + 1; lastR = i + 1; lastT = x.total;
+  });
+  var classAvg = stu.length ? stu.reduce(function (a, x) { return a + x.total }, 0) / stu.length : 0;
+
+  var sum2 = el('div', 'chartbox');
+  sum2.style.padding = '10px';
+  var grid = el('div', 'scgrid');
+  function kpi(k, v, s) {
+    var d = el('div', 'kpi');
+    d.appendChild(el('div', 'k', k));
+    d.appendChild(el('div', 'v', v));
+    if (s) d.appendChild(el('div', 's', s));
+    return d;
+  }
+  grid.appendChild(kpi('参与人数', String(stu.length), useSubs.join(' · ')));
+  grid.appendChild(kpi('班级总分平均', classAvg.toFixed(1), '各科原始分直接相加'));
+  var withScore = stu.filter(function (x) { return x.n > 0 });
+  if (withScore.length) {
+    var tot = withScore.map(function (x) { return x.total });
+    grid.appendChild(kpi('总分最高', String(Math.max.apply(null, tot)), ''));
+    grid.appendChild(kpi('总分最低', String(Math.min.apply(null, tot)), ''));
+  }
+  sum2.appendChild(grid);
+
+  var wrap = el('div', 'scroll');
+  wrap.style.maxHeight = '480px';
+  var t2 = el('table', 'sct');
+  var th2 = el('thead'), tr2 = el('tr');
+  ['名次', '姓名'].concat(useSubs, ['总分', '与班均差']).forEach(function (h) { tr2.appendChild(el('th', null, h)) });
+  th2.appendChild(tr2); t2.appendChild(th2);
+  var tb2 = el('tbody');
+  stu.forEach(function (x) {
+    var r = el('tr');
+    r.appendChild(el('td', 'num', x.n ? String(x.rank) : '—'));   /* 一科都没分的不参与排名 */
+    r.appendChild(el('td', 'nm', x.name));
+    useSubs.forEach(function (s) {
+      var td = el('td', 'num', x.vals[s] != null ? String(x.vals[s]) : '—');   /* 缺考显示 — */
+      if (x.vals[s] == null) td.style.color = '#b9c3cc';
+      r.appendChild(td);
+    });
+    r.appendChild(el('td', 'num', x.n ? String(x.total) : '—'));
+    if (x.n) {
+      var d = x.total - classAvg;
+      var td2 = el('td', 'num', (d > 0 ? '+' : '') + d.toFixed(1));
+      td2.style.color = d >= 0 ? '#dc2626' : '#1a9c5b';
+      r.appendChild(td2);
+    } else {
+      r.appendChild(el('td', 'num', '—'));
+    }
+    tb2.appendChild(r);
+  });
+  t2.appendChild(tb2);
+  wrap.appendChild(t2);
+  sum2.appendChild(wrap);
+  var lg = el('div', 'legend');
+  lg.innerHTML = '缺考（无记录）该科不计入总分、显示 —，但按已有科目的总分参与排名；「—」名次表示该生本场一科分数都没有。各科满分不同时总分为原始分直接相加。';
+  sum2.appendChild(lg);
+  out.appendChild(sum2);
 }
 
 /* ---------- 单科分析：分数段分布 + 统计明细 ---------- */
@@ -9183,11 +9441,12 @@ function scBonusExamList() {
 }
 function scBonusFillExams() {
   var sel = document.getElementById('scBonusExam'); if (!sel) return [];
-  var list = scBonusExamList();
+  /* vT173 功能⑥：考试下拉只列当前科目的场次（语/数/英分开管理，达标判定不跨科） */
+  var list = scBonusExamList().filter(function (x) { return x.subj === SC_BONUS_SUBJ; });
   var cur = SC_BONUS_EXAM || sel.value || '';
   sel.innerHTML = '';
   if (!list.length) {
-    sel.appendChild(el('option', null, '还没有成绩记录'));
+    sel.appendChild(el('option', null, SC_BONUS_SUBJ + '还没有成绩记录'));
     SC_BONUS_EXAM = '';
     return [];
   }
@@ -9201,6 +9460,17 @@ function scBonusFillExams() {
   SC_BONUS_EXAM = hit ? cur : (list[0].subj + '｜' + list[0].exam);
   sel.value = SC_BONUS_EXAM;
   return list;
+}
+/* vT173 功能⑥：切换科目（语文/数学/英语）。考试选择与勾选一并重置，
+   防止把语文的勾选状态带到数学那场去（跨科误加分）。 */
+function scBonusSubjChange() {
+  var sel = document.getElementById('scBonusSubj');
+  SC_BONUS_SUBJ = sel ? (sel.value || '语文') : '语文';
+  SC_BONUS_EXAM = '';
+  SC_BONUS_SEL = {};
+  var gp = document.getElementById('scGoalPanel');
+  if (gp && gp.style.display !== 'none') scGoalPanelRender();
+  scBonusRender();
 }
 function scBonusExamChange() {
   var sel = document.getElementById('scBonusExam');
@@ -9252,6 +9522,10 @@ function scBonusRenderStatus() {
     e.onclick = function () {
       var k = x.subj + '｜' + x.exam;
       SC_BONUS_EXAM = k;
+      /* vT173 功能⑥：状态清单跨科目 —— 点数学/英语的标签要把科目一并切过去，
+         否则考试下拉按当前科目过滤会找不到那一场 */
+      SC_BONUS_SUBJ = x.subj || SC_BONUS_SUBJ;
+      var sSel = document.getElementById('scBonusSubj'); if (sSel) sSel.value = SC_BONUS_SUBJ;
       var sel = document.getElementById('scBonusExam'); if (sel) sel.value = k;
       scBonusRender();
       try { var sc = document.getElementById('scBonusBox'); if (sc) sc.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}
@@ -9272,6 +9546,11 @@ function scBonusRenderStatus() {
 function scBonusRender(opts) {
   opts = opts || {};
   var box = document.getElementById('scBonusBox'); if (!box) return;
+  /* vT173 功能⑥：数英目标重读本机缓存（可能与成绩加载时序无关） */
+  try { scLoadGoals() } catch (_eg) {}
+  /* vT173 功能⑥：科目下拉与当前科目状态保持一致（防其它入口重绘时错位） */
+  var subSel = document.getElementById('scBonusSubj');
+  if (subSel && subSel.value !== SC_BONUS_SUBJ) subSel.value = SC_BONUS_SUBJ;
   try { scBonusRenderStatus() } catch (_e) {}
   var list = scBonusFillExams();
   var key = SC_BONUS_EXAM;
@@ -9319,7 +9598,8 @@ function scBonusRender(opts) {
   var hitN = 0, checkedN = 0;
   names.forEach(function (nm) {
     var v = score[nm];
-    var tg = scTargetOf(nm);
+    /* vT173 功能⑥：按当前科目取目标（语文=老表，数学/英语=各自目标表，没设过=不加分） */
+    var tg = scTargetOfSub(nm, SC_BONUS_SUBJ);
     var lv = 0, th = null;
     if (v != null && tg) {
       if (tg.t3 != null && v >= tg.t3) { lv = 3; th = tg.t3; }
@@ -9329,7 +9609,10 @@ function scBonusRender(opts) {
     var dup = !!awarded[nm];
     var can = (v != null && tg && lv > 0 && !dup);
     if (lv > 0) hitN++;
-    var on = !!SC_BONUS_SEL[nm] && can;
+    /* vT173 功能⑥：数英达标自动判定 —— 达标即自动勾上（「待加」），
+       老师核对无误后点一次写入；防重复仍靠「已加」标记（awardSet 按科目+考试名匹配）。
+       语文保持原有手动勾选习惯不变。 */
+    var on = (SC_BONUS_SUBJ !== '语文' ? can : (!!SC_BONUS_SEL[nm] && can));
     if (on) checkedN++;
 
     var tr = el('tr');
@@ -9421,10 +9704,13 @@ function scBonusApply() {
   if (!confirm('给下面 ' + picks.length + ' 位同学写入「目标达成」加分（合计 +' + sum + '）？\n\n' + lines.join('\n') +
     '\n\n写入位置：学生积分 → 奖惩流水（事项：「成绩达标 · ' + scBonusLabel(meta) + ' · 达目标X」）')) return;
   var lbl = scBonusLabel(meta);
+  /* vT173：学号/组别/职务用 stuRosterInfo 两段查找（花名册→座位表），
+     别再写学号全空的流水行 —— 那正是 11-17 重复花名册事故的制造模式 */
   var roster = (typeof stuRoster === 'function') ? stuRoster() : [];
   toastMsg('⏳ 正在写入 ' + picks.length + ' 条加分…');
   var jobs = picks.map(function (r) {
-    var stu = roster.filter(function (x) { return x.姓名 === r.name })[0] || { 学号: '', 组别: '', 职务: '' };
+    var si = (typeof stuRosterInfo === 'function') ? stuRosterInfo(r.name) : null;
+    var stu = si || (roster.filter(function (x) { return x.姓名 === r.name })[0] || { 学号: '', 组别: '', 职务: '' });
     return db.addRecord({ databaseId: ST_DB, properties: {
       '学号': { text: stu.学号 || '' }, '姓名': { text: r.name },
       '组别': { text: stu.组别 || '' }, '职务': { text: stu.职务 || '' },
@@ -9450,6 +9736,90 @@ function scBonusApply() {
     toastMsg('⚠️ 部分没保存成功，请重试');
     try { loadST().then(function () { scBonusRender({ keepPts: true }) }) } catch (e) {}
   });
+}
+
+/* ===== vT173 功能⑥：按科目设定目标分 =====
+   语文目标沿用 SC_TARGETS（sc_targets_v1）；数学 / 英语存 wb_goal_math_v1 / wb_goal_en_v1，
+   默认全空 —— 老师给谁设了目标、设了几档，谁才参与那科的达标加分。
+   留空保存 = 删除该档目标；三档全空 = 该生该科不做达标加分。 */
+function scGoalPanelToggle() {
+  var gp = document.getElementById('scGoalPanel');
+  if (!gp) return;
+  var show = gp.style.display === 'none';
+  gp.style.display = show ? '' : 'none';
+  if (show) scGoalPanelRender();
+}
+function scGoalPanelRender() {
+  var box = document.getElementById('scGoalBox');
+  var tspan = document.getElementById('scGoalTeacher');
+  if (!box) return;
+  /* vT173 功能⑥：每次打开面板先重读本机目标缓存 —— 页面启动时可能还没走
+     loadScoresFromDB（本地模式/表未连），不重读会把已存目标当成空表覆盖回去 */
+  scLoadGoals();
+  fill(box);
+  if (tspan) {
+    var t = scBonusTeacherOf(SC_BONUS_SUBJ);
+    tspan.textContent = t ? ('· ' + SC_BONUS_SUBJ + '任课教师：' + t) : (SC_BONUS_SUBJ === '语文' ? '· 语文由班主任负责' : '· ' + SC_BONUS_SUBJ + '暂未关联科任教师');
+  }
+  var names = (SC_NAMES || []).slice().sort(function (a, b) {
+    var ta = scTargetOf(a), tb2 = scTargetOf(b);
+    var na = (ta && ta.no) || 9999, nb = (tb2 && tb2.no) || 9999;
+    if (na !== nb) return na - nb;
+    return a.localeCompare(b, 'zh');
+  });
+  if (!names.length) { box.appendChild(el('div', 'note', '还没有学生名单。')); return; }
+  var tb = el('table');
+  var thead = el('thead'), trh = el('tr');
+  ['姓名', '学号', '目标一', '目标二', '目标三'].forEach(function (h) { trh.appendChild(el('th', null, h)) });
+  thead.appendChild(trh); tb.appendChild(thead);
+  var tbody = el('tbody');
+  names.forEach(function (nm) {
+    var tg = scTargetOfSub(nm, SC_BONUS_SUBJ) || {};
+    var tr = el('tr');
+    tr.appendChild(el('td', 'bnm', nm));
+    var no = (typeof stuRosterInfo === 'function') ? (function () { var si = stuRosterInfo(nm); return si ? String(si.学号 || '') : ''; })() : '';
+    tr.appendChild(el('td', 'na2', no || '—'));
+    ['t1', 't2', 't3'].forEach(function (fld) {
+      var td = el('td');
+      var inp = el('input');
+      inp.type = 'number';
+      inp.step = '0.5';
+      inp.style.width = '72px';
+      inp.value = tg[fld] != null ? String(tg[fld]) : '';
+      inp.dataset.gname = nm;
+      inp.dataset.gfield = fld;
+      inp.dataset.gorig = inp.value;
+      inp.title = nm + ' ' + SC_BONUS_SUBJ + '目标（留空 = 不做该档达标加分）';
+      td.appendChild(inp);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  tb.appendChild(tbody);
+  box.appendChild(tb);
+}
+function scGoalSave() {
+  var inputs = [].slice.call(document.querySelectorAll('#scGoalBox input[data-gname]')).filter(function (i) {
+    return String(i.value).trim() !== String(i.dataset.gorig);
+  });
+  if (!inputs.length) { toastMsg('目标没有改动'); return }
+  var map = scGoalMapOf(SC_BONUS_SUBJ);
+  var saved = 0;
+  inputs.forEach(function (i) {
+    var nm = i.dataset.gname, fld = i.dataset.gfield;
+    var cur = map[nm] || {};
+    var v = String(i.value).trim();
+    if (v === '') { delete cur[fld]; }
+    else { var p = parseFloat(v); if (!isNaN(p) && p >= 0) cur[fld] = p; }
+    /* 三档全空（语文还要看 no 学号）→ 整条删除，别留空壳 */
+    if (cur.t1 == null && cur.t2 == null && cur.t3 == null && cur.no == null) { delete map[nm]; }
+    else { map[nm] = cur; }
+    saved++;
+  });
+  scSaveGoalMap(SC_BONUS_SUBJ);
+  toastMsg('✅ 已保存 ' + SC_BONUS_SUBJ + '目标 ' + saved + ' 处改动');
+  scGoalPanelRender();
+  scBonusRender({ keepPts: true });   /* 目标变了 → 达标判定与勾选状态重算 */
 }
 
 /* ========== vT49 成绩管理：点击考试名称即可改名 ==========
@@ -13384,33 +13754,118 @@ function loadST(){return new Promise(function(res){
 function stuRoster(){
   var seen={},out=[];
   (DATA.seats||[]).forEach(function(s){
-    if(!s.姓名||seen[s.姓名])return;
-    seen[s.姓名]=1;
+    /* vT173 seen 改按归一姓名键：座位表/档案表里同名异形行（全角空格等）不能算两个人 */
+    if(!s.姓名||seen[stuNameKey(s.姓名)])return;
+    seen[stuNameKey(s.姓名)]=1;
     out.push({姓名:s.姓名,学号:String(s.学号||''),组别:'',职务:s.角色||''});
   });
   ST_ROWS.forEach(function(r){
     var n=fval(r,'姓名');if(!n)return;
-    if(!seen[n]){seen[n]=1;out.push({姓名:n,学号:fval(r,'学号'),组别:'',职务:''})}
+    if(!seen[stuNameKey(n)]){seen[stuNameKey(n)]=1;out.push({姓名:n,学号:fval(r,'学号'),组别:'',职务:''})}
   });
   /* 用档案表补组别 / 职务 */
   var gi={};
   ST_ROWS.forEach(function(r){
     var n=fval(r,'姓名'),g=fval(r,'组别'),d=fval(r,'职务');
     if(!n)return;
-    if(!gi[n])gi[n]={};
+    /* vT173 按归一姓名聚合：同一学生的档案行/流水行/异形姓名行合并出一份组别职务 */
+    var k=stuNameKey(n);if(!k)return;
+    if(!gi[k])gi[k]={};
     /* 2.6.60 数据表里组别/职务可能是数值型（如 1），不过 String() 会让
        groupList 里 (s.组别||'').trim() 直接抛错 → 座位表整页渲染不出来 */
-    if(g)gi[n].组别=String(g);
-    if(d)gi[n].职务=String(d);
+    if(g)gi[k].组别=String(g);
+    if(d)gi[k].职务=String(d);
   });
   out.forEach(function(x){
-    var g=gi[x.姓名];
+    var g=gi[stuNameKey(x.姓名)];
     if(g){if(g.组别)x.组别=g.组别;if(g.职务&&!x.职务)x.职务=g.职务}
   });
+  /* vT173 兜底：万一上游仍带回同名多行（座位表重复、档案表历史重复），
+     按归一姓名再去重一次 —— 保留学号非空/信息最全的那行 */
+  (function(){
+    var seen2={},out2=[];
+    out.forEach(function(x){
+      var k=stuNameKey(x.姓名);
+      var cur=seen2[k];
+      if(!cur){seen2[k]=x;out2.push(x);return}
+      if(stuRowScore(x.学号,x.组别,x.职务)>stuRowScore(cur.学号,cur.组别,cur.职务)){
+        var i=out2.indexOf(cur);if(i>=0)out2[i]=x;
+        seen2[k]=x;
+      }
+    });
+    out=out2;
+  })();
   out.sort(function(a,b){
     return (parseInt(a.学号,10)||99)-(parseInt(b.学号,10)||99)||a.姓名.localeCompare(b.姓名,'zh');
   });
   return out;
+}
+
+/* ===== vT173 花名册按姓名归一去重（11-17 中午数据事故修复）=====
+   事故：编辑积分找不到人时写下的「学号/组别/职务全空」流水行，
+   经 mpFromDeskBuild 整表重建被当成花名册行写回云端（78 行里混进 27 行重复）。
+   防线：所有 students 数据进出的关口都按「归一姓名」去重。 */
+/* 归一姓名键：去空白 + 全角转半角 + 异体字合并 + 小写。
+   复用 tomNorm（与小程序 nameKey 完全同口径）——同名重复行常带全角空格/
+   异体字差异，精确匹配永远去不了重。 */
+function stuNameKey(nm) {
+  var s = String(nm == null ? '' : nm);
+  try { return tomNorm(s) || '' } catch (e) { return s.replace(/\s+/g, '').toLowerCase() }
+}
+/* 花名册行信息量打分：学号 4 分 / 组别 2 分 / 职务 1 分。
+   同名多行时保留分高者；分数相同保留先出现的那行。 */
+function stuRowScore(no, group, duty) {
+  var n = 0;
+  if (String(no == null ? '' : no).trim()) n += 4;
+  if (String(group == null ? '' : group).trim()) n += 2;
+  if (String(duty == null ? '' : duty).trim()) n += 1;
+  return n;
+}
+/* 通用按姓名去重：同名保留「学号非空/信息最全」的一行，其余删除；
+   只有全空行时保留一行（学生不能凭空消失）。
+   get(k,row) 取字段：k ∈ name/no/group/duty。 */
+function stuDedupeRows(rows, get) {
+  var out = [], byK = {};
+  (rows || []).forEach(function (r) {
+    if (!r) return;
+    var k = stuNameKey(get('name', r));
+    if (!k) { out.push(r); return }   /* 空姓名行不在这里处理，交由各关口自身的脏数据过滤 */
+    var cur = byK[k];
+    if (!cur) { byK[k] = r; out.push(r); return }
+    if (stuRowScore(get('no', r), get('group', r), get('duty', r)) > stuRowScore(get('no', cur), get('group', cur), get('duty', cur))) {
+      /* 换成信息更全的那行：保持原顺序（先出现的位置），只替换内容 */
+      var i = out.indexOf(cur);
+      if (i >= 0) out[i] = r;
+      byK[k] = r;
+    }
+  });
+  return out;
+}
+/* 小程序格式 students（{name,no,group,duty}）去重（mpToDesk 导入前防线 a） */
+function stuMpDedupe(arr) {
+  return stuDedupeRows(arr || [], function (k, s) {
+    if (!s) return '';
+    if (k === 'name') return s.name;
+    if (k === 'no') return s.no;
+    if (k === 'group') return s.group;
+    return s.duty;
+  });
+}
+/* 找学生的学号/组别/职务（写档案/奖惩行用）：花名册优先 → 座位表按姓名二次兜底。
+   两处都找不到返回 null：调用方写「无学号记录」时必须在备注留 roster-miss 标记，
+   且这类行绝不能再被当成花名册行写回云端（27 行重复花名册的制造源就是这里）。 */
+function stuRosterInfo(nm) {
+  var x = null, seat = null;
+  try { x = stuRoster().filter(function (s) { return s.姓名 === nm })[0] || null } catch (e0) { x = null }
+  try { seat = (DATA.seats || []).filter(function (s) { return s && s.姓名 === nm })[0] || null } catch (e1) { seat = null }
+  if (x && String(x.学号 || '').trim()) return { 学号: String(x.学号 || ''), 组别: String(x.组别 || ''), 职务: String(x.职务 || '') };
+  if (seat) {
+    /* 座位表兜底：花名册暂时没刷出来/没这个人时，用座位表的学号与角色补 */
+    if (x) return { 学号: String(seat.学号 || x.学号 || ''), 组别: String(x.组别 || ''), 职务: String(x.职务 || seat.角色 || '') };
+    return { 学号: String(seat.学号 || ''), 组别: '', 职务: String(seat.角色 || '') };
+  }
+  if (x) return { 学号: String(x.学号 || ''), 组别: String(x.组别 || ''), 职务: String(x.职务 || '') };
+  return null;
 }
 /* vT100 作业登记名单：方浩轩、柯骏豪不参与作业登记（也不进未交统计），
    徐曼桦及其余同学照常登记。名单与「不进未交统计」共用一份（⚙️ 名单设置里勾选），
@@ -14606,7 +15061,12 @@ function gpWriteGroup(nm,gno){
   /* 2.0.17：档案里同一人有重复记录时，只写一条另一条旧值会把组别顶回去 → 只保留一条，多余的直接删掉 */
   (function dedupe(){
     if(rows.length<2)return;
-    var keep=rows[0],extra=rows.slice(1);
+    /* vT173 修复：原来把同一姓名的所有多余行都当重复档案删 —— 该生的奖惩流水行
+       （目标加分/积分修正，奖惩事项非空）会被误删，积分直接蒸发。
+       现在只删「档案占位行」（奖惩事项为空的），且保留的必须是档案占位行。 */
+    var keep=rows.filter(function(r){return !String(fval(r,'奖惩事项')||'').trim()})[0]||rows[0];
+    var extra=rows.filter(function(r){return r!==keep && !String(fval(r,'奖惩事项')||'').trim()});
+    if(!extra.length)return;
     extra.forEach(function(r){
       var rid=recId(r);
       if(rid)db.deleteRecord({databaseId:'2mthbbHsJeABzmnerNt6sK',recordId:rid}).catch(function(){});
@@ -14614,11 +15074,14 @@ function gpWriteGroup(nm,gno){
     rows=[keep];
   })();
   if(!rows.length){
-    /* 档案里还没有这个人，补一条 */
-    var s=stuRoster().filter(function(x){return x.姓名===nm})[0]||{学号:'',职务:''};
+    /* 档案里还没有这个人，补一条（vT173：花名册→座位表两段查找；
+       都找不到时写「无学号记录」并在备注留 roster-miss —— 这类行有 mpFromDeskBuild
+       的 keeper 规则兜着，不会再被当成重复花名册行写回云端） */
+    var si=stuRosterInfo(nm);
+    if(!si)toastMsg('⚠️ 花名册里找不到「'+nm+'」，已按无学号记录写入（备注 roster-miss）');
     return db.addRecord({databaseId:'2mthbbHsJeABzmnerNt6sK',properties:{
-      '学号':{text:s.学号||''},'姓名':{text:nm},'组别':{text:gno},'职务':{text:s.职务||''},
-      '奖惩事项':{text:''},'奖惩分值':{number:0},'日期':{date:ymd(new Date())},'备注':{text:''}
+      '学号':{text:(si&&si.学号)||''},'姓名':{text:nm},'组别':{text:gno},'职务':{text:(si&&si.职务)||''},
+      '奖惩事项':{text:''},'奖惩分值':{number:0},'日期':{date:ymd(new Date())},'备注':{text:si?'':'roster-miss'}
     }}).then(function(r){if(!(r&&r.id))throw new Error('addRecord 未返回 id')},
              function(err){throw err});
   }
@@ -15338,7 +15801,7 @@ function openStuPanel(name){
     var t=fval(r,'奖惩事项');
     if(!t)return;                      /* 档案占位行没有事项，不进流水 */
     var v=parseFloat(fval(r,'奖惩分值'));if(isNaN(v)||!v)return;
-    flow.push({d:fval(r,'日期'),t:'奖惩 · '+t,v:v,src:'rw',id:recId(r)});
+    flow.push({d:fval(r,'日期'),t:'奖惩 · '+t,v:v,src:'rw',id:recId(r),row:r});
   });
   /* vT17 科任端作业积分加减（s-hwadj）进流水 —— 直接读 NT 本地库，避免依赖 IIFE 时序 */
   (function(){ try{
@@ -15346,6 +15809,32 @@ function openStuPanel(name){
     var _a=Array.isArray(_db['s-hwadj'])?_db['s-hwadj']:[];
     _a.forEach(function(r){ if(!r||r.deleted||r.name!==name)return; var v=Number(r.delta)||0; if(!v)return; flow.push({d:r.date,t:'作业积分 · '+(r.subject||'')+(r.reason?'（'+r.reason+'）':''),v:v,src:'hwadj',id:r.id}); });
   }catch(e){} })();
+  /* vT173 手动积分并入流水显示：悬浮球加分/扣分、手机/桌面手动奖惩写在云端
+     manual 表（vT169 设计，写 manual 不写档案），此前工作台流水里看不到，
+     老师以为加分丢了（积分口径 stuPoints() vT156 起已含 manual，这里是补显示层）。
+     按「事项|日期|分值」去重 —— 已在档案流水(ST_ROWS)里的同一条不再重复显示。 */
+  (function(){ try{
+    var _gc=(typeof gdCloud==='function')?gdCloud():null;
+    if(!_gc||!Array.isArray(_gc.manual))return;
+    var _seen={};
+    ST_ROWS.forEach(function(r){
+      if(fval(r,'姓名')!==name)return;
+      var t=fval(r,'奖惩事项');if(!t)return;
+      var v=parseFloat(fval(r,'奖惩分值'));if(isNaN(v)||!v)return;
+      _seen[String(t).replace(/\s+/g,'')+'|'+String(fval(r,'日期')||'').slice(0,10)+'|'+(Number(v)||0)]=1;
+    });
+    _gc.manual.forEach(function(x){
+      if(!x||String(x.name||'').trim()!==name)return;
+      var v=Number(x.score)||0;if(!v)return;
+      var rs=String(x.reason||'').trim();if(!rs)return;
+      var d=(typeof syncDateOnly==='function'?syncDateOnly(x.date):String(x.date||'').slice(0,10));
+      var key=rs.replace(/\s+/g,'')+'|'+d+'|'+v;
+      if(_seen[key])return;
+      _seen[key]=1;
+      /* 来源标记：理由带「悬浮球」的标悬浮球，其余标手动 */
+      flow.push({d:d,t:(/悬浮球/.test(rs)?'悬浮球':'手动')+' · '+rs,v:v,src:'man',id:x.id||''});
+    });
+  }catch(_me){} })();
   flow.sort(function(a,b){return String(b.d||'').localeCompare(String(a.d||''))});
   if(!flow.length)ul.appendChild(el('li','empty','还没有积分记录'));
   flow.forEach(function(f){
@@ -15358,6 +15847,16 @@ function openStuPanel(name){
       x.onclick=function(){
         if(!confirm('删掉这条奖惩记录？'))return;
         db.deleteRecord({databaseId:'2mthbbHsJeABzmnerNt6sK',recordId:f.id}).then(function(){
+          /* vT173 删除留墓碑：键与合并层业务键（mpBizKey / recBizKey 的 st 分支）同构，
+             随 doc.deletes 透传。其它端/旧缓存再把这条推回来时，
+             并集(mpUnionTable)、合并(giteeMergeIntoCloud/IntoLocal)、整表重建(mpFromDeskBuild)
+             都按键命中墓碑直接丢弃 —— 目标加分删除后不再复活 */
+          try{
+            var _r=f.row||null;
+            if(_r&&typeof tomAdd==='function'&&typeof stTombKeyOf==='function'){
+              tomAdd('st',stTombKeyOf(fval(_r,'姓名'),fval(_r,'奖惩事项'),syncDateOnly(fval(_r,'日期')),parseFloat(fval(_r,'奖惩分值'))));
+            }
+          }catch(_te){}
           loadST().then(function(){renderStu();openStuPanel(name)});
           toastMsg('已删除');
         }).catch(function(err){console.error(err);toastMsg('⚠️ 没删掉')});
@@ -15380,11 +15879,15 @@ function openStuPanel(name){
 }
 function stuAddRw(name,title,val){
   if(!dbReady){toastMsg('⚠️ 未连接数据表');return}
-  var stu=stuRoster().filter(function(x){return x.姓名===name})[0]||{学号:'',组别:'',职务:''};
+  var stu=stuRosterInfo(name);   /* vT173：花名册→座位表两段查找，别再轻易写全空记录 */
+  if(!stu){
+    stu={学号:'',组别:'',职务:''};
+    toastMsg('⚠️ 花名册里找不到「'+name+'」，已按无学号记录写入（备注 roster-miss）');
+  }
   db.addRecord({databaseId:'2mthbbHsJeABzmnerNt6sK',properties:{
     '学号':{text:stu.学号||''},'姓名':{text:name},'组别':{text:stu.组别||''},
     '职务':{text:stu.职务||''},'奖惩事项':{text:title},'奖惩分值':{number:val},
-    '日期':{date:ymd(new Date())},'备注':{text:''}
+    '日期':{date:ymd(new Date())},'备注':{text:(stu.学号||stu.组别||stu.职务?'':'roster-miss')}
   }}).then(function(r){
     if(!(r&&r.id))throw new Error('addRecord 未返回 id');
     return loadST();
@@ -15424,11 +15927,17 @@ function stuEditRw(name){
   var delta=Math.round((v-cur)*10)/10;
   if(!delta){toastMsg('值没变');return}
   if(!dbReady){toastMsg('⚠️ 未连接数据表');return}
-  var stu=stuRoster().filter(function(x){return x.姓名===name})[0]||{学号:'',组别:'',职务:''};
+  var stu=stuRosterInfo(name);   /* vT173：花名册→座位表两段查找，别再轻易写全空记录 */
+  if(!stu){
+    /* 仍找不到：仍然写入（老师改的积分不能丢），但学号/组别/职务写空并在备注留
+       roster-miss 标记 —— mpFromDeskBuild 的 keeper 规则会拦住它变成花名册行 */
+    stu={学号:'',组别:'',职务:''};
+    toastMsg('⚠️ 花名册里找不到「'+name+'」，已按无学号记录写入（备注 roster-miss）');
+  }
   db.addRecord({databaseId:'2mthbbHsJeABzmnerNt6sK',properties:{
     '学号':{text:stu.学号||''},'姓名':{text:name},'组别':{text:stu.组别||''},
     '职务':{text:stu.职务||''},'奖惩事项':{text:'积分修正（编辑）'},'奖惩分值':{number:delta},
-    '日期':{date:ymd(new Date())},'备注':{text:'编辑积分：'+cur+' → '+v}
+    '日期':{date:ymd(new Date())},'备注':{text:'编辑积分：'+cur+' → '+v+(stu.学号||stu.组别||stu.职务?'':' · roster-miss')}
   }}).then(function(r){
     if(!(r&&r.id))throw new Error('addRecord 未返回 id');
     return loadST();
@@ -17299,7 +17808,10 @@ function recBizKey(tid, rec) {
     /* 目标加分不含日期：同一学生同一场考试同一档只应有一条 —— 否则 11-11 与 11-16
        两代记录并集后永远并存、重复计分（11-17 事故：21 组重复加分） */
     if (_sj) return 'st|' + sn + '|' + _sj + (_sj.indexOf('成绩达标') === 0 ? '' : ('|' + v('日期'))) + '|' + (v('奖惩分值') || '0');
-    return 'stu|' + sn + '|' + v('学号');
+    /* vT173 档案行键改按归一姓名（去掉学号部分），与 mpBizKey 的 students 分支同一口径：
+       云端学号全空的垃圾行与正常行同键，合并层才能收敛（否则空行键不同永远去不了重）。
+       同键时由 giteeMergeIntoCloud 的 LWW 特例保证「带学号的正常行顶掉空垃圾行」。 */
+    return 'stu|' + stuNameKey(v('姓名'));
   }
   var _scoreTid = String((window.MP_SYNC && MP_SYNC.score && MP_SYNC.score.table) || 'SI9EURtanpWC0y4lVipmQQ');
   if (String(tid) === _scoreTid) {
@@ -17510,6 +18022,32 @@ function tomAddScore(sub, exam, name, date) {
   var k = tomKey(sub, exam, name, date), a = tomLoad();
   for (var i = 0; i < a.length; i++) if (a[i].t === 'score' && a[i].k === k) { a[i].at = Date.now(); tomSave(a); return }
   a.push({ t: 'score', k: k, at: Date.now() }); tomSave(a);
+}
+/* vT173 通用墓碑登记：按类型+键去重，已有则只刷新时间（与 tomAddScore 同一套清单） */
+function tomAdd(t, k) {
+  if (!k) return;
+  var a = tomLoad();
+  for (var i = 0; i < a.length; i++) { if (a[i].t === t && a[i].k === k) { a[i].at = Date.now(); tomSave(a); return } }
+  a.push({ t: t, k: k, at: Date.now() }); tomSave(a);
+}
+/* vT173 st 流水墓碑键：与合并层业务键（mpBizKey / recBizKey 的 st 分支）同构 ——
+   目标加分（成绩达标…）不含日期、普通奖惩含日期，姓名走 tomNorm 归一。
+   为什么：网页删掉流水行后，其它电脑/旧手机缓存还会把同一条推回来；
+   键对齐后 union / 合并 / 导入 / 整表重建各层都能按键命中墓碑并丢弃，删除不再复活。 */
+function stTombKeyOf(name, reason, date, score) {
+  var rs = String(reason == null ? '' : reason).replace(/\s+/g, '');
+  if (!rs) return '';
+  return 'st|' + tomNorm(name) + '|' + rs +
+    (rs.indexOf('成绩达标') === 0 ? '' : ('|' + String(date == null ? '' : date).slice(0, 10))) +
+    '|' + (Number(score) || 0);
+}
+/* vT173 收集全部 st 墓碑键（远端 doc.deletes 已由 tomMerge 并进本机清单，读这里即可）。 */
+function stTombSet() {
+  var s = {};
+  (typeof tomLoad === 'function' ? tomLoad() : []).forEach(function (x) {
+    if (x && x.t === 'st' && x.k) s[x.k] = 1;
+  });
+  return s;
 }
 /* vT49 撤销一条成绩墓碑：改名用。
    场景：A 改成 B（给 A 留墓碑），过一阵又改回 A —— 此时 A 的墓碑还在，
@@ -18707,9 +19245,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v172';
-var WB_MY_VER = '优化版 vT172 · 近实时同步';
-var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.186';
+var WB_VER_TAG = 'v173';
+var WB_MY_VER = '优化版 vT173 · 数据修复';
+var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.187';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -18973,6 +19511,8 @@ function giteeMergeIntoCloud(pack) {
          以前只认 recBizKey，一旦表 ID 不匹配就完全失效，删掉的列每轮都被并回来。 */
       var _colT = (typeof hwColTombSet === 'function') ? hwColTombSet() : {};
       var _recT = (typeof hwRecTombSet === 'function') ? hwRecTombSet() : {};
+      /* vT173 st 流水墓碑：被删的奖惩/目标加分行不再并回飞书档案表（防复活） */
+      var _stTombC = (typeof stTombSet === 'function') ? stTombSet() : {};
       var _hwDelSeen = {};
       function _markHwDel(r) {
         if (!r) return;
@@ -19000,6 +19540,17 @@ function giteeMergeIntoCloud(pack) {
            别端不比我们新 → 保留云端。老的"存在就跳过"会让手机端的修改永远同步不上来。 */
         if (bk2 && byBiz[bk2]) {
           var inTs = wbRecTs(r);
+          /* vT173 档案表 students 特例：云端若被「学号全空的垃圾行」占住业务键，
+             而入包行是带学号的正常行 → 视为入包行更新（垃圾行是 11-17 事故产物，
+             必须让正常行能顶掉它，否则正常行永远被空行挡在门外） */
+          if (String(tid) === String(MP_SYNC.stu.table)) {
+            var _pQ = (r && r.properties) || {};
+            var _exQ = byBiz[bk2] && byBiz[bk2].properties || {};
+            if (String(dv(_pQ, '学号') || '').trim() && !String(dv(_exQ, '学号') || '').trim()) {
+              upd.push({ row: byBiz[bk2], incoming: r, key: bk2, ts: (inTs || Date.now()) });
+              return;
+            }
+          }
           if (inTs > mtGet(bk2)) {
             upd.push({ row: byBiz[bk2], incoming: r, key: bk2, ts: inTs });
           }
@@ -19010,6 +19561,16 @@ function giteeMergeIntoCloud(pack) {
           var p2 = (r && r.properties) || {};
           function v2(k) { var x = p2[k]; if (x && typeof x === 'object') return String(x.text != null ? x.text : (x.number != null ? x.number : '')); return String(x == null ? '' : x); }
           if (tomHasScore(tomKey(v2('科目'), v2('考试名称'), v2('学生姓名'), v2('考试日期')))) return;
+        }
+        /* vT173 墓碑过滤：这条奖惩流水（奖惩事项非空）已被某一端删除 → 不再并回飞书档案表。
+           入包行是 mpToDesk 的 properties 结构（姓名/奖惩事项/日期/奖惩分值）。 */
+        if (String(tid) === String(MP_SYNC.stu.table)) {
+          var _p4 = (r && r.properties) || {};
+          var _rs4 = String(dv(_p4, '奖惩事项') || '').trim();
+          if (_rs4) {
+            var _tk4 = (typeof stTombKeyOf === 'function') ? stTombKeyOf(dv(_p4, '姓名'), _rs4, String(dv(_p4, '日期') || '').slice(0, 10), Number(dv(_p4, '奖惩分值')) || 0) : '';
+            if (_tk4 && _stTombC[_tk4]) return;
+          }
         }
         if (bk2) byBiz[bk2] = null;   /* 占位，防止同批入包里重复键互相打架 */
         byFp[recFingerprint(r)] = 1;
@@ -19157,6 +19718,9 @@ function giteeMergeIntoLocal(mpTables) {
     var _hwTid = String((window.MP_SYNC && MP_SYNC.hw && MP_SYNC.hw.table) || 'fCfl0cuMIVzFDi0iDuAEv2');
     var _colT = (typeof hwColTombSet === 'function') ? hwColTombSet() : {};
     var _recT = (typeof hwRecTombSet === 'function') ? hwRecTombSet() : {};
+    /* vT173 st 流水墓碑（与 giteeMergeIntoCloud 的过滤对称） */
+    var _stuTid2 = String((window.MP_SYNC && MP_SYNC.stu && MP_SYNC.stu.table) || '2mthbbHsJeABzmnerNt6sK');
+    var _stTombL = (typeof stTombSet === 'function') ? stTombSet() : {};
     var add = [];
     incoming.forEach(function (r) {
       if (!r || typeof r !== 'object') return;
@@ -19165,6 +19729,15 @@ function giteeMergeIntoLocal(mpTables) {
         var _sp = (r && r.properties) || {};
         function _sv(k) { var x = _sp[k]; if (x && typeof x === 'object') return String(x.text != null ? x.text : (x.number != null ? x.number : '')); return String(x == null ? '' : x); }
         if (tomHasScore(tomKey(_sv('科目'), _sv('考试名称'), _sv('学生姓名'), _sv('考试日期')))) return;
+      }
+      /* ③ vT173 st 流水墓碑：已删的奖惩/目标加分行不再并入本机库（防删除复活） */
+      if (String(id) === _stuTid2) {
+        var _sp6 = (r && r.properties) || {};
+        var _rs6 = String(dv(_sp6, '奖惩事项') || '').trim();
+        if (_rs6) {
+          var _tk6 = (typeof stTombKeyOf === 'function') ? stTombKeyOf(dv(_sp6, '姓名'), _rs6, String(dv(_sp6, '日期') || '').slice(0, 10), Number(dv(_sp6, '奖惩分值')) || 0) : '';
+          if (_tk6 && _stTombL[_tk6]) return;
+        }
       }
       /* ② 作业墓碑：整列删除(|col|作业名|日期) / 记录级删除(姓名|作业名|日期) 命中即不再并入。
          判据与 giteeMergeIntoCloud 一致：既看业务键，也直接看记录属性（不依赖表 ID 是否匹配）。 */
@@ -20234,7 +20807,11 @@ function mpToDesk(tables) {
     });
     if (rows.length) out[tid] = rows;
   }
-  recs(MP_SYNC.stu.table, tables.students, function (s) {
+  /* vT173 防线 a：小程序/远端 tables.students 导入网页本地库之前按归一姓名去重 ——
+     同名保留学号非空/信息最全的一行（全空行只有一行时保留）。
+     云端 78 行里混着 27 行空学号重复花名册（rev6468 事故），
+     不在这里拦，脏名单会一路并进本地库再被整表写回。 */
+  recs(MP_SYNC.stu.table, stuMpDedupe(tables.students), function (s) {
     return { '姓名': mpTxt(s.name), '学号': mpTxt(s.no), '组别': mpTxt(s.group || ''), '职务': mpTxt(s.duty || ''), '备注': mpTxt(''), '奖惩事项': mpTxt(''), '奖惩分值': { number: 0 }, '小组职务': mpTxt(''), '日期': mpTxt('') };
   });
   recs(MP_SYNC.hw.table, tables.hw, function (r) {
@@ -20357,8 +20934,12 @@ function mpToDesk(tables) {
      同键自动跳过 = 正确合并；档案表与学生档案行共用一张表，这里追加不覆盖。 */
   if (window.__WB_LOCAL__ === true) {
     var _stRows = [];
+    /* vT173 墓碑过滤：已删除的流水行（任意端删的）不再从远端导入本机 —— 删除不能复活 */
+    var _stTomIn = (typeof stTombSet === 'function') ? stTombSet() : {};
     (Array.isArray(tables.st) ? tables.st : []).forEach(function (r) {
       if (!r || !String(r.name || '').trim()) return;
+      var _tkIn = (typeof stTombKeyOf === 'function') ? stTombKeyOf(r.name, r.reason, String(r.date || '').slice(0, 10), r.score) : '';
+      if (_tkIn && _stTomIn[_tkIn]) return;
       var p = { '姓名': mpTxt(r.name), '奖惩事项': mpTxt(r.reason || ''),
                 '奖惩分值': mpNum(r.score || 0), '日期': mpTxt(String(r.date || '').slice(0, 10)),
                 '备注': mpTxt(r.pet ? '宠物' : String(r.note || '')) };
@@ -20398,7 +20979,11 @@ function mpBizKey(k, r) {
   if (!r || typeof r !== 'object') return '';
   function s(v) { return String(v == null ? '' : v).replace(/\s+/g, '') }
   var nm = s(r.name);
-  if (k === 'students') return nm ? 'stu|' + nm + '|' + s(r.no) : '';
+  /* vT173 students 键改为「stu|归一姓名」（去掉学号部分）：
+     空学号的重复花名册行与正常行同键，union/LWW 才能收敛 ——
+     原来键含学号，空学号行键不同，永远去不了重（11-17 事故 27 行重复的直接根源之一）。
+     与 recBizKey 的 stu 分支、mpFromDeskBuild 的出口键保持同一口径。 */
+  if (k === 'students') return nm ? 'stu|' + stuNameKey(r.name) : '';
   if (k === 'hw') return (nm && s(r.item)) ? 'hw|' + nm + '|' + s(r.item) + '|' + s(r.date).slice(0, 10) : '';
   if (k === 'rc') return (nm && s(r.title)) ? 'rc|' + nm + '|' + s(r.title) + '|' + s(r.date).slice(0, 10) : '';
   if (k === 'scores') return nm ? 'sc|' + s(r.subject) + '|' + s(r.exam) + '|' + nm + '|' + s(r.date).slice(0, 10) : '';
@@ -20416,6 +21001,9 @@ function mpUnionTable(k, mine, remote) {
   mine = Array.isArray(mine) ? mine : [];
   remote = Array.isArray(remote) ? remote : [];
   var out = [], seen = {}, idx = {};
+  /* vT173 st 墓碑：已删除的流水行（任意端删的，墓碑随 doc.deletes 透传）在并集时直接丢弃。
+     没有这一步，旧手机整表推回会把删掉的目标加分数十行全部救活（11-17 事故③）。 */
+  var _stT = (k === 'st' && typeof stTombSet === 'function') ? stTombSet() : null;
   /* vT171 作业/成绩同键 LWW：原来同键「本机无条件赢」——两台电脑各存一份同一条记录时，
      谁后同步谁把对方的修改盖掉（欠佳改补交、改分数在另一台反复倒回去）。
      现在两边都有 ts（mtStampAuto 盖的真实修改时间）就谁新用谁；没有 ts 的老数据维持本机优先。 */
@@ -20424,6 +21012,10 @@ function mpUnionTable(k, mine, remote) {
   function push(r, from) {
     var bk = mpBizKey(k, r);
     if (!bk) { out.push(r); return }   /* 键算不出来（缺姓名/篇目等）→ 原样保留，绝不冒险丢数据 */
+    if (_stT) {
+      var _tk = (typeof stTombKeyOf === 'function') ? stTombKeyOf(r && r.name, r && r.reason, String((r && r.date) || '').slice(0, 10), r && r.score) : '';
+      if (_tk && _stT[_tk]) return;   /* 命中墓碑 → 丢弃，不进并集 */
+    }
     if (seen[bk]) {
       /* 同一条记录两边都有 */
       if (from === 'mine' && idx[bk] !== undefined) {
@@ -20500,16 +21092,45 @@ function mpFromDeskBuild(o) {
      同步时再原样写回 Gitee —— Gitee 清干净了也会被再次写脏。
      现在读出的瞬间就按业务键去重（同键保留时间戳最新的），
      之后无论怎么打包回写，出去的都是干净数据。 */
+  /* ---------- vT173 花名册 keeper 规则（防线 b，最后防线）----------
+     网页端是 students 的唯一生产者，写回云端之前必须保证同名只有一行。
+     保留规则（按归一姓名分组）：档案占位行（奖惩事项为空）优先，学号非空 > 信息最全；
+     奖惩流水行（奖惩事项非空）不是花名册行，只有该姓名【没有】任何档案占位行时才兜底保留 ——
+     否则 stuEditRw 找不到人时写下的空学号流水行会变成重复花名册行
+     （11-17 事故：云端 78 行里混进 27 行 {姓名,学号:'',组别:'',职务:''}）。 */
+  var _stuKeep = {};
+  (function () {
+    var a = Array.isArray(o[MP_SYNC.stu.table]) ? o[MP_SYNC.stu.table] : [];
+    var byK = {}, flowByK = {};
+    a.forEach(function (r, i) {
+      if (!r) return;
+      var p = (r && r.properties) || r || {};
+      var nm = String(dv(p, '姓名') || dv(p, '学生姓名') || '').replace(/\s+/g, '');
+      var k = stuNameKey(nm);
+      if (!k) return;
+      var no = dv(p, '学号'), gp = dv(p, '组别'), dt = dv(p, '职务');
+      var score = stuRowScore(no, gp, dt);
+      if (String(dv(p, '奖惩事项') || '').trim()) {
+        /* 流水行：单独登记，该姓名没有档案占位行时才兜底保留（分最高的那条） */
+        if (!flowByK[k] || score > flowByK[k].score) flowByK[k] = { i: i, score: score };
+        return;
+      }
+      if (!byK[k] || score > byK[k].score) byK[k] = { i: i, score: score };
+    });
+    Object.keys(byK).forEach(function (k) { _stuKeep[byK[k].i] = 1 });
+    Object.keys(flowByK).forEach(function (k) { if (!byK[k]) _stuKeep[flowByK[k].i] = 1 });
+  })();
   var _seen = {};
   function rows(tid) {
     var a = Array.isArray(o[tid]) ? o[tid] : [];
-    return a.filter(function (r) {
+    return a.filter(function (r, idx) {
       var p = (r && r.properties) || r || {};
       var nm = String(dv(p, '姓名') || dv(p, '学生姓名') || '').replace(/\s+/g, '');
       var k;
       if (String(tid) === String(MP_SYNC.stu.table)) {
         if (!nm) return true;
-        k = 'stu|' + nm + '|' + String(dv(p, '学号') || '').replace(/\s+/g, '');
+        if (_stuKeep[idx] === undefined) return false;   /* 同名多余行 / 流水行：不进 students */
+        k = 'stu|' + stuNameKey(nm);   /* vT173 键改按归一姓名（与 mpBizKey students 分支同口径） */
       } else if (String(tid) === String(MP_SYNC.hw.table)) {
         var hi = String(dv(p, '作业名称') || '').replace(/\s+/g, '');
         if (!nm || !hi) return true;
@@ -20761,10 +21382,15 @@ function mpFromDeskBuild(o) {
   if (!gaOut.length && Array.isArray(o && o.ga) && o.ga.length) gaOut = o.ga;   /* 飞书拉空 → 透传远端 */
   var stOut = [];
   try {
+    /* vT173 墓碑兜底：本端已删的流水（墓碑还在）若因删除失败/旧缓存仍留在飞书档案表里，
+       也绝不随整表重建写回云端 —— 删除不能复活 */
+    var _stTomOut = (typeof stTombSet === 'function') ? stTombSet() : {};
     ST_ROWS.forEach(function (r) {
       var n = fval(r, '姓名'); if (!n) return;
       var v = parseFloat(fval(r, '奖惩分值')); if (isNaN(v)) v = 0;
       if (!v) return;
+      var _tkOut = (typeof stTombKeyOf === 'function') ? stTombKeyOf(n, fval(r, '奖惩事项'), syncDateOnly(fval(r, '日期')), v) : '';
+      if (_tkOut && _stTomOut[_tkOut]) return;
       stOut.push({ id: recId(r) || '', name: n, score: v, reason: fval(r, '奖惩事项') || '',
                    date: syncDateOnly(fval(r, '日期')) || '', pet: fval(r, '备注') === '宠物' });
     });
