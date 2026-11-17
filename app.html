@@ -1753,7 +1753,7 @@ table.paper td.l{text-align:left;font-weight:600}
           <b style="font-size:14px;color:#1d4f7c">🏁 期末成绩看板</b>
           <button class="btn2 sm primary" onclick="fnImportOpen()">📥 导入 / 追加期末成绩</button>
           <button class="btn2 sm" onclick="fnReload(true)" title="导入新成绩后点这里，看板按最新数据重算">🔄 按新成绩重算</button>
-          <button class="btn2 sm ghost" style="color:#c2410c" onclick="fnCleanWrong()" title="删除此前误导入到「成绩管理」的期末记录">🧹 清除误导入成绩管理的记录</button>
+          <button class="btn2 sm ghost" style="color:#c2410c" onclick="fnCleanWrong()" title="删除成绩管理里的三上~五下期末记录，看板数据保留">🧹 删除历史期末（成绩管理）</button>
           <span class="sctip" id="fnTip"></span>
         </div>
         <iframe id="fnFrame" style="width:100%;height:860px;border:0;display:block" title="期末成绩分析看板"></iframe>
@@ -2821,9 +2821,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v194</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v195</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v194','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v195','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -7904,7 +7904,7 @@ function fnCleanWrong() {
   if (typeof SC_ROWS === 'undefined' || !Array.isArray(SC_ROWS)) { toastMsg('成绩数据还没加载完，稍后再试'); return }
   var rows = SC_ROWS.filter(function (r) { return fval(r, '备注') === '历次期末导入'; });
   if (!rows.length) { toastMsg('成绩管理里没有「历次期末导入」的记录，不需要清理'); return }
-  if (!confirm('从「成绩管理」删除 ' + rows.length + ' 条期末记录？\n\n只删除备注为「历次期末导入」的记录，日常单元测 / 期中成绩不受影响；\n期末分析看板用的是独立数据表，不会因此丢失。')) return;
+  if (!confirm('从「成绩管理」删除 ' + rows.length + ' 条历史期末记录（三上~五下）？\n\n· 只删备注为「历次期末导入」的记录，本学期的单元测 / 期中成绩不受影响\n· 「期末看板」用的是独立数据表，这些历史成绩在看板里照常显示\n· 删除后成绩管理 / 成绩分析 / 目标加分只保留本学期的成绩')) return;
   if (typeof wbEnsureDB !== 'function' || !wbEnsureDB()) { toastMsg('⚠️ 数据接口不可用，无法删除'); return }
   var btn = document.getElementById('fnTip');
   if (btn) btn.textContent = '正在删除 0 / ' + rows.length + ' …';
@@ -9980,11 +9980,29 @@ function scBonusRepaintPts() {
 }
 /* vT193 目标加分也要能读「期末看板」的独立期末库（s-final）：
    以前只读飞书成绩表，从期末看板导入的成绩在目标加分里看不到、也不提醒。 */
+/* vT195 当前学期（短格式，如「六上」）：历史学期的期末只在「期末看板」展示，
+   成绩管理 / 成绩分析 / 目标加分只保留本学期，避免一堆旧数据干扰。 */
+function scCurTerm() {
+  function norm(v) { return String(v == null ? '' : v).replace(/年级/g, '').replace(/\s/g, '').trim() }
+  var el = document.getElementById('scTerm');
+  var v = norm(el && el.value);
+  if (/^[三四五六][上下]$/.test(v)) return v;
+  var m = new Date().getMonth() + 1;
+  return '六' + ((m >= 9 || m === 1) ? '上' : '下');   /* 9~1 月为上学期，2~8 月为下学期 */
+}
 function scBonusRows() {
-  var out = (SC_ROWS || []).slice();
+  var cur = scCurTerm();
+  function norm(v) { return String(v == null ? '' : v).replace(/年级/g, '').replace(/\s/g, '').trim() }
+  /* 历史期末即使还留在成绩表里，也不进目标加分（只在本学期范围内加分） */
+  var out = (SC_ROWS || []).filter(function (r) {
+    if (fval(r, '备注') !== '历次期末导入') return true;
+    var t = norm(fval(r, '学期'));
+    return !t || t === cur;
+  });
   try {
     if (typeof fnRows === 'function') {
       fnRows().forEach(function (r) {
+        if (cur && r.term && r.term !== cur) return;   /* 三上~五下只给期末看板看 */
         out.push({
           '学生姓名': r.name, '科目': r.subject, '考试名称': r.term + '期末',
           '分数': Number(r.score),
@@ -19859,9 +19877,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v194';
-var WB_MY_VER = '优化版 vT194 · 数英目标分独立';
-var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.207';
+var WB_VER_TAG = 'v195';
+var WB_MY_VER = '优化版 vT195 · 历史期末不干扰本学期';
+var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.208';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
