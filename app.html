@@ -18707,9 +18707,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v161';
-var WB_MY_VER = '优化版 vT161 · 作业登记文案修正';
-var WB_BUILD_DATE = '11-16', WB_BUILD_NO = '2.6.185';
+var WB_VER_TAG = 'v172';
+var WB_MY_VER = '优化版 vT172 · 近实时同步';
+var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.186';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -19296,7 +19296,12 @@ function syncCycleCore(manual) {
     if (manual) toastMsg('⚠️ 请先填 Gitee 设置（仓库 owner / 仓库名 / 私人令牌）');
     return Promise.resolve();
   }
-  if (GITEE_BUSY) return Promise.resolve();
+  if (GITEE_BUSY) {
+    /* vT172：同步进行中又有新改动 → 记一笔，本轮结束后立即补推，绝不让写入被这轮吞掉 */
+    GITEE_PENDING = true;
+    if (manual) { try { toastMsg('⏳ 正在同步，完成后会立即补推一次…') } catch (_q) {} }
+    return Promise.resolve({ queued: true });
+  }
   GITEE_BUSY = true;
   var st = mpSyncStatusEl();
   function setst(t) { if (st) st.textContent = t }
@@ -19446,7 +19451,9 @@ function syncCycleCore(manual) {
         return Promise.resolve(mpFromDesk()).then(function (mine) {
         mine.hw = mpTrim365(mine.hw); mine.rc = mpTrim365(mine.rc);
         /* 2.6.0 rev 递增 + 协议版本：另一端靠 rev 判断"数据变了没有" */
-        var out = { rev: (Number(doc.rev) || 0) + 1, syncVersion: SYNC_PROTO,
+        /* vT172 rev 只由 giteePut 递增一次。以前这里是 doc.rev+1，giteePut 里又 +1，
+           rev 每轮跳 2（1→3→5→7），『谁真的改了』的对比很快就失真。 */
+        var out = { rev: Number(doc.rev) || 0, syncVersion: SYNC_PROTO,
                     updatedAt: Date.now(), updatedBy: 'desktop',
                     releaseVer: WB_VER_TAG,           /* 2.6.15 发布标记：随同步文件走，旧标签页据此自检 */
                     tables: {},
@@ -19767,9 +19774,66 @@ function syncCycleCore(manual) {
         /* 2.6.56 电脑侧数据（座位表 / 通讯录 / 本机设置）并入云端 locals 段。
            tables 段保持原样，小程序读的是 tables，因此不受影响。 */
         try{ out.locals = cloudMergeLocals(doc.locals) }catch(eCL){ try{ console.warn('[gitee-sync] locals 合并失败', eCL) }catch(_c){} }
+        /* ===== vT172 只有真的变了才写回云端 =====
+           本机有写入（WB_LOCAL_DIRTY） / 云端为空 / 内容指纹不同 / 版本标记或协议不一致
+           —— 任一成立才 PUT。否则跳过，rev 不变，别端探测不到「新提交」，来回互推就此停止。 */
+        var _fpR = wbLedgerFp(doc), _fpL = wbLedgerFp(out);
+        var _needPut = WB_LOCAL_DIRTY || res.empty || _fpR !== _fpL ||
+                       String(doc.releaseVer || '') !== WB_VER_TAG || wbIsStaleDoc(doc);
+        if (_needPut) {
+          try {
+            var _dt = [];
+            if (_fpR !== _fpL) {
+              var _tk = {};
+              Object.keys(doc.tables || {}).forEach(function (k) { _tk[k] = 1 });
+              Object.keys(out.tables || {}).forEach(function (k) { _tk[k] = 1 });
+              Object.keys(_tk).forEach(function (k) {
+                var _a = (doc.tables || {})[k], _b = (out.tables || {})[k];
+                var _ha = wbHash32(JSON.stringify(_a || null)), _hb = wbHash32(JSON.stringify(_b || null));
+                if (_ha !== _hb) _dt.push(k + '(' + (Array.isArray(_a) ? _a.length : 0) + '→' + (Array.isArray(_b) ? _b.length : 0) + ')');
+              });
+            }
+            console.info('[gitee-sync] 写回判定：dirty=' + WB_LOCAL_DIRTY + ' empty=' + !!res.empty +
+              ' fp同=' + (_fpR === _fpL) + ' ver同=' + (String(doc.releaseVer || '') === WB_VER_TAG) +
+              ' stale=' + wbIsStaleDoc(doc) + ' rev=' + (doc.rev || 0) +
+              ' 差异=' + (_dt.length ? _dt.join(',') : '-'));
+          } catch (_dp) {}
+        }
+        if (!_needPut) {
+          wbSetRev(doc.rev);
+          var _t0 = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+          var _msg0 = '✅ 云端守望 ' + _t0 + ' · 云端 ' + remoteN + ' 条 · 无改动（未写回）';
+          setst(_msg0);
+          try { localStorage.setItem('wb_gitee_last', _msg0) } catch (_m0) {}
+          try { if (typeof gdRenderIfVisible === 'function') gdRenderIfVisible() } catch (_gd0) {}
+          if (added > 0) {
+            if (manual) {
+              toastMsg('☁️ 已并入 ' + added + ' 条，正在刷新页面…');
+              setTimeout(function () { location.reload() }, 1200);
+            } else if (window.__WB_LOCAL__) {
+              if (!document.hasFocus() && wbAutoReloadOk()) { setTimeout(function () { location.reload() }, 1200) }
+              else { toastMsg('☁️ 自动同步并入 ' + added + ' 条，空闲时刷新生效') }
+            } else { toastMsg('☁️ 从云端并入 ' + added + ' 条') }
+          } else if (manual) { toastMsg('✅ 云端已是最新（' + remoteN + ' 条，无改动）') }
+          return { skipped: 'nochange', rev: doc.rev };
+        }
+        WB_LOCAL_DIRTY = false;
         return giteePut(out, res.empty ? '' : res.sha).then(function (r2) {
         GITEE_RETRY = 0;
         wbSnapSave(out); wbSetRev(out.rev);
+        /* vT172 真推送成功 → 立刻发 MQTT 信号，教室桌面/其它端 1~3 秒内就拉新数据，
+           不用再等它自己的 15 秒兜底轮询（这是「推云到别端看见」的最后一公里）。 */
+        try { if (typeof mqttPublishSignal === 'function') mqttPublishSignal() } catch (_ms) {}
+        /* vT172 把自己刚产生的这次提交号记进探测缓存。
+           否则 6 秒后的下一轮探测会看到「提交号变了」，误以为别端更新 → 再拉一遍、再写回一遍，
+           自激成一轮一轮的空转（这也是以前页面隔一会儿闪两下的来源）。 */
+        setTimeout(function () {
+          try {
+            giteeHeadInfo().then(function (h) {
+              if (h && h.sha) { try { localStorage.setItem(WB_CKEY, h.sha) } catch (_cq) {} }
+            }, function () {});
+          } catch (_ch) {}
+        }, 900);
         var failN2 = window.__WB_MERGE_FAIL__ || 0;
         var msg = (failN2 ? '⚠️' : '✅') + ' 云端守望 ' + new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) +
                   ' · 云端 ' + remoteN + ' 条' + (added ? (' · 并入 ' + added + ' 条') : '') +
@@ -19813,8 +19877,8 @@ function syncCycleCore(manual) {
   }
   /* 2.5.7 无论成功失败都要放锁，否则本页崩溃会把别的标签页永久挡住 */
   return cycle().then(
-    function (r) { GITEE_BUSY = false; syncLockRelease(); return r },
-    function (e) { GITEE_BUSY = false; syncLockRelease(); throw e }
+    function (r) { GITEE_BUSY = false; syncLockRelease(); wbFlushPending(); return r },
+    function (e) { GITEE_BUSY = false; syncLockRelease(); wbFlushPending(); throw e }
   );
 }
 /* ============================================================
@@ -19844,6 +19908,48 @@ function wbIsStaleDoc(doc) {
   return Number(doc.syncVersion || 0) < SYNC_PROTO;
 }
 function wbLastRev() { try { return Number(localStorage.getItem(WB_REV_KEY)) || 0 } catch (e) { return 0 } }
+/* ================= vT172 轻量内容指纹 =================
+   判断「本机要写回的内容」与「云端已有内容」是否等价，等价就不写回。
+   为什么必须这么做：以前每轮同步都无条件整表 PUT，rev 每轮 +1 ——
+     ① 两台电脑互相探测到对方 rev 变大 → 各自再拉再写 → 无休止 ping-pong（页面莫名闪两下）
+     ② rev 虚涨到 6000+，rev 对比彻底失去「谁真的改了」的意义
+   现在：内容一致且本机无改动 → rev 保持不动，别端也探测不到变化，抖动断根。
+   指纹只看业务内容（行数 + 内容 hash），不做整个 JSON 字符串比较，开销可忽略。 */
+function wbHash32(s) {
+  var h = 2166136261, i, l = String(s).length;
+  for (i = 0; i < l; i++) { h ^= String(s).charCodeAt(i); h = (h * 16777619) >>> 0 }
+  return h.toString(36);
+}
+function wbLedgerFp(doc) {
+  if (!doc) return '';
+  var t = doc.tables || {}, ks = Object.keys(t).sort(), p = [], i;
+  for (i = 0; i < ks.length; i++) {
+    var v = t[ks[i]];
+    if (!v) { p.push(ks[i] + ':0'); continue }
+    var s = '';
+    try { s = JSON.stringify(v) } catch (e) { s = String(v) }
+    var n = Array.isArray(v) ? v.length : (typeof v === 'object' ? Object.keys(v).length : 1);
+    p.push(ks[i] + ':' + n + ':' + wbHash32(s));
+  }
+  p.push('d:' + ((doc.deletes || []).length) + ':' + wbHash32(JSON.stringify(doc.deletes || [])));
+  try { p.push('p:' + wbHash32(JSON.stringify(doc.pets || null))) } catch (e2) { p.push('p:-') }
+  /* 顶层也有「会变、且必须上云」的小字段，漏掉它们就会被「内容一致」误判成不用写回：
+     colRevives = 作业列复活标记（漏了 → 已复活的列又被别端旧墓碑删掉，11-17 惨案复发）
+     ownerAuth  = 班主任口令哈希（漏了 → 改完口令手机端还是旧的，退不出科任模式） */
+  try { p.push('c:' + wbHash32(JSON.stringify((doc.colRevives || []).slice().sort()))) } catch (e3) { p.push('c:-') }
+  try {
+    var _oa = doc.ownerAuth;
+    p.push('a:' + wbHash32(_oa ? JSON.stringify([_oa.v, _oa.salt, _oa.hash, _oa.at]) : 'null'));
+  } catch (e4) { p.push('a:-') }
+  /* 电脑侧数据（座位表 / 通讯录 / 本机设置）也要比：座位表换了但没触发写入钩子时，
+     靠这一条兜住，避免「本机看着换了、云端还是旧座位」。__at 是每次合并都会刷新的时间戳，剔除。 */
+  try {
+    var _lc = doc.locals, _lo = {};
+    if (_lc) Object.keys(_lc).forEach(function (k) { if (k !== '__at') _lo[k] = _lc[k] });
+    p.push('l:' + (_lc ? wbHash32(JSON.stringify(_lo)) : 'n'));
+  } catch (e5) { p.push('l:-') }
+  return p.join('|');
+}
 function wbSetRev(n) { try { localStorage.setItem(WB_REV_KEY, String(Number(n) || 0)) } catch (e) {} }
 /* 发现 Gitee 被旧版写脏 → 用本地干净快照覆盖回去 */
 function wbRepairIfStale(res) {
@@ -19853,11 +19959,18 @@ function wbRepairIfStale(res) {
   var snap = wbSnapLoad();
   if (!snap) { wbSnapSave(doc); return Promise.resolve(null) }
   var fixed = {
-    rev: (Number(snap.rev) || 0) + 1,
+    rev: Number(snap.rev) || 0,      /* vT172 同款：交给 giteePut 递增，避免 rev 跳号 */
     syncVersion: SYNC_PROTO,
     updatedAt: Date.now(), updatedBy: 'desk-repair',
-    tables: snap.tables, deletes: snap.deletes || []
+    tables: snap.tables, deletes: snap.deletes || [],
+    /* vT172 自愈写回必须把这几项原样带回去，否则：
+       ① 丢了 releaseVer → 下一轮又判「版本不一致」→ 再写一次，白跑一轮；
+       ② 丢了 locals → 电脑侧座位表/通讯录被抹掉；
+       ③ 丢了 colRevives → 已复活的作业列又被旧墓碑删掉（11-17「一登记就消失」复发）。 */
+    releaseVer: WB_VER_TAG
   };
+  if (doc.locals) fixed.locals = doc.locals;
+  if (Array.isArray(doc.colRevives) && doc.colRevives.length) fixed.colRevives = doc.colRevives;
   /* vT30 自愈写回也必须带上口令记录：这一步会用快照整份覆盖云端，
      若不带 ownerAuth，共享设备上的口令闸门就被顺手抹掉了。 */
   try { wbOwnerAuthMerge(fixed, 'web-repair') } catch (_wae) {}
@@ -19899,13 +20012,29 @@ function wbSwitchToIsolated() {
   }, 300);
 }
 
-/* 自动触发：启动 30s、每 10 分钟、本机写盘后防抖 60s */
+/* 自动触发：启动 3s、每 10 分钟、本机写盘后防抖 2.2s */
 var GITEE_DEBOUNCE = null;
+/* vT172 近实时同步 —— 写入到上云从 8 秒压到 2.2 秒。
+   同时保证两次推送至少间隔 3 秒：连续登记几十条作业时不会一秒刷一个 commit，
+   但只要有改动就一定会推出去（最后一次改动后 2.2 秒必到云端）。 */
+var GITEE_LAST_PUSH = 0, GITEE_MIN_GAP = 3 * 1000, WB_LOCAL_DIRTY = false, GITEE_PENDING = false;
 function syncScheduleSoon() {
   if (!mpSyncSettings().gAuto) return;
+  WB_LOCAL_DIRTY = true;                       /* vT172：本机确有改动，写回时必须带上 */
   if (GITEE_DEBOUNCE) clearTimeout(GITEE_DEBOUNCE);
-  /* 2.6.64 写入后 8 秒即备份（原为 60 秒，关页面常被打断导致漏同步） */
-  GITEE_DEBOUNCE = setTimeout(function () { GITEE_DEBOUNCE = null; syncCycle() }, 8 * 1000);
+  var gap = GITEE_MIN_GAP - (Date.now() - GITEE_LAST_PUSH);
+  GITEE_DEBOUNCE = setTimeout(function () {
+    GITEE_DEBOUNCE = null; GITEE_LAST_PUSH = Date.now(); syncCycle();
+  }, gap > 2200 ? gap : 2200);
+}
+/* vT172 忙时排队补推：以前同步进行中的写入会被直接吞掉（GITEE_BUSY 就 return），
+   那一两秒里改的东西只能等下一轮（最坏 10 分钟）。现在记一笔，本轮结束 0.6 秒后立刻补推。 */
+function wbFlushPending() {
+  if (!GITEE_PENDING) return;
+  GITEE_PENDING = false;
+  setTimeout(function () {
+    try { if (mpSyncSettings().gAuto) { GITEE_LAST_PUSH = Date.now(); syncCycle(false) } } catch (e) {}
+  }, 600);
 }
 /* vT103 通知即时下发：以前 ntChanged 是「先发 MQTT 信号、数据却要等 8 秒防抖才推云端」——
    教室端收到信号立刻拉云端，拉到的还是旧数据，只能等 15 秒轮询兜底，体感 10~20 秒。
@@ -19943,28 +20072,61 @@ document.addEventListener('visibilitychange', function () {
 
 /* 2.6.3 别端有新数据立即同步：
    10 分钟一轮太慢 —— 在小程序里记完一条，电脑上要等最多 10 分钟才看见，
-   用户体感就是"没同步"。这里每 20 秒做一次极轻量的 rev 探测
-   （只读 doc 的 rev/syncVersion，不落库、不写回），
-   发现 Gitee 的 rev 比本机记录的新 → 立刻走完整 syncCycle 拉取合并。
-   代价很小：一次 GET，且已经在本机有 rev 缓存时不重复读全表。 */
-var WB_WATCH_MS = 20 * 1000;
-var WB_WATCH_BUSY = false;
+   用户体感就是"没同步"。
+   vT172：原来是每 20 秒「整文件 GET」，数据涨到几百 KB 后，一天要白拉几百兆。
+   现在改成每 6 秒问一次「这个文件最近有没有新提交」（commits?per_page=3，响应约 1~2KB），
+   提交号变了才走完整 syncCycle。带宽降到原来的 1/20，频率还能提高到 3 倍。
+   接口失败（限流/断网）自动退避到 30 秒一次，不会把浏览器打满。 */
+var WB_WATCH_MS = 6 * 1000;
+var WB_WATCH_BUSY = false, WB_WATCH_FAIL = 0;
+var WB_CKEY = 'wb_cloud_commitsha';
+/* 只取「最新提交号 + 提交说明里的 rev=N」，不下载文件内容 */
+function giteeHeadInfo() {
+  var cfg = giteeCfg();
+  var u = GITEE_API + '/repos/' + encodeURIComponent(cfg.owner) + '/' + encodeURIComponent(cfg.repo) +
+          '/commits?path=' + encodeURIComponent(cfg.path) + '&per_page=3&access_token=' + encodeURIComponent(cfg.token);
+  return fetch(u).then(function (r) {
+    if (!r.ok) return null;
+    return r.text().then(function (t) {
+      var arr = null;
+      try { arr = JSON.parse(t) } catch (e) { return null }
+      if (!Array.isArray(arr)) return null;
+      if (!arr.length) return { sha: '', rev: 0 };
+      var top = arr[0] || {};
+      var msg = (top.commit && top.commit.message) || '';
+      var m = /rev=(\d+)/.exec(msg);
+      return { sha: String(top.sha || ''), rev: m ? Number(m[1]) : 0 };
+    });
+  }).catch(function () { return null });
+}
 function wbWatchRemote() {
   if (!mpSyncSettings().gAuto) return;
   if (WB_WATCH_BUSY || GITEE_BUSY) return;
   var cfg = giteeCfg();
   if (!cfg.owner || !cfg.repo || !cfg.token) return;
   WB_WATCH_BUSY = true;
-  giteeGet().then(function (res) {
+  giteeHeadInfo().then(function (h) {
     WB_WATCH_BUSY = false;
-    if (!res || res.empty) return;
-    var remoteRev = Number((res.doc && res.doc.rev) || 0);
-    var mineRev = wbLastRev();
-    /* 远端比本机新 → 有人（小程序/另一台电脑）改了数据，立即拉 */
-    if (remoteRev > mineRev) {
-      try { console.info('[gitee-sync] 探测到云端 rev ' + remoteRev + ' > 本机 ' + mineRev + '，立即同步') } catch (_e) {}
-      syncCycle();
+    if (!h) {                       /* 接口不可用 → 退避，别死循环打接口 */
+      WB_WATCH_FAIL++;
+      if (WB_WATCH_FAIL >= 3) { WB_WATCH_FAIL = 0; setTimeout(function () { try { wbWatchRemote() } catch (e) {} }, 30000) }
+      return;
     }
+    WB_WATCH_FAIL = 0;
+    if (!h.sha) return;
+    var last = '';
+    try { last = localStorage.getItem(WB_CKEY) || '' } catch (e0) {}
+    if (h.sha === last) return;     /* 云端没有新提交 */
+    var mineRev = wbLastRev();
+    try { localStorage.setItem(WB_CKEY, h.sha) } catch (e1) {}
+    /* 提交说明里带 rev=N 且没超过本机记录 → 是本端刚推上去的，不必再拉一遍 */
+    if (h.rev && h.rev <= mineRev) return;
+    /* 解析不出 rev（小程序/桌面推送的提交说明不带 rev=N）时：
+       若本机 15 秒内刚推过，先当成自己的提交、只更缓存 —— 否则每次自己推完都会
+       立刻再拉一轮、再写一轮，空转成「页面隔一会儿闪两下」。 */
+    if (!h.rev && Date.now() - GITEE_LAST_PUSH < 15000) return;
+    try { console.info('[gitee-sync] 探测到新提交（rev=' + (h.rev || '?') + ' > 本机 ' + mineRev + '），立即同步') } catch (_e) {}
+    syncCycle(false);
   }).catch(function () { WB_WATCH_BUSY = false });
 }
 /* 每 20 秒探测一次；页面不可见时跳过（省流量，回到前台会补一次） */
