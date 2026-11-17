@@ -2820,9 +2820,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v198</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v199</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v198','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v199','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -6090,6 +6090,7 @@ function loadScoresFromDB(){
       scLoadTargets();
       scLoadGoals();   /* vT173 功能⑥：数英目标与本机缓存一并加载 */
       try { scBonusNotice(true); } catch (_bn) {}   /* vT193 更新「目标加分」待加场次角标 */
+      setTimeout(function () { try { scPurgeOldFinal(); } catch (_pe) {} }, 1200);   /* vT199 自动清理三上~五下期末 */
       scFillFilters();
       scRenderList();
       scRenderAn();
@@ -10502,6 +10503,37 @@ function scRenameExamRun(subj,oldName,newName,rows){
   });
 }
 
+/* vT199 自动清理三上~五下的期末成绩：这些记录只该在「期末看板」里看。
+   老师手动删了又复活，多半是某次云端合并又写回来；这里在每次成绩加载后自检一次，
+   命中就删（写墓碑防重建、本地立即剔除、失败下次重试），不需要老师再点按钮。 */
+var SC_PURGE_BUSY = false;
+function scPurgeOldFinal() {
+  if (SC_PURGE_BUSY) return Promise.resolve(0);
+  var OLD = ['三上', '三下', '四上', '四下', '五上', '五下'];
+  function norm(v) { return String(v == null ? '' : v).replace(/年级/g, '').replace(/\s/g, '').trim() }
+  var rows = (SC_ROWS || []).filter(function (r) {
+    return fval(r, '备注') === '历次期末导入' && OLD.indexOf(norm(fval(r, '学期'))) >= 0;
+  });
+  if (!rows.length) return Promise.resolve(0);
+  if (typeof wbEnsureDB !== 'function' || !wbEnsureDB()) return Promise.resolve(0);
+  SC_PURGE_BUSY = true;
+  var okN = 0, failN = 0;
+  return eachSeries(rows, function (r) {
+    tomAddScore(fval(r, '科目'), fval(r, '考试名称'), fval(r, '学生姓名'), fval(r, '考试日期'));
+    return db.deleteRecord({ databaseId: DATABASE_ID, recordId: r._id })
+      .then(function () { okN++; }, function () { failN++; });
+  }).then(function () {
+    var kill = {};
+    rows.forEach(function (r) { if (r._id) kill[r._id] = 1 });
+    SC_ROWS = (SC_ROWS || []).filter(function (r) { return !kill[r._id] });
+    try { scRefreshNames(); } catch (e) {}
+    try { scMgRefresh(); } catch (e) {}
+    try { scBonusNotice(true); } catch (e) {}
+    if (okN || failN) toastMsg('🧹 已自动清理历史期末成绩：成功 ' + okN + ' 条' + (failN ? ('，失败 ' + failN + ' 条（下次刷新会重试）') : ''));
+    SC_PURGE_BUSY = false;
+    return okN;
+  }).catch(function () { SC_PURGE_BUSY = false; return 0; });
+}
 function scMgSave(){
   if(!wbEnsureDB()){toastMsg('⚠️ 数据接口不可用');return}
   var scoreInputs=[].slice.call(document.querySelectorAll('#scMgBox input[data-id]')).filter(function(i){
@@ -17152,6 +17184,34 @@ function renderHome(){
   chips.appendChild(chip(' 项待办',pending.length));
   if(lateN)chips.appendChild(chip(' 项已过期',lateN));
   chips.appendChild(chip(' 节我的课',todayMy.length));
+  /* vT199 首页只提醒「本学期录入的语文成绩」还没做目标加分：
+     历史学期（三上~五下）即使还在数据里也不会再冒出来催加分。 */
+  try {
+    if (typeof scBonusExamStatus === 'function' && typeof scCurTerm === 'function') {
+      var _cur = scCurTerm();
+      var _termOf = {};
+      (SC_ROWS || []).forEach(function (r) {
+        var _s = fval(r, '科目'), _e = fval(r, '考试名称');
+        var _t = String(fval(r, '学期') || '').replace(/年级/g, '').replace(/\s/g, '').trim();
+        if (_s && _e && _t) _termOf[_s + '|' + _e] = _t;
+      });
+      var _pend = (scBonusExamStatus().pending || []).filter(function (x) {
+        if (String(x.subj || '') !== '语文') return false;
+        return _termOf[x.subj + '|' + x.exam] === _cur;
+      });
+      if (_pend.length) {
+        var _bw = el('div', 'hm-chip hm-warn', ' 场语文成绩待加分');
+        _bw.insertBefore(el('b', null, String(_pend.length)), _bw.firstChild);
+        _bw.title = '本学期（' + _cur + '）这些语文考试还没做「目标达成加分」：\n' +
+          _pend.map(function (x) { return '· ' + x.subj + ' ' + x.exam }).join('\n') + '\n\n点此前往处理';
+        _bw.onclick = function () {
+          try { var navBtn = document.querySelector('#nav button[data-s="score"]'); if (navBtn) navBtn.click(); } catch (_) {}
+          try { if (typeof scTab === 'function') scTab('bonus'); } catch (_) {}
+        };
+        chips.appendChild(_bw);
+      }
+    }
+  } catch (_be) {}
   /* vT197 老师明确要求：首页不再催「成绩待加分」。导入历史成绩后也不想被提醒，
      需要时到「成绩管理 → 🏆 目标加分」查看即可。 */
   /* 第几周：与座位表"当前周"对齐，方便老师对得上 */
@@ -19872,9 +19932,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v198';
-var WB_MY_VER = '优化版 vT198 · 灵宠喂养感谢特效';
-var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.211';
+var WB_VER_TAG = 'v199';
+var WB_MY_VER = '优化版 vT199 · 自动清理历史期末';
+var WB_BUILD_DATE = '11-17', WB_BUILD_NO = '2.6.212';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
