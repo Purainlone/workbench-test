@@ -28859,7 +28859,44 @@ function cwInit(){
     [74,'神鸮'],
     [75,'灵燕'],
     [76,'文鳐'],
-    [77,'灵蟹']
+    [77,'灵蟹'],
+    /* vT221 新增：山海经神兽第二批 35 只（2026-11-18 老师提供三阶段素材，
+       图源 petimg/078_1.png ~ 112_3.png，编号与《灵宠名册.csv》一致） */
+    [78,'貔貅狮'],
+    [79,'白泽鹿'],
+    [80,'青鸾'],
+    [81,'金蟾'],
+    [82,'玄鹤'],
+    [83,'天狐'],
+    [84,'水麒麟'],
+    [85,'石犀'],
+    [86,'赤貉'],
+    [87,'云雀'],
+    [88,'玄蚕'],
+    [89,'雪貂'],
+    [90,'火猊'],
+    [91,'珊瑚鲸'],
+    [92,'风狸'],
+    [93,'墨麒麟'],
+    [94,'烛龙'],
+    [95,'应龙二'],
+    [96,'獬豸'],
+    [97,'毕方'],
+    [98,'英招'],
+    [99,'鲲鹏'],
+    [100,'螭吻'],
+    [101,'陆吾'],
+    [102,'夫诸'],
+    [103,'乘黄'],
+    [104,'讙'],
+    [105,'蠃鱼'],
+    [106,'重明鸟'],
+    [107,'天马二'],
+    [108,'狰'],
+    [109,'驺吾'],
+    [110,'蛊雕'],
+    [111,'夔'],
+    [112,'鸾鸟']
   ];
   /* ---------------- vT133 成长灵宠品级：普通 / 稀有两档 ----------------
      ｜稀有款初始 12 只（编号见下，老师可在后台「灵宠品级」自行增减）；
@@ -31303,8 +31340,8 @@ function cwInit(){
      之前后台图鉴一片空白/发灰，图片加载失败也是原因之一。 */
   var PT_CODEX_BASE = 'https://purainlone.github.io/workbench-test/';
   var PT_CODEX_MIRRORS = [
-    'https://testingcf.jsdelivr.net/gh/Purainlone/workbench-test@b6b3fde9bfd6a8155f90646194d33ced1e603cff/',
-    'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@b6b3fde9bfd6a8155f90646194d33ced1e603cff/',
+    'https://testingcf.jsdelivr.net/gh/Purainlone/workbench-test@7052eab5641314145127f5c26344e7d256cac555/',
+    'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@7052eab5641314145127f5c26344e7d256cac555/',
     PT_CODEX_BASE
   ];
   var PT_CX_SRCS = {};
@@ -31312,7 +31349,7 @@ function cwInit(){
      故镜像源锁定到含新卡的 commit；换卡面时同步改这里的 SHA 与 PT_CX_Q。
      卡面 URL 再加版本参数（最长 12h），
      给候选 URL 加版本参数，CDN 当作全新资源回源，保证立刻看到新图。 */
-  var PT_CX_Q = 'v=119';   /* vT119 成长灵宠 petimg 上线，顺带刷新图鉴缓存键 */
+  var PT_CX_Q = 'v=120';   /* vT119 成长灵宠 petimg 上线，顺带刷新图鉴缓存键 */
   function ptCxUrl(b, rel) { return b + rel + (rel.indexOf('?') >= 0 ? '&' : '?') + PT_CX_Q; }
   /* vT78 隐藏/典藏卡优先加载动态卡面 codeximg/NNN.gif（vT78 生成的光效版），
      404 时按候选顺序自动回落静态 png；普通卡不产生多余请求。 */
