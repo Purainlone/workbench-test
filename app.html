@@ -14432,6 +14432,83 @@ function pullGA(onDone,onFail){
     }).catch(function(err){onFail(err)});
   })(null);
 }
+/* ===== vT227 奖惩流水「删除不复活」加固 =====
+   现象：学生详情 → 积分流水 → 点「✕」删一条奖惩，几秒后它自己又回来了。
+   两层原因：
+     ① 删除用的 id 字段可能跟适配器认的不一致（本地库认 id，云端/桌面行里常见 _id / record_id），
+        deleteRecord 于是「成功返回但一条没删」，界面刷新后原样回来；
+     ② 另一台电脑 / 教室桌面把旧表推回云端，并集、合并、整表重建里的墓碑过滤只要有一层没命中，
+        这条行就复活。
+   加固做法：
+     a. 删除时把 id / _id / record_id 全试一遍；
+     b. 记住「已删记录 id」（本机 90 天），loadST 回来时凡是命中「已删 id」或「st 墓碑」的行，
+        直接从数据表再删一次并从内存里剔除 —— 云端表跟着收敛，其它端下一轮也就看不到了。 */
+var ST_DEL_KEY = 'wb_st_dead_ids_v1';
+function stDeadLoad() {
+  try {
+    var o = JSON.parse(localStorage.getItem(ST_DEL_KEY) || '{}');
+    if (!o || typeof o !== 'object') o = {};
+    var lim = Date.now() - 90 * 86400000, changed = false;
+    Object.keys(o).forEach(function (k) { if (!(Number(o[k]) > lim)) { delete o[k]; changed = true } });
+    if (changed) { try { localStorage.setItem(ST_DEL_KEY, JSON.stringify(o)) } catch (e0) {} }
+    return o;
+  } catch (e) { return {} }
+}
+function stDeadAdd(id) {
+  if (!id) return;
+  var o = stDeadLoad(); o[String(id)] = Date.now();
+  try { localStorage.setItem(ST_DEL_KEY, JSON.stringify(o)) } catch (e) {}
+}
+/* 按所有可能的 id 字段各删一次；silent 时只删不记墓碑 */
+function stDelRow(r, silent) {
+  if (!r || typeof db === 'undefined' || !db || typeof db.deleteRecord !== 'function') return Promise.resolve(0);
+  var ids = [];
+  ['id', 'recordId', 'record_id', '_id'].forEach(function (k) {
+    var v = r[k];
+    if (v == null || v === '') return;
+    var s = String(v);
+    if (ids.indexOf(s) < 0) ids.push(s);
+  });
+  if (!ids.length) return Promise.resolve(0);
+  var ok = 0;
+  return ids.reduce(function (p, id) {
+    return p.then(function () {
+      return db.deleteRecord({ databaseId: '2mthbbHsJeABzmnerNt6sK', recordId: id }).then(function () {
+        ok++; if (!silent) stDeadAdd(id);
+      }, function () {});
+    });
+  }, Promise.resolve()).then(function () { return ok });
+}
+/* 过滤掉「已删」的奖惩行：命中即从表里再删一次，返回干净的行数组 */
+function stPurge(rows) {
+  try {
+    if (!Array.isArray(rows) || !rows.length) return rows;
+    var T = (typeof stTombSet === 'function') ? stTombSet() : {};
+    var hasT = !!(T && Object.keys(T).length);
+    var dead = stDeadLoad();
+    var kill = [];
+    var keep = rows.filter(function (r) {
+      if (!r) return false;
+      var id = (typeof recId === 'function') ? String(recId(r) || '') : '';
+      if (id && dead[id]) { kill.push(r); return false }
+      var rs = String((typeof fval === 'function' ? fval(r, '奖惩事项') : '') || '').trim();
+      if (!rs || !hasT) return true;
+      var d = (typeof syncDateOnly === 'function') ? syncDateOnly(fval(r, '日期')) : String(fval(r, '日期') || '').slice(0, 10);
+      var tk = (typeof stTombKeyOf === 'function') ? stTombKeyOf(fval(r, '姓名'), rs, d, parseFloat(fval(r, '奖惩分值'))) : '';
+      if (tk && T[tk]) { kill.push(r); return false }
+      return true;
+    });
+    if (kill.length) {
+      kill.forEach(function (r) {
+        var id = (typeof recId === 'function') ? recId(r) : '';
+        if (id) stDeadAdd(id);
+        stDelRow(r, true);
+      });
+      try { console.log('[st] vT227 自动清掉复活流水 ' + kill.length + ' 条'); } catch (e1) {}
+    }
+    return keep;
+  } catch (e) { return rows }
+}
 function pullST(onDone,onFail){
   var acc=[],guard=0;
   (function step(cursor){
@@ -14453,7 +14530,11 @@ function loadGA(){return new Promise(function(res){
 })}
 function loadST(){return new Promise(function(res){
   if(!db){res();return}
-  pullST(function(rows){ST_ROWS=rows;res()},function(err){dbFail('学生档案',err);res()});
+  pullST(function(rows){
+    /* vT227：命中「已删 id / st 墓碑」的行直接剔掉并再删一次，防止删了又回来 */
+    ST_ROWS=(typeof stPurge==='function')?stPurge(rows):rows;
+    res();
+  },function(err){dbFail('学生档案',err);res()});
 })}
 
 /* ---------- 学生名单：座位表为准，档案表补组别职务 ---------- */
@@ -16586,17 +16667,19 @@ function openStuPanel(name){
       var x=el('button','x','✕');x.title='删除这条奖惩';
       x.onclick=function(){
         if(!confirm('删掉这条奖惩记录？'))return;
-        db.deleteRecord({databaseId:'2mthbbHsJeABzmnerNt6sK',recordId:f.id}).then(function(){
-          /* vT173 删除留墓碑：键与合并层业务键（mpBizKey / recBizKey 的 st 分支）同构，
-             随 doc.deletes 透传。其它端/旧缓存再把这条推回来时，
-             并集(mpUnionTable)、合并(giteeMergeIntoCloud/IntoLocal)、整表重建(mpFromDeskBuild)
-             都按键命中墓碑直接丢弃 —— 目标加分删除后不再复活 */
-          try{
-            var _r=f.row||null;
-            if(_r&&typeof tomAdd==='function'&&typeof stTombKeyOf==='function'){
-              tomAdd('st',stTombKeyOf(fval(_r,'姓名'),fval(_r,'奖惩事项'),syncDateOnly(fval(_r,'日期')),parseFloat(fval(_r,'奖惩分值'))));
-            }
-          }catch(_te){}
+        /* vT227：先记墓碑（键与合并层同构）+ 记住记录 id，再按 id/_id/record_id 各删一次——
+           以前只用 recId 走一次 deleteRecord，适配器认的 id 字段一变就会出现
+           「提示已删除、几秒后这条又回来」。 */
+        var _r=f.row||null;
+        var _tk='';
+        try{
+          if(_r&&typeof stTombKeyOf==='function'){
+            _tk=stTombKeyOf(fval(_r,'姓名'),fval(_r,'奖惩事项'),syncDateOnly(fval(_r,'日期')),parseFloat(fval(_r,'奖惩分值')));
+            if(_tk&&typeof tomAdd==='function') tomAdd('st',_tk);
+          }
+        }catch(_te){}
+        try{ if(typeof stDeadAdd==='function'&&f.id) stDeadAdd(f.id); }catch(_te2){}
+        stDelRow(_r||{id:f.id},false).then(function(){
           loadST().then(function(){renderStu();openStuPanel(name)});
           toastMsg('已删除');
         }).catch(function(err){console.error(err);toastMsg('⚠️ 没删掉')});
@@ -20097,9 +20180,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v226';
-var WB_MY_VER = '优化版 vT226 · 家长提案403彻底修复';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.237';
+var WB_VER_TAG = 'v227';
+var WB_MY_VER = '优化版 vT227 · 积分流水删除不复活';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.238';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
