@@ -362,7 +362,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT216）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT217）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -1263,7 +1263,8 @@
   }
   /* ================= vT187 每日竞答挑战 =================
      题目随老师快照下发（quiz.bank + quiz.today）；同一天全班题目一致。
-     答对 +0.5 分，答错当场给答案与解析；同一题跨天也只计一次分。
+     答对 +0.5 分；vT217 防乱答阶梯扣分：一次提交错 1 题不扣、错 2 题扣 0.5、错 3 题及以上扣 1。
+     答错当场给答案与解析；同一题跨天也只计一次分。
      提交走 pq/ 提案，老师端或教室桌面自动批准后进个人积分。 */
   var QZ_STATE = null, QZ_LS = 'wb_pa_quiz_v1';
   function qzToday() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
@@ -1359,7 +1360,7 @@
     if (!st.has) return '';
     var done = qzDoneAll(), s = qzStat();
     var h = '<div class="card" id="quizCard"><h2>🧠 每日竞答挑战 <em>' + esc(st.date) + ' · ' + st.items.length + ' 题</em></h2>';
-    h += '<div style="font-size:12.5px;color:#7a8a80;line-height:1.7;margin-bottom:6px">答对 1 题 +0.5 分，答错直接给答案；<b>同一题只算一次分</b>，不用全部答完，答多少算多少。</div>';
+    h += '<div style="font-size:12.5px;color:#7a8a80;line-height:1.7;margin-bottom:6px">答对 1 题 +0.5 分；请认真作答：一次提交<b>答错 2 题扣 0.5 分，答错 3 题及以上扣 1 分</b>（错 1 题不扣）。答错直接给答案；<b>同一题只算一次分</b>，不用全部答完，答多少算多少。</div>';
     if (st.submitted) {
       h += '<div style="background:#eef7f2;border:1px solid #cfe7db;border-radius:10px;padding:9px 11px;font-size:13px;color:#25574a;margin-bottom:8px">✅ 已提交：' + esc(st.msg || '等待老师端入账') + '</div>';
     }
@@ -1704,7 +1705,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v216</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v217</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     /* vT210 取消灵宠迎宾弹窗：改为置顶板块内联欢迎（见上方 pethero 卡），不再弹 */
