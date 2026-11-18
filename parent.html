@@ -474,11 +474,23 @@
     return j;
   }
   function loadSnap(repo) {
-    var u = GITEE + '/repos/' + enc(repo.owner) + '/' + enc(repo.repo) + '/contents/' + SNAP + '?ref=master&_t=' + Date.now();
-    return api(u).then(function (j) {
-      var doc = JSON.parse(b64Json(j.content));
+    /* vT222 紧急修复：Gitee 自 2026-11 起封禁匿名 API / raw 访问（家长端原来匿名请求
+       contents API 一律 403，页面显示「HTTP 403」没法登录）。快照属于公开只读数据，
+       现改为优先读同源 Pages 镜像（与 parent.html 同域：无跨域、无需令牌、CDN 更快），
+       Gitee 只是兜底（若以后恢复公开匿名访问仍可用）。
+       两种返回格式不同：Pages 是原始 JSON；Gitee contents 是 {content: base64}。 */
+    var mirror = 'wb_parent_snap.json?_t=' + Date.now();
+    var gitee = GITEE + '/repos/' + enc(repo.owner) + '/' + enc(repo.repo) + '/contents/' + SNAP + '?ref=master&_t=' + Date.now();
+    function ok(doc) {
       if (!doc || !doc.blocks) throw new Error('老师的家长端数据还没发布');
       return doc;
+    }
+    return api(mirror).then(ok, function () {
+      return api(gitee).then(function (j) { return ok(JSON.parse(b64Json(j.content))) }, function (e) {
+        var msg = (e && e.message) || '';
+        if (/403|401/.test(msg)) throw new Error('家长端数据读取失败（服务器拒绝匿名访问）。请稍后再试，或让老师重发一次接入码');
+        throw new Error('家长端数据暂时读取不到，请检查网络后重试');
+      });
     });
   }
 
