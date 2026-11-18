@@ -2846,8 +2846,9 @@ table.paper td.l{text-align:left;font-weight:600}
         </div>
       </div>
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
-        <div class="syncdesc"><b>👪 家长端权限 · 提案仓库（vT137）</b>：家长端「🎴 抽灵杰卡 / 🐾 抽灵宠 / 🍚 喂养」都是提交提案，老师批准（或自动批准）后才真正扣孩子积分、加成长值。提案要写进下面这个 Gitee 仓库，<b>以前只能在手机小程序「我的」里配，电脑端没配过家长端就会一直提示「老师还没开通」</b>。<br>
-          <b>怎么填：</b>用户名＝Gitee 账号名；仓库名＝<b>当前云端数据仓库名后面加 <code>-pt</code></b>（例：数据仓库 <code>work-test-data</code> → 这里填 <code>work-test-data-pt</code>，家长快照和提案都放这个库）；令牌＝能读写该仓库的 Gitee 私人令牌。忘了叫什么就点下面「一键填入」。</div>
+        <div class="syncdesc"><b>👪 家长端权限 · 提案仓库（vT226）</b>：家长端「🎴 抽灵杰卡 / 🐾 抽灵宠 / 🍚 喂养」都是提交提案，老师批准（或自动批准）后才真正扣孩子积分、加成长值。提案要写进下面这个 Gitee 仓库，<b>以前只能在手机小程序「我的」里配，电脑端没配过家长端就会一直提示「老师还没开通」</b>。<br>
+          <b>怎么填：</b>用户名＝Gitee 账号名；仓库名＝<b>当前云端数据仓库名后面加 <code>-pt</code></b>（例：数据仓库 <code>work-test-data</code> → 这里填 <code>work-test-data-pt</code>，家长快照和提案都放这个库）；令牌＝能读写该仓库的 Gitee 私人令牌。忘了叫什么就点下面「一键填入」。<br>
+          <span style="color:#2b7a4e">vT226 修复：三个框保存在本机后，扫描提案<b>直接读这三个值</b>，不再先去 Gitee 匿名读快照（匿名读取会被墙成 403，明明配好了也报「读不到家长快照 403」）。</span></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
           <input id="paChOwner" placeholder="Gitee 用户名" style="width:150px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
           <input id="paChRepo" placeholder="提案仓库名（数据仓库名 + -pt）" style="width:230px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
@@ -2862,9 +2863,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v223</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v224</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v223','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v224','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -19569,28 +19570,38 @@ function paChannelSave() {
     localStorage.setItem('wb_pe_repo', repo);
     localStorage.setItem('wb_pe_token', token);
   } catch (e) {}
+  try { if (typeof window.ptaCfgReset === 'function') window.ptaCfgReset(); } catch (e3) {}
   paChannelStatus();
   if (typeof toastMsg === 'function') toastMsg('✅ 家长通道已保存，正在重发快照…');
   try { ptwPublishNow(); } catch (e2) {}
 }
-/* 检测：只读一次仓库信息，确认用户名 / 仓库名 / 令牌对得上 */
+/* 检测：只读一次仓库信息，确认用户名 / 仓库名 / 令牌对得上（vT226 再顺手列一次 pq 目录，
+   因为「扫描提案」真正依赖的是列目录权限 —— 只验证仓库信息会出现「绿色的已开通，扫描却 403」） */
 function paChannelTest() {
   var c = paChannelGet();
   var el = document.getElementById('paChStatus');
   if (!c.owner || !c.repo || !c.token) { paChannelSave(); return; }
   if (el) { el.textContent = '⏳ 正在检测…'; el.style.color = '#666'; }
-  var url = 'https://gitee.com/api/v5/repos/' + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo) +
-    '?access_token=' + encodeURIComponent(c.token);
-  fetch(url).then(function (r) {
-    if (r.status === 200) {
-      paChannelStatus();
-      var warn = /-pt$/.test(c.repo) ? '' : '<br><span style="color:#b45309">⚠️ 仓库名一般是「云端数据仓库名 + -pt」，家长快照就在那个库里；如果不是这个库，家长端可能读不到，确认后再保存。</span>';
-      if (el) el.innerHTML = '✅ 检测通过：仓库可读写（' + c.owner + '/' + c.repo + '）<br><span style="color:#2b7a4e">' + el.innerHTML.replace(/^✅[^<]*/, '') + '</span>' + warn;
-      return;
+  var base = 'https://gitee.com/api/v5/repos/' + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo);
+  var q = '?access_token=' + encodeURIComponent(c.token);
+  fetch(base + q).then(function (r) {
+    if (r.status !== 200) {
+      return r.text().then(function (t) {
+        var j = null; try { j = JSON.parse(t); } catch (e) {}
+        if (el) { el.textContent = '❌ 检测失败（' + r.status + '）：' + ((j && (j.message || j.error)) || '检查用户名 / 仓库名 / 令牌权限'); el.style.color = '#c0392b'; }
+      });
     }
-    return r.text().then(function (t) {
-      var j = null; try { j = JSON.parse(t); } catch (e) {}
-      if (el) { el.textContent = '❌ 检测失败（' + r.status + '）：' + ((j && (j.message || j.error)) || '检查用户名 / 仓库名 / 令牌权限'); el.style.color = '#c0392b'; }
+    return fetch(base + '/contents/pq?ref=master&' + q.slice(1)).then(function (r2) {
+      return r2.text().then(function (t2) {
+        if (r2.status === 401) { if (el) { el.textContent = '❌ 令牌无效（401）：重新生成 Gitee 私人令牌（勾 projects）再保存'; el.style.color = '#c0392b'; } return; }
+        if (r2.status === 403) { if (el) { el.textContent = '❌ 列目录被拒（403）：令牌没有该仓库的读权限，或 Gitee 正在限流，1 分钟后再试'; el.style.color = '#c0392b'; } return; }
+        var n = 0;
+        try { var arr = JSON.parse(t2); if (Array.isArray(arr)) n = arr.filter(function (f) { return f && f.type === 'file' && /\.json$/i.test(f.name) }).length; } catch (e2) {}
+        paChannelStatus();
+        var warn = /-pt$/.test(c.repo) ? '' : '<br><span style="color:#b45309">⚠️ 仓库名一般是「云端数据仓库名 + -pt」，家长快照就在那个库里；如果不是这个库，家长端可能读不到，确认后再保存。</span>';
+        if (el) el.innerHTML = '✅ 检测通过：仓库可读写，提案目录可列（' + c.owner + '/' + c.repo + '，现有 ' + n + ' 条提案）<br><span style="color:#2b7a4e">' + el.innerHTML.replace(/^✅[^<]*/, '') + '</span>' + warn;
+        if (typeof window.ptaScan === 'function') { try { window.ptaScan(true) } catch (e3) {} }
+      });
     });
   }).catch(function () {
     if (el) { el.textContent = '❌ 网络不通：稍后再试，或检查令牌是否过期'; el.style.color = '#c0392b'; }
@@ -20086,9 +20097,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v223';
-var WB_MY_VER = '优化版 vT223 · 家长端修复+灵宠112只';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.236';
+var WB_VER_TAG = 'v226';
+var WB_MY_VER = '优化版 vT226 · 家长提案403彻底修复';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.237';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -33432,28 +33443,75 @@ function cwInit(){
     return GITEE_API + '/repos/' + encodeURIComponent(cfg.owner) + '/' + encodeURIComponent(cfg.repo) +
       '/contents/' + (sub || '') + '?ref=master&access_token=' + encodeURIComponent(cfg.token);
   }
-  /* 家长仓库配置从「已发布的家长快照」里取（快照本来就是公开可读的，家长端也读它） */
+  /* vT226 提案通道配置：本机「家长通道」三项优先，不再必须先读 Gitee 快照。
+     旧逻辑每次都去 Gitee 匿名读 wb_parent_snap.json —— Gitee 2026-11 起封禁匿名 API，
+     即使老师在本机三个框都填好并保存了，也会一直卡在「读不到家长快照 403」。
+     现在的顺序：① 本机 localStorage（wb_pe_*，即「💾 保存家长通道」写入的）
+               → ② GitHub Pages 镜像里的快照（API 优先，带令牌则不吃匿名配额）
+               → ③ Pages 同源静态文件 → ④ Gitee 带令牌兜底。 */
+  var PT_GH_SNAP_API = 'https://api.github.com/repos/Purainlone/workbench-test/contents/wb_parent_snap.json';
+  var PT_PG_SNAP = 'https://purainlone.github.io/workbench-test/wb_parent_snap.json';
+  function ptaLocalCfg() {
+    try {
+      var o = (localStorage.getItem('wb_pe_owner') || '').trim();
+      var r = (localStorage.getItem('wb_pe_repo') || '').trim();
+      var t = (localStorage.getItem('wb_pe_token') || '').trim();
+      if (o && r && t) return { owner: o, repo: r, token: t };
+    } catch (e) {}
+    return null;
+  }
+  function ptaSnapDocGh() {
+    var hdr = { 'Accept': 'application/vnd.github+json' };
+    var c = ptGhCfg();
+    if (c && c.token) hdr['Authorization'] = 'Bearer ' + c.token;
+    return fetch(PT_GH_SNAP_API + '?_t=' + Date.now(), { headers: hdr, cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('gh ' + r.status); return r.json() })
+      .then(function (j) { return JSON.parse(ptaB64ToStr(j.content)); });
+  }
+  function ptaSnapDocPages() {
+    return fetch(PT_PG_SNAP + '?_t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('pg ' + r.status); return r.json(); });
+  }
   function ptaParentCfg(force) {
     if (!force && PTA.cfg && Date.now() - PTA.cfgAt < 300000) return Promise.resolve(PTA.cfg);
+    var loc = ptaLocalCfg();
+    if (loc) { PTA.cfg = loc; PTA.cfgAt = Date.now(); return Promise.resolve(loc); }
     var s = (typeof mpSyncSettings === 'function') ? mpSyncSettings() : null;
-    if (!s || !s.gOwner || !s.gRepo) return Promise.reject(new Error('还没配置 Gitee 云端同步'));
-    var url = GITEE_API + '/repos/' + encodeURIComponent(s.gOwner) + '/' + encodeURIComponent(String(s.gRepo) + '-pt') +
-      '/contents/wb_parent_snap.json?ref=master';
-    return fetch(url).then(function (r) { return r.text().then(function (t) { var j = null; try { j = JSON.parse(t) } catch (_e) {} if (!r.ok || !j) throw new Error('读不到家长快照 ' + r.status); return j; }); })
-      .then(function (j) {
-        var doc = JSON.parse(ptaB64ToStr(j.content));
-        if (!doc || !doc.parentEssayRepo) throw new Error('家长通道还没开通（缺家长作文仓库配置）');
-        var cfg = { owner: doc.parentEssayOwner || s.gOwner, repo: doc.parentEssayRepo, token: doc.parentEssayToken || '' };
-        if (!cfg.token) throw new Error('家长快照里没有只写令牌，请先在小程序端发布一次家长端');
-        PTA.cfg = cfg; PTA.cfgAt = Date.now();
-        return cfg;
+    function fromDoc(doc) {
+      if (!doc || !doc.parentEssayRepo) throw new Error('家长通道还没开通（缺家长作文仓库配置）');
+      var cfg = { owner: doc.parentEssayOwner || (s && s.gOwner) || '', repo: doc.parentEssayRepo, token: doc.parentEssayToken || '' };
+      if (!cfg.token) throw new Error('家长快照里没有只写令牌，请先在小程序端发布一次家长端');
+      PTA.cfg = cfg; PTA.cfgAt = Date.now();
+      return cfg;
+    }
+    return ptaSnapDocGh().then(fromDoc, function () {
+      return ptaSnapDocPages().then(fromDoc, function () {
+        if (!s || !s.gOwner || !s.gRepo) {
+          throw new Error('本机还没保存「家长通道」三项 —— 在下方「👪 家长端权限 · 提案仓库」里填好点「💾 保存家长通道」');
+        }
+        var url = GITEE_API + '/repos/' + encodeURIComponent(s.gOwner) + '/' + encodeURIComponent(String(s.gRepo) + '-pt') +
+          '/contents/wb_parent_snap.json?ref=master' + (s.gToken ? ('&access_token=' + encodeURIComponent(s.gToken)) : '');
+        return fetch(url).then(function (r) {
+          return r.text().then(function (t) {
+            var j = null; try { j = JSON.parse(t) } catch (_e) {}
+            if (!r.ok || !j) {
+              if (r.status === 403) throw new Error('Gitee 拒绝匿名读取快照（403）—— 点「💾 保存家长通道」把三项存到本机即可，之后不再依赖快照');
+              throw new Error('读不到家长快照 ' + r.status);
+            }
+            return JSON.parse(ptaB64ToStr(j.content));
+          });
+        }).then(fromDoc);
       });
+    });
   }
   /* vT180：Gitee 返回 401 时给出可操作提示，不再只显示英文原文 */
   function ptaErrText(e) {
     var m = (e && e.message) || '扫描失败';
     if (/401|Unauthorized|Access token does not exist/i.test(m)) {
-      return '家长通道令牌失效：请在「家长通道」重新保存新令牌，再点「立即重发快照」';
+      return '家长通道令牌失效（401）：在下方「提案仓库」重新粘贴令牌并保存，再点「立即扫描」';
+    }
+    if (/403|Rate Limit|Forbidden/i.test(m)) {
+      return 'Gitee 拒绝访问（403）：多为匿名/无令牌请求被限流。① 下方「提案仓库」三项填好并点「💾 保存家长通道」；② 点「🔍 检测连通」确认令牌有效；③ 等 1 分钟再点「立即扫描」';
     }
     return m;
   }
@@ -33610,6 +33668,8 @@ function cwInit(){
   }
   window.ptaScan = ptaScan;
   window.ptaKick = function () { return ptaScan(true); };
+  /* vT226：老师刚改了「提案仓库」三项时，下一次扫描必须立刻用新配置，不能吃 5 分钟缓存 */
+  window.ptaCfgReset = function () { PTA.cfg = null; PTA.cfgAt = 0; };
   if (document.readyState === 'complete') ptaStart(); else window.addEventListener('load', ptaStart);
 
   /* 暴露给本页其它脚本的编辑钩子调用 */
