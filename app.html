@@ -2834,7 +2834,8 @@ table.paper td.l{text-align:left;font-weight:600}
           <input id="ghmOwner" placeholder="GitHub 用户名" style="width:150px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
           <input id="ghmRepo" placeholder="仓库名（workbench-test）" style="width:190px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
           <input id="ghmToken" type="password" placeholder="GitHub 令牌（只存本机）" style="width:260px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
-          <button class="btn2" onclick="ptGhCfgSave()">💾 保存镜像配置</button>
+          <button class="btn2 primary" onclick="ptGhOneKey()" title="保存 + 验证令牌 + 立即同步，一步到位">⚡ 一键配置并同步</button>
+          <button class="btn2" onclick="ptGhCfgSave()">💾 只保存</button>
           <button class="btn2 primary" onclick="ptGhSyncNow()" title="立即把当前家长快照同步到 GitHub Pages">⬆️ 立即同步镜像</button>
           <span id="ptGhStatus" class="syncstatus"></span>
         </div>
@@ -3625,6 +3626,8 @@ table.paper td.l{text-align:left;font-weight:600}
     }
     gdRender();
   }
+  window.gdSyncNow = gdSyncNow;
+  window.gdCalibrate = gdCalibrate;
   /* --- 玫瑰渲染（提取自预览并 gd 前缀化；阈值可校准） --- */
   const GD_NS="http://www.w3.org/2000/svg", GD_RCX=150, GD_RCY=170, GD_RMAX=3000;
 const GD_RSTAGES=[
@@ -29753,6 +29756,299 @@ function cwInit(){
         '<span>启灵纪念 · ' + ptArcD(Date.now()) + '</span></div>' +
     '</div>';
   }
+  /* ============ vT225 启灵纪念卡（成品图卡 · 点击下载） ============
+     老师 2026-11 重做了纪念卡素材：正面 112 张 card/fNNN.jpg（92×129mm，1087×1523px）、
+     背面 18 张 card/bNN.jpg（其余款背面还没画）。
+     用法：正面直接用；背面把「驯养人 / 驯养时间 / 进化时间 / 灵宠寄语」写在印刷横线上，
+     再与正面合成一份 PDF（正面一页、背面一页，尺寸 92×129mm）供打印或送印。
+     背面横线位置每张卡都不同，PT_CARD_BK 是逐张实测坐标：[[各行 y%…], 左缘 x%, 右缘 x%]。
+     若某款还没有背面，就只出正面一页并在提示里说明。 */
+  var PT_CARD_BASE = 'https://purainlone.github.io/workbench-test/';
+  var PT_CARD_Q = '?v=1';
+  var PT_CARD_BK = {
+    1:[[65.1,70.4,75.8,81.0,85.6,90.1],0.316,0.872],
+    2:[[67.9,73.4,78.8,84.2,87.9],0.368,0.851],
+    3:[[67.7,73.3,78.8,83.9,87.0,90.1],0.348,0.82],
+    4:[[69.5,75.4,81.3,87.0,91.2],0.332,0.848],
+    5:[[64.0,69.8,75.6,81.7,85.2,88.6],0.394,0.824],
+    6:[[66.3,72.1,78.2,84.2,87.7,90.8],0.383,0.849],
+    7:[[63.7,68.7,73.7,78.8,83.3,87.4],0.382,0.81],
+    8:[[63.7,68.0,73.6,79.3,83.3,87.0],0.358,0.832],
+    9:[[64.1,68.5,73.0,77.6,81.7,85.6],0.356,0.798],
+    10:[[67.1,73.0,79.0,84.9,88.8],0.4,0.824],
+    11:[[67.6,72.1,76.6,81.1,84.5,87.8],0.405,0.759],
+    12:[[61.4,67.4,73.3,79.3,84.0,88.9],0.374,0.835],
+    13:[[62.5,68.4,74.2,80.6,86.0],0.393,0.824],
+    14:[[63.0,69.2,75.4,81.7,86.3,91.4],0.339,0.888],
+    15:[[61.3,67.9,74.5,81.0,87.2,90.8],0.402,0.794],
+    16:[[62.6,68.0,73.3,78.7,82.9,87.1],0.368,0.823],
+    17:[[63.3,69.5,75.7,81.9,87.2,91.8],0.406,0.824],
+    18:[[61.4,66.8,72.2,77.5,82.8,87.8],0.345,0.848]
+  };
+  var PT_CARD_BK_MAX = 18;          /* 目前只画到 18 号背面 */
+  var PT_CARD_INK = '#3a2c1c';
+  var PT_CARD_FONT = 'KaiTi, STKaiti, "Kaiti SC", "楷体", serif';
+  function ptCardPad(n, w) { var s = '000' + n; return s.slice(-w) }
+  function ptCardId(pet) {
+    if (!pet) return 0;
+    var m = String(pet.defId || '').match(/^gp(\d{1,3})$/);
+    if (m) return Number(m[1]);
+    var g = ptGrowImgsOf(pet), rel = (g && (g.baby || g.teen || g.adult)) || '';
+    m = String(rel).match(/petimg\/(\d{3})_/);
+    if (m) return Number(m[1]);
+    /* 兜底：按名字找（「天马二 / 应龙二」这类重名款去掉序号后匹配） */
+    var nm = String(pet.name || '').replace(/[二三四]$/, '');
+    for (var i = 0; i < PT_GROW_ROWS.length; i++) {
+      if (String(PT_GROW_ROWS[i][1]).replace(/[二三四]$/, '') === nm) return PT_GROW_ROWS[i][0];
+    }
+    return 0;
+  }
+  function ptCardUrl(f) { return PT_CARD_BASE + 'card/' + f + PT_CARD_Q }
+  function ptCardLoad(url) {
+    return new Promise(function (res, rej) {
+      var im = new Image();
+      im.crossOrigin = 'anonymous';
+      im.onload = function () { res(im) };
+      im.onerror = function () { rej(new Error('图片加载失败：' + url)) };
+      im.src = url;
+    });
+  }
+  function ptCardMD(v) {
+    var d = ptArcDay(v); if (!d) return '';
+    return d.getFullYear() + '.' + ptCardPad(d.getMonth() + 1, 2) + '.' + ptCardPad(d.getDate(), 2);
+  }
+  function ptCardEvoRaw(pet, from) {
+    var log = pet && pet.evoLog; if (!log || !log.length) return null;
+    for (var i = 0; i < log.length; i++) if (log[i] && log[i].from === from && log[i].at) return log[i].at;
+    return null;
+  }
+  function ptCardEvoText(pet) {
+    var a = ptCardMD(ptCardEvoRaw(pet, 'baby')), b = ptCardMD(ptCardEvoRaw(pet, 'teen'));
+    if (a && b) return a + ' · ' + b;
+    if (a) return a;
+    if (b) return b;
+    return '—';
+  }
+  /* 单行写入：超宽自动缩字号，保证不越过横线右端 */
+  function ptCardPut(ctx, txt, x, y, maxW, fs) {
+    if (!txt) return;
+    var f = fs;
+    while (f > 12) {
+      ctx.font = f + 'px ' + PT_CARD_FONT;
+      if (ctx.measureText(txt).width <= maxW) break;
+      f -= 1;
+    }
+    ctx.fillText(txt, x, y);
+  }
+  function ptCardWrap(ctx, txt, maxW) {
+    var out = [], cur = '';
+    for (var i = 0; i < txt.length; i++) {
+      var ch = txt.charAt(i);
+      if (ctx.measureText(cur + ch).width > maxW && cur) { out.push(cur); cur = ch; }
+      else cur += ch;
+    }
+    if (cur) out.push(cur);
+    return out;
+  }
+  /* 把主人信息写进背面，返回画好的 canvas */
+  function ptCardBack(pet, img, lay) {
+    var W = img.naturalWidth, H = img.naturalHeight;
+    var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    var ctx = cv.getContext('2d');
+    ctx.drawImage(img, 0, 0, W, H);
+    var ys = lay[0], x0 = lay[1] * W, x1 = lay[2] * W;
+    var lineY = ys.map(function (p) { return p / 100 * H });
+    var gap = H * (ys[1] - ys[0]) / 100;
+    var baseFs = Math.max(18, Math.min(W * 0.0455, gap * 0.70));
+    var maxW = x1 - x0 - Math.round(W * 0.008);
+    ctx.fillStyle = PT_CARD_INK;
+    ctx.textBaseline = 'alphabetic';
+    var fixed = [String(pet.studentName || ''), ptCardMD(pet.obtainedAt || pet.hatchedAt), ptCardEvoText(pet)];
+    for (var i = 0; i < 3 && i < lineY.length; i++) {
+      ptCardPut(ctx, fixed[i], x0 + 4, lineY[i] - Math.round(baseFs * 0.10), maxW, baseFs);
+    }
+    /* 寄语：在剩余行内换行，放不下就缩字号 */
+    var wish = ptArcWish(pet), slots = Math.max(1, ys.length - 3), fs = baseFs, segs = [wish];
+    while (true) {
+      ctx.font = fs + 'px ' + PT_CARD_FONT;
+      segs = ptCardWrap(ctx, wish, maxW);
+      if (segs.length <= slots || fs <= 14) break;
+      fs = Math.round(fs * 0.92);
+    }
+    if (segs.length > slots) { segs = segs.slice(0, slots); segs[slots - 1] = segs[slots - 1].slice(0, -1) + '…'; }
+    for (var k = 0; k < segs.length; k++) {
+      if (3 + k >= lineY.length) break;
+      ctx.fillText(segs[k], x0 + 4, lineY[3 + k] - Math.round(fs * 0.10));
+    }
+    return cv;
+  }
+  function ptCardJpeg(cv) {
+    return new Promise(function (res, rej) {
+      cv.toBlob(function (b) {
+        if (!b) return rej(new Error('画面导出失败'));
+        b.arrayBuffer().then(function (ab) { res({ buf: new Uint8Array(ab), w: cv.width, h: cv.height }) });
+      }, 'image/jpeg', 0.92);
+    });
+  }
+  /* 极简 PDF：每张卡一页，92×129mm，内嵌 JPEG（DCTDecode），无第三方库 */
+  function ptCardPdf(pages) {
+    var PW = 260.79, PH = 365.67;            /* 92mm × 129mm（pt） */
+    var enc = new TextEncoder(), parts = [], pos = 0, offs = [];
+    function put(x) {
+      var b = typeof x === 'string' ? enc.encode(x) : x;
+      parts.push(b); pos += b.length;
+    }
+    function obj(n, dict, stream) {
+      offs[n] = pos;
+      put(n + ' 0 obj\n' + dict + '\n');
+      if (stream) { put('stream\n'); put(stream); put('\nendstream\n'); }
+      put('endobj\n');
+    }
+    var n = pages.length, kids = [];
+    for (var i = 0; i < n; i++) kids.push((3 + i * 3) + ' 0 R');
+    put('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+    obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+    obj(2, '<< /Type /Pages /Count ' + n + ' /Kids [' + kids.join(' ') + '] >>');
+    for (var j = 0; j < n; j++) {
+      var pn = 3 + j * 3, cn = pn + 1, xn = pn + 2, pg = pages[j];
+      var content = enc.encode('q ' + PW + ' 0 0 ' + PH + ' 0 0 cm /Im' + j + ' Do Q');
+      obj(pn, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + PW + ' ' + PH + ']' +
+        ' /Resources << /XObject << /Im' + j + ' ' + xn + ' 0 R >> >> /Contents ' + cn + ' 0 R >>');
+      obj(cn, '<< /Length ' + content.length + ' >>', content);
+      obj(xn, '<< /Type /XObject /Subtype /Image /Width ' + pg.w + ' /Height ' + pg.h +
+        ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + pg.buf.length + ' >>', pg.buf);
+    }
+    var size = 3 + n * 3;
+    var xs = pos;
+    var tbl = 'xref\n0 ' + size + '\n0000000000 65535 f \n';
+    for (var k = 1; k < size; k++) tbl += ('0000000000' + (offs[k] || 0)).slice(-10) + ' 00000 n \n';
+    put(tbl + 'trailer\n<< /Size ' + size + ' /Root 1 0 R >>\nstartxref\n' + xs + '\n%%EOF\n');
+    var total = 0; parts.forEach(function (b) { total += b.length });
+    var out = new Uint8Array(total), at = 0;
+    parts.forEach(function (b) { out.set(b, at); at += b.length });
+    return out;
+  }
+  function ptCardSave(blob, name) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove() }, 8000);
+  }
+  /* 生成一只灵宠的两页（正面 / 背面），背面没有就只给正面 */
+  function ptCardPages(pet) {
+    var cid = ptCardId(pet);
+    if (!cid) return Promise.reject(new Error('这只灵宠没有对应纪念卡'));
+    return ptCardLoad(ptCardUrl('f' + ptCardPad(cid, 3) + '.jpg')).then(function (front) {
+      return ptCardJpeg(front);
+    }).then(function (p1) {
+      var lay = PT_CARD_BK[cid];
+      if (!lay || cid > PT_CARD_BK_MAX) return [p1];
+      return ptCardLoad(ptCardUrl('b' + ptCardPad(cid, 2) + '.jpg'))
+        .then(function (back) { return ptCardJpeg(ptCardBack(pet, back, lay)) })
+        .then(function (p2) { return [p1, p2] })
+        .catch(function () { return [p1] });
+    });
+  }
+  function ptCardPet(id) {
+    var s = ptGet();
+    return (s.pets || []).filter(function (p) { return p && p.id === id && !p.deleted })[0];
+  }
+  /* 单张：预览 + 下载 */
+  function ptCardOpen(id) {
+    var pet = ptCardPet(id);
+    if (!pet) return toastMsg('找不到这只灵宠');
+    var cid = ptCardId(pet);
+    if (!cid) return toastMsg('这只灵宠还没有纪念卡素材');
+    var ov = document.getElementById('ptCardOv');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'ptCardOv';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(20,14,8,.72);z-index:99998;display:flex;align-items:center;justify-content:center;padding:16px';
+      ov.onclick = function (e) { if (e.target === ov) ov.remove() };
+      document.body.appendChild(ov);
+    }
+    ov.innerHTML = '<div style="background:#fff;border-radius:16px;padding:16px;max-width:900px;width:100%;' +
+      'max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">' +
+        '<b style="font-size:15px">🪪 ' + ptEsc(pet.studentName || '') + ' · ' + ptEsc(pet.name || '') + '</b>' +
+        '<button class="btn2 sm" onclick="document.getElementById(\'ptCardOv\').remove()">关闭</button></div>' +
+      '<div id="ptCardPrev" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;min-height:120px;align-items:center;color:#999">正在生成预览…</div>' +
+      '<div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap">' +
+        '<button class="btn2 primary" onclick="ptCardDownloadOne(\'' + id + '\')">⬇ 下载 PDF（可打印/送印）</button>' +
+        '<button class="btn2" onclick="ptCardDownloadImg(\'' + id + '\')">⬇ 只下载图片</button>' +
+      '</div></div>';
+    ptCardPages(pet).then(function (pages) {
+      var box = document.getElementById('ptCardPrev');
+      if (!box) return;
+      box.innerHTML = '';
+      pages.forEach(function (pg, i) {
+        var b = new Blob([pg.buf], { type: 'image/jpeg' });
+        var im = document.createElement('img');
+        im.src = URL.createObjectURL(b);
+        im.style.cssText = 'width:280px;max-width:46%;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18)';
+        im.title = i === 0 ? '正面' : '背面';
+        box.appendChild(im);
+      });
+      if (pages.length === 1) {
+        var tip = document.createElement('div');
+        tip.style.cssText = 'width:100%;text-align:center;color:#b0863f;font-size:12px;margin-top:6px';
+        tip.textContent = '这款灵宠的背面还在绘制中，先只导出了正面。';
+        box.parentNode.insertBefore(tip, box.nextSibling);
+      }
+    }).catch(function (e) {
+      var box = document.getElementById('ptCardPrev');
+      if (box) box.innerHTML = '<div style="color:#c0392b">' + ptEsc(e.message || '生成失败') + '</div>';
+    });
+  }
+  function ptCardDownloadOne(id) {
+    var pet = ptCardPet(id);
+    if (!pet) return toastMsg('找不到这只灵宠');
+    toastMsg('正在生成 PDF…');
+    ptCardPages(pet).then(function (pages) {
+      var blob = new Blob([ptCardPdf(pages)], { type: 'application/pdf' });
+      ptCardSave(blob, '纪念卡_' + (pet.studentName || '') + '_' + (pet.name || '') + '.pdf');
+      toastMsg('✅ 已下载');
+    }).catch(function (e) { toastMsg('⚠️ ' + (e.message || '生成失败')) });
+  }
+  function ptCardDownloadImg(id) {
+    var pet = ptCardPet(id);
+    if (!pet) return;
+    ptCardPages(pet).then(function (pages) {
+      pages.forEach(function (pg, i) {
+        var blob = new Blob([pg.buf], { type: 'image/jpeg' });
+        setTimeout(function () {
+          ptCardSave(blob, '纪念卡_' + (pet.studentName || '') + '_' + (pet.name || '') + (i ? '_背面' : '_正面') + '.jpg');
+        }, i * 400);
+      });
+    }).catch(function (e) { toastMsg('⚠️ ' + (e.message || '生成失败')) });
+  }
+  /* 全班 / 已毕业：合成一份多页 PDF（每人正面+背面） */
+  function ptCardDownloadAll(mode) {
+    var list = ptArcList(mode || 'all').filter(function (p) { return ptCardId(p) });
+    if (!list.length) return toastMsg('还没有可生成纪念卡的灵宠');
+    toastMsg('正在生成 0/' + list.length + ' …');
+    var all = [], i = 0, noBack = 0;
+    function step() {
+      if (i >= list.length) {
+        toastMsg('正在合成 PDF…');
+        var blob = new Blob([ptCardPdf(all)], { type: 'application/pdf' });
+        ptCardSave(blob, '启灵纪念卡_' + (ptArcCls() || '全班') + '.pdf');
+        toastMsg('✅ 已下载（' + list.length + ' 位同学' + (noBack ? '，其中 ' + noBack + ' 位背面待补' : '') + '）');
+        return;
+      }
+      var pet = list[i++];
+      ptCardPages(pet).then(function (pages) {
+        if (pages.length < 2) noBack++;
+        all = all.concat(pages);
+        toastMsg('正在生成 ' + i + '/' + list.length + ' …');
+        step();
+      }).catch(function () { step() });
+    }
+    step();
+  }
+
   /* ---- 启灵档案证书（A4 一页一人） ---- */
   function ptArcCertHtml(pet) {
     var im = ptArcImgs(pet);
@@ -29935,22 +30231,19 @@ function cwInit(){
         '</div>' +
       '</div>' +
       '<div style="margin:10px 0 4px;color:#8a7355;font-size:12px;line-height:1.7">' +
-        '每个学生自动记录：启灵日期、互动次数、两次进化的时间。毕业时点「📜 档案」生成 A4 证书，点「🪪 纪念卡」生成 ' +
-        '92×132mm 纪念卡（A4 一版 4 张，可直接给印厂）。✏️ 可单独写寄语。</div>' +
+        '每个学生自动记录：启灵日期、互动次数、两次进化的时间。点「📜 档案」生成 A4 证书；' +
+        '点「🪪 纪念卡」预览成品卡并下载 PDF（92×129mm，正面+背面，背面自动写驯养人、驯养时间、进化时间与寄语）。' +
+        '背面素材目前做到 18 号，其余款先出正面。✏️ 可单独写寄语。</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px">' +
-        '<button class="btn2 primary" onclick="ptArcPrintCards(\'all\')">🖨 全班纪念卡（A4）</button>' +
+        '<button class="btn2 primary" onclick="ptCardDownloadAll(\'all\')">⬇ 全班纪念卡（PDF 打包下载）</button>' +
+        '<button class="btn2" onclick="ptCardDownloadAll(\'grad\')">🎓 已毕业纪念卡（PDF）</button>' +
         '<button class="btn2" onclick="ptArcPrintBook(\'all\')">🖨 全班回忆册（A4）</button>' +
-        '<button class="btn2" onclick="ptArcPrintCards(\'grad\')">🎓 已毕业纪念卡</button>' +
         '<button class="btn2" onclick="ptArcPrintBook(\'grad\')">🎓 已毕业回忆册</button>' +
       '</div>' +
       rows +
     '</div>';
   }
-  function ptArcPrintSingleCard(id) {
-    var s = ptGet(), pet = (s.pets || []).filter(function (p) { return p && p.id === id && !p.deleted })[0];
-    if (!pet) return toastMsg('找不到这只灵宠');
-    ptArcPrint('启灵纪念卡 · ' + pet.studentName, '<div class="pgrid">' + ptArcCardHtml(pet) + '</div>');
-  }
+  function ptArcPrintSingleCard(id) { ptCardOpen(id) }   /* vT225：预览 + 下载成品图卡 */
 
   /* ---------------- 后台管理面板 ---------------- */
   function ptRenderAdmin() {
@@ -32255,6 +32548,13 @@ function cwInit(){
   window.ptArcPrintBook = ptArcPrintBook;
   window.ptArcPrintCert = ptArcPrintCert;
   window.ptArcPrintSingleCard = ptArcPrintSingleCard;
+  window.ptCardOpen = ptCardOpen;
+  window.ptCardDownloadOne = ptCardDownloadOne;
+  window.ptCardDownloadImg = ptCardDownloadImg;
+  window.ptCardDownloadAll = ptCardDownloadAll;
+  window.ptCardId = ptCardId;
+  window.ptCardPages = ptCardPages;
+  window.ptCardPdf = ptCardPdf;
   window.ptArcCardHtml = ptArcCardHtml;     /* 供预览 / 自测：单张纪念卡 HTML */
   window.ptArcCertHtml = ptArcCertHtml;     /* 供预览 / 自测：单页档案证书 HTML */
   window.ptArcList = ptArcList;
@@ -32944,8 +33244,53 @@ function cwInit(){
     var st = document.getElementById('ptGhStatus');
     if (!ptGhCfg()) { if (st) st.textContent = '⚠️ 先保存镜像配置（用户名 / 仓库 / 令牌）'; return }
     if (st) st.textContent = '正在重新生成并同步…';
-    try { ptwPublish() } catch (e) { if (st) st.textContent = '同步失败：' + ((e && e.message) || '') }
+    ptwMirrorToPages(ptwBuildSnap()).then(function () {
+      if (st) st.textContent = '✅ 已同步到 GitHub Pages（家长端 1 分钟内生效）';
+    }).catch(function (e) {
+      if (st) st.textContent = '❌ 同步失败：' + ((e && e.message) || '');
+    });
   }
+  /* vT225 一键配置：保存 → 验令牌 → 立即同步（令牌只存本机 localStorage） */
+  function ptGhTest() {
+    var c = ptGhCfg();
+    if (!c) return Promise.reject(new Error('还没有保存配置'));
+    return fetch('https://api.github.com/repos/' + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo),
+      { headers: { Authorization: 'Bearer ' + c.token, Accept: 'application/vnd.github+json' }, cache: 'no-store' })
+      .then(function (r) {
+        if (r.ok) return r.json();
+        if (r.status === 401) throw new Error('令牌无效或已过期（401），请重新生成');
+        if (r.status === 403) throw new Error('令牌权限不足（403），需要该仓库的 Contents: Read and write');
+        if (r.status === 404) throw new Error('仓库不存在或令牌没勾这个仓库（404）：' + c.owner + '/' + c.repo);
+        throw new Error('GitHub ' + r.status);
+      });
+  }
+  function ptGhOneKey() {
+    var st = document.getElementById('ptGhStatus');
+    var o = (document.getElementById('ghmOwner').value || '').trim() || 'Purainlone';
+    var r = (document.getElementById('ghmRepo').value || '').trim() || 'workbench-test';
+    var t = (document.getElementById('ghmToken').value || '').trim() || ((ptGhCfg() || {}).token || '');
+    if (!t) { if (st) st.textContent = '⚠️ 先把 GitHub 令牌粘到第三个框（只存本机）'; return }
+    document.getElementById('ghmOwner').value = o;
+    document.getElementById('ghmRepo').value = r;
+    try { localStorage.setItem(PT_GH_KEY, JSON.stringify({ owner: o, repo: r, token: t })) } catch (e) {}
+    if (st) st.textContent = '已保存，正在验证令牌…';
+    ptGhTest().then(function (repo) {
+      if (st) st.textContent = '✅ 令牌有效（' + repo.full_name + '），正在同步快照…';
+      var snap = ptwBuildSnap();
+      if (!snap) throw new Error('当前还没有可发布的快照（先在任一端保存一次数据）');
+      return ptwMirrorToPages(snap).then(function () {
+        if (st) st.textContent = '✅ 已同步到 GitHub Pages，家长端 1 分钟内可用';
+        try { toastMsg('✅ 家长端镜像已同步') } catch (_e) {}
+      });
+    }).catch(function (e) {
+      if (st) st.textContent = '❌ ' + ((e && e.message) || '失败');
+    });
+  }
+  window.ptGhCfgSave = ptGhCfgSave;
+  window.ptGhSyncNow = ptGhSyncNow;
+  window.ptGhCfgFill = ptGhCfgFill;
+  window.ptGhOneKey = ptGhOneKey;
+  window.ptGhTest = ptGhTest;
 
   function ptwPublish() {
     try {
