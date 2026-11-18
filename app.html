@@ -23354,6 +23354,7 @@ document.getElementById('nav').addEventListener('click',e=>{
   if(b.dataset.s==='scan'){try{scnEnsureWasm();scnInit()}catch(e){console.error('[扫描] 初始化失败',e)}}
   if(b.dataset.s==='sync'){try{syncInit()}catch(e){console.error('[同步] 初始化失败',e)}}
   if(b.dataset.s==='seat'){try{actShow()}catch(e){console.error('[座位] 渲染失败',e)}}   /* vT123 只有小组活动座位表 */
+  if(b.dataset.s==='desk'){try{window.deskModRender()}catch(e){}}
   if(b.dataset.s==='pet'){try{wbPetRender()}catch(e){}}
   if(b.dataset.s==='guard'){try{gdRender()}catch(e){console.error('[守护] 渲染失败',e)}}   /* 班级守护 */
   if(b.dataset.s==='comment'){try{cmThemeRender()}catch(e){}try{cmRosterRender()}catch(e){}try{cmResultRender()}catch(e){}}   /* vT14 学生评语 */
