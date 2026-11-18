@@ -1962,8 +1962,8 @@ table.paper td.l{text-align:left;font-weight:600}
 
   <!-- ============ vT187 每日竞答（家长端每日 N 题，答对 0.5 分，同一题只计一次） ============ -->
   <section class="section" id="s-quiz">
-    <h2>每日竞答 <span style="font-size:13px;font-weight:400;color:#1d5c8f;background:#e8f0fb;border-radius:8px;padding:2px 10px;vertical-align:middle">家长端 · 答对 0.5 分</span></h2>
-    <div class="sub">家长端每天一套选择题（默认 6 题，可调 1~10），内容取自六上语文课内知识、常见古文词语、文学文化常识、快乐读书吧。答对一题 +0.5 分，答错当场给答案与解析；<b>同一题只算一次分</b>，答多少算多少，不要求答完。题目按日期自动更换，全班同一天题目一致。</div>
+    <h2>每日竞答 <span style="font-size:13px;font-weight:400;color:#1d5c8f;background:#e8f0fb;border-radius:8px;padding:2px 10px;vertical-align:middle">家长端 · 答对 0.5 分 · 乱答阶梯扣分</span></h2>
+    <div class="sub">家长端每天一套选择题（默认 6 题，可调 1~10），内容取自六上语文课内知识、常见古文词语、文学文化常识、快乐读书吧。答对一题 +0.5 分；<b>为防乱答：一次提交中答错 1 题不扣分，答错 2 题扣 0.5 分，答错 3 题及以上扣 1 分</b>。答错当场给答案与解析；<b>同一题只算一次分</b>，答多少算多少，不要求答完。题目按日期自动更换，全班同一天题目一致。</div>
 
     <div class="chartbox" style="margin:10px 0">
       <h3 style="font-size:14px">⚙️ 竞答设置</h3>
@@ -2844,9 +2844,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v216</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v217</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v216','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v217','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -19964,9 +19964,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v216';
-var WB_MY_VER = '优化版 vT216 · 大屏模式回归';
-var WB_BUILD_DATE = '11-18', WB_BUILD_NO = '2.6.229';
+var WB_VER_TAG = 'v217';
+var WB_MY_VER = '优化版 vT217 · 竞答阶梯扣分';
+var WB_BUILD_DATE = '11-18', WB_BUILD_NO = '2.6.230';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24963,7 +24963,7 @@ function cwInit(){
 
   /* ================= vT187 每日竞答（家长端）=================
      数据表：s-quiz 题库 / s-quizdone 每生每题只答一次 / s-quizlog 每日出题记录 / s-quizcfg 设置。
-     规则（老师已确认）：每天 1~10 题（默认 6）；答对 0.5 分，答错给答案；同一题跨天也只计一次分；
+     规则（老师已确认）：每天 1~10 题（默认 6）；答对 0.5 分；vT217 防乱答阶梯扣分——一次提交错 1 题不扣、错 2 题扣 0.5、错 3 题及以上扣 1；答错给答案；同一题跨天也只计一次分；
      普通题 60 天内不重复，高频错题可提前重复；同一天全班题目一致。 */
   var QZ_CATS = ['课内知识', '古文词语', '文学文化常识', '快乐读书吧'];
   var QZ_PER_SCORE = 0.5;
@@ -28148,6 +28148,7 @@ function cwInit(){
     if (typeof stuPoints !== 'function' || typeof stuTotal !== 'function') return 0;
     var p = stuPoints(); return stuTotal(p, name);
   }
+  window.ptAddManual = ptAddManual;   /* vT217 竞答乱答扣分走同一条积分流水通道 */
   function ptNames() {
     var stus = (typeof stuRoster === 'function') ? stuRoster() : [];
     return stus.map(function (x) { return x.姓名; }).filter(Boolean);
@@ -32857,8 +32858,13 @@ function cwInit(){
       todo.push({ qid: q.id, ok: right });
       if (right) correct++;
     });
-    if (!todo.length) return Promise.resolve({ ok: true, msg: '这些题之前已经答过，本次不重复加分' });
-    var add = Math.round(correct * 0.5 * 10) / 10;
+    if (!todo.length) return Promise.resolve({ ok: true, msg: '这些题之前已经答过，本次不重复计分' });
+    /* vT217 防乱答阶梯扣分（老师定的规则）：本次提交中错 1 题不扣、错 2 题扣 0.5 分、错 3 题及以上扣 1 分。
+       答对部分照常 0.5 分/题；净得分 = 答对得分 − 扣分（可能为负，体现在奖惩流水里）。 */
+    var wrong = todo.length - correct;
+    var base = Math.round(correct * 0.5 * 10) / 10;
+    var pen = (wrong >= 3) ? 1 : (wrong === 2 ? 0.5 : 0);
+    var add = Math.round((base - pen) * 10) / 10;
     var writeDone = function () {
       var now = Date.now(), iso = new Date(now).toISOString();
       todo.forEach(function (x, i) {
@@ -32868,14 +32874,29 @@ function cwInit(){
         });
       });
       try { window.ntChanged(); } catch (e3) {}
-      return { ok: true, msg: '答对 ' + correct + ' / ' + todo.length + ' 题' + (add ? ('，+' + add + ' 分') : '，本次没有新增得分') };
+      var msg = '答对 ' + correct + ' / ' + todo.length + ' 题';
+      if (base > 0) msg += '，+' + base + ' 分';
+      if (pen > 0) msg += '；答错 ' + wrong + ' 题，乱答扣 ' + pen + ' 分';
+      if (base === 0 && pen === 0) msg += '，本次没有新增得分';
+      else if (add !== base && add !== 0) msg += '（净 ' + (add > 0 ? '+' : '') + add + ' 分）';
+      else if (add === 0 && base > 0) msg += '（正负相抵，本次净 0 分）';
+      return { ok: true, msg: msg };
     };
-    if (!add) return Promise.resolve(writeDone());     /* 全错也要记「已答」，避免反复刷同一题 */
-    if (typeof window.ptQuizBonus !== 'function') return Promise.resolve({ ok: false, msg: '积分模块未就绪' });
-    return window.ptQuizBonus(who, correct).then(writeDone).catch(function (e) {
-      return { ok: false, msg: '加分失败：' + ((e && e.message) || e) };
+    var jobs = [];
+    if (base > 0) {
+      if (typeof window.ptQuizBonus !== 'function') return Promise.resolve({ ok: false, msg: '积分模块未就绪' });
+      jobs.push(window.ptQuizBonus(who, correct));
+    }
+    if (pen > 0) {
+      if (typeof window.ptAddManual !== 'function') return Promise.resolve({ ok: false, msg: '积分模块未就绪' });
+      jobs.push(window.ptAddManual(who, '每日竞答 · 答错 ' + wrong + ' 题（乱答扣分）', -pen));
+    }
+    if (!jobs.length) return Promise.resolve(writeDone());   /* 全错且未达扣分线也要记「已答」，避免反复刷同一题 */
+    return Promise.all(jobs).then(writeDone).catch(function (e) {
+      return { ok: false, msg: '积分写入失败：' + ((e && e.message) || e) };
     });
   }
+  window.ptaQuizHandle = ptaQuizHandle;   /* vT217 暴露便于验收测试与后续复用 */
   function ptaScan(manual) {
     if (PTA.busy) return Promise.resolve();
     if (typeof window.ptAutoCfg !== 'function') return Promise.resolve();
