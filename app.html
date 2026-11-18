@@ -2820,9 +2820,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v209</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v210</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v209','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v210','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -5657,12 +5657,16 @@ function wrapDbForLww(){
       var _f=db[name];
       db[name]=function(p){
         var r=_f.call(db,p);
-        if(r&&typeof r.then==='function')return r.then(function(x){return stamp(p,x)});
-        return stamp(p,r);
+        if(r&&typeof r.then==='function')return r.then(function(x){stamp(p,x);vT210Kick();return x});
+        stamp(p,r);vT210Kick();return r;
       };
     }
-    wrap('addRecord'); wrap('updateRecord');
+    wrap('addRecord'); wrap('updateRecord'); wrap('deleteRecord');
     try{db.__wbMtWrapped=true}catch(e){}
+    /* vT210 秒级上云：任何经 SDK 写库成功后，安排一次秒级 Gitee 写回。
+       用刚压到 0.9s 防抖的 syncScheduleSoon（连续写入自动合并），
+       不直接调 ntChanged（那是"越过防抖立即推"，批量登记时会一秒一个 commit）。 */
+    function vT210Kick(){ try{ if(typeof syncScheduleSoon==='function') syncScheduleSoon() }catch(e){} }
   }catch(eMt){}
 }
 try{wrapDbForLww()}catch(eMt){}
@@ -14666,6 +14670,7 @@ function hwMarkAllOverdue(){
   })).then(function(){
     renderHW();renderStu();setTimeout(function(){try{renderHome()}catch(e){}},0);
     toastMsg('✅ 已记超时未交 '+remain.length+' 人');
+    try{wbPushNow()}catch(e){}   /* vT210 秒级上云 */
   }).catch(function(err){
     console.error('[作业] 超时未交批量写入失败',err);
     renderHW();renderStu();
@@ -14736,6 +14741,7 @@ function hwBatchRun(item,plan,okMsg){
     HW_BATCH_BUSY=false;
     renderHW();renderStu();setTimeout(function(){try{renderHome()}catch(e){}},0);
     toastMsg(okMsg);
+    try{wbPushNow()}catch(e){}   /* vT210 秒级上云：批量登记写完立即推 Gitee + 通知桌面 */
   }).catch(function(err){
     HW_BATCH_BUSY=false;
     console.error('[作业] 批量登记失败',err);
@@ -14991,6 +14997,7 @@ function hwToggleCell(td,name,item){
     delete HW_BUSY[k];
     renderHW();renderStu();
     setTimeout(function(){try{renderHome()}catch(e){}},0);
+    try{wbPushNow()}catch(e){}   /* vT210 秒级上云：作业登记写完立即推 Gitee + 通知桌面 */
   }).catch(function(err){
     console.error('[database] 作业登记写入失败:',err);
     delete HW_BUSY[k];td.classList.remove('busy');
@@ -15459,6 +15466,7 @@ function scnCommit(){
       scnPaintList();renderHW();renderStu();
       scnStatus('已写入 '+ok.length+' 人'+(fail.length?('，失败 '+fail.length+' 人'):'')+(ok.length?' · 记得点主表的「完成登记」':''),'ok');
       toastMsg('✅ 已登记 '+ok.length+' 人');
+      if(ok.length){try{wbPushNow()}catch(e){}}   /* vT210 秒级上云：扫码批量写完统一推一次 */
       return;
     }
     var p=list[i];
@@ -19932,9 +19940,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v209';
-var WB_MY_VER = '优化版 vT209 · 板块显示完整修复';
-var WB_BUILD_DATE = '11-18', WB_BUILD_NO = '2.6.222';
+var WB_VER_TAG = 'v210';
+var WB_MY_VER = '优化版 vT210 · 秒级写入提速';
+var WB_BUILD_DATE = '11-18', WB_BUILD_NO = '2.6.223';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -21272,12 +21280,12 @@ function wbSwitchToIsolated() {
   }, 300);
 }
 
-/* 自动触发：启动 3s、每 10 分钟、本机写盘后防抖 2.2s */
+/* 自动触发：启动 3s、每 10 分钟、本机写盘后防抖（vT210 秒级档 0.9s） */
 var GITEE_DEBOUNCE = null;
-/* vT172 近实时同步 —— 写入到上云从 8 秒压到 2.2 秒。
-   同时保证两次推送至少间隔 3 秒：连续登记几十条作业时不会一秒刷一个 commit，
-   但只要有改动就一定会推出去（最后一次改动后 2.2 秒必到云端）。 */
-var GITEE_LAST_PUSH = 0, GITEE_MIN_GAP = 3 * 1000, WB_LOCAL_DIRTY = false, GITEE_PENDING = false;
+/* vT172 近实时同步 → vT210 秒级档：写入到上云从 2.2 秒压到 0.9 秒。
+   同时把两次推送最小间隔从 3 秒压到 1.2 秒：连续登记几十条作业时仍会合并
+   （一次整份 PUT 约 2.5s，天然限速），但最后一次改动后 0.9 秒必触发写回。 */
+var GITEE_LAST_PUSH = 0, GITEE_MIN_GAP = 1200, WB_LOCAL_DIRTY = false, GITEE_PENDING = false;
 function syncScheduleSoon() {
   if (!mpSyncSettings().gAuto) return;
   WB_LOCAL_DIRTY = true;                       /* vT172：本机确有改动，写回时必须带上 */
@@ -21285,7 +21293,22 @@ function syncScheduleSoon() {
   var gap = GITEE_MIN_GAP - (Date.now() - GITEE_LAST_PUSH);
   GITEE_DEBOUNCE = setTimeout(function () {
     GITEE_DEBOUNCE = null; GITEE_LAST_PUSH = Date.now(); syncCycle();
-  }, gap > 2200 ? gap : 2200);
+  }, gap > 900 ? gap : 900);
+}
+/* ===== vT210 秒级写入触发器 wbPushNow() =====
+   统一的「数据变了，立刻上云」入口。任何写库函数成功落库后调它即可：
+   ① 越过防抖立即推 Gitee 数据中心（复用 vT103 的 ntNotifyDesks 通道，
+      它内部会 syncCycle → PUT 整份 → 完成后发 MQTT 信号给教室桌面）；
+   ② 如果此刻正有一轮同步在跑，ntNotifyDesks 会退化为「保住防抖推送 + 12s 后补发信号」，
+      不会丢数据也不会双重写；
+   ③ 幂等：短时间连续调用会被 GITEE_BUSY / DEBOUNCE 合并，不会一秒一个 commit。
+   注意：本函数是函数声明，提升到 IIFE 顶部，前面定义的函数也能安全调用。 */
+function wbPushNow() {
+  try {
+    if (typeof window.ntChanged === 'function') window.ntChanged();
+    else if (typeof ntNotifyDesks === 'function') ntNotifyDesks();
+    else syncScheduleSoon();
+  } catch (e) { try { syncScheduleSoon() } catch (e2) {} }
 }
 /* vT172 忙时排队补推：以前同步进行中的写入会被直接吞掉（GITEE_BUSY 就 return），
    那一两秒里改的东西只能等下一轮（最坏 10 分钟）。现在记一笔，本轮结束 0.6 秒后立刻补推。 */
