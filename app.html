@@ -14479,7 +14479,12 @@ function stDelRow(r, silent) {
     });
   }, Promise.resolve()).then(function () { return ok });
 }
-/* 过滤掉「已删」的奖惩行：命中即从表里再删一次，返回干净的行数组 */
+/* 过滤掉「已删」的奖惩行：命中即从表里再删一次，返回干净的行数组
+   两条判据分开用，避免误伤：
+     · 已删 id（精确）：老师实际点删的那一条，按 id 命中就剔；
+     · st 墓碑（按业务键）：只当**兜底**，且同一个键最多剔一条 ——
+       家长同一天喂两次同一种食物，两行的「姓名|事项|日期|分值」完全一样，
+       按注释里的老写法会把两条一起抹掉，学生直接少扣分。 */
 var _stPurgeTry = {};
 function stPurge(rows) {
   try {
@@ -14487,25 +14492,33 @@ function stPurge(rows) {
     var T = (typeof stTombSet === 'function') ? stTombSet() : {};
     var hasT = !!(T && Object.keys(T).length);
     var dead = stDeadLoad();
-    var kill = [];
-    var keep = rows.filter(function (r) {
-      if (!r) return false;
+    var kill = [], keep = [];
+    rows.forEach(function (r) {
+      if (!r) return;
       var id = (typeof recId === 'function') ? String(recId(r) || '') : '';
-      if (id && dead[id]) { kill.push(r); return false }
-      var rs = String((typeof fval === 'function' ? fval(r, '奖惩事项') : '') || '').trim();
-      if (!rs || !hasT) return true;
-      var d = (typeof syncDateOnly === 'function') ? syncDateOnly(fval(r, '日期')) : String(fval(r, '日期') || '').slice(0, 10);
-      var tk = (typeof stTombKeyOf === 'function') ? stTombKeyOf(fval(r, '姓名'), rs, d, parseFloat(fval(r, '奖惩分值'))) : '';
-      if (tk && T[tk]) { kill.push(r); return false }
-      return true;
+      if (id && dead[id]) { kill.push(r); return }
+      keep.push(r);
     });
+    if (hasT) {
+      var used = {};
+      for (var i = 0; i < keep.length; i++) {
+        var r2 = keep[i];
+        var rs = String((typeof fval === 'function' ? fval(r2, '奖惩事项') : '') || '').trim();
+        if (!rs) continue;
+        var d = (typeof syncDateOnly === 'function') ? syncDateOnly(fval(r2, '日期')) : String(fval(r2, '日期') || '').slice(0, 10);
+        var tk = (typeof stTombKeyOf === 'function') ? stTombKeyOf(fval(r2, '姓名'), rs, d, parseFloat(fval(r2, '奖惩分值'))) : '';
+        if (!tk || !T[tk] || used[tk]) continue;
+        used[tk] = 1;
+        kill.push(r2); keep.splice(i, 1); i--;
+      }
+    }
     /* 再删一次：同一条 10 分钟内只尝试一回（删不掉就只做内存隐藏，不刷接口）；
-       一次命中超过 50 条也跳过重删（多为整批历史数据，交给合并层的墓碑处理） */
+       一次命中超过 50 条也跳过重删（多为历史遗留，交给合并层的墓碑处理） */
     if (kill.length && kill.length <= 50) {
       var now = Date.now(), done = 0;
       kill.forEach(function (r) {
         var id = (typeof recId === 'function') ? String(recId(r) || '') : '';
-        var key = id || ('k' + (r && r.properties ? String(fval(r, '姓名')) + fval(r, '日期') : ''));
+        var key = id || ('k' + String(fval(r, '姓名')) + '|' + String(fval(r, '奖惩事项')) + '|' + String(fval(r, '日期')));
         if (!key) return;
         if (_stPurgeTry[key] && now - _stPurgeTry[key] < 600000) return;
         _stPurgeTry[key] = now; done++;
