@@ -1434,8 +1434,17 @@
     var body = { access_token: ST.snap.parentEssayToken, content: b64en(utf8Encode(JSON.stringify(rec))), message: '家长竞答 ' + rec.id };
     var url = proposalUrl(rec.id + '.json', false);
     toast('正在提交…', 900);
-    fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      .catch(function (e) { if (e && e.status === 404) return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); throw e; })
+    /* vT223：Gitee PUT 新建文件报 400「sha is missing」；改 POST 新建，已存在才 GET sha 后 PUT */
+    var sendQ = function (method, extra) {
+      var b = {}; Object.keys(body).forEach(function (k) { b[k] = body[k] });
+      Object.keys(extra || {}).forEach(function (k) { b[k] = extra[k] });
+      return fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+    };
+    sendQ('POST').then(function (r) {
+      if (r.ok || (r.status !== 400 && r.status !== 409 && r.status !== 404)) return r;
+      return fetch(proposalUrl(rec.id + '.json', true)).then(function (j) { return j.json() })
+        .then(function (j) { return sendQ('PUT', j && j.sha ? { sha: j.sha } : {}) });
+    })
       .then(function (r) { if (!r.ok) throw new Error('提交失败 ' + r.status); return r; })
       .then(function () {
         /* 本机先记为已答，避免刷新后又能重复作答拿分（服务端仍会再校验一次） */
@@ -1899,11 +1908,23 @@
       message: '家长提案 ' + rec.id
     };
     var url = proposalUrl(rec.id + '.json', false);
-    var put = function (method) {
-      return api(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    /* vT223：Gitee contents API 变更——PUT 新建文件一律报 400「sha is missing」（不再返回 404）。
+       正确做法：先 POST 到具体文件路径新建（201）；若文件已存在（400/409）则 GET 拿 sha 再 PUT 更新。
+       旧逻辑只认 404 才 fallback 到 POST，导致提案从此提交失败（「收不到家长提案」）。 */
+    var send = function (method, extraBody) {
+      var b = {}; Object.keys(body).forEach(function (k) { b[k] = body[k] });
+      Object.keys(extraBody || {}).forEach(function (k) { b[k] = extraBody[k] });
+      return api(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
     };
-    put('PUT').catch(function (e) {
-      if (e && e.status === 404) return put('POST');
+    send('POST').catch(function (e) {
+      var st = e && e.status;
+      if (st === 400 || st === 409 || st === 404) {
+        /* 文件已存在 → 拿 sha 后 PUT 更新（合并进 body） */
+        return api(proposalUrl(rec.id + '.json', true)).then(function (j) {
+          if (j && j.sha) return send('PUT', { sha: j.sha });
+          return send('PUT');
+        });
+      }
       throw e;
     }).then(function () {
       ST.busy = false;
