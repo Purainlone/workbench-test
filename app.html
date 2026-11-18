@@ -1989,6 +1989,18 @@ table.paper td.l{text-align:left;font-weight:600}
     </div>
 
     <div class="chartbox" style="margin:10px 0">
+      <h3 style="font-size:14px">📊 答题情况 · 错题库 <span style="font-size:12px;font-weight:400;color:#6b7c72">谁答了、错在哪，一目了然</span></h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+        <button class="btn2 sm" id="qzWTabQ" onclick="qzWrongRender('q')">📋 按题目（错题排行）</button>
+        <button class="btn2 sm" id="qzWTabS" onclick="qzWrongRender('s')">🧑‍🎓 按学生（答题明细）</button>
+        <button class="btn2 sm ghost" onclick="qzWrongRender()">🔄 刷新</button>
+        <button class="btn2 sm" onclick="qzWrongExport()">📤 导出 CSV</button>
+        <span class="sub" id="qzWrongTip"></span>
+      </div>
+      <div id="qzWrong" style="margin-top:8px"></div>
+    </div>
+
+    <div class="chartbox" style="margin:10px 0">
       <h3 style="font-size:14px">👀 今日题目预览（家长端看到的就是这几题）</h3>
       <div id="qzToday" style="margin-top:6px"></div>
     </div>
@@ -2820,9 +2832,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v214</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v215</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v214','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v215','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -19940,9 +19952,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v214';
-var WB_MY_VER = '优化版 vT214 · 无标题栏窗口 + 家长端竞答位置调整';
-var WB_BUILD_DATE = '11-18', WB_BUILD_NO = '2.6.227';
+var WB_VER_TAG = 'v215';
+var WB_MY_VER = '优化版 vT215 · 竞答错题库';
+var WB_BUILD_DATE = '11-18', WB_BUILD_NO = '2.6.228';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -25253,6 +25265,117 @@ function cwInit(){
     qzRender(); qzRenderToday(); ntChanged();
     toastMsg('🧹 已清空 ' + k + ' 道题');
   };
+  /* ===== vT215 答题情况 · 错题库：把 s-quizdone 变成老师看得见的界面 =====
+     数据：s-quizdone 每条 = { name 学生, qid 题号, date 日期, ok 对/错 }
+     联表 s-quiz 题库拿题干 / 分类 / 正确答案。出题端 vT187 已有「错题优先」（错得多的题
+     不受 60 天回避限制提前重复），这里补老师侧的可见性：错题排行 + 学生明细 + 导出。 */
+  var qzWrongMode = 'q';
+  function qzWrongData() {
+    var bank = {}, rows = [];
+    try { qzBank().forEach(function (q) { if (q && q.id) bank[q.id] = q; }); } catch (e1) {}
+    try { (ntRows('s-quizdone') || []).forEach(function (r) {
+      if (r && !r.deleted && r.qid && r.name) rows.push(r);
+    }); } catch (e2) {}
+    return { bank: bank, rows: rows };
+  }
+  function qzWrongRender(mode) {
+    if (mode) qzWrongMode = mode;
+    var box = document.getElementById('qzWrong'); if (!box) return;
+    var tabQ = document.getElementById('qzWTabQ'), tabS = document.getElementById('qzWTabS');
+    if (tabQ) tabQ.style.opacity = qzWrongMode === 'q' ? '1' : '.55';
+    if (tabS) tabS.style.opacity = qzWrongMode === 's' ? '1' : '.55';
+    var d = qzWrongData(), tip = document.getElementById('qzWrongTip');
+    if (!d.rows.length) {
+      if (tip) tip.textContent = '';
+      box.innerHTML = '<div class="sub">还没有答题记录——学生提交竞答、老师端自动入账后，这里会出现每道题的对错明细。</div>';
+      return;
+    }
+    var html = '';
+    if (qzWrongMode === 'q') {
+      var agg = {};
+      d.rows.forEach(function (r) {
+        var a = agg[r.qid]; if (!a) a = agg[r.qid] = { wrong: [], right: 0 };
+        if (r.ok === false) a.wrong.push(r); else a.right++;
+      });
+      var list = Object.keys(agg).map(function (qid) {
+        return { qid: qid, q: d.bank[qid], wrong: agg[qid].wrong, right: agg[qid].right };
+      }).filter(function (x) { return x.wrong.length > 0; })
+        .sort(function (a, b) { return b.wrong.length - a.wrong.length || (b.wrong.length + b.right) - (a.wrong.length + a.right); });
+      if (tip) tip.textContent = '题库 ' + Object.keys(d.bank).length + ' 题 · 有错误记录 ' + list.length + ' 题';
+      if (!list.length) {
+        html = '<div class="sub">🎉 到目前为止没有学生答错过任何题。</div>';
+      } else {
+        html = list.map(function (x) {
+          var total = x.wrong.length + x.right;
+          var rate = Math.round(x.wrong.length * 100 / total);
+          var names = x.wrong.map(function (r) { return esc(r.name); }).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).join('、');
+          var dates = x.wrong.map(function (r) { return String(r.date || '').slice(0, 10); }).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).join('、');
+          return '<div style="padding:8px 0;border-bottom:1px dashed #e3ede7">' +
+            '<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">' +
+            '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#fdeee8;color:#c2410c;flex-shrink:0">错 ' + x.wrong.length + ' 人 / 共 ' + total + ' 人答 · 错误率 ' + rate + '%</span>' +
+            (x.q && x.q.cat ? '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#eef4ff;color:#3b6fb0;flex-shrink:0">' + esc(x.q.cat) + '</span>' : '') +
+            '</div>' +
+            '<div style="font-size:13px;font-weight:600;margin-top:4px">' + esc((x.q && x.q.stem) || '（' + x.qid + '：题目可能已被删除）') + '</div>' +
+            (x.q ? '<div style="font-size:11.5px;color:#2d7a4f;margin-top:2px">✓ 正确答案：' + 'ABCD'.charAt(Number(x.q.ans) || 0) + '．' + esc((x.q.opts || [])[x.q.ans] || '') + (x.q.exp ? '　解析：' + esc(x.q.exp) : '') + '</div>' : '') +
+            '<div style="font-size:12px;color:#c2410c;margin-top:3px">答错的学生：' + (names || '—') + (dates ? '　<span style="color:#9aa8a0">（' + dates + '）</span>' : '') + '</div>' +
+            '</div>';
+        }).join('');
+      }
+    } else {
+      var stu = {};
+      d.rows.forEach(function (r) {
+        var s = stu[r.name]; if (!s) s = stu[r.name] = { total: 0, right: 0, wrongs: [], last: '' };
+        s.total++;
+        if (r.ok === false) s.wrongs.push(r); else s.right++;
+        var dt = String(r.date || '').slice(0, 10);
+        if (dt > s.last) s.last = dt;
+      });
+      var names = Object.keys(stu).sort(function (a, b) {
+        return (stu[b].total - stu[b].right) - (stu[a].total - stu[a].right) || stu[b].total - stu[a].total;
+      });
+      if (tip) tip.textContent = '共 ' + names.length + ' 名学生参与过竞答';
+      html = names.map(function (n) {
+        var s = stu[n];
+        var acc = s.total ? Math.round(s.right * 100 / s.total) : 0;
+        var wrongItems = s.wrongs.map(function (r) {
+          var q = d.bank[r.qid];
+          return '<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 8px;border-radius:8px;background:#fdeee8;color:#c2410c;font-size:11.5px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc((q && q.stem) || r.qid) + '">' +
+            (String(r.date || '').slice(5, 10)) + ' ' + esc((q && q.stem) || '（已删题 ' + r.qid + '）') + '</span>';
+        }).join('');
+        return '<div style="padding:8px 0;border-bottom:1px dashed #e3ede7">' +
+          '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+          '<b style="font-size:13.5px">' + esc(n) + '</b>' +
+          '<span style="font-size:11.5px;padding:1px 6px;border-radius:6px;background:' + (acc >= 80 ? '#e6f4ea;color:#2d7a4f' : acc >= 60 ? '#fff7e0;color:#a16207' : '#fdeee8;color:#c2410c') + '">答对 ' + s.right + ' / ' + s.total + ' · 正确率 ' + acc + '%</span>' +
+          (s.last ? '<span style="font-size:11px;color:#9aa8a0">最近答题 ' + esc(s.last) + '</span>' : '') +
+          '</div>' +
+          (wrongItems ? '<div style="margin-top:4px;font-size:12px">错题（' + s.wrongs.length + '）：' + wrongItems + '</div>' : '<div style="margin-top:4px;font-size:12px;color:#2d7a4f">全部答对 🎉</div>') +
+          '</div>';
+      }).join('');
+    }
+    box.innerHTML = html;
+  }
+  function qzWrongExport() {
+    try {
+      var d = qzWrongData();
+      if (!d.rows.length) { (typeof toast === 'function' ? toast('还没有答题记录') : alert('还没有答题记录')); return; }
+      var lines = ['日期,学生,题号,题目,分类,答错/答对,学生所选,正确答案'];
+      d.rows.forEach(function (r) {
+        var q = d.bank[r.qid];
+        var okTxt = r.ok === false ? '答错' : '答对';
+        lines.push([
+          String(r.date || '').slice(0, 10), r.name, r.qid,
+          '"' + String((q && q.stem) || '已删题 ' + r.qid).replace(/"/g, '""') + '"',
+          (q && q.cat) || '', okTxt,
+          '', '"' + String((q && q.opts && (q.opts[q.ans] || '')) || '').replace(/"/g, '""') + '"'
+        ].join(','));
+      });
+      var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '竞答答题记录_' + qzToday() + '.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (e) { alert('导出失败：' + e.message); }
+  }
   function qzInit() {
     var seeded = qzSeedIfEmpty();
     var purged = 0;
@@ -25269,12 +25392,13 @@ function cwInit(){
         (purged ? '　<span style="color:#c2410c">已清除 ' + purged + ' 道内置题，请重新导入</span>' : '') +
         (seeded ? '　<span style="color:#2d7a4f">已内置 ' + seeded + ' 题</span>' : '');
     }
-    qzRender(); qzRenderToday();
+    qzRender(); qzRenderToday(); qzWrongRender();
   }
   window.qzRender = qzRender; window.qzRenderToday = qzRenderToday; window.qzAdd = qzAdd; window.qzEdit = qzEdit;
   window.qzSaveForm = qzSaveForm; window.qzDel = qzDel; window.qzCloseForm = qzCloseForm;
   window.qzOpenImport = qzOpenImport; window.qzCloseImport = qzCloseImport;
   window.qzImportPreview = qzImportPreview; window.qzImportDo = qzImportDo; window.qzSaveCfg = qzSaveCfg;
+  window.qzWrongRender = qzWrongRender; window.qzWrongExport = qzWrongExport;   /* vT215 错题库 */
   try { qzInit(); } catch (e) { console.warn('[quiz] 初始化失败', e); }
 
   /* ================= vT14 学生评语 ================= */
