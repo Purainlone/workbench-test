@@ -25078,10 +25078,18 @@ function cwInit(){
     var tip = document.getElementById('qzBankTip');
     if (tip) tip.textContent = '题库共 ' + qzBank().length + ' 题 · 每天 ' + qzPerDay() + ' 题 · 约 ' + (qzBank().length ? Math.floor(qzBank().length / qzPerDay()) : 0) + ' 天不重复';
     list.innerHTML = bank.length ? bank.map(function (r, i) {
+      /* vT215b 题库列表展示完整选项（正确项绿色打勾），方便老师审核题目 */
+      var optsHtml = (r.opts || []).map(function (o, k) {
+        var isAns = k === Number(r.ans);
+        return '<span style="display:inline-block;margin:2px 12px 2px 0;font-size:12px;' + (isAns ? 'color:#2d7a4f;font-weight:600' : 'color:#445') + '">' +
+          'ABCD'.charAt(k) + '. ' + esc(String(o || '')) + (isAns ? ' ✓' : '') + '</span>';
+      }).join('');
       return '<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed #e3ede7">' +
         '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#eef4ff;color:#3b6fb0;flex-shrink:0">' + esc(r.cat || '未分类') + '</span>' +
         '<div style="flex:1;min-width:0;font-size:13px">' + esc(r.stem || '') +
-        '<div style="font-size:11.5px;color:#6b7c72;margin-top:3px">答案：' + esc(String((r.opts || [])[r.ans] || '')) +
+        '<div style="margin-top:3px">' + optsHtml + '</div>' +
+        '<div style="font-size:11.5px;color:#6b7c72;margin-top:3px">答案：' + 'ABCD'.charAt(Number(r.ans) || 0) + '．' + esc(String((r.opts || [])[r.ans] || '')) +
+        (r.exp ? '　<span style="color:#8a9a90">解析：' + esc(r.exp) + '</span>' : '') +
         (r.src ? ' · ' + esc(r.src) : '') + (r.on === false ? ' · <span style="color:#c2410c">已停用</span>' : '') + '</div></div>' +
         '<button class="btn2 sm" onclick="qzEdit(\'' + r.id + '\')">编辑</button>' +
         '<button class="btn2 sm ghost" style="color:#c2410c" onclick="qzDel(\'' + r.id + '\')">删</button></div>';
