@@ -473,6 +473,40 @@
     if (!j || !j.owner || !j.repo) throw new Error('接入码不对');
     return j;
   }
+  /* vT224 秒级取数：GitHub Pages 的 CDN 缓存固定 max-age=600（≈10 分钟），老师刚发布
+     家长端往往还看到旧快照。GitHub contents API 无 CDN 缓存（秒级、CORS 全开、匿名可用），
+     但它有 60 次/小时/IP 的匿名配额，所以不能只靠它：
+       ① 两源并发（API + 同源 Pages），取 exportedAt 更新者——正常情况秒级，配额耗尽自动用 Pages；
+       ② 两源都失败才退回 Gitee（vT222 的兜底保留）。 */
+  var GH_SNAP_API = 'https://api.github.com/repos/Purainlone/workbench-test/contents/' + SNAP;
+  function ghSnapDoc() {
+    return fetch(GH_SNAP_API, { headers: { 'Accept': 'application/vnd.github+json' }, cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('gh ' + r.status); return r.json() })
+      .then(function (j) { return JSON.parse(b64Json(j.content)) });
+  }
+  function pgSnapDoc(u) {
+    return fetch(u, { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('pg ' + r.status);
+      return r.json();
+    });
+  }
+  function newestSnap(u) {
+    return new Promise(function (resolve, reject) {
+      var got = [], left = 2, done = false;
+      function fin() {
+        if (done) return; done = true;
+        if (!got.length) { reject(new Error('no snap')); return }
+        got.sort(function (a, b) { return String(b && b.exportedAt || '').localeCompare(String(a && a.exportedAt || '')) });
+        resolve(got[0]);
+      }
+      function one(p) {
+        p.then(function (d) { if (d && d.blocks) got.push(d) }, function () { })
+          .then(function () { if (--left <= 0) fin() });
+      }
+      one(ghSnapDoc()); one(pgSnapDoc(u));
+      setTimeout(fin, 4500);   /* 保险：网络卡住时 4.5s 内也要出结果 */
+    });
+  }
   function loadSnap(repo) {
     /* vT222 紧急修复：Gitee 自 2026-11 起封禁匿名 API / raw 访问（家长端原来匿名请求
        contents API 一律 403，页面显示「HTTP 403」没法登录）。快照属于公开只读数据，
@@ -485,7 +519,7 @@
       if (!doc || !doc.blocks) throw new Error('老师的家长端数据还没发布');
       return doc;
     }
-    return api(mirror).then(ok, function () {
+    return newestSnap(mirror).then(ok, function () {
       return api(gitee).then(function (j) { return ok(JSON.parse(b64Json(j.content))) }, function (e) {
         var msg = (e && e.message) || '';
         if (/403|401/.test(msg)) throw new Error('家长端数据读取失败（服务器拒绝匿名访问）。请稍后再试，或让老师重发一次接入码');
@@ -1726,7 +1760,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v223</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v224</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     /* vT210 取消灵宠迎宾弹窗：改为置顶板块内联欢迎（见上方 pethero 卡），不再弹 */
@@ -1765,6 +1799,19 @@
       renderMain();
     }).catch(function (e) { toast((e && e.message) || '刷新失败'); });
   }
+
+  /* vT224 跨天自动刷新：家长常把页面留一晚上不关，第二天打开看到的还是昨天的「今日作业」
+     （renderMain 只在取到数据时执行，日期变了没人喊）。每 30 秒比一次本地日期，
+     跨天就静默重拉快照并重渲染；从后台切回前台时也检查一次。 */
+  var _lastDay = ymd();
+  function dayGuard() {
+    var d = ymd();
+    if (d === _lastDay) return;
+    _lastDay = d;
+    try { if (ST.access && ST.code && ST.snap) refresh(); } catch (e) { }
+  }
+  setInterval(dayGuard, 30000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) dayGuard(); });
 
   /* vT210 灵宠数据延迟自愈：打开页面时快照里还没有灵宠（老师刚发/快照缓存旧），
      隔 6 秒、18 秒各静默重拉一次快照；拿到灵宠就渲染并停。
