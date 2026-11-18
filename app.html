@@ -14530,6 +14530,22 @@ function stPurge(rows) {
     return keep;
   } catch (e) { return rows }
 }
+/* 云端 manual 流水里的同源条目是否也该当「已删」——
+   mpFromDeskBuild 会把 ST_ROWS 的奖惩行同时派生成 manual 一条，
+   老师删了 ST 行后 manual 那条还在，分数看着「删了没变化」。 */
+function stManDead(x) {
+  try {
+    if (!x) return false;
+    var id = String(x.id || '');
+    if (id) { var dead = stDeadLoad(); if (dead[id]) return true }
+    var n = String(x.name || '').trim(), rs = String(x.reason || '').trim(), v = Number(x.score) || 0;
+    if (!n || !rs || !v) return false;
+    var T = (typeof stTombSet === 'function') ? stTombSet() : null;
+    if (!T || !Object.keys(T).length) return false;
+    var tk = (typeof stTombKeyOf === 'function') ? stTombKeyOf(n, rs, String(x.date || '').slice(0, 10), v) : '';
+    return !!(tk && T[tk]);
+  } catch (e) { return false }
+}
 function pullST(onDone,onFail){
   var acc=[],guard=0;
   (function step(cursor){
@@ -16438,6 +16454,7 @@ function stuPoints(){
     if(_gc&&Array.isArray(_gc.manual)){
       _gc.manual.forEach(function(x){
         if(!x)return;
+        if(typeof stManDead==='function'&&stManDead(x))return;   /* vT227：已删奖惩的同源副本不再算分 */
         var n=String(x.name||'').trim();if(!n)return;
         var v=(Number(x.score)||0);
         rwP[n]=(rwP[n]||0)+v;
@@ -16667,6 +16684,7 @@ function openStuPanel(name){
     });
     _gc.manual.forEach(function(x){
       if(!x||String(x.name||'').trim()!==name)return;
+      if(typeof stManDead==='function'&&stManDead(x))return;   /* vT227：同源副本已随奖惩行删除 */
       var v=Number(x.score)||0;if(!v)return;
       var rs=String(x.reason||'').trim();if(!rs)return;
       var d=(typeof syncDateOnly==='function'?syncDateOnly(x.date):String(x.date||'').slice(0,10));
