@@ -362,7 +362,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT210）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT211）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -1718,7 +1718,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v210</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v211</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     /* vT210 取消灵宠迎宾弹窗：改为置顶板块内联欢迎（见上方 pethero 卡），不再弹 */
@@ -1730,6 +1730,7 @@
     wirePetFun();   /* vT136 灵宠卡互动：捏捏 / 摸摸 / 玩耍 */
     try { window.__paImgWatch() } catch (e) {}   /* vT210 图片看门狗：5秒未加载出图→蛋占位 */
     try { paPetRetry(v); } catch (e) {}          /* vT210 灵宠为空→静默重拉快照（救数据延迟） */
+    try { paAutoRefreshStart(); } catch (e) {}    /* vT211 前台 45s 静默自动刷新（内容变了才重渲染） */
     ppEvoScan(v);   /* vT155 孩子灵宠阶段前进 → 轻量进化庆祝 */
     if (ST.pending && ST.pending.status === 'pending') startPoll();
   }
@@ -1781,9 +1782,41 @@
     } catch (e) {}
   }
 
+  /* vT211 家长端静默自动刷新：以前只在提交提案后轮询，平时不刷新，
+     老师在电脑上改了作业/积分，家长挂着的页面要手动点「刷新」才更新。
+     现在前台每 45 秒静默拉一次快照，只比对「发布时刻 + 灵宠数 + 积分」指纹，
+     真变了才重渲染（避免闪烁/打断阅读），后台/有提案在轮询时跳过。 */
+  var _paAutoT = null;
+  function paSig(snap, per) {
+    try {
+      return String((snap && snap.ts) || 0) + '|' +
+        (((per && per.codex) || []).length) + '|' +
+        Math.round(Number((per && per.points && per.points.total) || 0)) + '|' +
+        (((per && per.hw) || []).length);
+    } catch (e) { return '' }
+  }
+  function paAutoRefreshStart() {
+    if (_paAutoT) return;
+    _paAutoT = setInterval(function () {
+      try {
+        if (document.visibilityState !== 'visible') return;
+        if (ST.busy) return;
+        if (ST.pending && ST.pending.status === 'pending') return;   /* startPoll 已在刷 */
+        var repo; try { repo = decodeAccess(ST.access); } catch (e) { return; }
+        loadSnap(repo).then(function (snap) {
+          var b = (snap.blocks || {})[ST.name]; if (!b) return;
+          var per = unsealBlock(b.data, ST.code);
+          if (paSig(snap, per) === paSig(ST.snap, ST.per)) return;    /* 没变，什么都不做 */
+          ST.snap = snap; ST.per = per; renderMain();
+        }).catch(function () {});
+      } catch (e) {}
+    }, 45000);
+  }
+
   function goLogin() {
     ST.access = ST.access || ''; ST.name = ST.name || ''; ST.code = '';
     ST.snap = null; ST.per = null; ST.pending = null; savePending();
+    if (_paAutoT) { clearInterval(_paAutoT); _paAutoT = null; }
     renderLogin('');
   }
 
