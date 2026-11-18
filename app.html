@@ -2827,6 +2827,18 @@ table.paper td.l{text-align:left;font-weight:600}
         <button class="btn2" onclick="ptPanelsAll(false)">全不选</button>
         <span id="ptPanelsStatus" class="syncstatus"></span>
       </div>
+      <div id="ptGhMirrorBox" style="margin-top:12px;padding-top:10px;border-top:1px dashed #dde5ee">
+        <div class="syncdesc"><b>🌐 家长端快照镜像（vT222 · 必配）</b>：Gitee 从 2026-11 起封禁匿名访问，家长端若只读 Gitee 会报 <b>HTTP 403 登录不了</b>。配一次 GitHub 令牌后，每次发布家长快照都会<b>自动同步到 GitHub Pages</b>（家长端同源读取，免令牌、更稳）。
+          <br>令牌创建：GitHub → Settings → Developer settings → Fine-grained tokens → 只勾 <code>Purainlone/workbench-test</code> 仓库、权限 <code>Contents: Read and write</code>。</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+          <input id="ghmOwner" placeholder="GitHub 用户名" style="width:150px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
+          <input id="ghmRepo" placeholder="仓库名（workbench-test）" style="width:190px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
+          <input id="ghmToken" type="password" placeholder="GitHub 令牌（只存本机）" style="width:260px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px">
+          <button class="btn2" onclick="ptGhCfgSave()">💾 保存镜像配置</button>
+          <button class="btn2 primary" onclick="ptGhSyncNow()" title="立即把当前家长快照同步到 GitHub Pages">⬆️ 立即同步镜像</button>
+          <span id="ptGhStatus" class="syncstatus"></span>
+        </div>
+      </div>
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>👪 家长端权限 · 提案仓库（vT137）</b>：家长端「🎴 抽灵杰卡 / 🐾 抽灵宠 / 🍚 喂养」都是提交提案，老师批准（或自动批准）后才真正扣孩子积分、加成长值。提案要写进下面这个 Gitee 仓库，<b>以前只能在手机小程序「我的」里配，电脑端没配过家长端就会一直提示「老师还没开通」</b>。<br>
           <b>怎么填：</b>用户名＝Gitee 账号名；仓库名＝<b>当前云端数据仓库名后面加 <code>-pt</code></b>（例：数据仓库 <code>work-test-data</code> → 这里填 <code>work-test-data-pt</code>，家长快照和提案都放这个库）；令牌＝能读写该仓库的 Gitee 私人令牌。忘了叫什么就点下面「一键填入」。</div>
@@ -19626,6 +19638,8 @@ function ptGradeRead() {
 }
 /* vT141 进页面就把已保存的板块开关 / 成绩显示方式回填（以前要等点开「数据同步」页才回填） */
 try { ptPanelsFill(); } catch (e) {}
+/* vT222 快照镜像配置回填（延迟一拍，避开脚本块执行顺序） */
+setTimeout(function () { try { if (typeof ptGhCfgFill === 'function') ptGhCfgFill() } catch (e) {} }, 1200);
 function ptPanelsSave() {
   var d = ptPanelsDefault();
   var box = document.getElementById('ptPanels');
@@ -32860,11 +32874,79 @@ function cwInit(){
               return isFinite(n) && n >= 0 ? n : 1;
             } catch (_e4) { return 1; }
           })();
-          return ptwGiteeWrite(api, pr.token, doc, sha);
+          return ptwGiteeWrite(api, pr.token, doc, sha).then(function (r) {
+            /* vT222：Gitee 已封禁匿名读取，家长端改读 Pages 镜像 —— 每次发布同步推一份 */
+            try {
+              ptwMirrorToPages(doc).then(function (ok) {
+                if (ok === 'skip') return;
+                var st = document.getElementById('ptGhStatus');
+                if (st) st.textContent = '✅ 已同步镜像 ' + new Date().toLocaleTimeString('zh-CN');
+              }).catch(function (e) {
+                console.error('[家长快照镜像]', e && e.message);
+                var st = document.getElementById('ptGhStatus');
+                if (st) st.textContent = '⚠️ 镜像失败：' + ((e && e.message) || '');
+              });
+            } catch (_m) {}
+            return r;
+          });
         });
       });
     });
   }
+  /* ===== vT222 家长快照 GitHub Pages 镜像 =====
+     Gitee 2026-11 起封禁匿名 API/raw → 家长端匿名读快照 403（登录不了）。
+     快照是公开只读数据，改为同时推到 Pages（家长端同源读取，免令牌、无跨域）。
+     令牌只存老师本机 localStorage，绝不写进页面代码。 */
+  var PT_GH_KEY = 'wb_gh_snap';
+  function ptGhCfg() {
+    try { var c = JSON.parse(localStorage.getItem(PT_GH_KEY) || 'null'); return (c && c.token) ? c : null } catch (e) { return null }
+  }
+  function ptGhCfgSave() {
+    var st = document.getElementById('ptGhStatus');
+    var o = (document.getElementById('ghmOwner').value || '').trim() || 'Purainlone';
+    var r = (document.getElementById('ghmRepo').value || '').trim() || 'workbench-test';
+    var t = (document.getElementById('ghmToken').value || '').trim();
+    var old = ptGhCfg();
+    if (!t) t = old ? old.token : '';
+    if (!t) { if (st) st.textContent = '⚠️ 请先填 GitHub 令牌（只存本机）'; return }
+    localStorage.setItem(PT_GH_KEY, JSON.stringify({ owner: o, repo: r, token: t }));
+    if (st) st.textContent = '✅ 镜像配置已保存（' + o + '/' + r + '）';
+  }
+  function ptGhCfgFill() {
+    var c = ptGhCfg() || {};
+    var a = document.getElementById('ghmOwner'), b = document.getElementById('ghmRepo'), d = document.getElementById('ghmToken');
+    if (a) a.value = c.owner || 'Purainlone';
+    if (b) b.value = c.repo || 'workbench-test';
+    if (d) d.value = '';
+    var st = document.getElementById('ptGhStatus');
+    if (st) st.textContent = c.token ? ('已配置：' + (c.owner || '') + '/' + (c.repo || '') + '（令牌已保存）') : '未配置 —— 家长端会登录不了';
+  }
+  function ptwMirrorToPages(doc) {
+    var c = ptGhCfg();
+    if (!c) return Promise.resolve('skip');
+    var api = 'https://api.github.com/repos/' + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo) + '/contents/wb_parent_snap.json';
+    var hdr = { 'Authorization': 'Bearer ' + c.token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
+    return fetch(api, { headers: hdr, cache: 'no-store' }).then(function (r) {
+      return r.ok ? r.json() : null;
+    }).catch(function () { return null }).then(function (cur) {
+      var body = { message: '家长端快照 ' + new Date().toISOString(), content: b64en(utf8Encode(JSON.stringify(doc))), branch: 'main' };
+      if (cur && cur.sha) body.sha = cur.sha;
+      return fetch(api, { method: 'PUT', headers: hdr, body: JSON.stringify(body) }).then(function (r) {
+        if (r.ok) return r.json();
+        return r.text().then(function (t) {
+          var j = null; try { j = JSON.parse(t) } catch (e) {}
+          throw new Error('GitHub ' + r.status + '：' + ((j && j.message) || ''));
+        });
+      });
+    });
+  }
+  function ptGhSyncNow() {
+    var st = document.getElementById('ptGhStatus');
+    if (!ptGhCfg()) { if (st) st.textContent = '⚠️ 先保存镜像配置（用户名 / 仓库 / 令牌）'; return }
+    if (st) st.textContent = '正在重新生成并同步…';
+    try { ptwPublish() } catch (e) { if (st) st.textContent = '同步失败：' + ((e && e.message) || '') }
+  }
+
   function ptwPublish() {
     try {
       var snap = ptwBuildSnap();
