@@ -2384,6 +2384,11 @@ table.paper td.l{text-align:left;font-weight:600}
       <div id="deskStatus" class="sub">检测中…</div>
     </div>
     <div class="card">
+      <h3>🧩 大屏显示哪些板块</h3>
+      <div class="sub">勾掉就整块不出现在教室大屏上（教室端 2~5 秒生效，只影响大屏，不影响工作台和家长端）。</div>
+      <div id="deskModBox" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px 18px"></div>
+    </div>
+    <div class="card">
       <h3>🎛️ 远程控制教室电脑</h3>
       <div class="sub">在教室里也能远程操控这台教室电脑。指令经 <b>MQTT 实时通道</b>下发（秒级到达），MQTT 不通时自动改走 <b>Gitee 同步</b>（约 15 秒到达），两条通道都带签名，外人伪造的指令会被教室端丢弃。</div>
       <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -24518,6 +24523,14 @@ function cwInit(){
        避免把待办藏起来后没法再改回。
      - 老记录没有该字段，按 true 处理，升级后显示行为不变。
      - 走 ntUpsert + ntChanged，和完成登记同一条近实时通道，约 2~5 秒同步到桌面。 */
+  /* vT225 布置作业：单条「大屏显示/隐藏」（老师反馈某些作业内容错了，不想让学生一直看） */
+  window.asDeskToggle = function (id) {
+    var rec = ntGet('s-assign', id); if (!rec) return;
+    rec.deskShow = rec.deskShow === false;
+    rec.ts = Date.now(); rec.updatedAt = new Date().toISOString(); rec.updatedBy = 'teacher';
+    ntUpsert('s-assign', rec); asRender(); ntChanged();
+    toastMsg(rec.deskShow ? '🖥️ 已显示到教室大屏（约 2~5 秒生效）' : '🙈 已从教室大屏隐藏（家长端/工作台照常显示）');
+  };
   window.asRdDeskToggle = function (id) {
     var rec = ntGet('s-remedy', id); if (!rec) return;
     rec.deskShow = rec.deskShow === false;
@@ -24557,7 +24570,9 @@ function cwInit(){
         '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#e8f4ee;color:#2d5a45;flex-shrink:0">' + esc(r.subject || '') + '</span>' +
         '<span style="flex:1;font-size:13px">' + esc(r.content || '') + '</span>' +
         '<span style="font-size:11px;color:#93a89b;flex-shrink:0">' + esc(r.by || '') + '</span>' +
-        '<button class="btn2 sm ghost" style="color:#c2410c" onclick="asDel(\'' + r.id + '\')">删</button></div>';
+        '<button class="btn2 sm ghost" style="color:' + (r.deskShow === false ? '#6b7280' : '#1d5c8f') + '" onclick="asDeskToggle(\'' + r.id + '\')" title="只管教室大屏是否显示这条；工作台/家长端不受影响">' + (r.deskShow === false ? '大屏隐藏' : '大屏显示') + '</button>' +
+        '<button class="btn2 sm ghost" style="color:#c2410c" onclick="asDel(\'' + r.id + '\')">删</button>' +
+        (r.deskShow === false ? '<span style="font-size:11px;color:#93a89b;flex-shrink:0">已隐藏</span>' : '') + '</div>';
     });
     html = html.concat(rds.map(function (r) {
       /* vT58 学生姓名变成可点的「完成开关」：灰红=未完成，绿底✓=已完成 */
@@ -26043,6 +26058,30 @@ function cwInit(){
   /* ================= 教室桌面 ================= */
   var wallPending = null; /* {dataUrl, bytes, w, h} */
   function deskCfgRec() { return ntGet('s-desktop', 'client_cfg') }
+  /* vT225 大屏板块开关：存在 s-desktop/client_cfg.modules，教室端 2~5 秒生效 */
+  var DESK_MODULES = [
+    ['duty', '🧹 今日岗位'], ['hw', '📝 今日作业'], ['detain', '⏰ 今日留堂'],
+    ['pet', '🐾 灵宠墙'], ['tt', '📅 今日课表'], ['rank', '🏆 积分榜'],
+    ['guard', '🛡️ 班级守护'], ['classic', '📜 今日古诗文']
+  ];
+  window.deskModRender = function () {
+    var box = document.getElementById('deskModBox'); if (!box) return;
+    var rec = deskCfgRec() || {}, m = rec.modules || {};
+    box.innerHTML = DESK_MODULES.map(function (x) {
+      var on = m[x[0]] !== false;
+      return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:3px 2px">' +
+        '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="deskModToggle(\'' + x[0] + '\', this.checked)">' + x[1] + '</label>';
+    }).join('');
+  };
+  window.deskModToggle = function (k, on) {
+    var rec = deskCfgRec() || { id: 'client_cfg' };
+    rec.id = 'client_cfg';
+    rec.modules = rec.modules || {};
+    rec.modules[k] = !!on;
+    rec.ts = Date.now(); rec.updatedAt = new Date().toISOString(); rec.updatedBy = 'teacher';
+    ntUpsert('s-desktop', rec); ntChanged(); deskModRender();
+    toastMsg(on ? '✅ 已恢复显示（2~5 秒生效）' : '🙈 已在大屏隐藏该板块（2~5 秒生效）');
+  };
   function wallFilePath() {
     var s = mpSyncSettings();
     return (s.gPath || 'wb_test_') + 'wallpaper_' + (s.classId || 'c1') + '.jpg';
@@ -26450,7 +26489,7 @@ function cwInit(){
         var id = active && active.id;
         if (id === 's-rota') { try { rotaRender() } catch (e) {} }
         else if (id === 's-notice') { try { noticeRenderInbox() } catch (e) {} try { noticeRenderHistory() } catch (e) {} }
-        else if (id === 's-desk') { try { deskRenderStatus() } catch (e) {} try { rcRenderLog() } catch (e) {} }
+        else if (id === 's-desk') { try { deskRenderStatus() } catch (e) {} try { rcRenderLog() } catch (e) {} try { window.deskModRender() } catch (e) {} }
       }, 5000);
     }
   }
