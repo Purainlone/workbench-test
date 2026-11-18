@@ -2820,9 +2820,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v210</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v211</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v210','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v211','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -19940,9 +19940,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v210';
-var WB_MY_VER = '优化版 vT210 · 秒级写入提速';
-var WB_BUILD_DATE = '11-18', WB_BUILD_NO = '2.6.223';
+var WB_VER_TAG = 'v211';
+var WB_MY_VER = '优化版 vT211 · 全端即时同步与签名版';
+var WB_BUILD_DATE = '11-18', WB_BUILD_NO = '2.6.224';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -21360,7 +21360,7 @@ document.addEventListener('visibilitychange', function () {
    现在改成每 6 秒问一次「这个文件最近有没有新提交」（commits?per_page=3，响应约 1~2KB），
    提交号变了才走完整 syncCycle。带宽降到原来的 1/20，频率还能提高到 3 倍。
    接口失败（限流/断网）自动退避到 30 秒一次，不会把浏览器打满。 */
-var WB_WATCH_MS = 6 * 1000;
+var WB_WATCH_MS = 5 * 1000;   /* vT211 提速：6s → 5s，别端改动最迟 5s 被本端感知 */
 var WB_WATCH_BUSY = false, WB_WATCH_FAIL = 0;
 var WB_CKEY = 'wb_cloud_commitsha';
 /* 只取「最新提交号 + 提交说明里的 rev=N」，不下载文件内容 */
@@ -32544,12 +32544,13 @@ function cwInit(){
       });
     } catch (e) { console.error('[家长快照] 构建/发布异常', e); }
   }
-  /* 12 秒防抖：与小程序端 store.scheduleParentPublish 同源节奏 */
+  /* vT211 防抖 12s → 6s：老师改完作业/积分，家长端（45s 自动刷新）更快看到。
+     连改仍会合并，家长快照是独立小文件，不占主数据文件的写回次数。 */
   var _ptwTimer = null;
   function ptwSchedule() {
     try { if (typeof mpSyncSettings === 'function') { var s = mpSyncSettings(); if (!s || !s.gOwner) return; } } catch (e) { return; }
     if (_ptwTimer) clearTimeout(_ptwTimer);
-    _ptwTimer = setTimeout(function () { _ptwTimer = null; ptwPublish(); }, 12000);
+    _ptwTimer = setTimeout(function () { _ptwTimer = null; ptwPublish(); }, 6000);
   }
   /* vT129 立即重发（老师在「家长端显示设置」里手动点）：不等 12 秒，也把失败原因显示出来 */
   function ptwPublishNow() {
