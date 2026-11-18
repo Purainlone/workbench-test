@@ -352,7 +352,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT205）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT206）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -1666,9 +1666,10 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v205</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v206</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
+    petWelcomeMaybe();   /* vT206 打开页面时灵宠迎宾（每次会话只弹一次） */
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
     document.getElementById('btnOut').onclick = function () { goLogin(); };
     var bf = document.getElementById('btnFeed'); if (bf) bf.onclick = function () { submitProposal('feed', feedCost); };
@@ -1746,6 +1747,44 @@
       document.body.appendChild(d);
       setTimeout(function () { d.classList.add('out'); }, 2100);
       setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 2700);
+    } catch (e) {}
+  }
+  /* ---------- vT206 灵宠迎宾：家长打开页面时，孩子的灵宠主动打招呼 ----------
+     每次打开页面弹一次（随机挑一只灵宠 + 一句欢迎语），点一下就关，3.8 秒也会自动收；
+     同一次会话里 30 秒轮询刷新不会重复弹。 */
+  var PET_WELCOME = [
+    '小主人你回来啦～',
+    '快来陪我玩吧！',
+    '见到你我很高兴！',
+    '今天也在想你哦～',
+    '我等你好久啦，快摸摸我嘛～',
+    '小主人，今天也要一起加油呀！',
+    '嘿嘿，我又长大一点点了～',
+    '陪我玩一会儿再去看作业嘛～'
+  ];
+  function petWelcomeMaybe() {
+    try {
+      if (ST.welcomed) return;
+      var pets = ((ST.view && ST.view.codex) || []).filter(function (p) { return cxIsPet(p); });
+      if (!pets.length) return;
+      ST.welcomed = true;
+      var p = pets[Math.floor(Math.random() * pets.length)];
+      var say = PET_WELCOME[Math.floor(Math.random() * PET_WELCOME.length)];
+      var img = p.img || (p.imgs && (p.imgs[p.stage] || p.imgs.baby || p.imgs.teen || p.imgs.adult));
+      var old = document.getElementById('petFeedFx');
+      if (old && old.parentNode) old.parentNode.removeChild(old);
+      var d = document.createElement('div');
+      d.id = 'petFeedFx';
+      d.style.pointerEvents = 'auto';
+      d.innerHTML = '<div class="pff-card" title="点一下关闭">' +
+        (img ? '<img class="pff-pet" src="' + esc(pickSrcs(img)[0] || img) + '" alt="">' : '<div class="pff-emo">🐾</div>') +
+        '<div class="pff-say">' + esc((p.name ? '「' + p.name + '」：' : '') + say) + '</div>' +
+        '<div class="pff-sub">🐾 灵宠迎宾 · 点一下和我玩</div>' +
+        '</div>';
+      d.onclick = function () { if (d.parentNode) d.parentNode.removeChild(d); };
+      document.body.appendChild(d);
+      setTimeout(function () { if (d.parentNode) d.classList.add('out'); }, 3200);
+      setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 3800);
     } catch (e) {}
   }
   function submitProposal(action, cost, extra) {
