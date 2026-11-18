@@ -291,6 +291,9 @@ table.tt tr.tt-split td,table.tt tr.tt-split th{border-top:3px solid #c9d9ea}
 /* 轮转控制 */
 .rotbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
 .btn2{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer}
+/* vT215c 竞答页面切换按钮：当前页高亮 */
+.qz-tab{opacity:.62}
+.qz-tab.active{opacity:1;background:#2d8f63;border-color:#2d8f63;color:#fff;font-weight:600}
 .btn2:hover{border-color:var(--primary);color:var(--primary)}
 .btn2.primary{background:linear-gradient(135deg,#1a9c5b,#3fbf84);color:#fff;border:0}
 .btn2.ghost{color:var(--muted)}
@@ -1976,36 +1979,42 @@ table.paper td.l{text-align:left;font-weight:600}
       <div id="qzStat" class="sub" style="margin-top:8px"></div>
     </div>
 
-    <!-- vT215b 三块并列：今日题目 / 答题情况 / 题库管理，宽屏三栏、窄屏自动换行 -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:10px;margin:10px 0;align-items:start">
-      <div class="chartbox" style="margin:0">
-        <h3 style="font-size:14px">👀 今日题目预览（家长端看到的就是这几题）</h3>
-        <div id="qzToday" style="margin-top:6px"></div>
+    <!-- vT215c 三个按钮切换页面（不再并列铺开）：今日题目 / 答题情况 / 题库管理 -->
+    <div class="chartbox" style="margin:10px 0">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn2 sm qz-tab" data-qzt="today" onclick="qzTab('today')">👀 今日题目</button>
+        <button class="btn2 sm qz-tab" data-qzt="wrong" onclick="qzTab('wrong')">📊 答题情况 · 错题库</button>
+        <button class="btn2 sm qz-tab" data-qzt="bank" onclick="qzTab('bank')">📚 题库管理</button>
       </div>
+    </div>
 
-      <div class="chartbox" style="margin:0">
-        <h3 style="font-size:14px">📊 答题情况 · 错题库 <span style="font-size:12px;font-weight:400;color:#6b7c72">谁答了、错在哪</span></h3>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
-          <button class="btn2 sm" id="qzWTabQ" onclick="qzWrongRender('q')">📋 按题目（错题排行）</button>
-          <button class="btn2 sm" id="qzWTabS" onclick="qzWrongRender('s')">🧑‍🎓 按学生（答题明细）</button>
-          <button class="btn2 sm ghost" onclick="qzWrongRender()">🔄 刷新</button>
-          <button class="btn2 sm" onclick="qzWrongExport()">📤 导出 CSV</button>
-          <span class="sub" id="qzWrongTip"></span>
-        </div>
-        <div id="qzWrong" style="margin-top:8px;max-height:420px;overflow-y:auto"></div>
-      </div>
+    <div class="chartbox" id="qzPane-today" style="margin:10px 0">
+      <h3 style="font-size:14px">👀 今日题目预览（家长端看到的就是这几题）</h3>
+      <div id="qzToday" style="margin-top:6px"></div>
+    </div>
 
-      <div class="chartbox" style="margin:0">
-        <h3 style="font-size:14px">📚 题库管理</h3>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
-          <select id="qzCatFilter" onchange="qzRender()" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px"></select>
-          <button class="btn2 sm primary" onclick="qzAdd()">➕ 新增题目</button>
-          <button class="btn2 sm" onclick="qzOpenImport()">📥 批量导入</button>
-          <button class="btn2 sm ghost" style="color:#c2410c" onclick="qzPurgeAll()" title="清空全部题目（已加过的分不受影响）">🧹 清空题库</button>
-          <span class="sctip" id="qzBankTip"></span>
-        </div>
-        <div id="qzList" style="margin-top:8px;max-height:420px;overflow-y:auto"></div>
+    <div class="chartbox" id="qzPane-wrong" style="margin:10px 0;display:none">
+      <h3 style="font-size:14px">📊 答题情况 · 错题库 <span style="font-size:12px;font-weight:400;color:#6b7c72">谁答了、错在哪</span></h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+        <button class="btn2 sm" id="qzWTabQ" onclick="qzWrongRender('q')">📋 按题目（错题排行）</button>
+        <button class="btn2 sm" id="qzWTabS" onclick="qzWrongRender('s')">🧑‍🎓 按学生（答题明细）</button>
+        <button class="btn2 sm ghost" onclick="qzWrongRender()">🔄 刷新</button>
+        <button class="btn2 sm" onclick="qzWrongExport()">📤 导出 CSV</button>
+        <span class="sub" id="qzWrongTip"></span>
       </div>
+      <div id="qzWrong" style="margin-top:8px;max-height:520px;overflow-y:auto"></div>
+    </div>
+
+    <div class="chartbox" id="qzPane-bank" style="margin:10px 0;display:none">
+      <h3 style="font-size:14px">📚 题库管理</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+        <select id="qzCatFilter" onchange="qzRender()" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px"></select>
+        <button class="btn2 sm primary" onclick="qzAdd()">➕ 新增题目</button>
+        <button class="btn2 sm" onclick="qzOpenImport()">📥 批量导入</button>
+        <button class="btn2 sm ghost" style="color:#c2410c" onclick="qzPurgeAll()" title="清空全部题目（已加过的分不受影响）">🧹 清空题库</button>
+        <span class="sctip" id="qzBankTip"></span>
+      </div>
+      <div id="qzList" style="margin-top:8px;max-height:520px;overflow-y:auto"></div>
     </div>
   </section>
 
@@ -25365,6 +25374,20 @@ function cwInit(){
     }
     box.innerHTML = html;
   }
+  /* vT215c 竞答板块三个页面切换：today 今日题目 / wrong 答题情况 / bank 题库管理 */
+  function qzTab(name) {
+    ['today', 'wrong', 'bank'].forEach(function (k) {
+      var pane = document.getElementById('qzPane-' + k);
+      if (pane) pane.style.display = (k === name) ? '' : 'none';
+      var btn = document.querySelector('.qz-tab[data-qzt="' + k + '"]');
+      if (btn) btn.classList.toggle('active', k === name);
+    });
+    try {
+      if (name === 'wrong') qzWrongRender();
+      else if (name === 'today') qzRenderToday();
+      else if (name === 'bank') qzRender();
+    } catch (e2) {}
+  }
   function qzWrongExport() {
     try {
       var d = qzWrongData();
@@ -25403,13 +25426,14 @@ function cwInit(){
         (purged ? '　<span style="color:#c2410c">已清除 ' + purged + ' 道内置题，请重新导入</span>' : '') +
         (seeded ? '　<span style="color:#2d7a4f">已内置 ' + seeded + ' 题</span>' : '');
     }
-    qzRender(); qzRenderToday(); qzWrongRender();
+    qzRender(); qzRenderToday(); qzWrongRender(); qzTab('today');
   }
   window.qzRender = qzRender; window.qzRenderToday = qzRenderToday; window.qzAdd = qzAdd; window.qzEdit = qzEdit;
   window.qzSaveForm = qzSaveForm; window.qzDel = qzDel; window.qzCloseForm = qzCloseForm;
   window.qzOpenImport = qzOpenImport; window.qzCloseImport = qzCloseImport;
   window.qzImportPreview = qzImportPreview; window.qzImportDo = qzImportDo; window.qzSaveCfg = qzSaveCfg;
   window.qzWrongRender = qzWrongRender; window.qzWrongExport = qzWrongExport;   /* vT215 错题库 */
+  window.qzTab = qzTab;                                                          /* vT215c 页面切换 */
   try { qzInit(); } catch (e) { console.warn('[quiz] 初始化失败', e); }
 
   /* ================= vT14 学生评语 ================= */
