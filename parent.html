@@ -120,10 +120,20 @@
   .rctag.ex{background:#fdf6e6;color:#a97a11}
   .rcfoot{font-size:11.5px;color:#9aa8a0;margin-top:11px;line-height:1.7}
   .empty{color:#9aa8a0;font-size:13px;text-align:center;padding:10px 0}
+  /* vT210 灵宠置顶板块：内联欢迎气泡（替代弹窗，打开即见） */
+  .pethero{background:linear-gradient(180deg,#fff8fa 0%,#fff 42%)}
+  .petsay{display:flex;align-items:center;gap:11px;background:#fff5f8;border:1px solid #f7d7e2;border-radius:16px;padding:10px 13px;margin:2px 0 12px}
+  .petsay-pet{width:46px;height:46px;object-fit:contain;border-radius:12px;background:#fff;flex:0 0 auto}
+  .petsay-emo{width:46px;height:46px;display:flex;align-items:center;justify-content:center;font-size:24px;background:#fff;border-radius:12px;flex:0 0 auto}
+  .petsay-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .petsay-body b{font-size:12px;color:#c2416a;font-weight:700}
+  .petsay-body span{font-size:13.5px;color:#5a4a50;line-height:1.45}
   /* 图鉴 */
   .cxgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
   .cx{background:#fbfdfb;border:1px solid var(--line);border-radius:13px;padding:7px 6px 8px;position:relative;overflow:hidden;text-align:center}
-  .cx img{width:100%;aspect-ratio:1/1;object-fit:contain;display:block;border-radius:9px;background:#f2f6f3}
+  /* vT210 图片兜底：加载中/失败时不留白框，用柔和底色 + 蛋蛋占位（家长网络差也不至于像"灵宠没了"） */
+  .cx img{width:100%;aspect-ratio:1/1;object-fit:contain;display:block;border-radius:9px;
+    background:linear-gradient(135deg,#f7fbf8,#eaf2ee);background-repeat:no-repeat;background-position:center}
   .cx .nm{font-size:12px;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .cx .sr{font-size:10px;color:#9aa8a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .cx .ph{width:100%;aspect-ratio:1/1;border-radius:9px;background:#f2f6f3;display:flex;align-items:center;justify-content:center;font-size:26px}
@@ -352,7 +362,7 @@
 <div class="toast" id="toast"></div>
 <script>
 /* ============================================================
-   家长端网页（vT209）—— 免审核、不限人数的「家长查看」入口
+   家长端网页（vT210）—— 免审核、不限人数的「家长查看」入口
    ------------------------------------------------------------
    数据链路与小程序家长端完全同源：
      老师发布 → Gitee 公开仓库 {repo}-pt/wb_parent_snap.json（按学生用绑定码加密）
@@ -742,8 +752,9 @@
     var srcs = pickSrcs(petRel(p));
     var fx = (p.tier === '典藏') ? 'fx-gold' : (p.tier === '隐藏') ? 'fx-purple' : '';
     var tier = (p.tier && p.tier !== '普通') ? ('<span class="tier">' + esc(p.tier) + '</span>') : '';
+    /* vT210：img 加 data-pi 供看门狗定位；loaded 类在加载成功后由 onload 打上 */
     var inner = srcs.length
-      ? '<img src="' + esc(srcs[0]) + '" data-i="' + i + '" onerror="window.__paImgErr(this)" alt="">'
+      ? '<img src="' + esc(srcs[0]) + '" data-i="' + i + '" data-pi="' + i + '" onerror="window.__paImgErr(this)" onload="this.className=\'ld\'" alt="">'
       : '<div class="ph">🥚</div>';
     /* vT113 卡面显示星级（重复卡升星，满 5 星） */
     var st = Number(p.stars) || 1;
@@ -772,7 +783,23 @@
     var srcs = pickSrcs(petRel(p));
     var at = srcs.indexOf(img.getAttribute('src'));
     if (at + 1 < srcs.length) { img.setAttribute('src', srcs[at + 1]); }
-    else { img.outerHTML = '<div class="ph">📖</div>'; }
+    else { img.outerHTML = '<div class="ph">🐾</div>'; }   /* vT210 全源失败：给爪爪占位而不是破图 */
+  };
+  /* vT210 图片看门狗：三个镜像都慢/被墙时，家长会看到一片空白（很像"灵宠没了"）。
+     渲染后 5 秒检查一次：仍没加载出图的直接换成蛋占位，至少能看出"这里有只灵宠、图没到"。
+     只处理 .cx img 且未打 ld 类的，不干扰正常加载。 */
+  window.__paImgWatch = function () {
+    try {
+      setTimeout(function () {
+        var imgs = document.querySelectorAll('.cx img[data-pi]');
+        for (var i = 0; i < imgs.length; i++) {
+          var im = imgs[i];
+          if (im.className === 'ld') continue;               /* 已加载成功 */
+          if (im.complete && im.naturalWidth > 0) { im.className = 'ld'; continue; }
+          try { im.outerHTML = '<div class="ph">🥚</div>' } catch (e) {}
+        }
+      }, 5000);
+    } catch (e) {}
   };
 
   /* ---------- vT136 灵宠互动：捏捏 / 摸摸 / 玩耍 ----------
@@ -1440,6 +1467,37 @@
     h += '<div style="font-size:12px;color:#9aa8a0;margin:-6px 2px 10px"><span class="dot"></span>数据 ' + at + ' 更新' +
       (ageH >= 24 ? ('（老师 ' + Math.round(ageH / 24) + ' 天前发布）') : '') + '</div>';
 
+    /* ===== vT210 灵宠板块置顶：打开就能看到 + 内联欢迎（不再弹窗） =====
+       家长反馈：弹窗要等灵宠数据到才出现、看不全；把灵宠直接放到最上面，
+       打开即可见，欢迎语以内联气泡显示在卡片里，随页面一起出现，无需点击关闭。 */
+    if (on('codex')) {
+      var topPets = (v.codex || []).filter(function (p) { return cxIsPet(p); });
+      h += '<div class="card pethero"><h2>🐾 孩子的灵宠 <em>' + topPets.length + ' 只</em></h2>';
+      if (topPets.length) {
+        /* 内联欢迎：随机挑一只说一句，每次打开随机一句；不弹窗、不占屏 */
+        var wob = topPets[Math.floor(Math.random() * topPets.length)];
+        var wsay = PET_WELCOME[Math.floor(Math.random() * PET_WELCOME.length)];
+        var wimg = wob.img || (wob.imgs && (wob.imgs[wob.stage] || wob.imgs.baby || wob.imgs.teen || wob.imgs.adult));
+        var wsrc = wimg ? (pickSrcs(wimg)[0] || wimg) : '';
+        h += '<div class="petsay">' +
+          (wsrc ? '<img class="petsay-pet" src="' + esc(wsrc) + '" onerror="this.style.display=\'none\'" alt="">' : '<span class="petsay-emo">🐾</span>') +
+          '<div class="petsay-body"><b>' + esc(wob.name || '灵宠') + '</b><span>' + esc(wsay) + '</span></div>' +
+          '</div>';
+        h += '<div class="cxgrid">' + topPets.map(function (p) { return cxCard(p, v.codex.indexOf(p)); }).join('') + '</div>';
+        h += '<div class="cxtip">点灵宠卡片可「🤏 捏捏 / ✋ 摸摸 / 🎾 玩耍」（免费小演出，不改成长值）；想真的长成长值，点下方「🍚 喂食」。</div>';
+        /* 抽灵宠按钮带上来，方便直接操作 */
+        h += '<div class="acts" style="margin-top:10px">' +
+          '<button class="btn2" id="btnPetTop"' + (perm0.draw ? '' : ' disabled') + '>🐾 抽灵宠（-' + petCost + '）</button>' +
+          '</div>';
+      } else {
+        h += '<div class="empty">还没有灵宠，点下方「🐾 抽灵宠」唤醒第一只<br>' +
+          '<span style="font-size:11px;color:#b8c4bd">如果孩子已有灵宠却不显示，可能是老师还没发布最新数据，稍后点「刷新」或请老师在工作台点一次「🚀 立即重发快照」</span></div>' +
+          '<div class="acts" style="margin-top:10px">' +
+          '<button class="btn2" id="btnPetTop"' + (perm0.draw ? '' : ' disabled') + '>🐾 抽灵宠（-' + petCost + '）</button>' +
+          '</div>';
+      }
+      h += '</div>';
+    }
     /* 留堂 */
     if (on('detain') && v.detain.length) {
       h += '<div class="card warn"><h2>📌 今天被留堂</h2><div class="why">' +
@@ -1607,13 +1665,8 @@
     if (on('codex')) {
       var petList = (v.codex || []).filter(function (p) { return cxIsPet(p); });
       var cardList = (v.codex || []).filter(function (p) { return !cxIsPet(p); });
-      h += '<div class="card"><h2>孩子的启灵图鉴 <em>灵宠 ' + petList.length + ' 只 · 灵杰 ' + cardList.length + (poolN ? (' 张(共' + poolN + ')') : '') + '</em></h2>';
-      /* 已养灵宠 */
-      h += '<div class="cxsub"><span>🐾 已养灵宠</span><small>' + petList.length + ' 只</small></div>';
-      h += petList.length
-        ? '<div class="cxgrid">' + petList.map(function (p) { return cxCard(p, v.codex.indexOf(p)); }).join('') + '</div>' +
-          '<div class="cxtip">点灵宠卡片：「🤏 捏捏 / ✋ 摸摸 / 🎾 玩耍」是免费小演出，不会真的改变成长值；想真的长成长值，点菜单里的「🍚 喂食」（扣孩子积分，老师批准 / 自动批准后生效）。</div>'
-        : '<div class="empty">还没有灵宠，点下方「🐾 抽灵宠」唤醒第一只</div>';
+      /* vT210 灵宠已置顶独立展示，图鉴卡只保留「已集灵杰」，避免同一批灵宠在页面出现两次 */
+      h += '<div class="card"><h2>孩子的启灵图鉴 <em>灵杰 ' + cardList.length + (poolN ? (' 张(共' + poolN + ')') : '') + (petList.length ? (' · 灵宠见上方') : '') + '</em></h2>';
       /* 已集灵杰 */
       h += '<div class="cxsub"><span>🎴 已集灵杰</span><small>' + cardList.length + (poolN ? (' / ' + poolN) : '') + '</small></div>';
       h += cardList.length
@@ -1625,13 +1678,12 @@
           ? ('老师已开启自动批准：提交后约 10 秒自动入账' + (Number(ST.snap.autoLimit) > 0 ? ('（每人每天 ' + ST.snap.autoLimit + ' 次）') : '') + '。')
           : '提交后由老师批准，批准后这里会显示已生效。')
         : '⚠️ 老师还没开通家长通道：请老师在电脑工作台「家长端显示设置 → 家长端权限」里填提案仓库和令牌（以前只能在手机小程序里配，所以电脑端看着像没开通）。';
-      h += '<div class="drawbox"><div class="t">🎴🐾 帮孩子抽卡 / 喂养（扣孩子的启灵积分）</div>' +
+      h += '<div class="drawbox"><div class="t">🎴 帮孩子抽灵杰卡（扣孩子的启灵积分）</div>' +
         '<div class="acts">' +
         '<button class="btn2" id="btnFeed"' + (perm0.draw ? '' : ' disabled') + '>🎴 抽灵杰卡（-' + feedCost + '）</button>' +
-        '<button class="btn2" id="btnPet"' + (perm0.draw ? '' : ' disabled') + '>🐾 抽灵宠（-' + petCost + '）</button>' +
         '</div>' +
         '<div class="note">抽灵杰卡：抽到还没有的灵杰会同时唤醒上墙；重复的卡自动升星（最高 ★5）。<br>' +
-        '抽灵宠：抽一只成长灵宠（奶团子态）；<b>名下还有未成年灵宠时不能抽</b>，养到成年才能抽下一只。<br>' +
+        '抽灵宠：在页面顶部「🐾 孩子的灵宠」板块操作（抽一只成长灵宠，奶团子态；<b>名下还有未成年灵宠时不能抽</b>，养到成年才能抽下一只）。<br>' +
         '喂养：点孩子的灵宠卡 →「🍚 喂食」，米饭 +5 / 胡萝卜 +10 / 肉干 +20 成长值（1 点 = 1 分），攒满自动进化。<br>' +
         (perm0.draw ? '' : '⚠️ 老师关掉了家长端抽卡；') + (perm0.feed ? '' : '⚠️ 老师关掉了家长端喂养；') +
         (perm0.draw || perm0.feed ? '' : '<br>') + chTip +
@@ -1666,15 +1718,18 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v209</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v210</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
-    petWelcomeMaybe();   /* vT206 打开页面时灵宠迎宾（每次会话只弹一次） */
+    /* vT210 取消灵宠迎宾弹窗：改为置顶板块内联欢迎（见上方 pethero 卡），不再弹 */
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
     document.getElementById('btnOut').onclick = function () { goLogin(); };
     var bf = document.getElementById('btnFeed'); if (bf) bf.onclick = function () { submitProposal('feed', feedCost); };
     var bp = document.getElementById('btnPet'); if (bp) bp.onclick = function () { submitProposal('growdraw', petCost); };
+    var bpt = document.getElementById('btnPetTop'); if (bpt) bpt.onclick = function () { submitProposal('growdraw', petCost); };
     wirePetFun();   /* vT136 灵宠卡互动：捏捏 / 摸摸 / 玩耍 */
+    try { window.__paImgWatch() } catch (e) {}   /* vT210 图片看门狗：5秒未加载出图→蛋占位 */
+    try { paPetRetry(v); } catch (e) {}          /* vT210 灵宠为空→静默重拉快照（救数据延迟） */
     ppEvoScan(v);   /* vT155 孩子灵宠阶段前进 → 轻量进化庆祝 */
     if (ST.pending && ST.pending.status === 'pending') startPoll();
   }
@@ -1701,6 +1756,29 @@
       ST.per = unsealBlock(b.data, ST.code);
       renderMain();
     }).catch(function (e) { toast((e && e.message) || '刷新失败'); });
+  }
+
+  /* vT210 灵宠数据延迟自愈：打开页面时快照里还没有灵宠（老师刚发/快照缓存旧），
+     隔 6 秒、18 秒各静默重拉一次快照；拿到灵宠就渲染并停。
+     全程不弹 toast、不打断家长，最多试 2 次，避免无意义请求。 */
+  var _paPetRetryN = 0;
+  function paPetRetry(v) {
+    try {
+      var has = ((v && v.codex) || []).some(function (p) { return cxIsPet(p); });
+      if (has || _paPetRetryN >= 2) return;
+      var repo; try { repo = decodeAccess(ST.access); } catch (e) { return; }
+      var delays = [6000, 18000];
+      var d = delays[_paPetRetryN];
+      _paPetRetryN++;
+      setTimeout(function () {
+        loadSnap(repo).then(function (snap) {
+          var b = (snap.blocks || {})[ST.name]; if (!b) return;
+          var per = unsealBlock(b.data, ST.code);
+          var now = ((per && per.codex) || []).some(function (p) { return cxIsPet(p); });
+          if (now) { ST.snap = snap; ST.per = per; renderMain(); }   /* 有灵宠了→立即重渲染 */
+        }).catch(function () {});
+      }, d);
+    } catch (e) {}
   }
 
   function goLogin() {
@@ -1749,9 +1827,9 @@
       setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 2700);
     } catch (e) {}
   }
-  /* ---------- vT206 灵宠迎宾：家长打开页面时，孩子的灵宠主动打招呼 ----------
-     每次打开页面弹一次（随机挑一只灵宠 + 一句欢迎语），点一下就关，3.8 秒也会自动收；
-     同一次会话里 30 秒轮询刷新不会重复弹。 */
+  /* ---------- vT210 灵宠欢迎语池：改为置顶板块内联显示，不再弹窗 ----------
+     家长反馈弹窗要等数据到、还要手动关；现在欢迎语直接渲染在「孩子的灵宠」卡片里，
+     随页面出现，随机挑一只灵宠说一句。 */
   var PET_WELCOME = [
     '小主人你回来啦～',
     '快来陪我玩吧！',
@@ -1762,31 +1840,6 @@
     '嘿嘿，我又长大一点点了～',
     '陪我玩一会儿再去看作业嘛～'
   ];
-  function petWelcomeMaybe() {
-    try {
-      if (ST.welcomed) return;
-      var pets = ((ST.view && ST.view.codex) || []).filter(function (p) { return cxIsPet(p); });
-      if (!pets.length) return;
-      ST.welcomed = true;
-      var p = pets[Math.floor(Math.random() * pets.length)];
-      var say = PET_WELCOME[Math.floor(Math.random() * PET_WELCOME.length)];
-      var img = p.img || (p.imgs && (p.imgs[p.stage] || p.imgs.baby || p.imgs.teen || p.imgs.adult));
-      var old = document.getElementById('petFeedFx');
-      if (old && old.parentNode) old.parentNode.removeChild(old);
-      var d = document.createElement('div');
-      d.id = 'petFeedFx';
-      d.style.pointerEvents = 'auto';
-      d.innerHTML = '<div class="pff-card" title="点一下关闭">' +
-        (img ? '<img class="pff-pet" src="' + esc(pickSrcs(img)[0] || img) + '" alt="">' : '<div class="pff-emo">🐾</div>') +
-        '<div class="pff-say">' + esc((p.name ? '「' + p.name + '」：' : '') + say) + '</div>' +
-        '<div class="pff-sub">🐾 灵宠迎宾 · 点一下和我玩</div>' +
-        '</div>';
-      d.onclick = function () { if (d.parentNode) d.parentNode.removeChild(d); };
-      document.body.appendChild(d);
-      setTimeout(function () { if (d.parentNode) d.classList.add('out'); }, 3200);
-      setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 3800);
-    } catch (e) {}
-  }
   function submitProposal(action, cost, extra) {
     if (ST.busy) return;
     extra = extra || {};
