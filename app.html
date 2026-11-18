@@ -14916,7 +14916,10 @@ function hwTomAddRec(name,item,date){
   return ks.length;
 }
 /* 重新登记 → 撤墓碑（vT49 改名的同一教训：
-   「登记 → 取消 → 再登记」时旧墓碑还挂着，会把刚登记的这条当成已删除而静默丢失） */
+   「登记 → 取消 → 再登记」时旧墓碑还挂着，会把刚登记的这条当成已删除而静默丢失）
+   vT220：撤掉的同时必须【作废】（wbTombInvalidate 精确键 + wbHwTombInvalidateNorm
+   归一键扫缓存）。以前只从本机清单移除，push 的「远端 ∪ 本机」并集会把云端副本
+   原样加回 → 墓碑永生 → 重新登记的记录每轮被杀（「登完一会又没了」）。 */
 function hwTomDropRec(name,item,date){
   var ks=hwRecTomKeys(name,item,date);
   if(!ks.length)return 0;
@@ -14926,11 +14929,19 @@ function hwTomDropRec(name,item,date){
     var x=a[i];
     if(x&&x.t==='hw'&&x.k&&x.k.indexOf('|col|')!==0){
       var kk=String(x.k).replace(/\s+/g,'').toLowerCase();
-      if(low.indexOf(kk)>=0){hit++;continue}
+      if(low.indexOf(kk)>=0){hit++;if(typeof wbTombInvalidate==='function')wbTombInvalidate('hw',x.k);continue}
     }
     out.push(x);
   }
   if(hit)tomSave(out);
+  /* 归一键再扫一遍缓存/清单里格式变体（大小写、hw| 前缀、异体字）的同键墓碑 */
+  if(typeof wbHwTombInvalidateNorm==='function'){
+    var seen={};
+    for(var j=0;j<ks.length;j++){
+      var nk=(typeof hwRecTomNorm==='function')?hwRecTomNorm(ks[j]):'';
+      if(nk&&!seen[nk]){seen[nk]=1;wbHwTombInvalidateNorm(nk,'')}
+    }
+  }
   return hit;
 }
 function hwDeleteColumn(name,date){
@@ -18660,6 +18671,30 @@ function wbTombInvalidated(x) {
     return true;
   } catch (e) { return false }
 }
+/* vT220 墓碑原始键 → 业务键归一（hwRecTomKeys/hwRecKeys/mpFromDeskBuild 同一口径）：
+   记录级 rec = tomNorm(姓名)|作业名(去空格小写)|YYYY-MM-DD；
+   列级   col = 作业名(去空格小写)|YYYY-MM-DD。
+   以前这个函数缺失（typeof 守卫吞掉了所有调用），wbHwTombInvalidateNorm 的
+   归一匹配整条路是空操作，缓存里的异体墓碑永远作废不掉。 */
+function hwRecTomNorm(k) {
+  try {
+    var s = String(k == null ? '' : k).trim();
+    if (!s) return '';
+    var colMode = false;
+    if (s.indexOf('|col|') === 0) { colMode = true; s = s.slice(5); }
+    else if (s.indexOf('hw|') === 0 && s.indexOf('hw|') === 0) { s = s.slice(3); if (s.indexOf('|col|') === 0) { colMode = true; s = s.slice(5) } }
+    var parts = s.split('|');
+    function _p(v) { return String(v == null ? '' : v).replace(/\s+/g, '').toLowerCase() }
+    if (colMode) {
+      if (parts.length >= 2) return _p(parts[0]) + '|' + (hwDateKey(parts.slice(1).join('|')) || _p(parts[1]));
+      return _p(parts[0] || '');
+    }
+    if (parts.length < 3) return parts.map(_p).join('|');
+    var dt = hwDateKey(parts.slice(2).join('|')) || _p(parts[2]);
+    var nm = (typeof tomNorm === 'function') ? tomNorm(parts[0]) : _p(parts[0]);
+    return nm + '|' + _p(parts[1]) + '|' + dt;
+  } catch (e) { return String(k == null ? '' : k).toLowerCase() }
+}
 /* 作废一个作业墓碑（按归一键匹配 本机清单 + 缓存 里的所有原样键） */
 function wbHwTombInvalidateNorm(normKey, colKey) {
   try {
@@ -18678,10 +18713,12 @@ function wbHwTombInvalidateNorm(normKey, colKey) {
     if (window.__WB_HW_TOMBS__) {
       Object.keys(window.__WB_HW_TOMBS__).forEach(function (kk) {
         var raw = String(kk).replace(/^hw\|/, '');
-        if (normKey && typeof hwRecTomNorm === 'function' && hwRecTomNorm(raw) === normKey) { wbTombInvalidate('hw', raw); delete window.__WB_HW_TOMBS__[kk] }
+        /* vT220b：缓存键可能是 'hw|'+云端键 的双层形式，出站剔除按【云端原始键】精确
+           匹配 → 两种键形都要作废，否则带前缀的云端墓碑漏剔 */
+        if (normKey && typeof hwRecTomNorm === 'function' && hwRecTomNorm(raw) === normKey) { wbTombInvalidate('hw', raw); wbTombInvalidate('hw', kk); wbTombInvalidate('hw', 'hw|' + raw); delete window.__WB_HW_TOMBS__[kk] }
         else if (colKey && raw.indexOf('|col|') === 0) {
           var p2 = raw.slice(5).split('|');
-          if (p2.length >= 2 && (p2[0] + '|' + p2[1]) === colKey) { wbTombInvalidate('hw', raw); delete window.__WB_HW_TOMBS__[kk] }
+          if (p2.length >= 2 && (p2[0] + '|' + p2[1]) === colKey) { wbTombInvalidate('hw', raw); wbTombInvalidate('hw', kk); wbTombInvalidate('hw', 'hw|' + raw); delete window.__WB_HW_TOMBS__[kk] }
         }
       });
     }
@@ -21973,9 +22010,16 @@ function mpFromDeskBuild(o) {
         var _hiL = hi.toLowerCase();
         /* vT28 整列删除墓碑：被删列的登记绝不回写（日期/大小写统一归一后比对） */
         if (_ct[_hiL + '|' + _hd]) return false;
-        /* vT52 记录级墓碑：被「取消」的登记绝不回写（否则下一轮同步又复活） */
+        /* vT52 记录级墓碑：被「取消」的登记绝不回写（否则下一轮同步又复活）。
+           vT220 LWW：记录比墓碑新（取消后又重新登记）→ 墓碑作废放行，
+           登记写回云端，随后出站墓碑剔除把旧墓碑从云端真正移除。 */
         var _rn = (typeof tomNorm === 'function') ? tomNorm(nm) : nm.toLowerCase();
-        if (_rn && _rt[_rn + '|' + _hiL + '|' + _hd]) return false;
+        var _rk2 = (_rn && _rt[_rn + '|' + _hiL + '|' + _hd]) ? (_rn + '|' + _hiL + '|' + _hd) : '';
+        if (_rk2) {
+          var _rt2 = (typeof wbRecTs === 'function') ? wbRecTs(r) : 0;
+          if (_rt2 > _rt[_rk2]) { if (typeof wbHwTombInvalidateNorm === 'function') wbHwTombInvalidateNorm(_rk2, '') }
+          else return false;
+        }
         k = 'hw|' + nm + '|' + hi + '|' + _hd;
       } else if (String(tid) === String(MP_SYNC.rc.table)) {
         var rt = String(dv(p, '篇目') || '').replace(/\s+/g, '');
