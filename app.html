@@ -2844,9 +2844,9 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v219</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v220</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v219','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v220','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
       </div>
@@ -18637,6 +18637,68 @@ function tomLoad() {
 function tomSave(a) {
   try { localStorage.setItem('wb_mp_tombstones', JSON.stringify((a || []).filter(function (x) { return !wbScoreTombBanned(x) }).slice(-500))) } catch (e) {}
 }
+/* vT220 墓碑 LWW 统一语义（三端同一条不变量）：
+   墓碑只杀「比它旧」的记录（record.ts < tomb.at）。记录比墓碑新 → 记录赢，
+   墓碑作废。以前墓碑无条件永远赢、且没有任何端能从云端移除墓碑，
+   导致「登记→取消→再登记」死循环：重新登记的记录每轮都被云端墓碑杀掉
+   （2026-11-18 事故：管萱萱/黄紫琦《送元二使安西》改写怎么登都登不上）。 */
+function wbTombInvalidate(t, k) {
+  try {
+    if (!k) return;
+    var m = window.__WB_TOMB_INVALIDATED__ = window.__WB_TOMB_INVALIDATED__ || {};
+    m[(t || 'score') + '|' + k] = Date.now();
+  } catch (e) {}
+}
+function wbTombInvalidated(x) {
+  if (!x || !x.k) return false;
+  try {
+    var m = window.__WB_TOMB_INVALIDATED__ || {};
+    var kk = (x.t || 'score') + '|' + x.k;
+    var at = m[kk];
+    if (at == null) return false;
+    if ((Number(x.at) || 0) > at) { delete m[kk]; return false }   /* 更新的删除意图 → 作废失效，重新生效 */
+    return true;
+  } catch (e) { return false }
+}
+/* 作废一个作业墓碑（按归一键匹配 本机清单 + 缓存 里的所有原样键） */
+function wbHwTombInvalidateNorm(normKey, colKey) {
+  try {
+    var a = (typeof tomLoad === 'function') ? tomLoad() : [], ch = false;
+    a = a.filter(function (x) {
+      if (!x || x.t !== 'hw' || !x.k) return true;
+      if (colKey && x.k.indexOf('|col|') === 0) {
+        var p = x.k.slice(5).split('|');
+        if (p.length >= 2 && (p[0] + '|' + p[1]) === colKey) { ch = true; wbTombInvalidate('hw', x.k); return false }
+        return true;
+      }
+      if (normKey && typeof hwRecTomNorm === 'function' && hwRecTomNorm(x.k) === normKey) { ch = true; wbTombInvalidate('hw', x.k); return false }
+      return true;
+    });
+    if (ch && typeof tomSave === 'function') tomSave(a);
+    if (window.__WB_HW_TOMBS__) {
+      Object.keys(window.__WB_HW_TOMBS__).forEach(function (kk) {
+        var raw = String(kk).replace(/^hw\|/, '');
+        if (normKey && typeof hwRecTomNorm === 'function' && hwRecTomNorm(raw) === normKey) { wbTombInvalidate('hw', raw); delete window.__WB_HW_TOMBS__[kk] }
+        else if (colKey && raw.indexOf('|col|') === 0) {
+          var p2 = raw.slice(5).split('|');
+          if (p2.length >= 2 && (p2[0] + '|' + p2[1]) === colKey) { wbTombInvalidate('hw', raw); delete window.__WB_HW_TOMBS__[kk] }
+        }
+      });
+    }
+    if (window.__WB_HW_COL_TOMBS__ && colKey) delete window.__WB_HW_COL_TOMBS__[colKey];
+  } catch (e) {}
+}
+/* 行时间戳：本周期 mpToDesk 映射行经指纹表取源行 ts；带 _wts 属性的行直接取 */
+function hwRowTs(r) {
+  try {
+    if (!r) return 0;
+    var v = (window.__WB_ROW_WTS__ || {})[recFingerprint(r)];
+    if (v) return Number(v) || 0;
+    var p = (r && r.properties) || r || {};
+    if (p['_wts'] != null) return Number(p['_wts']) || 0;
+    return Number((r && r.ts) || 0) || 0;
+  } catch (e) { return 0 }
+}
 /* 姓名规范化与小程序 nameKey 完全一致（含异体字表），保证两端算出的业务键相同 */
 var TOM_VARIANT = { '铖': '成', '玥': '月', '琪': '其', '萱': '宣', '怡': '宜', '涵': '含', '轩': '宣', '瑶': '摇' };
 function tomNorm(name) {
@@ -18662,16 +18724,16 @@ function hwDateKey(v){
    键 = 作业名(去空格,小写)|YYYY-MM-DD。列名/日期任一不精确都不会漏判（双写保险）。 */
 function hwColTombSet(){
   var s={};
-  function add(name,date){
+  function add(name,date,at){
     var n=String(name==null?'':name).replace(/\s+/g,'').toLowerCase();
     var d=hwDateKey(date);
-    if(n&&d)s[n+'|'+d]=1;
+    if(n&&d)s[n+'|'+d]=(Number(at)||1);
   }
   try{
     (typeof tomLoad==='function'?tomLoad():[]).forEach(function(x){
       if(x&&x.t==='hw'&&x.k&&x.k.indexOf('|col|')===0){
         var p=String(x.k).slice(5).split('|');
-        if(p.length>=2)add(p[0],p[1]);
+        if(p.length>=2)add(p[0],p[1],x.at);
       }
     });
   }catch(e){}
@@ -18679,7 +18741,7 @@ function hwColTombSet(){
     if(window.__WB_HW_COL_TOMBS__){
       Object.keys(window.__WB_HW_COL_TOMBS__).forEach(function(k){
         var p=String(k).split('|');
-        if(p.length>=2)add(p[0],p[1]);
+        if(p.length>=2)add(p[0],p[1],window.__WB_HW_COL_TOMBS__[k]);
       });
     }
   }catch(e2){}
@@ -18691,18 +18753,18 @@ function hwColTombSet(){
    归一后都是同一个键，命中判定不会因为大小写/空白/异体字差一点点而漏判。 */
 function hwRecTombSet(){
   var s={};
-  function add(k){
+  function add(k, at){
     if(!k)return;
     var p=String(k).split('|');
     if(p.length>=3){
       var nm=tomNorm(p[0]), it=String(p[1]).replace(/\s+/g,'').toLowerCase(), dt=hwDateKey(p[2]);
-      if(nm&&it&&dt){s[nm+'|'+it+'|'+dt]=1;return}
+      if(nm&&it&&dt){s[nm+'|'+it+'|'+dt]=(Number(at)||1);return}
     }
-    s[String(k).replace(/\s+/g,'').toLowerCase()]=1;
+    s[String(k).replace(/\s+/g,'').toLowerCase()]=(Number(at)||1);
   }
   try{
     (typeof tomLoad==='function'?tomLoad():[]).forEach(function(x){
-      if(x&&x.t==='hw'&&x.k&&x.k.indexOf('|col|')!==0) add(x.k);
+      if(x&&x.t==='hw'&&x.k&&x.k.indexOf('|col|')!==0) add(x.k, x.at);
     });
   }catch(e){}
   try{
@@ -18710,7 +18772,7 @@ function hwRecTombSet(){
       Object.keys(window.__WB_HW_TOMBS__).forEach(function(k){
         var s2=String(k);
         if(s2.indexOf('hw|')===0)s2=s2.slice(3);
-        add(s2);
+        add(s2, window.__WB_HW_TOMBS__[k]);
       });
     }
   }catch(e2){}
@@ -18798,6 +18860,7 @@ function tomMerge(remote) {
   var a = tomLoad(), changed = false;
   remote.forEach(function (x) {
     if (!x || !x.k) return;
+    if (typeof wbTombInvalidated === 'function' && wbTombInvalidated(x)) return;   /* vT220：已作废墓碑不再并回 */
     var hit = null;
     for (var i = 0; i < a.length; i++) if (a[i].t === (x.t || 'score') && a[i].k === x.k) { hit = a[i]; break; }
     if (hit) { if ((x.at || 0) > (hit.at || 0)) { hit.at = x.at; changed = true; } return; }
@@ -19964,9 +20027,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v219';
-var WB_MY_VER = '优化版 vT219 · 桌面窗口高度贴合内容';
-var WB_BUILD_DATE = '11-18', WB_BUILD_NO = '2.6.232';
+var WB_VER_TAG = 'v220';
+var WB_MY_VER = '优化版 vT220 · 自由缩放 + 墓碑LWW统一';
+var WB_BUILD_DATE = '11-18', WB_BUILD_NO = '2.6.233';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -20238,7 +20301,14 @@ function giteeMergeIntoCloud(pack) {
         var rid = r.record_id || r.id;
         if (!rid || _hwDelSeen[rid]) return;
         var k = (typeof hwRecKeys === 'function') ? hwRecKeys(r) : { col: '', rec: '' };
-        if ((k.col && _colT[k.col]) || (k.rec && _recT[k.rec])) { _hwDelSeen[rid] = 1; hwDels.push(rid); }
+        /* vT220 LWW：记录比墓碑新 → 墓碑作废，不再删这条（登记→取消→再登记能活） */
+        var _rwt = (typeof hwRowTs === 'function') ? hwRowTs(r) : 0;
+        if (k.col && _colT[k.col]) {
+          if (_rwt > _colT[k.col]) { if (typeof wbHwTombInvalidateNorm === 'function') wbHwTombInvalidateNorm('', k.col); return }
+        } else if (k.rec && _recT[k.rec]) {
+          if (_rwt > _recT[k.rec]) { if (typeof wbHwTombInvalidateNorm === 'function') wbHwTombInvalidateNorm(k.rec, ''); return }
+        } else return;
+        _hwDelSeen[rid] = 1; hwDels.push(rid);
       }
       mine.forEach(_markHwDel);
       var add = [], upd = [];
@@ -20247,13 +20317,22 @@ function giteeMergeIntoCloud(pack) {
         if (r.id && byId[String(r.id)]) return;
         if (byFp[recFingerprint(r)]) return;
         var bk2 = recBizKey(tid, r);
-        /* 2.6.31 作业墓碑：被移列/删除的登记不再并回云端数据表（防复活） */
-        if (bk2 && window.__WB_HW_TOMBS__ && window.__WB_HW_TOMBS__[bk2]) return;
-        /* vT28 作业删除墓碑：直接按记录属性判定（不再依赖表 ID / 业务键是否匹配）。
-           被删列的登记、被删的登记，一律不再并回飞书 —— 这就是"删完又回来"的堵点。 */
+        /* 2.6.31 作业墓碑（vT220 LWW）：被移列/删除的登记不再并回（防复活），
+           但记录比墓碑新（重新登记）→ 墓碑作废放行，登记不再被吞 */
+        var _rwt2 = (typeof hwRowTs === 'function') ? hwRowTs(r) : 0;
         var _k2 = (typeof hwRecKeys === 'function') ? hwRecKeys(r) : { col: '', rec: '' };
-        if (_k2.col && _colT[_k2.col]) return;
-        if (_k2.rec && _recT[_k2.rec]) return;
+        if (_k2.rec && _recT[_k2.rec]) {
+          if (_rwt2 > _recT[_k2.rec]) { if (typeof wbHwTombInvalidateNorm === 'function') wbHwTombInvalidateNorm(_k2.rec, '') }
+          else return;
+        }
+        if (_k2.col && _colT[_k2.col]) {
+          if (_rwt2 > _colT[_k2.col]) { if (typeof wbHwTombInvalidateNorm === 'function') wbHwTombInvalidateNorm('', _k2.col) }
+          else return;
+        }
+        if (bk2 && window.__WB_HW_TOMBS__ && window.__WB_HW_TOMBS__[bk2]) {
+          if (_rwt2 > window.__WB_HW_TOMBS__[bk2]) { if (typeof wbHwTombInvalidateNorm === 'function') wbHwTombInvalidateNorm(_k2.rec, '') }
+          else return;
+        }
         /* 2.5.8 最后写入胜出：同键记录已存在时，比时间——
            别端的时间更新 → 用别端的覆盖云端这条（含改分、改正姓名等）；
            别端不比我们新 → 保留云端。老的"存在就跳过"会让手机端的修改永远同步不上来。 */
@@ -20461,11 +20540,22 @@ function giteeMergeIntoLocal(mpTables) {
       /* ② 作业墓碑：整列删除(|col|作业名|日期) / 记录级删除(姓名|作业名|日期) 命中即不再并入。
          判据与 giteeMergeIntoCloud 一致：既看业务键，也直接看记录属性（不依赖表 ID 是否匹配）。 */
       if (String(id) === _hwTid) {
-        var _bk0 = recBizKey(id, r);
-        if (_bk0 && window.__WB_HW_TOMBS__ && window.__WB_HW_TOMBS__[_bk0]) return;
+        /* vT220 LWW：记录比墓碑新 → 墓碑作废放行（重新登记不再被吞） */
+        var _rwt3 = (typeof hwRowTs === 'function') ? hwRowTs(r) : 0;
         var _hk = (typeof hwRecKeys === 'function') ? hwRecKeys(r) : { col: '', rec: '' };
-        if (_hk.col && _colT[_hk.col]) return;
-        if (_hk.rec && _recT[_hk.rec]) return;
+        if (_hk.rec && _recT[_hk.rec]) {
+          if (_rwt3 > _recT[_hk.rec]) { if (typeof wbHwTombInvalidateNorm === 'function') wbHwTombInvalidateNorm(_hk.rec, '') }
+          else return;
+        }
+        if (_hk.col && _colT[_hk.col]) {
+          if (_rwt3 > _colT[_hk.col]) { if (typeof wbHwTombInvalidateNorm === 'function') wbHwTombInvalidateNorm('', _hk.col) }
+          else return;
+        }
+        var _bk0 = recBizKey(id, r);
+        if (_bk0 && window.__WB_HW_TOMBS__ && window.__WB_HW_TOMBS__[_bk0]) {
+          if (_rwt3 > window.__WB_HW_TOMBS__[_bk0]) { if (typeof wbHwTombInvalidateNorm === 'function') wbHwTombInvalidateNorm(_hk.rec, '') }
+          else return;
+        }
       }
       if (r.id && byId[String(r.id)]) return;
       var fp = recFingerprint(r);
@@ -20687,16 +20777,18 @@ function syncCycleCore(manual) {
       } catch (_crvE) {}
       window.__WB_HW_TOMBS__ = {};
       window.__WB_HW_COL_TOMBS__ = {};   /* vT27 整列删除墓碑：键 = 作业名(去空格)|日期，来自任意端（小程序 2.6.40 格式对齐） */
+      /* vT220：值为墓碑 at（供记录 LWW 比较），已作废的墓碑不再入缓存 */
       (doc.deletes || []).forEach(function (x) {
         if (x && x.t === 'hw' && x.k) {
+          if (typeof wbTombInvalidated === 'function' && wbTombInvalidated(x)) return;
           var kk = String(x.k);
           if (kk.indexOf('|col|') === 0) {
             var _cp = kk.slice(5).split('|');
-            if (_cp.length >= 2 && _cp[0]) window.__WB_HW_COL_TOMBS__[_cp[0] + '|' + _cp[1]] = 1;
+            if (_cp.length >= 2 && _cp[0]) window.__WB_HW_COL_TOMBS__[_cp[0] + '|' + _cp[1]] = (Number(x.at) || 1);
             return;
           }
           if (kk.indexOf('hw|') === 0) kk = kk.slice(3);
-          window.__WB_HW_TOMBS__['hw|' + kk] = 1;
+          window.__WB_HW_TOMBS__['hw|' + kk] = (Number(x.at) || 1);
         }
       });
       Object.keys(tables).forEach(function (k) { remoteN += (tables[k] || []).length });
@@ -20774,12 +20866,18 @@ function syncCycleCore(manual) {
             (out.deletes || []).forEach(function (x) { if (x && x.k) _dm[(x.t || 'score') + '|' + x.k] = x; });
             _mt.forEach(function (x) {
               if (!x || !x.k) return;
+              if (typeof wbTombInvalidated === 'function' && wbTombInvalidated(x)) return;   /* vT220：已作废墓碑不再推回 */
               var kk = (x.t || 'score') + '|' + x.k;
               var old = _dm[kk];
               if (!old) { out.deletes.push({ t: x.t || 'score', k: x.k, at: x.at || Date.now() }); _dm[kk] = x; return; }
               if ((x.at || 0) > (old.at || 0)) old.at = x.at;
             });
           }
+          /* vT220：最终出口剔除已作废墓碑 —— 这是唯一的「云端墓碑移除」通路，
+             让「登记→取消→再登记」的记录能真正活下来（以前墓碑一旦入云就永生）。 */
+          var _di0 = (out.deletes || []).length;
+          out.deletes = (out.deletes || []).filter(function (x) { return !(typeof wbTombInvalidated === 'function' && wbTombInvalidated(x)) });
+          if (out.deletes.length !== _di0) { try { console.info('[tomb] 已作废墓碑出站剔除 ' + (_di0 - out.deletes.length) + ' 条') } catch (_diE1) {} }
         } catch (_dterr) {}
         /* vT170 双保险：远端 deletes 里若混入 9 个「恢复保护」墓碑（旧版手机推回），
            写回时一并滤掉，绝不让它们经网页「过桥」存活 → 旧手机墓碑从此断根。
@@ -21531,13 +21629,16 @@ function mpToDesk(tables) {
   /* 2.5.4 防线加固：任何来源（含脏仓库/旧手机）推来的空姓名记录，一律不入云端表。
      之前只在 mpFromDeskBuild（回写方向）过滤，giteeMergeIntoCloud（并入方向）没有拦，
      脏数据仍可能从这条缝钻进云端数据表。 */
-  function recs(tid, arr, fn) {
+  function recs(tid, arr, fn, tsFn) {
     var rows = [];
     (arr || []).forEach(function (r) {
       var p = fn(r); if (!p) return;
       var nm = dv(p, '姓名') || dv(p, '学生姓名') || '';
       if (!String(nm).trim()) return;   /* 空姓名 = 脏记录，直接丢弃 */
-      rows.push({ id: 'MPK_' + mpStableKey(tid, p), properties: p });
+      var row = { id: 'MPK_' + mpStableKey(tid, p), properties: p };
+      /* vT220 墓碑 LWW：把源行 ts 记进指纹表，合并层据此判断「记录比墓碑新」 */
+      if (tsFn) { try { var _w = Number(tsFn(r)) || 0; if (_w) (window.__WB_ROW_WTS__ = window.__WB_ROW_WTS__ || {})[recFingerprint(row)] = _w } catch (_wE) {} }
+      rows.push(row);
     });
     if (rows.length) out[tid] = rows;
   }
@@ -21560,7 +21661,7 @@ function mpToDesk(tables) {
     /* 记住科任各列的科目，工作台主页据此把非语文学科过滤掉（只留语文） */
     hwSubjSet(r.item, r.date, r.subject);
     return p;
-  });
+  }, function (r) { return r && r.ts });
   recs(MP_SYNC.rc.table, tables.rc, function (r) {
     return { '学生姓名': mpTxt(r.name), '打卡日期': mpTxt(r.date), '篇目': mpTxt(r.title) };
   });
