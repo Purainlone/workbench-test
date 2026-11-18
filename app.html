@@ -14480,6 +14480,7 @@ function stDelRow(r, silent) {
   }, Promise.resolve()).then(function () { return ok });
 }
 /* 过滤掉「已删」的奖惩行：命中即从表里再删一次，返回干净的行数组 */
+var _stPurgeTry = {};
 function stPurge(rows) {
   try {
     if (!Array.isArray(rows) || !rows.length) return rows;
@@ -14498,13 +14499,20 @@ function stPurge(rows) {
       if (tk && T[tk]) { kill.push(r); return false }
       return true;
     });
-    if (kill.length) {
+    /* 再删一次：同一条 10 分钟内只尝试一回（删不掉就只做内存隐藏，不刷接口）；
+       一次命中超过 50 条也跳过重删（多为整批历史数据，交给合并层的墓碑处理） */
+    if (kill.length && kill.length <= 50) {
+      var now = Date.now(), done = 0;
       kill.forEach(function (r) {
-        var id = (typeof recId === 'function') ? recId(r) : '';
+        var id = (typeof recId === 'function') ? String(recId(r) || '') : '';
+        var key = id || ('k' + (r && r.properties ? String(fval(r, '姓名')) + fval(r, '日期') : ''));
+        if (!key) return;
+        if (_stPurgeTry[key] && now - _stPurgeTry[key] < 600000) return;
+        _stPurgeTry[key] = now; done++;
         if (id) stDeadAdd(id);
         stDelRow(r, true);
       });
-      try { console.log('[st] vT227 自动清掉复活流水 ' + kill.length + ' 条'); } catch (e1) {}
+      try { console.log('[st] vT227 剔掉复活流水 ' + kill.length + ' 条（本轮补删 ' + done + ' 条）'); } catch (e1) {}
     }
     return keep;
   } catch (e) { return rows }
