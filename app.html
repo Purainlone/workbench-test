@@ -1976,33 +1976,36 @@ table.paper td.l{text-align:left;font-weight:600}
       <div id="qzStat" class="sub" style="margin-top:8px"></div>
     </div>
 
-    <div class="chartbox" style="margin:10px 0">
-      <h3 style="font-size:14px">📚 题库管理</h3>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
-        <select id="qzCatFilter" onchange="qzRender()" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px"></select>
-        <button class="btn2 sm primary" onclick="qzAdd()">➕ 新增题目</button>
-        <button class="btn2 sm" onclick="qzOpenImport()">📥 批量导入</button>
-        <button class="btn2 sm ghost" style="color:#c2410c" onclick="qzPurgeAll()" title="清空全部题目（已加过的分不受影响）">🧹 清空题库</button>
-        <span class="sctip" id="qzBankTip"></span>
+    <!-- vT215b 三块并列：今日题目 / 答题情况 / 题库管理，宽屏三栏、窄屏自动换行 -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:10px;margin:10px 0;align-items:start">
+      <div class="chartbox" style="margin:0">
+        <h3 style="font-size:14px">👀 今日题目预览（家长端看到的就是这几题）</h3>
+        <div id="qzToday" style="margin-top:6px"></div>
       </div>
-      <div id="qzList" style="margin-top:8px"></div>
-    </div>
 
-    <div class="chartbox" style="margin:10px 0">
-      <h3 style="font-size:14px">📊 答题情况 · 错题库 <span style="font-size:12px;font-weight:400;color:#6b7c72">谁答了、错在哪，一目了然</span></h3>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
-        <button class="btn2 sm" id="qzWTabQ" onclick="qzWrongRender('q')">📋 按题目（错题排行）</button>
-        <button class="btn2 sm" id="qzWTabS" onclick="qzWrongRender('s')">🧑‍🎓 按学生（答题明细）</button>
-        <button class="btn2 sm ghost" onclick="qzWrongRender()">🔄 刷新</button>
-        <button class="btn2 sm" onclick="qzWrongExport()">📤 导出 CSV</button>
-        <span class="sub" id="qzWrongTip"></span>
+      <div class="chartbox" style="margin:0">
+        <h3 style="font-size:14px">📊 答题情况 · 错题库 <span style="font-size:12px;font-weight:400;color:#6b7c72">谁答了、错在哪</span></h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+          <button class="btn2 sm" id="qzWTabQ" onclick="qzWrongRender('q')">📋 按题目（错题排行）</button>
+          <button class="btn2 sm" id="qzWTabS" onclick="qzWrongRender('s')">🧑‍🎓 按学生（答题明细）</button>
+          <button class="btn2 sm ghost" onclick="qzWrongRender()">🔄 刷新</button>
+          <button class="btn2 sm" onclick="qzWrongExport()">📤 导出 CSV</button>
+          <span class="sub" id="qzWrongTip"></span>
+        </div>
+        <div id="qzWrong" style="margin-top:8px;max-height:420px;overflow-y:auto"></div>
       </div>
-      <div id="qzWrong" style="margin-top:8px"></div>
-    </div>
 
-    <div class="chartbox" style="margin:10px 0">
-      <h3 style="font-size:14px">👀 今日题目预览（家长端看到的就是这几题）</h3>
-      <div id="qzToday" style="margin-top:6px"></div>
+      <div class="chartbox" style="margin:0">
+        <h3 style="font-size:14px">📚 题库管理</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
+          <select id="qzCatFilter" onchange="qzRender()" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px"></select>
+          <button class="btn2 sm primary" onclick="qzAdd()">➕ 新增题目</button>
+          <button class="btn2 sm" onclick="qzOpenImport()">📥 批量导入</button>
+          <button class="btn2 sm ghost" style="color:#c2410c" onclick="qzPurgeAll()" title="清空全部题目（已加过的分不受影响）">🧹 清空题库</button>
+          <span class="sctip" id="qzBankTip"></span>
+        </div>
+        <div id="qzList" style="margin-top:8px;max-height:420px;overflow-y:auto"></div>
+      </div>
     </div>
   </section>
 
