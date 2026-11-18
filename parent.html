@@ -1467,37 +1467,6 @@
     h += '<div style="font-size:12px;color:#9aa8a0;margin:-6px 2px 10px"><span class="dot"></span>数据 ' + at + ' 更新' +
       (ageH >= 24 ? ('（老师 ' + Math.round(ageH / 24) + ' 天前发布）') : '') + '</div>';
 
-    /* ===== vT210 灵宠板块置顶：打开就能看到 + 内联欢迎（不再弹窗） =====
-       家长反馈：弹窗要等灵宠数据到才出现、看不全；把灵宠直接放到最上面，
-       打开即可见，欢迎语以内联气泡显示在卡片里，随页面一起出现，无需点击关闭。 */
-    if (on('codex')) {
-      var topPets = (v.codex || []).filter(function (p) { return cxIsPet(p); });
-      h += '<div class="card pethero"><h2>🐾 孩子的灵宠 <em>' + topPets.length + ' 只</em></h2>';
-      if (topPets.length) {
-        /* 内联欢迎：随机挑一只说一句，每次打开随机一句；不弹窗、不占屏 */
-        var wob = topPets[Math.floor(Math.random() * topPets.length)];
-        var wsay = PET_WELCOME[Math.floor(Math.random() * PET_WELCOME.length)];
-        var wimg = wob.img || (wob.imgs && (wob.imgs[wob.stage] || wob.imgs.baby || wob.imgs.teen || wob.imgs.adult));
-        var wsrc = wimg ? (pickSrcs(wimg)[0] || wimg) : '';
-        h += '<div class="petsay">' +
-          (wsrc ? '<img class="petsay-pet" src="' + esc(wsrc) + '" onerror="this.style.display=\'none\'" alt="">' : '<span class="petsay-emo">🐾</span>') +
-          '<div class="petsay-body"><b>' + esc(wob.name || '灵宠') + '</b><span>' + esc(wsay) + '</span></div>' +
-          '</div>';
-        h += '<div class="cxgrid">' + topPets.map(function (p) { return cxCard(p, v.codex.indexOf(p)); }).join('') + '</div>';
-        h += '<div class="cxtip">点灵宠卡片可「🤏 捏捏 / ✋ 摸摸 / 🎾 玩耍」（免费小演出，不改成长值）；想真的长成长值，点下方「🍚 喂食」。</div>';
-        /* 抽灵宠按钮带上来，方便直接操作 */
-        h += '<div class="acts" style="margin-top:10px">' +
-          '<button class="btn2" id="btnPetTop"' + (perm0.draw ? '' : ' disabled') + '>🐾 抽灵宠（-' + petCost + '）</button>' +
-          '</div>';
-      } else {
-        h += '<div class="empty">还没有灵宠，点下方「🐾 抽灵宠」唤醒第一只<br>' +
-          '<span style="font-size:11px;color:#b8c4bd">如果孩子已有灵宠却不显示，可能是老师还没发布最新数据，稍后点「刷新」或请老师在工作台点一次「🚀 立即重发快照」</span></div>' +
-          '<div class="acts" style="margin-top:10px">' +
-          '<button class="btn2" id="btnPetTop"' + (perm0.draw ? '' : ' disabled') + '>🐾 抽灵宠（-' + petCost + '）</button>' +
-          '</div>';
-      }
-      h += '</div>';
-    }
     /* 留堂 */
     if (on('detain') && v.detain.length) {
       h += '<div class="card warn"><h2>📌 今天被留堂</h2><div class="why">' +
@@ -1665,8 +1634,24 @@
     if (on('codex')) {
       var petList = (v.codex || []).filter(function (p) { return cxIsPet(p); });
       var cardList = (v.codex || []).filter(function (p) { return !cxIsPet(p); });
-      /* vT210 灵宠已置顶独立展示，图鉴卡只保留「已集灵杰」，避免同一批灵宠在页面出现两次 */
-      h += '<div class="card"><h2>孩子的启灵图鉴 <em>灵杰 ' + cardList.length + (poolN ? (' 张(共' + poolN + ')') : '') + (petList.length ? (' · 灵宠见上方') : '') + '</em></h2>';
+      h += '<div class="card"><h2>孩子的启灵图鉴 <em>灵宠 ' + petList.length + ' 只 · 灵杰 ' + cardList.length + (poolN ? (' 张(共' + poolN + ')') : '') + '</em></h2>';
+      /* vT211 灵宠回到原位（图鉴卡内）；欢迎语改为内联气泡，不弹窗 */
+      h += '<div class="cxsub"><span>🐾 已养灵宠</span><small>' + petList.length + ' 只</small></div>';
+      if (petList.length) {
+        var wob = petList[Math.floor(Math.random() * petList.length)];
+        var wsay = PET_WELCOME[Math.floor(Math.random() * PET_WELCOME.length)];
+        var wimg = wob.img || (wob.imgs && (wob.imgs[wob.stage] || wob.imgs.baby || wob.imgs.teen || wob.imgs.adult));
+        var wsrc = wimg ? (pickSrcs(wimg)[0] || wimg) : '';
+        h += '<div class="petsay">' +
+          (wsrc ? '<img class="petsay-pet" src="' + esc(wsrc) + '" onerror="this.style.display=\'none\'" alt="">' : '<span class="petsay-emo">🐾</span>') +
+          '<div class="petsay-body"><b>' + esc(wob.name || '灵宠') + '</b><span>' + esc(wsay) + '</span></div>' +
+          '</div>';
+        h += '<div class="cxgrid">' + petList.map(function (p) { return cxCard(p, v.codex.indexOf(p)); }).join('') + '</div>' +
+          '<div class="cxtip">点灵宠卡片：「🤏 捏捏 / ✋ 摸摸 / 🎾 玩耍」是免费小演出，不会真的改变成长值；想真的长成长值，点菜单里的「🍚 喂食」（扣孩子积分，老师批准 / 自动批准后生效）。</div>';
+      } else {
+        h += '<div class="empty">还没有灵宠，点下方「🐾 抽灵宠」唤醒第一只<br>' +
+          '<span style="font-size:11px;color:#b8c4bd">如果孩子已有灵宠却不显示，可能是老师还没发布最新数据，稍后点「刷新」或请老师在工作台点一次「🚀 立即重发快照」</span></div>';
+      }
       /* 已集灵杰 */
       h += '<div class="cxsub"><span>🎴 已集灵杰</span><small>' + cardList.length + (poolN ? (' / ' + poolN) : '') + '</small></div>';
       h += cardList.length
@@ -1678,12 +1663,13 @@
           ? ('老师已开启自动批准：提交后约 10 秒自动入账' + (Number(ST.snap.autoLimit) > 0 ? ('（每人每天 ' + ST.snap.autoLimit + ' 次）') : '') + '。')
           : '提交后由老师批准，批准后这里会显示已生效。')
         : '⚠️ 老师还没开通家长通道：请老师在电脑工作台「家长端显示设置 → 家长端权限」里填提案仓库和令牌（以前只能在手机小程序里配，所以电脑端看着像没开通）。';
-      h += '<div class="drawbox"><div class="t">🎴 帮孩子抽灵杰卡（扣孩子的启灵积分）</div>' +
+      h += '<div class="drawbox"><div class="t">🎴🐾 帮孩子抽卡 / 喂养（扣孩子的启灵积分）</div>' +
         '<div class="acts">' +
         '<button class="btn2" id="btnFeed"' + (perm0.draw ? '' : ' disabled') + '>🎴 抽灵杰卡（-' + feedCost + '）</button>' +
+        '<button class="btn2" id="btnPet"' + (perm0.draw ? '' : ' disabled') + '>🐾 抽灵宠（-' + petCost + '）</button>' +
         '</div>' +
         '<div class="note">抽灵杰卡：抽到还没有的灵杰会同时唤醒上墙；重复的卡自动升星（最高 ★5）。<br>' +
-        '抽灵宠：在页面顶部「🐾 孩子的灵宠」板块操作（抽一只成长灵宠，奶团子态；<b>名下还有未成年灵宠时不能抽</b>，养到成年才能抽下一只）。<br>' +
+        '抽灵宠：抽一只成长灵宠（奶团子态）；<b>名下还有未成年灵宠时不能抽</b>，养到成年才能抽下一只。<br>' +
         '喂养：点孩子的灵宠卡 →「🍚 喂食」，米饭 +5 / 胡萝卜 +10 / 肉干 +20 成长值（1 点 = 1 分），攒满自动进化。<br>' +
         (perm0.draw ? '' : '⚠️ 老师关掉了家长端抽卡；') + (perm0.feed ? '' : '⚠️ 老师关掉了家长端喂养；') +
         (perm0.draw || perm0.feed ? '' : '<br>') + chTip +
@@ -1726,7 +1712,6 @@
     document.getElementById('btnOut').onclick = function () { goLogin(); };
     var bf = document.getElementById('btnFeed'); if (bf) bf.onclick = function () { submitProposal('feed', feedCost); };
     var bp = document.getElementById('btnPet'); if (bp) bp.onclick = function () { submitProposal('growdraw', petCost); };
-    var bpt = document.getElementById('btnPetTop'); if (bpt) bpt.onclick = function () { submitProposal('growdraw', petCost); };
     wirePetFun();   /* vT136 灵宠卡互动：捏捏 / 摸摸 / 玩耍 */
     try { window.__paImgWatch() } catch (e) {}   /* vT210 图片看门狗：5秒未加载出图→蛋占位 */
     try { paPetRetry(v); } catch (e) {}          /* vT210 灵宠为空→静默重拉快照（救数据延迟） */
