@@ -10512,17 +10512,28 @@ function scBonusUndoApply() {
   if (!confirm('撤销下面 ' + picks.length + ' 条目标加分（合计 +' + sum + '，将从个人积分扣回）？\n\n' + lines.join('\n') +
     '\n\n会删除飞书流水行并写删除墓碑，小程序 / 教室桌面同步移除。')) return;
   toastMsg('⏳ 正在撤销 ' + picks.length + ' 条…');
+  /* vT236 按键统计勾选情况：同键还有未勾选的保留行时【不写墓碑】（墓碑会把保留的
+     兄弟行连坐杀掉），只按 id 精确删；整键全撤 → 照旧写墓碑 + 移除创建登记 */
+  var _undoKeys = {};
+  SC_BONUS_UNDO.forEach(function (r) {
+    var k = stTombKeyOf(r.name, r.reason, r.date, r.pts); if (!k) return;
+    _undoKeys[k] = _undoKeys[k] || { p: 0, l: 0 };
+    if (r._on) _undoKeys[k].p++; else _undoKeys[k].l++;
+  });
   picks.forEach(function (r) {
-    /* ① 记录级墓碑（成绩达标键不含日期，date 传不传都不影响键） */
-    try { tomAdd('st', stTombKeyOf(r.name, r.reason, r.date, r.pts)) } catch (_te) {}
-    /* ② 移除创建登记：撤销场景墓碑必须赢过 vT233 LWW */
-    try {
-      var k = stTombKeyOf(r.name, r.reason, r.date, r.pts);
-      if (k) {
-        var m = stCreatedMap();
-        if (m[k]) { delete m[k]; localStorage.setItem('wb_st_created_v1', JSON.stringify(m)) }
-      }
-    } catch (_ce) {}
+    var k = stTombKeyOf(r.name, r.reason, r.date, r.pts);
+    var full = !k || !_undoKeys[k] || !_undoKeys[k].l;
+    if (full) {
+      /* ① 记录级墓碑（成绩达标键不含日期，date 传不传都不影响键） */
+      try { tomAdd('st', stTombKeyOf(r.name, r.reason, r.date, r.pts)) } catch (_te) {}
+      /* ② 移除创建登记：撤销场景墓碑必须赢过 vT233 LWW */
+      try {
+        if (k) {
+          var m = stCreatedMap();
+          if (m[k]) { delete m[k]; localStorage.setItem('wb_st_created_v1', JSON.stringify(m)) }
+        }
+      } catch (_ce) {}
+    }
   });
   var jobs = picks.filter(function (r) { return r.rid }).map(function (r) {
     return db.deleteRecord({ databaseId: ST_DB, recordId: r.rid }).then(function () { return 1 }, function () { return 0 });
@@ -14637,6 +14648,58 @@ function stDeadAdd(id) {
   var o = stDeadLoad(); o[String(id)] = Date.now();
   try { localStorage.setItem(ST_DEL_KEY, JSON.stringify(o)) } catch (e) {}
 }
+/* ===== vT236 目标加分（成绩达标类）流水去重 =====
+   病根（11-19 复盘）：stTombKeyOf 对成绩达标键不含日期（一场考试一个键）。
+   同一学生在飞书里存在两条同键行（如 11-16 的旧行 + 撤销后重加的新行）时：
+   ① 显示层不去重 → 看到「重复记录」；
+   ② 删旧行 → 同键墓碑会在 stPurge 把重加的新行也杀掉（或 used[tk] 任杀一条留下另一条）
+      → 「删了还剩 / 删也删不掉」，甚至把重加的分数弄丢。
+   规则：成绩达标类一场考试每人只计一次（与 scBonusAwardedSet 防重同口径），
+   同键多行 = 意外重复 → 保留日期最新的一条，其余当重复清理。
+   普通奖惩（同日同事项多条是正常的，如家长喂食两次）不参与去重。 */
+function stIsBonusRow(r) {
+  return String(fval(r, '奖惩事项') || '').indexOf('成绩达标') === 0;
+}
+function stBonusRowKey(r) {
+  return stTombKeyOf(fval(r, '姓名'), fval(r, '奖惩事项'), syncDateOnly(fval(r, '日期')), parseFloat(fval(r, '奖惩分值')));
+}
+function stDedupBonus(rows) {
+  var keep = [], dups = [], groups = {};
+  (rows || []).forEach(function (r) {
+    if (!stIsBonusRow(r)) { keep.push(r); return }
+    var k = stBonusRowKey(r);
+    if (!k) { keep.push(r); return }
+    (groups[k] = groups[k] || []).push(r);
+  });
+  Object.keys(groups).forEach(function (k) {
+    var g = groups[k];
+    if (g.length === 1) { keep.push(g[0]); return }
+    /* 保留最新：日期新优先 → id 稳定序（撤销后重加的行日期一定 ≥ 原行，日期新的就是该留的那条） */
+    g.sort(function (a, b) {
+      var da = String(fval(a, '日期') || ''), db = String(fval(b, '日期') || '');
+      if (da !== db) return db.localeCompare(da);
+      return String(recId(a)).localeCompare(String(recId(b)));
+    });
+    keep.push(g[0]);
+    for (var i = 1; i < g.length; i++) dups.push(g[i]);
+  });
+  return { keep: keep, dups: dups };
+}
+/* vT236：某业务键是否还有「活着」的兄弟行（排除 selfRow 自身、不在已删名单里）。
+   有兄弟行 = 这个键还活着 → 删行时不能写墓碑（墓碑会把兄弟行连坐杀掉），只按 id 精确删。 */
+function stBonusSiblingAlive(tk, selfRow) {
+  try {
+    var dead = stDeadLoad();
+    for (var i = 0; i < (ST_ROWS || []).length; i++) {
+      var r = ST_ROWS[i];
+      if (!r || r === selfRow) continue;
+      if (String(recId(r)) && String(recId(r)) === String(recId(selfRow))) continue;
+      if (dead[String(recId(r))]) continue;
+      if (stBonusRowKey(r) === tk) return true;
+    }
+  } catch (e) {}
+  return false;
+}
 /* 按所有可能的 id 字段各删一次；silent 时只删不记墓碑 */
 function stDelRow(r, silent) {
   if (!r || typeof db === 'undefined' || !db || typeof db.deleteRecord !== 'function') return Promise.resolve(0);
@@ -14683,22 +14746,63 @@ function stPurge(rows) {
       var _stCr = (typeof stCreatedMap === 'function') ? stCreatedMap() : {};
       var _stTomAt = {};
       if (typeof tomLoad === 'function') tomLoad().forEach(function (x) { if (x && x.t === 'st' && x.k) _stTomAt[x.k] = Number(x.at) || 0 });
-      for (var i = 0; i < keep.length; i++) {
-        var r2 = keep[i];
+      /* vT236 重写：先按键分组再裁决，取代旧版「顺序遍历、任杀第一条」——
+         同键多条时（如 11-16 旧行 + 撤销后重加的新行）旧版会连坐新行或漏杀，
+         现在规则：① 组内最新创建登记 > 墓碑 → 行赢，作废墓碑整组保留（去重段兜底）；
+         ② 否则只杀「最旧」一条（创建登记时间小 → 日期旧优先），新行不受连坐。 */
+      var _byKey = {};
+      keep.forEach(function (r2) {
         var rs = String((typeof fval === 'function' ? fval(r2, '奖惩事项') : '') || '').trim();
-        if (!rs) continue;
-        var d = (typeof syncDateOnly === 'function') ? syncDateOnly(fval(r2, '日期')) : String(fval(r2, '日期') || '').slice(0, 10);
-        var tk = (typeof stTombKeyOf === 'function') ? stTombKeyOf(fval(r2, '姓名'), rs, d, parseFloat(fval(r2, '奖惩分值'))) : '';
-        if (!tk || !T[tk] || used[tk]) continue;
-        var _crTs = (typeof stCreatedFresh === 'function') ? stCreatedFresh(fval(r2, '姓名'), rs, d, parseFloat(fval(r2, '奖惩分值'))) : 0;
-        if (_crTs && _crTs > (_stTomAt[tk] || 0)) {
-          if (typeof wbTombInvalidate === 'function') wbTombInvalidate('st', tk);
-          continue;
-        }
+        if (!rs) return;
+        var tk = (typeof stTombKeyOf === 'function') ? stTombKeyOf(fval(r2, '姓名'), rs, (typeof syncDateOnly === 'function' ? syncDateOnly(fval(r2, '日期')) : String(fval(r2, '日期') || '').slice(0, 10)), parseFloat(fval(r2, '奖惩分值'))) : '';
+        if (!tk || !T[tk]) return;
+        (_byKey[tk] = _byKey[tk] || []).push(r2);
+      });
+      Object.keys(_byKey).forEach(function (tk) {
+        if (used[tk]) return;
         used[tk] = 1;
-        kill.push(r2); keep.splice(i, 1); i--;
-      }
+        var g = _byKey[tk];
+        var newestCr = 0;
+        g.forEach(function (r2) {
+          var cr = (typeof stCreatedFresh === 'function') ? stCreatedFresh(fval(r2, '姓名'), fval(r2, '奖惩事项'), (typeof syncDateOnly === 'function' ? syncDateOnly(fval(r2, '日期')) : String(fval(r2, '日期') || '').slice(0, 10)), parseFloat(fval(r2, '奖惩分值'))) : 0;
+          if (cr > newestCr) newestCr = cr;
+        });
+        if (newestCr > (_stTomAt[tk] || 0)) {
+          if (typeof wbTombInvalidate === 'function') wbTombInvalidate('st', tk);
+          return;
+        }
+        var victim = g.slice().sort(function (a, b) {
+          var ka = '', kb = '';
+          try { ka = stBonusRowKey(a) } catch (e1) {}
+          try { kb = stBonusRowKey(b) } catch (e2) {}
+          var ca = _stCr[ka] || 0, cb = _stCr[kb] || 0;
+          if (ca !== cb) return ca - cb;
+          var da = String(fval(a, '日期') || ''), dbb = String(fval(b, '日期') || '');
+          return da.localeCompare(dbb);
+        })[0];
+        var idx = keep.indexOf(victim);
+        if (idx >= 0) { kill.push(victim); keep.splice(idx, 1) }
+      });
     }
+    /* vT236 达标去重段：同键（姓名|事项|分值，成绩达标类）多行 → 保留日期最新，
+       多余的进 kill 由下方限频补删（一场考试每人只加一次，重复行=意外双写） */
+    try {
+      var _dd = stDedupBonus(keep);
+      if (_dd.dups.length) {
+        var _nowD = Date.now();
+        _dd.dups.forEach(function (r) {
+          var id = (typeof recId === 'function') ? String(recId(r) || '') : '';
+          var key = id || ('k' + String(fval(r, '姓名')) + '|' + String(fval(r, '奖惩事项')) + '|' + String(fval(r, '日期')));
+          if (_stPurgeTry[key] && _nowD - _stPurgeTry[key] < 600000) return;
+          _stPurgeTry[key] = _nowD;
+          if (id) stDeadAdd(id);
+          stDelRow(r, true);
+        });
+        kill = kill.concat(_dd.dups);
+        keep = _dd.keep;
+        try { console.log('[st] vT236 达标重复行清理 ' + _dd.dups.length + ' 条') } catch (e2) {}
+      }
+    } catch (_dde) {}
     /* 再删一次：同一条 10 分钟内只尝试一回（删不掉就只做内存隐藏，不刷接口）；
        一次命中超过 50 条也跳过重删（多为历史遗留，交给合并层的墓碑处理） */
     if (kill.length && kill.length <= 50) {
@@ -16668,7 +16772,8 @@ function stuPoints(){
     var _a=Array.isArray(_db['s-hwadj'])?_db['s-hwadj']:[];
     _a.forEach(function(r){ if(!r||r.deleted||!r.name)return; var v=Number(r.delta)||0; if(!v)return; hwP[r.name]=(hwP[r.name]||0)+v; });
   }catch(e){} })();
-  ST_ROWS.forEach(function(r){
+  /* vT236 成绩达标类同键重复行只算一次分（11-16 重复加分事故修复，与流水显示同口径） */
+  stDedupBonus(ST_ROWS).keep.forEach(function(r){
     var n=fval(r,'姓名');if(!n)return;
     var v=parseFloat(fval(r,'奖惩分值'));
     if(isNaN(v))v=0;
@@ -16886,7 +16991,8 @@ function openStuPanel(name){
         v:Math.round(v/myg.members.length*10)/10,src:'ga',id:recId(r)});
     });
   }
-  ST_ROWS.forEach(function(r){
+  /* vT236 去重：成绩达标类同键重复行（11-16 旧行+重加新行）流水只显示一条 */
+  stDedupBonus(ST_ROWS).keep.forEach(function(r){
     if(fval(r,'姓名')!==name)return;
     var t=fval(r,'奖惩事项');
     if(!t)return;                      /* 档案占位行没有事项，不进流水 */
@@ -16939,13 +17045,25 @@ function openStuPanel(name){
         if(!confirm('删掉这条奖惩记录？'))return;
         /* vT227：先记墓碑（键与合并层同构）+ 记住记录 id，再按 id/_id/record_id 各删一次——
            以前只用 recId 走一次 deleteRecord，适配器认的 id 字段一变就会出现
-           「提示已删除、几秒后这条又回来」。 */
+           「提示已删除、几秒后这条又回来」。
+           vT236 关键修正：同业务键还有「活着的兄弟行」（如 11-16 旧行旁边撤销后重加的新行）
+           时【不写墓碑】，只按 id 精确删 —— 墓碑会把同键兄弟行连坐杀掉
+           （成绩达标键不含日期），这正是「删一条重复、整组都对不上」的病根。
+           没有兄弟行 → 照旧写墓碑防复活，并移除创建登记。 */
         var _r=f.row||null;
-        var _tk='';
         try{
           if(_r&&typeof stTombKeyOf==='function'){
-            _tk=stTombKeyOf(fval(_r,'姓名'),fval(_r,'奖惩事项'),syncDateOnly(fval(_r,'日期')),parseFloat(fval(_r,'奖惩分值')));
-            if(_tk&&typeof tomAdd==='function') tomAdd('st',_tk);
+            var _tk=stTombKeyOf(fval(_r,'姓名'),fval(_r,'奖惩事项'),syncDateOnly(fval(_r,'日期')),parseFloat(fval(_r,'奖惩分值')));
+            if(_tk){
+              var _sib=(typeof stBonusSiblingAlive==='function')?stBonusSiblingAlive(_tk,_r):false;
+              if(!_sib){
+                if(typeof tomAdd==='function') tomAdd('st',_tk);
+                try{
+                  var _m=stCreatedMap();
+                  if(_m[_tk]){delete _m[_tk];localStorage.setItem('wb_st_created_v1',JSON.stringify(_m))}
+                }catch(_ce){}
+              }
+            }
           }
         }catch(_te){}
         try{ if(typeof stDeadAdd==='function'&&f.id) stDeadAdd(f.id); }catch(_te2){}
@@ -20516,9 +20634,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v234';
+var WB_VER_TAG = 'v236';
 var WB_MY_VER = '优化版 vT233 · 积分流水 LWW 同步（重新加的稳定上云不再闪消）';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.243';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.244';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -22720,7 +22838,9 @@ function mpFromDeskBuild(o) {
        无创建登记或比墓碑旧 → 仍按墓碑过滤（删除不能复活）。 */
     var _stTomAt = {};
     if (typeof tomLoad === 'function') tomLoad().forEach(function (x) { if (x && x.t === 'st' && x.k) _stTomAt[x.k] = Number(x.at) || 0 });
-    ST_ROWS.forEach(function (r) {
+    /* vT236 达标类同键重复行只推最新一条，小程序/桌面快照不再带重复 */
+    var _stSrc = (typeof stDedupBonus === 'function') ? stDedupBonus(ST_ROWS).keep : ST_ROWS;
+    _stSrc.forEach(function (r) {
       var n = fval(r, '姓名'); if (!n) return;
       var v = parseFloat(fval(r, '奖惩分值')); if (isNaN(v)) v = 0;
       if (!v) return;
