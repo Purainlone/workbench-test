@@ -1822,8 +1822,9 @@ table.paper td.l{text-align:left;font-weight:600}
           <button class="btn2 sm ghost" onclick="scBonusSelAll(false)">🚫 清空勾选</button>
           <button class="btn2 primary" onclick="scBonusApply()">🏆 给勾选同学加分</button>
           <button class="btn2 sm ghost" onclick="scBonusUndoOpen()">↩️ 撤销已加</button>
+          <button class="btn2 sm ghost" onclick="stCleanBonusDups()">🧹 清理重复加分</button>
           <button class="btn2 sm ghost" onclick="scGoalPanelToggle()">🎯 设定目标分</button>
-          <span class="sctip" id="scBonusTip">选一场考试，按学生的目标一 / 二 / 三自动判断谁达标，勾选后一次写入积分；加错了点「撤销已加」可全选批量撤</span>
+          <span class="sctip" id="scBonusTip">选一场考试，按学生的目标一 / 二 / 三自动判断谁达标，勾选后一次写入积分；加错了点「撤销已加」可全选批量撤；发现有人加分重复显示，点「🧹 清理重复加分」一键清掉全班的重复行</span>
         </div>
         <div class="scroll" id="scBonusBox" style="max-height:min(58vh,540px);margin-top:8px"></div>
       </div>
@@ -10552,6 +10553,46 @@ function scBonusUndoApply() {
     console.error('[成绩] 目标加分撤销失败', err);
     toastMsg('⚠️ 撤销没保存成功，请重试');
     try { loadST().then(function () { scBonusRender({ keepPts: true }) }) } catch (e) {}
+  });
+}
+
+/* ===== vT237 一键清理全班「成绩达标」重复加分行 =====
+   场景：撤销重加后不少学生名下残留同键旧行（显示重复、多算分）。
+   与 stDedupBonus 同口径：同学生同科目同考试同档位同分值只留日期最新的一条，
+   其余真删。重复行必有活兄弟行（保留行），所以【不写墓碑】（墓碑会连坐杀保留行），
+   只按 id 精确删 + 已删名单（本端即时隐藏）。删完立即推云，小程序/桌面下轮同步即一致。 */
+function stCleanBonusDups() {
+  if (!db || !dbReady) { toastMsg('⚠️ 数据通道未就绪，稍后再试'); return }
+  var d = stDedupBonus(ST_ROWS);
+  if (!d.dups.length) { toastMsg('✅ 没有重复的达标加分记录，无需清理'); return }
+  /* 汇总预览：姓名/事项/日期/分值，让老师在确认前看到要删哪些 */
+  var preview = {};
+  d.dups.forEach(function (r) {
+    var n = String(fval(r, '姓名') || '?');
+    (preview[n] = preview[n] || []).push(String(fval(r, '奖惩事项') || '').slice(0, 22) + ' · ' + syncDateOnly(fval(r, '日期')) + ' · ' + fnum(parseFloat(fval(r, '奖惩分值'))));
+  });
+  var lines = Object.keys(preview).map(function (n) {
+    return '· ' + n + '：' + preview[n].length + ' 条（' + preview[n].join('；') + '）';
+  });
+  if (!confirm('发现 ' + Object.keys(preview).length + ' 名同学共 ' + d.dups.length + ' 条重复的目标加分记录（同一考试只保留日期最新的一条）。\n\n' + lines.slice(0, 20).join('\n') + (lines.length > 20 ? '\n…等' : '') + '\n\n确定一键清理？')) return;
+  toastMsg('⏳ 正在清理 ' + d.dups.length + ' 条重复记录…');
+  var jobs = d.dups.map(function (r) {
+    stDeadAdd(recId(r)); /* 已删名单：本端立即隐藏，防闪烁 */
+    return db.deleteRecord({ databaseId: ST_DB, recordId: recId(r) }).then(function () { return 1 }, function (e) { console.error('[清理] 删除失败', e); return 0 });
+  });
+  return Promise.all(jobs).then(function (oks) {
+    var okN = oks.filter(function (x) { return x }).length;
+    return loadST().then(function () {
+      renderStu();
+      try { if (typeof renderHome === 'function') renderHome() } catch (e) {}
+      scBonusRender({ keepPts: true });
+      if (okN === jobs.length) toastMsg('✅ 已清理 ' + okN + ' 条重复加分');
+      else toastMsg('⚠️ 删除 ' + okN + '/' + jobs.length + ' 成功，刷新后再点一次可清理剩余');
+      kickSyncAfterScore();
+    });
+  }).catch(function (err) {
+    console.error('[清理] 重复加分清理失败', err);
+    toastMsg('⚠️ 清理没完成，请重试');
   });
 }
 
@@ -20634,9 +20675,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v236';
+var WB_VER_TAG = 'v237';
 var WB_MY_VER = '优化版 vT233 · 积分流水 LWW 同步（重新加的稳定上云不再闪消）';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.244';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.245';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
