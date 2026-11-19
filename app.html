@@ -10390,6 +10390,15 @@ function scBonusApply() {
     });
   });
   Promise.all(jobs).then(function () {
+    /* vT232 关键修复：作废同业务键的历史 st 墓碑，否则本次加分写回云端时
+       会被旧墓碑判成「已删除」过滤掉，小程序/桌面永远看不到目标加分。
+       日期用今天（与写入的「日期」字段一致，stTombKeyOf 对成绩达标类忽略日期）。 */
+    var _today = ymd(new Date()), _dropped = 0;
+    picks.forEach(function (r) {
+      var _reason = '成绩达标 · ' + lbl + ' · 达目标' + ['', '一', '二', '三'][r.lv];
+      try { _dropped += stTombDrop(r.name, _reason, _today, r.pts) } catch (_e) {}
+    });
+    if (_dropped) { try { console.info('[目标加分] 已作废 ' + _dropped + ' 条同键历史墓碑（本次加分得以复活）') } catch (_ce) {} }
     return loadST();
   }).then(function () {
     renderStu();
@@ -19114,6 +19123,23 @@ function tomDropScore(sub, exam, name, date) {
   if (hit) tomSave(out);
   return hit;
 }
+/* vT232 目标加分「复活」：加分成功时作废同一业务键的历史 st 墓碑。
+   病根：stTombKeyOf 对「成绩达标」流水生成的键【不含日期】，
+   历史某次批量撤销加分留下的墓碑会让本次同姓名+事项+分值的新加分
+   在 mpFromDeskBuild 写回云端时被当成「已删除」过滤掉 → 小程序/桌面永远拿不到。
+   这里按 stTombKeyOf 完全同一口径算出键，把命中的墓碑从清单移除（加分即视为复活）。 */
+function stTombDrop(name, reason, date, score) {
+  if (typeof stTombKeyOf !== 'function') return 0;
+  var k = stTombKeyOf(name, reason, date, score);
+  if (!k) return 0;
+  var a = tomLoad(), out = [], hit = 0;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] && a[i].t === 'st' && a[i].k === k) { hit++; continue }
+    out.push(a[i]);
+  }
+  if (hit) tomSave(out);
+  return hit;
+}
 function tomPrune() {
   var lim = Date.now() - 90 * 86400000, a = tomLoad();
   var b = a.filter(function (x) { return (x.at || 0) >= lim });
@@ -20310,9 +20336,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v231';
-var WB_MY_VER = '优化版 vT231 · 作业重复登记去重（多扣分自动加回+一键清理飞书重复行）';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.240';
+var WB_VER_TAG = 'v232';
+var WB_MY_VER = '优化版 vT232 · 课前展示按节次排班 + 目标加分复活同步 + 误删恢复';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.241';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24246,6 +24272,26 @@ function cwInit(){
     if (rotaCur === 's-safety') return [String(rec['人员1'] || ''), String(rec['人员2'] || '')].filter(Boolean);
     return [String(rec['姓名'] || '')].filter(Boolean);
   }
+  /* vT232 课前展示：当天所有「有效」节次记录（每天可有多节语文课，一节一人） */
+  function rotaDayRows(date) {
+    return ntRows('s-speech').filter(function (r) {
+      return r && !r.deleted && String(r['日期'] || '').slice(0, 10) === date && String(r['姓名'] || '').trim();
+    }).sort(function (a, b) {
+      var na = /(\d+)/.exec(String(a['节次'] || '')), nb = /(\d+)/.exec(String(b['节次'] || ''));
+      return (na ? +na[1] : 99) - (nb ? +nb[1] : 99);
+    });
+  }
+  /* vT232 从生效课表取某天的语文节次（手动新增时预填；与自动排班同源） */
+  function speechPeriodsOf(ds) {
+    try {
+      var ttr = ttExportRec(), tb = ttr && ttr['表'];
+      if (!tb) return [];
+      var w = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][new Date(ds + 'T00:00:00').getDay()];
+      return (tb[w] || []).filter(function (p) { return p && String(p['科目'] || '').indexOf('语文') >= 0; })
+        .map(function (p) { return String(p['名目'] || '').split(' ')[0] || ''; }).filter(Boolean);
+    } catch (e) { return [] }
+  }
+  var rotaSpeechOrigIds = [];   /* vT232 当前编辑日原有节次 id，保存时识别被删的行 */
   window.rotaSwitch = function (k) {
     rotaCur = k; rotaCloseEdit(); rotaCloseRule();
     ['s-rota', 's-safety', 's-speech'].forEach(function (x) {
@@ -24286,18 +24332,57 @@ function cwInit(){
     for (var d = 1; d <= days; d++) {
       var ds = y + '-' + pad2(m + 1) + '-' + pad2(d);
       var wk = (new Date(y, m, d).getDay() + 6) % 7;
-      var rec = rotaDayRec(ds);
-      var names = rotaNamesOf(rec);
-      var manual = rec && rec['来源'] === '手动';
-      h += '<td onclick="rotaEditDay(\'' + ds + '\')" style="border:1px solid #e3ede7;vertical-align:top;padding:4px;min-height:52px;height:52px;cursor:pointer;' +
+      var isSpeech = rotaCur === 's-speech';
+      var srows = isSpeech ? rotaDayRows(ds) : [];
+      var rec = isSpeech ? null : rotaDayRec(ds);
+      var names = isSpeech ? [] : rotaNamesOf(rec);
+      var manual = isSpeech
+        ? (function () { for (var z = 0; z < srows.length; z++) if (srows[z]['来源'] === '手动') return true; return false })()
+        : (rec && rec['来源'] === '手动');
+      var cellHtml;
+      if (isSpeech) {
+        cellHtml = srows.length
+          ? srows.map(function (r) {
+              var pp = String(r['节次'] || '').split(' ')[0];
+              return '<div style="font-size:11px;line-height:1.35;color:#2d5a45">' +
+                (pp ? '<span style="color:#8aa79a">' + esc(pp) + ' </span>' : '') + esc(r['姓名']) + '</div>';
+            }).join('')
+          : '<span style="color:#c9d6cf">—</span>';
+      } else {
+        cellHtml = names.length ? esc(names.join('、')) : '<span style="color:#c9d6cf">—</span>';
+      }
+      h += '<td onclick="rotaEditDay(\'' + ds + '\')" style="border:1px solid #e3ede7;vertical-align:top;padding:4px;' +
+        (isSpeech ? 'min-height:66px;' : 'min-height:52px;height:52px;') + 'cursor:pointer;' +
         (wk >= 5 ? 'background:#f6f9f7;' : '') + (ds === today ? 'outline:2px solid #58b88a;outline-offset:-2px;' : '') + '">' +
         '<div style="font-size:11px;color:#8aa79a">' + d + (manual ? ' <span style="color:#c47f17">✋</span>' : '') + '</div>' +
-        '<div style="font-size:12px;font-weight:600;color:#2d5a45;line-height:1.5">' +
-        (names.length ? esc(names.join('、')) : '<span style="color:#c9d6cf">—</span>') + '</div></td>';
+        '<div style="font-size:12px;font-weight:600;color:#2d5a45;line-height:1.5">' + cellHtml + '</div></td>';
       if ((startWk + d) % 7 === 0 && d < days) h += '</tr><tr>';
     }
     h += '</tr></table>';
     grid.innerHTML = h;
+  };
+  /* vT232 课前展示按节次编辑的行/下拉 */
+  function rotaSpeechOpts(cur) {
+    return '<option value="">（空）</option>' + stuRoster().map(function (s) {
+      return '<option value="' + esc(s.姓名) + '"' + (s.姓名 === cur ? ' selected' : '') + '>' + esc(s.姓名) + (s.组别 ? '（' + esc(s.组别) + '组）' : '') + '</option>';
+    }).join('');
+  }
+  function rotaSpeechRowHtml(i, r) {
+    return '<div class="speech-row" data-id="' + esc(r.id || '') + '" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%">' +
+      '<span style="font-size:12px;color:#5a7d6d;min-width:18px">' + (i + 1) + '.</span>' +
+      '<input class="sp-period" type="text" value="' + esc(r['节次'] || '') + '" placeholder="节次，如 第一节" style="width:104px;border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:12.5px">' +
+      '<select class="sp-name" style="border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:12.5px">' + rotaSpeechOpts(r['姓名']) + '</select>' +
+      '<button class="btn2 sm ghost" onclick="rotaSpeechDel(this)" title="删除这一节">✕ 删</button></div>';
+  }
+  window.rotaSpeechAdd = function () {
+    var wrap = document.getElementById('rotaSpeechRows'); if (!wrap) return;
+    var div = document.createElement('div');
+    div.innerHTML = rotaSpeechRowHtml(wrap.children.length, {}, 0).trim();
+    wrap.appendChild(div.firstChild);
+  };
+  window.rotaSpeechDel = function (btn) {
+    var row = btn.closest ? btn.closest('.speech-row') : null;
+    if (row && row.parentNode) row.parentNode.removeChild(row);
   };
   window.rotaEditDay = function (ds) {
     rotaEditDate = ds;
@@ -24311,6 +24396,24 @@ function cwInit(){
         return '<option value="' + esc(s.姓名) + '"' + (s.姓名 === cur ? ' selected' : '') + '>' + esc(s.姓名) + (s.组别 ? '（' + esc(s.组别) + '组）' : '') + '</option>';
       }).join('');
     };
+    /* vT232 课前展示：一天可有几节语文课 → 每节一行，单独改节次/人员，可增删 */
+    if (rotaCur === 's-speech') {
+      var all = ntRows('s-speech').filter(function (r) { return r && String(r['日期'] || '').slice(0, 10) === ds; });
+      var rows = all.filter(function (r) { return !r.deleted && String(r['姓名'] || '').trim(); });
+      rotaSpeechOrigIds = all.map(function (r) { return r.id; });
+      if (!rows.length) {
+        var pps = speechPeriodsOf(ds);
+        rows = (pps.length ? pps : ['']).map(function (p) { return { '节次': p, '姓名': '' } });
+      }
+      document.getElementById('rotaEditBody').innerHTML =
+        '<div class="sub" style="width:100%">每行一节课：填节次、选展示同学；点「✕ 删」删掉该节；可「＋ 添加一节」。保存后随同步推送到教室桌面（没语文课的日子可留空）。</div>' +
+        '<div id="rotaSpeechRows" style="width:100%;display:flex;flex-direction:column;gap:6px">' +
+        rows.map(function (r, i) { return rotaSpeechRowHtml(i, r); }).join('') + '</div>' +
+        '<button class="btn2 sm" onclick="rotaSpeechAdd()">＋ 添加一节</button>';
+      box.style.display = 'block';
+      try { box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) } catch (e) {}
+      return;
+    }
     if (def.cap === 2) {
       document.getElementById('rotaEditBody').innerHTML =
         '<span>人员1</span><select id="rotaEditP1">' + opts(rec ? rec['人员1'] : '') + '</select>' +
