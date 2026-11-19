@@ -13619,8 +13619,38 @@ function rcMakeTitle(name,kind){ return {t:(name+'').trim(),k:(kind==='extra'?'e
    防止滚动表格时手指划过就误涂。 */
 var RC_DOWN=null;
 /* ---------- vT16 诵读通关荣誉证书 ---------- */
+function rcDoneItems(name){
+  return RC_TITLES.filter(function(t){ return RC_MAP[rcKey(name, rcTName(t))]; })
+    .map(function(t){ return { t: rcTName(t), k: rcTKind(t) }; });
+}
 function rcDoneTitles(name){
-  return RC_TITLES.filter(function(t){ return RC_MAP[rcKey(name, rcTName(t))]; }).map(rcTName);
+  return rcDoneItems(name).map(function(x){ return x.t; });
+}
+/* vT247 证书篇目：原来是把篇名用全角空格串成一行，篇目一多就挤成一团黑。
+   现在按课内 / 课外分组，编号 + 自动列数（≤6 篇两列、≤18 篇三列、再多四列），
+   每格右端超长省略，整页看上去像一份清单而不是一段话。 */
+function rcCertListHtml(items){
+  var core = [], extra = [];
+  items.forEach(function(x){ (x.k === 'extra' ? extra : core).push(x); });
+  var n = items.length, cols = n <= 6 ? 2 : (n <= 18 ? 3 : 4), seq = 0;
+  function grp(title, arr){
+    if(!arr.length) return '';
+    var cells = arr.map(function(x){
+      seq++;
+      var nm = String(x.t).replace(/（课外）/g, '');
+      return '<span class="it"><i>' + (seq < 10 ? '0' : '') + seq + '</i>' + esc(nm) + '</span>';
+    }).join('');
+    return '<div class="grp">' +
+      '<div class="ghd"><span>' + title + '</span><b>' + arr.length + ' 篇</b><i></i></div>' +
+      '<div class="grid" style="grid-template-columns:repeat(' + cols + ',1fr)">' + cells + '</div>' +
+    '</div>';
+  }
+  return '<div class="list">' +
+    '<div class="stats"><span>课内 <b>' + core.length + '</b></span><span class="sp">·</span>' +
+      '<span>课外 <b>' + extra.length + '</b></span><span class="sp">·</span>' +
+      '<span>共 <b>' + n + '</b> 篇</span></div>' +
+    grp('课内必背', core) + grp('课外拓展', extra) +
+  '</div>';
 }
 var RC_CERT_HONORS = ['记忆王者', '最强大脑', '诵读之星', '博览群书'];
 var RC_CERT_TERM = '2026—2027学年第一学期（六年级上学期）';
@@ -13669,7 +13699,7 @@ function rcMakeCert(){
   var honor=((document.getElementById('rcCertCustom')||{}).value||'').trim()||(document.getElementById('rcCertHonor')||{}).value||'记忆王者';
   var praise=(document.getElementById('rcCertPraise')||{}).value||'';
   var term=((document.getElementById('rcCertTerm')||{}).value||'').trim()||RC_CERT_TERM;
-  var done=rcDoneTitles(name);
+  var items=rcDoneItems(name), done=items.map(function(x){return x.t});
   if(!name||!done.length){ toastMsg('这位同学还没有背完的篇目'); return; }
   var d=new Date();
   var ds=d.getFullYear()+' 年 '+(d.getMonth()+1)+' 月 '+d.getDate()+' 日';
@@ -13707,16 +13737,26 @@ function rcMakeCert(){
     +'background:radial-gradient(circle at 34% 30%,#ffefb8,#dcb84e 55%,#a8791c);'
     +'box-shadow:0 .8mm 1.6mm rgba(0,0,0,.22),inset 0 0 0 1mm rgba(255,255,255,.4);'
     +'display:flex;align-items:center;justify-content:center;color:#7a5400;font-size:12pt;font-weight:700}'
-    +'.body{width:222mm;margin:7mm auto 0;font-size:15.5pt;line-height:2.05}'
+    +'.body{width:222mm;margin:6mm auto 0;font-size:14pt;line-height:1.9}'
     +'.nm{font-size:19pt;font-weight:700;color:#8b1a1a}'
     +'.div{display:flex;align-items:center;justify-content:center;gap:4mm;margin-top:3.5mm}'
     +'.div i{display:block;width:52mm;height:.5mm;background:linear-gradient(90deg,transparent,#c9a227)}'
     +'.div i:last-child{background:linear-gradient(90deg,#c9a227,transparent)}'
     +'.div s{text-decoration:none;color:#b8860b;font-size:11pt}'
-    +'.list{width:232mm;margin:3.5mm auto 0;text-align:center;font-size:14pt;line-height:1.95;color:#5a4a30}'
-    +'.enc{text-align:center;margin-top:5mm;font-size:13.5pt;color:#7a5c00}'
+    +'.list{width:228mm;margin:4mm auto 0;color:#5a4a30}'
+    +'.stats{display:flex;align-items:center;justify-content:center;gap:3mm;font-size:9pt;color:#a08457;letter-spacing:1pt;margin-bottom:3.4mm}'
+    +'.stats b{color:#8a5a2b;font-size:11pt;font-family:Georgia,"Times New Roman",serif;margin:0 .6mm}'
+    +'.stats .sp{color:#dcc9a0}'
+    +'.grp{margin-top:3.6mm}'
+    +'.ghd{display:flex;align-items:center;gap:2.4mm;font-size:8.5pt;color:#a8862e;letter-spacing:2.5pt;margin-bottom:1.4mm}'
+    +'.ghd i{flex:1;height:.3mm;background:linear-gradient(90deg,#e6d4a6,transparent)}'
+    +'.ghd b{font-size:7.5pt;font-weight:400;color:#bda37a;letter-spacing:0}'
+    +'.grid{display:grid;gap:1mm 5mm}'
+    +'.it{font-size:10.5pt;color:#5a4a30;line-height:1.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    +'.it i{font-style:normal;font-size:7pt;color:#c6ab74;margin-right:1.2mm;font-family:Georgia,"Times New Roman",serif}'
+    +'.enc{text-align:center;margin-top:4mm;font-size:12pt;color:#7a5c00}'
     +'.no{position:absolute;left:20mm;bottom:19mm;font-size:11.5pt;color:#8a7a5a;letter-spacing:1pt}'
-    +'.sig{position:absolute;left:0;right:20mm;bottom:19mm;text-align:right;font-size:15pt}'
+    +'.sig{position:absolute;left:0;right:64mm;bottom:19mm;text-align:right;font-size:15pt}'
     +'.seal{position:absolute;right:16mm;bottom:16mm;width:50mm;height:50mm;transform:rotate(-8deg);opacity:.92;mix-blend-mode:multiply;pointer-events:none}'
     +'.seal text,.seal path{font-family:"STXinwei","LiSu","STKaiti","KaiTi",serif}'
     +'</style></head><body><div class="cert">'
@@ -13730,9 +13770,9 @@ function rcMakeCert(){
     +'<div class="ttl">诵读通关 · 荣誉证书</div>'
     +'<div class="sub">───　'+esc(term)+' · 经典诵读 · 背诵通关认证　───</div>'
     +'<div class="honor"><div class="medal">★</div><span>授予「'+esc(honor)+'」称号</span></div>'
-    +'<div class="body"><span class="nm">'+esc(name)+'</span> 同学：'+esc(praise)+'经考核，你已熟练背诵以下 <b>'+done.length+'</b> 篇：</div>'
+    +'<div class="body"><span class="nm">'+esc(name)+'</span> 同学：'+esc(praise)+'经考核，你已熟练背诵以下 <b>'+items.length+'</b> 篇：</div>'
     +'<div class="div"><i></i><s>❖</s><i></i></div>'
-    +'<div class="list">'+esc(done.join('　'))+'</div>'
+    + rcCertListHtml(items)
     +'<div class="enc">'+enc+'</div>'
     +'<div class="no">编号：SY-2026-________</div>'
     +'<div class="sig">教师签名：____________　　'+esc(ds)+'</div>'
@@ -20909,9 +20949,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v246';
+var WB_VER_TAG = 'v247';
 var WB_MY_VER = '优化版 vT233 · 积分流水 LWW 同步（重新加的稳定上云不再闪消）';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.251';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.252';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -30693,6 +30733,26 @@ function cwInit(){
     return Math.max(0, Math.round((b - a) / 86400000));
   }
   function ptArcCare(pet) { return Math.max(0, Number(pet.careN) || Number(pet.feedN) || 0) }
+  /* vT247 互动来源：工作台喂养 / 家长端提案获批 / 教室桌面喂食。
+     老记录没有 careSrc，按「历史」单列，避免出现「总数 20、三项都是 0」的怪账。 */
+  function ptArcCareSrc(pet) {
+    var c = (pet && pet.careSrc) || {};
+    var o = {
+      web: Math.max(0, Number(c.web) || 0),
+      parent: Math.max(0, Number(c.parent) || 0),
+      desk: Math.max(0, Number(c.desk) || 0)
+    };
+    var all = ptArcCare(pet), sum = o.web + o.parent + o.desk;
+    o.total = all;
+    o.old = Math.max(0, all - sum);
+    return o;
+  }
+  function ptCareMark(pet, src) {
+    if (!pet) return;
+    var c = pet.careSrc;
+    if (!c || typeof c !== 'object') c = pet.careSrc = {};
+    c[src] = (Number(c[src]) || 0) + 1;
+  }
   function ptArcEvoAt(pet, fromStage) {
     var log = pet && pet.evoLog;
     if (!log || !log.length) return '';
@@ -30721,12 +30781,121 @@ function cwInit(){
     }
     return out;
   }
+  /* ===== vT247 灵宠寄语池（按性格分六类） =====
+     原来只有一句「愿你带着这份勇气，去看更大的世界」，48 只灵宠共用，念着像套话。
+     这里按名字里的意象分六种性格，每类 8 句；默认句用「学生姓名 + 灵宠名」算哈希取一句，
+     所以同一只灵宠永远是同一句（刷新不会变），想换就点「换一句」或自己写。 */
+  var PT_WISH_TONE = [
+    { k: 'brave', nm: '勇猛', re: /龙|虎|猿|狮|狻猊|犬|狼|豹|熊|牛|犀|鹰|蟒|鲨/,
+      w: [
+        '你替我挡过风，我替你记着这份勇。',
+        '山海再远，也远不过你抬脚的那一步。',
+        '敢想敢试的人，才配得上「神兽」这两个字。',
+        '不怕慢，就怕站；你在长，我也在长。',
+        '往后遇难事，先别退——想想我们一起闯过的这一关。',
+        '愿你带着一身火气往前闯，也记得回家的路。',
+        '我不是天生勇敢，是遇见你之后才敢的。',
+        '你护着我的时候，我就决定要长成能护住别人的人。'
+      ] },
+    { k: 'swift', nm: '自由', re: /马|驹|鹿|翼|风|飞|云|雁|鹤/,
+      w: [
+        '你跑起来的样子，我一直记得。',
+        '愿你永远有一片可以撒欢的草地。',
+        '路是自己跑出来的，不是等出来的。',
+        '天地很宽，别把自己关在小小的心事里。',
+        '慢一点也没关系，方向对了就好。',
+        '风往哪儿吹，你就往哪儿去，别怕。',
+        '你奔跑时扬起的尘土，是这一年最好看的光。',
+        '愿你一路轻快，回头时仍有可亲的人。'
+      ] },
+    { k: 'clever', nm: '灵巧', re: /狐|猫|蛇|猴|鼠|兔|灵|妖/,
+      w: [
+        '你眼睛一转，我就知道你在想什么——这份机灵，要用在正道上。',
+        '聪明是天赋，肯下笨功夫才是本事。',
+        '会绕路的人，往往先到。',
+        '愿你机灵不减，心也一直软。',
+        '三个主意里挑一个做完，就是长大了。',
+        '聪明要让人服气，不要让人提防。',
+        '你藏起来的小心思，我都知道，也替你留着。',
+        '灵巧的手，配上沉得住气的心，天下没有难事。'
+      ] },
+    { k: 'wise', nm: '沉静', re: /龟|泽|玄|鳌|麟|象|鲸/,
+      w: [
+        '你懂得等，所以能看见别人看不见的东西。',
+        '沉住气，答案常常在最后一行。',
+        '愿你肚子里装下山海，嘴上还留三分温和。',
+        '慢，是因为你在想；想清楚了，再开口。',
+        '有分量的沉默，比热闹更值钱。',
+        '你把读过的书背在身上，就成了别人的靠山。',
+        '世界很吵，你要留一块安静给自己。',
+        '我不急着长大，你也不急，我们慢慢来。'
+      ] },
+    { k: 'warm', nm: '温柔', re: /水|露|冰|霜|雪|绒|绵|暖/,
+      w: [
+        '你靠过来的时候，我想把这一年都记住。',
+        '愿你一直被温柔对待，也一直温柔待人。',
+        '有你在，教室的灯都暖一些。',
+        '你安静的样子，是班里最软的一角。',
+        '愿你心里那点软，别被长大的事磨掉。',
+        '你替我记住了所有好天气。',
+        '温柔不是软弱，是你最大的力气。',
+        '愿你被这个世界轻轻抱住。'
+      ] },
+    { k: 'dream', nm: '星海', re: /月|星|梦|尾|珊瑚|虹|光|夜/,
+      w: [
+        '你抬头看天的时候，我也在看同一片。',
+        '愿你眼里永远有光，脚下永远有路。',
+        '梦可以很大，先把今晚的作业做完。',
+        '山海是一幅画，你是画里走出来的人。',
+        '你许的愿，我替你收着。',
+        '愿你走的每一步，都算数。',
+        '星星很远，但你已经在路上了。',
+        '愿你成为自己想成为的样子，不必成为别人的。'
+      ] }
+  ];
+  function ptWishHash(s) {
+    var h = 5381, str = String(s || '');
+    for (var i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+    return Math.abs(h);
+  }
+  /* 匹配顺序很关键：名字往往同时命中两类（「冰鹿」既是冰也是鹿）。
+     先认「冰鹿 = 清冷温柔」，再认「白驹 = 自由」，否则温柔型永远没机会出现。 */
+  var PT_WISH_ORDER = ['brave', 'clever', 'warm', 'swift', 'wise', 'dream'];
+  function ptWishTone(pet) {
+    var nm = String((pet && pet.name) || '') + String((pet && pet.series) || '');
+    for (var k = 0; k < PT_WISH_ORDER.length; k++) {
+      for (var i = 0; i < PT_WISH_TONE.length; i++) {
+        if (PT_WISH_TONE[i].k === PT_WISH_ORDER[k] && PT_WISH_TONE[i].re.test(nm)) return i;
+      }
+    }
+    return PT_WISH_TONE.length - 1;
+  }
+  function ptWishToneName(pet) { return PT_WISH_TONE[ptWishTone(pet)].nm }
+  function ptWishPool(pet) { return PT_WISH_TONE[ptWishTone(pet)].w }
+  function ptWishDefault(pet) {
+    var pool = ptWishPool(pet);
+    return pool[ptWishHash((pet.studentName || '') + '|' + (pet.name || '')) % pool.length];
+  }
+  function ptWishIsCustom(pet) {
+    var w = String(pet.wish || '').trim();
+    return !!w && ptWishPool(pet).indexOf(w) < 0;
+  }
   function ptArcWish(pet) {
     var w = String(pet.wish || '').trim();
     if (w) return w;
     var b = String(pet.blessing || '').trim();
     if (b) return b;
-    return '愿你带着这份勇气，去看更大的世界。';
+    return ptWishDefault(pet);
+  }
+  /* 换一句：池里往后挪一句，写进 pet.wish（卡片、档案、打印同时生效）。自己写的不动。 */
+  function ptWishNext(id) {
+    var s = ptGet(), pet = (s.pets || []).filter(function (p) { return p && p.id === id })[0];
+    if (!pet) return '';
+    var pool = ptWishPool(pet), i = pool.indexOf(String(pet.wish || '').trim());
+    var nx = pool[(i < 0 ? 0 : i + 1) % pool.length];
+    pet.wish = nx; pet.updatedAt = Date.now();
+    ptSave(s); PET_DB = s; ptKickSync();
+    return nx;
   }
   function ptArcOrder(list) {
     var order = {};
@@ -30821,11 +30990,21 @@ function cwInit(){
     return 0;
   }
   function ptCardUrl(f) { return PT_CARD_BASE + 'card/' + f + PT_CARD_Q }
+  /* vT247 卡面缓存：同一节课里反复预览 / 批量导出都是同 112 张图，
+     每次重新下载 400KB 太慢（首次预览曾要 25 秒）。最多留 8 张，避免吃内存。 */
+  var PT_CARD_IMGS = [], PT_CARD_IMG_MAX = 8;
   function ptCardLoad(url) {
+    for (var i = 0; i < PT_CARD_IMGS.length; i++) {
+      if (PT_CARD_IMGS[i].url === url) return Promise.resolve(PT_CARD_IMGS[i].img);
+    }
     return new Promise(function (res, rej) {
       var im = new Image();
       im.crossOrigin = 'anonymous';
-      im.onload = function () { res(im) };
+      im.onload = function () {
+        PT_CARD_IMGS.push({ url: url, img: im });
+        if (PT_CARD_IMGS.length > PT_CARD_IMG_MAX) PT_CARD_IMGS.shift();
+        res(im);
+      };
       im.onerror = function () { rej(new Error('图片加载失败：' + url)) };
       im.src = url;
     });
@@ -30901,9 +31080,22 @@ function cwInit(){
   }
   function ptCardJpeg(cv) {
     return new Promise(function (res, rej) {
+      /* vT247 兜底：个别内核 / 精简版浏览器没有 canvas.toBlob，改用 toDataURL 手工解码，
+         否则预览与导出会直接报「画面导出失败」。 */
+      function viaDataUrl() {
+        try {
+          var du = cv.toDataURL('image/jpeg', 0.92);
+          var b64 = du.slice(du.indexOf(',') + 1);
+          var bin = atob(b64), arr = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+          res({ buf: arr, w: cv.width, h: cv.height });
+        } catch (e) { rej(new Error('画面导出失败')); }
+      }
+      if (typeof cv.toBlob !== 'function') return viaDataUrl();
       cv.toBlob(function (b) {
-        if (!b) return rej(new Error('画面导出失败'));
-        b.arrayBuffer().then(function (ab) { res({ buf: new Uint8Array(ab), w: cv.width, h: cv.height }) });
+        if (!b) return viaDataUrl();
+        b.arrayBuffer().then(function (ab) { res({ buf: new Uint8Array(ab), w: cv.width, h: cv.height }) })
+          .catch(viaDataUrl);
       }, 'image/jpeg', 0.92);
     });
   }
@@ -30954,26 +31146,43 @@ function cwInit(){
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove() }, 8000);
   }
   /* 生成一只灵宠的两页（正面 / 背面），背面没有就只给正面 */
+  /* vT247 修（vT225 遗留 bug）：正面原来是「Image 直接当 canvas」传给 ptCardJpeg，
+     cv.toBlob 不存在 → 预览与 PDF / 图片下载全部报「画面导出失败」。
+     这里先把正面画进 canvas 再导出（背面本来就走 canvas，所以一直只有背面能出）。 */
+  function ptCardFlat(img) {
+    var cv = document.createElement('canvas');
+    cv.width = img.naturalWidth || img.width;
+    cv.height = img.naturalHeight || img.height;
+    cv.getContext('2d').drawImage(img, 0, 0);
+    return cv;
+  }
   function ptCardPages(pet) {
     var cid = ptCardId(pet);
     if (!cid) return Promise.reject(new Error('这只灵宠没有对应纪念卡'));
-    return ptCardLoad(ptCardUrl('f' + ptCardPad(cid, 3) + '.jpg')).then(function (front) {
-      return ptCardJpeg(front);
-    }).then(function (p1) {
-      var lay = PT_CARD_BK[cid];
-      if (!lay || cid > PT_CARD_BK_MAX) return [p1];
-      return ptCardLoad(ptCardUrl('b' + ptCardPad(cid, 2) + '.jpg'))
-        .then(function (back) { return ptCardJpeg(ptCardBack(pet, back, lay)) })
-        .then(function (p2) { return [p1, p2] })
-        .catch(function () { return [p1] });
+    /* 正面、背面并行取图（原来是串行，网络不好的时候两份延迟叠加） */
+    var pFront = ptCardLoad(ptCardUrl('f' + ptCardPad(cid, 3) + '.jpg'))
+      .then(function (front) { return ptCardJpeg(ptCardFlat(front)) });
+    var lay = PT_CARD_BK[cid];
+    if (!lay || cid > PT_CARD_BK_MAX) return pFront.then(function (p1) { return [p1] });
+    var pBack = ptCardLoad(ptCardUrl('b' + ptCardPad(cid, 2) + '.jpg'))
+      .then(function (back) { return ptCardJpeg(ptCardBack(pet, back, lay)) })
+      .catch(function () { return null });
+    return Promise.all([pFront, pBack]).then(function (r) {
+      return r[1] ? [r[0], r[1]] : [r[0]];
     });
   }
   function ptCardPet(id) {
     var s = ptGet();
     return (s.pets || []).filter(function (p) { return p && p.id === id && !p.deleted })[0];
   }
-  /* 单张：预览 + 下载 */
-  function ptCardOpen(id) {
+  /* ===== vT247 纪念卡后台预览 =====
+     左边看大图（正面 / 背面切换），右边改寄语，改完立刻重画背面。
+     原来只有「两张缩略图 + 两个下载按钮」，看不见寄语效果，也不知道哪句是哪句。 */
+  function ptCardClose() {
+    var ov = document.getElementById('ptCardOv');
+    if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+  }
+  function ptCardPreview(id) {
     var pet = ptCardPet(id);
     if (!pet) return toastMsg('找不到这只灵宠');
     var cid = ptCardId(pet);
@@ -30983,41 +31192,120 @@ function cwInit(){
       ov = document.createElement('div');
       ov.id = 'ptCardOv';
       ov.style.cssText = 'position:fixed;inset:0;background:rgba(20,14,8,.72);z-index:99998;display:flex;align-items:center;justify-content:center;padding:16px';
-      ov.onclick = function (e) { if (e.target === ov) ov.remove() };
+      ov.onclick = function (e) { if (e.target === ov) ptCardClose() };
       document.body.appendChild(ov);
     }
-    ov.innerHTML = '<div style="background:#fff;border-radius:16px;padding:16px;max-width:900px;width:100%;' +
-      'max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">' +
-        '<b style="font-size:15px">🪪 ' + ptEsc(pet.studentName || '') + ' · ' + ptEsc(pet.name || '') + '</b>' +
-        '<button class="btn2 sm" onclick="document.getElementById(\'ptCardOv\').remove()">关闭</button></div>' +
-      '<div id="ptCardPrev" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;min-height:120px;align-items:center;color:#999">正在生成预览…</div>' +
-      '<div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap">' +
-        '<button class="btn2 primary" onclick="ptCardDownloadOne(\'' + id + '\')">⬇ 下载 PDF（可打印/送印）</button>' +
-        '<button class="btn2" onclick="ptCardDownloadImg(\'' + id + '\')">⬇ 只下载图片</button>' +
+    var st = ptArcStageNow(pet);
+    var wish = ptArcWish(pet);
+    var tone = ptWishToneName(pet);
+    var info = [
+      ['主人', pet.studentName || '—'],
+      ['灵宠', (pet.name || '—') + ' · ' + (pet.tier || '普通')],
+      ['性格', tone + '型'],
+      ['阶段', PT_ARC_STAGE[st] || '—'],
+      ['启灵', ptArcD(pet.obtainedAt || pet.hatchedAt) || '—'],
+      ['进化', (ptCardEvoText(pet) === '—' ? '还没进化' : ptCardEvoText(pet))],
+      ['互动', ptArcCare(pet) + ' 次' + (ptArcCareSrc(pet).total ? ('（台 ' + ptArcCareSrc(pet).web + ' · 家 ' + ptArcCareSrc(pet).parent + ' · 桌 ' + ptArcCareSrc(pet).desk + '）') : '')],
+      ['相伴', ptArcDays(pet) + ' 天'],
+      ['卡号', pet.gradCode || '—']
+    ].map(function (r) {
+      return '<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px dashed #f2ebdd;font-size:12.5px;line-height:1.5">' +
+        '<span style="flex:0 0 46px;color:#a08b68">' + r[0] + '</span>' +
+        '<span style="flex:1;color:#4c3d28;word-break:break-all">' + ptEsc(r[1]) + '</span></div>';
+    }).join('');
+    ov.innerHTML = '<div style="background:#fff;border-radius:18px;width:100%;max-width:800px;max-height:92vh;overflow:auto;box-shadow:0 24px 70px rgba(0,0,0,.45)">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid #f4ecdd;position:sticky;top:0;background:#fff;z-index:2">' +
+        '<div><b style="font-size:15px">🪪 纪念卡预览</b>' +
+          '<span style="color:#a08b68;font-size:12px;margin-left:8px">' + ptEsc(pet.studentName || '') + ' · ' + ptEsc(pet.name || '') + '</span></div>' +
+        '<div style="display:flex;gap:6px"><button class="btn2 sm" onclick="ptCardClose()">关闭</button></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:18px;padding:16px 18px 18px;flex-wrap:wrap">' +
+        '<div style="flex:0 0 300px">' +
+          '<div id="ptCardBig" style="width:300px;height:421px;border-radius:10px;background:#faf6ee;display:flex;align-items:center;justify-content:center;color:#b3a58c;font-size:12px;box-shadow:0 8px 24px rgba(90,60,20,.14)">正在生成预览…<br>首次要先下载卡面素材，约 3–10 秒</div>' +
+          '<div id="ptCardThumbs" style="display:flex;gap:8px;margin-top:10px"></div>' +
+          '<div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">' +
+            '<button class="btn2 primary sm" onclick="ptCardDownloadOne(\'' + id + '\')">⬇ PDF</button>' +
+            '<button class="btn2 sm" onclick="ptCardDownloadImg(\'' + id + '\')">⬇ 图片</button>' +
+            '<button class="btn2 sm" onclick="ptArcPrintCert(\'' + id + '\')">📜 档案</button>' +
+          '</div>' +
+        '</div>' +
+        '<div style="flex:1;min-width:250px">' +
+          '<div style="font-size:11.5px;color:#a08b68;letter-spacing:1px;margin-bottom:4px">卡片信息</div>' + info +
+          '<div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+            '<div style="font-size:11.5px;color:#a08b68;letter-spacing:1px">背面寄语（印在卡片上）</div>' +
+            '<div id="ptWishCnt" style="font-size:11px;color:#c0ae90">' + wish.length + '/90</div>' +
+          '</div>' +
+          '<textarea id="pcwTxt" maxlength="90" oninput="document.getElementById(\'ptWishCnt\').textContent=this.value.length+\'/90\'" ' +
+            'style="width:100%;box-sizing:border-box;height:96px;margin-top:6px;padding:9px 11px;border:1px solid #e8dcc2;border-radius:10px;font-size:13px;line-height:1.7;color:#4c3d28;resize:vertical;font-family:inherit" ' +
+            'placeholder="写一句给「' + ptEsc(pet.name || '灵宠') + '」的话">' + ptEsc(wish) + '</textarea>' +
+          '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">' +
+            '<button class="btn2 sm" onclick="ptCardWishAct(\'' + id + '\',\'next\')">🎲 换一句</button>' +
+            '<button class="btn2 sm primary" onclick="ptCardWishAct(\'' + id + '\',\'save\')">💾 保存</button>' +
+            '<button class="btn2 sm" onclick="ptCardWishAct(\'' + id + '\',\'reset\')">↺ 恢复默认</button>' +
+          '</div>' +
+          '<div style="margin-top:10px;font-size:11.5px;color:#b0a086;line-height:1.7">' +
+            '寄语会印在背面第 4 行起（自动换行、放不下会缩字号）。这一款' +
+            (ptCardBkOk(cid) ? '有背面素材，导出的 PDF 是正反两页。' : '背面还在绘制，目前只出正面一页。') +
+          '</div>' +
+        '</div>' +
       '</div></div>';
-    ptCardPages(pet).then(function (pages) {
-      var box = document.getElementById('ptCardPrev');
-      if (!box) return;
-      box.innerHTML = '';
+    /* 生成图片（返回 Promise 方便调用方等它画完） */
+    return ptCardPages(pet).then(function (pages) {
+      var big = document.getElementById('ptCardBig');
+      var th = document.getElementById('ptCardThumbs');
+      if (!big || !th) return;
+      big.innerHTML = '';
+      big.style.background = 'transparent';
+      big.style.boxShadow = 'none';
+      var imBig = document.createElement('img');
+      imBig.style.cssText = 'width:300px;height:421px;object-fit:cover;border-radius:10px;box-shadow:0 8px 24px rgba(90,60,20,.18);display:block';
+      big.appendChild(imBig);
+      th.innerHTML = '';
+      var labels = ['正面', '背面'];
       pages.forEach(function (pg, i) {
-        var b = new Blob([pg.buf], { type: 'image/jpeg' });
-        var im = document.createElement('img');
-        im.src = URL.createObjectURL(b);
-        im.style.cssText = 'width:280px;max-width:46%;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18)';
-        im.title = i === 0 ? '正面' : '背面';
-        box.appendChild(im);
+        var src = URL.createObjectURL(new Blob([pg.buf], { type: 'image/jpeg' }));
+        var t = document.createElement('img');
+        t.src = src;
+        t.style.cssText = 'width:62px;height:87px;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid ' + (i === 0 ? '#b8860b' : 'transparent') + ';opacity:' + (i === 0 ? 1 : .78);
+        t.title = labels[i] || ('第 ' + (i + 1) + ' 页');
+        t.onclick = function () {
+          imBig.src = src;
+          Array.prototype.forEach.call(th.children, function (c) { c.style.borderColor = 'transparent'; c.style.opacity = .78 });
+          t.style.borderColor = '#b8860b'; t.style.opacity = 1;
+        };
+        th.appendChild(t);
+        if (i === 0) imBig.src = src;
       });
       if (pages.length === 1) {
         var tip = document.createElement('div');
-        tip.style.cssText = 'width:100%;text-align:center;color:#b0863f;font-size:12px;margin-top:6px';
-        tip.textContent = '这款灵宠的背面还在绘制中，先只导出了正面。';
-        box.parentNode.insertBefore(tip, box.nextSibling);
+        tip.style.cssText = 'font-size:11px;color:#b0863f;margin-top:2px';
+        tip.textContent = '（这款只有正面）';
+        th.appendChild(tip);
       }
     }).catch(function (e) {
-      var box = document.getElementById('ptCardPrev');
-      if (box) box.innerHTML = '<div style="color:#c0392b">' + ptEsc(e.message || '生成失败') + '</div>';
+      var big = document.getElementById('ptCardBig');
+      if (big) big.innerHTML = '<div style="color:#c0392b;padding:10px;text-align:center;font-size:12px">' + ptEsc(e.message || '生成失败') + '</div>';
     });
+  }
+  function ptCardBkOk(cid) { return !!PT_CARD_BK[cid] && cid <= PT_CARD_BK_MAX }
+  /* 预览里的寄语操作：换一句 / 保存 / 恢复默认 → 重画 */
+  function ptCardWishAct(id, mode) {
+    var s = ptGet(), pet = (s.pets || []).filter(function (p) { return p && p.id === id })[0];
+    if (!pet) return;
+    if (mode === 'next') {
+      if (ptWishIsCustom(pet) && !window.confirm('这句是你自己写的，换成系统推荐句会覆盖它，确定吗？')) return;
+      ptWishNext(id);
+    } else if (mode === 'reset') {
+      pet.wish = ''; pet.updatedAt = Date.now();
+      ptSave(s); PET_DB = s; ptKickSync();
+    } else {
+      var t = ((document.getElementById('pcwTxt') || {}).value || '').trim();
+      pet.wish = t.slice(0, 90); pet.updatedAt = Date.now();
+      ptSave(s); PET_DB = s; ptKickSync();
+      toastMsg(t ? '✅ 寄语已保存' : '已清空，恢复系统推荐句');
+    }
+    ptCardClose();
+    ptCardPreview(id);
   }
   function ptCardDownloadOne(id) {
     var pet = ptCardPet(id);
@@ -31089,7 +31377,9 @@ function cwInit(){
           (im.adult ? '<img src="' + ptEsc(im.adult) + '">' : '') +
         '</div>' +
         '<div class="ac-steps">' + steps + '</div>' +
-        '<div class="ac-stat"><div><b>' + care + '</b><span>互动次数</span></div>' +
+        '<div class="ac-stat"><div><b>' + care + '</b><span>互动次数</span>' +
+          ((function (c) { return (c.web + c.parent + c.desk) > 0 ? ('<i class="ac-src">台 ' + c.web + ' · 家 ' + c.parent + ' · 桌 ' + c.desk + '</i>') : ''; })(ptArcCareSrc(pet))) +
+          '</div>' +
           '<div><b>' + days + '</b><span>相伴天数</span></div>' +
           '<div><b>' + ptEsc(PT_ARC_STAGE[now] || '—') + '</b><span>当前阶段</span></div>' +
           '<div><b>' + ptEsc(pet.tier || '普通') + '</b><span>灵宠品级</span></div></div>' +
@@ -31149,6 +31439,7 @@ function cwInit(){
     '.ac-stat div{text-align:center}',
     '.ac-stat b{display:block;font-size:16pt;color:#8a5a2b}',
     '.ac-stat span{font-size:7.5pt;color:#a08457}',
+    '.ac-src{display:block;font-style:normal;font-size:6pt;color:#c0a77e;margin-top:.6mm;letter-spacing:.2pt}',
     '.ac-wish{margin:2mm 6mm;text-align:center}',
     '.ac-wish i{font-style:normal;font-size:8pt;color:#b99a68;letter-spacing:2pt}',
     '.ac-wish p{margin-top:2mm;font-size:10pt;line-height:1.8;color:#5f4726}',
@@ -31205,15 +31496,130 @@ function cwInit(){
     var ov = document.getElementById('ptArcOv');
     if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
   }
-  function ptArchWish(id) {
-    var s = ptGet(), pet = (s.pets || []).filter(function (p) { return p && p.id === id })[0];
-    if (!pet) return;
-    var v = window.prompt('给「' + (pet.name || '灵宠') + '」写一句寄语（会印在纪念卡和档案上）：', pet.wish || ptArcWish(pet));
-    if (v == null) return;
-    pet.wish = String(v).slice(0, 60); pet.updatedAt = Date.now();
-    ptSave(s); PET_DB = s; ptKickSync();
-    toastMsg('✅ 寄语已保存');
-    ptArchiveOpen();
+  /* ===== vT247 启灵档案面板（重做）=====
+     旧版 900px 宽、一行铺 5 个字段、下面一大段说明，看着又大又空、字还小。
+     新版 640px 卡片式：头像 + 姓名/灵宠 + 一行小字（启灵日 · 互动 · 卡号）+ 三个图标按钮，
+     顶部能搜、能按阶段筛，底部一行汇总。 */
+  var PT_ARC_Q = '', PT_ARC_ST = '';
+  var PT_ARC_ICON_CSS = [
+    '#ptArcOv .pa-panel{background:#fff;border-radius:16px;width:100%;max-width:640px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(40,25,8,.45);overflow:hidden}',
+    '#ptArcOv .pa-hd{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 9px}',
+    '#ptArcOv .pa-ttl{font-size:15px;font-weight:700;color:#3f3222;letter-spacing:.4px}',
+    '#ptArcOv .pa-ttl i{font-style:normal;font-size:11.5px;color:#b3a184;font-weight:400;margin-left:6px;letter-spacing:0}',
+    '#ptArcOv .pa-hd-r{display:flex;gap:6px;align-items:center}',
+    '#ptArcOv .pa-cls{width:112px;padding:5px 8px;border:1px solid #ece2cc;border-radius:8px;font-size:12px;color:#5b4a33;background:#fdfcf8;outline:none}',
+    '#ptArcOv .pa-x{border:0;background:#f5efe2;color:#8a7355;width:26px;height:26px;border-radius:8px;cursor:pointer;font-size:13px;line-height:1}',
+    '#ptArcOv .pa-x:hover{background:#efe6d2}',
+    '#ptArcOv .pa-tools{display:flex;align-items:center;gap:8px;padding:0 16px 9px;border-bottom:1px solid #f4ecdd}',
+    '#ptArcOv .pa-q{flex:1;padding:6px 10px;border:1px solid #eee4cf;border-radius:9px;font-size:12.5px;background:#fdfcf8;outline:none}',
+    '#ptArcOv .pa-q:focus{border-color:#e0c893;background:#fff}',
+    '#ptArcOv .pa-chips{display:flex;gap:4px;flex-wrap:wrap}',
+    '#ptArcOv .pa-chip{font-size:11.5px;padding:4px 9px;border-radius:999px;background:#f7f2e7;color:#8f7a58;cursor:pointer;border:1px solid transparent;white-space:nowrap}',
+    '#ptArcOv .pa-chip:hover{background:#f2ebdb}',
+    '#ptArcOv .pa-chip.on{background:#fdf3dd;border-color:#e8d3a0;color:#8a5a2b;font-weight:600}',
+    '#ptArcOv .pa-list{overflow:auto;padding:6px 10px 2px;flex:1}',
+    '#ptArcOv .pa-row{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:10px;transition:background .12s}',
+    '#ptArcOv .pa-row:hover{background:#fdfaf3}',
+    '#ptArcOv .pa-av{width:30px;height:30px;flex:0 0 30px;border-radius:9px;background:linear-gradient(160deg,#fdf3dd,#f7e6c4);color:#8a5a2b;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}',
+    '#ptArcOv .pa-main{flex:1;min-width:0}',
+    '#ptArcOv .pa-l1{display:flex;align-items:center;gap:6px;font-size:13.5px;color:#3f3222;line-height:1.55}',
+    '#ptArcOv .pa-l1 b{font-weight:600}',
+    '#ptArcOv .pa-pet{color:#8a7355;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}',
+    '#ptArcOv .pa-tag{font-size:10.5px;padding:1px 6px;border-radius:999px;background:#f4ede0;color:#8f7a58;font-weight:400;flex:0 0 auto}',
+    '#ptArcOv .pa-tag.g{background:#eaf4ec;color:#3f7a52}',
+    '#ptArcOv .pa-tag.h{background:#f3eefb;color:#7a5cbf}',
+    '#ptArcOv .pa-l2{font-size:12px;color:#95805f;line-height:1.55;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '#ptArcOv .pa-care{flex:0 0 auto;text-align:right;min-width:50px;margin-right:2px}',
+    '#ptArcOv .pa-care b{display:block;font-size:13.5px;color:#8a5a2b;font-family:Georgia,"Times New Roman",serif;line-height:1.15}',
+    '#ptArcOv .pa-care span{display:block;font-size:10.5px;color:#bda98a;line-height:1.25;letter-spacing:.2px}',
+    '#ptArcOv .pa-l2 b{color:#8a5a2b;font-weight:600}',
+    '#ptArcOv .pa-acts{display:flex;gap:2px;flex:0 0 auto}',
+    '#ptArcOv .pa-ico{border:0;background:transparent;width:27px;height:27px;border-radius:8px;cursor:pointer;font-size:13px;line-height:1;color:#8a7355}',
+    '#ptArcOv .pa-ico:hover{background:#f4ecdb}',
+    '#ptArcOv .pa-empty{text-align:center;color:#b3a184;font-size:12.5px;padding:34px 0}',
+    '#ptArcOv .pa-ft{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 14px;border-top:1px solid #f4ecdd;background:#fffdf8;flex-wrap:wrap}',
+    '#ptArcOv .pa-sum{font-size:11.5px;color:#9b8768}',
+    '#ptArcOv .pa-sum b{color:#8a5a2b;font-weight:600}',
+    '#ptArcOv .pa-btns{display:flex;gap:5px;flex-wrap:wrap}',
+    '#ptArcOv .pa-mini{font-size:11.5px;padding:5px 10px;border-radius:8px;border:1px solid #ece2cc;background:#fff;color:#7a6344;cursor:pointer}',
+    '#ptArcOv .pa-mini:hover{background:#fdf6e6}',
+    '#ptArcOv .pa-mini.p{background:#8a5a2b;border-color:#8a5a2b;color:#fff8ec}',
+    '#ptArcOv .pa-mini.p:hover{background:#7a4c22}',
+    /* 寄语小弹窗 */
+    '#ptWishOv{position:fixed;inset:0;background:rgba(28,20,10,.5);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px}',
+    '#ptWishOv .pw-card{background:#fff;border-radius:14px;width:100%;max-width:380px;padding:15px 16px 14px;box-shadow:0 20px 60px rgba(0,0,0,.4)}',
+    '#ptWishOv .pw-hd{font-size:13.5px;font-weight:600;color:#3f3222;display:flex;align-items:baseline;gap:6px}',
+    '#ptWishOv .pw-hd span{font-size:11px;color:#b3a184;font-weight:400}',
+    '#ptWishOv textarea{width:100%;box-sizing:border-box;height:82px;margin-top:9px;padding:9px 11px;border:1px solid #ece2cc;border-radius:10px;font-size:13px;line-height:1.7;color:#4c3d28;resize:vertical;font-family:inherit;outline:none}',
+    '#ptWishOv textarea:focus{border-color:#e0c893}',
+    '#ptWishOv .pw-row{display:flex;justify-content:space-between;font-size:11px;color:#b3a184;margin-top:5px}',
+    '#ptWishOv .pw-btns{display:flex;gap:6px;margin-top:10px}',
+    '#ptWishOv .pw-btns button{flex:1;font-size:12.5px;padding:8px 0;border-radius:9px;border:1px solid #ece2cc;background:#fff;color:#7a6344;cursor:pointer}',
+    '#ptWishOv .pw-btns button.p{background:#8a5a2b;border-color:#8a5a2b;color:#fff8ec}',
+    '#ptWishOv .pw-btns button:hover{filter:brightness(.97)}'
+  ].join('');
+  function ptArchFilter(list) {
+    var q = String(PT_ARC_Q || '').trim();
+    return list.filter(function (p) {
+      if (PT_ARC_ST === 'grad') { if (!p.graduated) return false; }
+      else if (PT_ARC_ST) { if (p.graduated || ptArcStageNow(p) !== PT_ARC_ST) return false; }
+      if (!q) return true;
+      return (String(p.studentName || '') + ' ' + String(p.name || '')).indexOf(q) > -1;
+    });
+  }
+  function ptArchRow(p) {
+    var st = ptArcStageNow(p), cs = ptArcCareSrc(p);
+    var tip = '工作台 ' + cs.web + ' · 家长端 ' + cs.parent + ' · 教室桌面 ' + cs.desk + (cs.old ? (' · 升级前 ' + cs.old) : '');
+    var stName = ({ baby: '幼年', teen: '少年', adult: '成年' })[st] || '成年';
+    var tier = String(p.tier || '普通');
+    return '<div class="pa-row">' +
+      '<div class="pa-av">' + ptEsc(String(p.name || '灵').slice(0, 1)) + '</div>' +
+      '<div class="pa-main">' +
+        '<div class="pa-l1"><b>' + ptEsc(p.studentName || '') + '</b>' +
+          '<span class="pa-pet">' + ptEsc(p.name || '') + '</span>' +
+          '<span class="pa-tag">' + stName + '</span>' +
+          (tier !== '普通' ? '<span class="pa-tag h">' + ptEsc(tier) + '</span>' : '') +
+          (p.graduated ? '<span class="pa-tag g">已毕业</span>' : '') +
+          (ptWishIsCustom(p) ? '<span class="pa-tag" title="老师自己写的寄语">✍ 自写</span>' : '') +
+        '</div>' +
+        '<div class="pa-l2">' + (ptArcD(p.obtainedAt || p.hatchedAt) || '—') + ' 启灵' +
+          (p.gradCode ? (' · ' + ptEsc(p.gradCode)) : '') +
+          (ptCardId(p) ? '' : ' · 无卡面') +
+        '</div>' +
+      '</div>' +
+      '<div class="pa-care" title="' + ptEsc(tip) + '"><b>' + cs.total + '</b><span>次互动</span></div>' +
+      '<div class="pa-acts">' +
+        '<button class="pa-ico" title="预览纪念卡" onclick="ptCardPreview(\'' + p.id + '\')">👁</button>' +
+        '<button class="pa-ico" title="生成 A4 启灵档案" onclick="ptArcPrintCert(\'' + p.id + '\')">📜</button>' +
+        '<button class="pa-ico" title="写寄语" onclick="ptArchWish(\'' + p.id + '\')">✏️</button>' +
+      '</div>' +
+    '</div>';
+  }
+  function ptArchRender() {
+    var box = document.getElementById('ptArcList'); if (!box) return;
+    var all = ptArcList('all'), list = ptArchFilter(all);
+    box.innerHTML = list.length ? list.map(ptArchRow).join('') : '<div class="pa-empty">没有符合条件的灵宠</div>';
+    var cnt = document.getElementById('ptArcCnt');
+    if (cnt) cnt.textContent = (PT_ARC_Q || PT_ARC_ST) ? ('筛出 ' + list.length + ' 只') : '';
+    var sum = document.getElementById('ptArcSum');
+    if (sum) {
+      var care = 0, adult = 0, grad = 0;
+      all.forEach(function (p) {
+        care += ptArcCare(p);
+        if (ptArcStageNow(p) === 'adult') adult++;
+        if (p.graduated) grad++;
+      });
+      sum.innerHTML = '共 <b>' + all.length + '</b> 只 · 成年 <b>' + adult + '</b> · 已毕业 <b>' + grad + '</b> · 累计互动 <b>' + care + '</b> 次';
+    }
+  }
+  function ptArchQ(v) { PT_ARC_Q = v || ''; ptArchRender() }
+  function ptArchSt(v) {
+    PT_ARC_ST = (PT_ARC_ST === v ? '' : v);
+    var chips = document.querySelectorAll('#ptArcOv .pa-chip');
+    Array.prototype.forEach.call(chips, function (c) {
+      c.className = 'pa-chip' + (c.getAttribute('data-st') === PT_ARC_ST && PT_ARC_ST ? ' on' : (c.getAttribute('data-st') === '' && !PT_ARC_ST ? ' on' : ''));
+    });
+    ptArchRender();
   }
   function ptArchiveOpen() {
     var ov = document.getElementById('ptArcOv');
@@ -31224,43 +31630,78 @@ function cwInit(){
       ov.onclick = function (e) { if (e.target === ov) ptArchClose() };
       document.body.appendChild(ov);
     }
-    var list = ptArcList('all');
-    var rows = list.map(function (p) {
-      var st = ptArcStageNow(p);
-      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed #eadfcb;font-size:13px">' +
-        '<span style="width:70px;font-weight:700">' + ptEsc(p.studentName || '') + '</span>' +
-        '<span style="flex:1;min-width:110px">' + ptEsc(p.name || '') +
-          ' <i style="font-style:normal;color:#9a7a52;font-size:12px">' + ptEsc(PT_ARC_STAGE[st] || '') + ' · ' + ptEsc(p.tier || '普通') + '</i></span>' +
-        '<span style="width:96px;color:#8a7355;font-size:12px">' + (ptArcD(p.obtainedAt || p.hatchedAt) || '—') + '</span>' +
-        '<span style="width:70px;color:#8a7355;font-size:12px">互动 ' + ptArcCare(p) + ' 次</span>' +
-        '<span style="display:flex;gap:5px">' +
-          '<button class="btn2 sm" onclick="ptArcPrintCert(\'' + p.id + '\')">📜 档案</button>' +
-          '<button class="btn2 sm primary" onclick="ptArcPrintSingleCard(\'' + p.id + '\')">🪪 纪念卡</button>' +
-          '<button class="btn2 sm" onclick="ptArchWish(\'' + p.id + '\')" title="写寄语">✏️</button>' +
-        '</span></div>';
-    }).join('') || '<div class="pet-empty">还没有灵宠</div>';
-    ov.innerHTML = '<div style="background:#fff;border-radius:16px;width:100%;max-width:900px;max-height:86vh;overflow:auto;padding:18px 20px;box-shadow:0 18px 60px rgba(0,0,0,.3)">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">' +
-        '<b style="font-size:16px">📜 启灵档案 · 毕业纪念</b>' +
-        '<div style="display:flex;gap:8px;align-items:center">' +
-          '<input id="ptArcCls" value="' + ptEsc(ptArcCls()) + '" placeholder="班级（印在卡片上）" style="width:150px;padding:6px 8px;border:1px solid #e0d3b8;border-radius:8px;font-size:13px" onchange="ptArcSetCls(this.value)">' +
-          '<button class="btn2 sm" onclick="ptArchClose()">关闭</button>' +
+    var chips = [['', '全部'], ['baby', '幼年'], ['teen', '少年'], ['adult', '成年'], ['grad', '已毕业']].map(function (c) {
+      var on = (PT_ARC_ST === c[0]) ? ' on' : '';
+      return '<span class="pa-chip' + on + '" data-st="' + c[0] + '" onclick="ptArchSt(\'' + c[0] + '\')">' + c[1] + '</span>';
+    }).join('');
+    ov.innerHTML = '<style>' + PT_ARC_ICON_CSS + '</style>' +
+      '<div class="pa-panel">' +
+        '<div class="pa-hd">' +
+          '<div class="pa-ttl">📜 启灵档案<i>毕业纪念 · 纪念卡</i></div>' +
+          '<div class="pa-hd-r">' +
+            '<input class="pa-cls" value="' + ptEsc(ptArcCls()) + '" placeholder="班级（印在卡上）" onchange="ptArcSetCls(this.value)">' +
+            '<button class="pa-x" onclick="ptArchClose()" title="关闭">✕</button>' +
+          '</div>' +
         '</div>' +
-      '</div>' +
-      '<div style="margin:10px 0 4px;color:#8a7355;font-size:12px;line-height:1.7">' +
-        '每个学生自动记录：启灵日期、互动次数、两次进化的时间。点「📜 档案」生成 A4 证书；' +
-        '点「🪪 纪念卡」预览成品卡并下载 PDF（92×129mm，正面+背面，背面自动写驯养人、驯养时间、进化时间与寄语）。' +
-        '背面素材目前做到 18 号，其余款先出正面。✏️ 可单独写寄语。</div>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px">' +
-        '<button class="btn2 primary" onclick="ptCardDownloadAll(\'all\')">⬇ 全班纪念卡（PDF 打包下载）</button>' +
-        '<button class="btn2" onclick="ptCardDownloadAll(\'grad\')">🎓 已毕业纪念卡（PDF）</button>' +
-        '<button class="btn2" onclick="ptArcPrintBook(\'all\')">🖨 全班回忆册（A4）</button>' +
-        '<button class="btn2" onclick="ptArcPrintBook(\'grad\')">🎓 已毕业回忆册</button>' +
-      '</div>' +
-      rows +
-    '</div>';
+        '<div class="pa-tools">' +
+          '<input class="pa-q" id="ptArcQ" value="' + ptEsc(PT_ARC_Q) + '" placeholder="🔎 搜姓名 / 灵宠" oninput="ptArchQ(this.value)">' +
+          '<div class="pa-chips">' + chips + '</div>' +
+          '<div id="ptArcCnt" style="font-size:11.5px;color:#b3a184;white-space:nowrap"></div>' +
+        '</div>' +
+        '<div class="pa-list" id="ptArcList"></div>' +
+        '<div class="pa-ft">' +
+          '<div class="pa-sum" id="ptArcSum"></div>' +
+          '<div class="pa-btns">' +
+            '<button class="pa-mini p" onclick="ptCardDownloadAll(\'all\')">⬇ 全班纪念卡</button>' +
+            '<button class="pa-mini" onclick="ptArcPrintBook(\'all\')">🖨 回忆册</button>' +
+            '<button class="pa-mini" onclick="ptCardDownloadAll(\'grad\')">🎓 已毕业</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    ptArchRender();
   }
-  function ptArcPrintSingleCard(id) { ptCardOpen(id) }   /* vT225：预览 + 下载成品图卡 */
+  /* 写寄语：小弹窗（不加载图片，点开就是），保存后只刷新列表 */
+  function ptArchWish(id) {
+    var s = ptGet(), pet = (s.pets || []).filter(function (p) { return p && p.id === id })[0];
+    if (!pet) return;
+    var old = document.getElementById('ptWishOv');
+    if (old) old.parentNode.removeChild(old);
+    var ov = document.createElement('div');
+    ov.id = 'ptWishOv';
+    ov.onclick = function (e) { if (e.target === ov) ov.parentNode.removeChild(ov) };
+    var w = ptArcWish(pet);
+    ov.innerHTML = '<style>' + PT_ARC_ICON_CSS + '</style>' +
+      '<div class="pw-card">' +
+        '<div class="pw-hd">给「' + ptEsc(pet.name || '灵宠') + '」写寄语<span>' + ptEsc(pet.studentName || '') + ' · 性格：' + ptWishToneName(pet) + '型</span></div>' +
+        '<textarea id="pwTxt" maxlength="90" oninput="document.getElementById(\'pwCnt\').textContent=this.value.length+\'/90\'">' + ptEsc(w) + '</textarea>' +
+        '<div class="pw-row"><span>会印在卡片背面、档案上</span><span id="pwCnt">' + w.length + '/90</span></div>' +
+        '<div class="pw-btns">' +
+          '<button onclick="ptWishAct(\'' + id + '\',\'next\')">🎲 换一句</button>' +
+          '<button class="p" onclick="ptWishAct(\'' + id + '\',\'save\')">💾 保存</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    setTimeout(function () { var t = document.getElementById('pwTxt'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length) } }, 30);
+  }
+  function ptWishAct(id, mode) {
+    var s = ptGet(), pet = (s.pets || []).filter(function (p) { return p && p.id === id })[0];
+    if (!pet) return;
+    if (mode === 'next') {
+      if (ptWishIsCustom(pet) && !window.confirm('这句是你自己写的，换成推荐句会覆盖它，确定吗？')) return;
+      var nx = ptWishNext(id);
+      var t = document.getElementById('pwTxt');
+      if (t) { t.value = nx; document.getElementById('pwCnt').textContent = nx.length + '/90' }
+      return;
+    }
+    var v = ((document.getElementById('pwTxt') || {}).value || '').trim();
+    pet.wish = v.slice(0, 90); pet.updatedAt = Date.now();
+    ptSave(s); PET_DB = s; ptKickSync();
+    var ov = document.getElementById('ptWishOv');
+    if (ov) ov.parentNode.removeChild(ov);
+    ptArchRender();
+    toastMsg(v ? '✅ 寄语已保存' : '已清空，恢复系统推荐句');
+  }
+  function ptArcPrintSingleCard(id) { ptCardPreview(id) }   /* vT225：预览 + 下载成品图卡（vT247 修：原来误指向抽卡函数） */
 
   /* ---------------- 后台管理面板 ---------------- */
   function ptRenderAdmin() {
@@ -31876,6 +32317,7 @@ function cwInit(){
       pet.mood = Math.min(100, (Number(pet.mood) || 90) + 2);
       pet.feedN = (Number(pet.feedN) || 0) + 1;
       pet.careN = (Number(pet.careN) || 0) + 1;   /* vT166 启灵档案：累计互动 */
+      ptCareMark(pet, 'web');                    /* vT247 记来源：工作台 */
       pet.lastFood = food.k;
       pet.updatedAt = Date.now();
       ptSave(s); PET_DB = s; ptKickSync();
@@ -32398,6 +32840,7 @@ function cwInit(){
         pet2.mood = Math.min(100, (Number(pet2.mood) || 90) + 2);
         pet2.feedN = (Number(pet2.feedN) || 0) + 1;
         pet2.careN = (Number(pet2.careN) || 0) + 1;   /* vT166 启灵档案：累计互动 */
+        ptCareMark(pet2, 'parent');                 /* vT247 记来源：家长端提案获批 */
         pet2.lastFood = plan.food.k;
         pet2.updatedAt = Date.now();
         it.status = 'done'; it.doneAt = Date.now(); it.doneBy = byAuto ? 'auto' : 'teacher';
@@ -33615,6 +34058,19 @@ function cwInit(){
   window.ptAdminUnlocked = ptAdminUnlocked;
   /* vT166 启灵档案 / 毕业纪念卡 */
   window.ptArchiveOpen = ptArchiveOpen;
+  window.ptArchQ = ptArchQ;                 /* vT247 面板搜索 / 筛选（供自测与快捷键） */
+  window.ptArchSt = ptArchSt;
+  window.ptArchRender = ptArchRender;
+  window.ptArchRow = ptArchRow;             /* 自测：单行版式（不依赖真名单） */
+  window.ptArcCareSrc = ptArcCareSrc;
+  window.ptWishToneName = ptWishToneName;
+  window.ptWishPool = ptWishPool;
+  window.ptWishNext = ptWishNext;
+  window.ptWishDefault = ptWishDefault;
+  window.ptWishIsCustom = ptWishIsCustom;
+  window.ptArcWish = ptArcWish;
+  window.rcCertListHtml = rcCertListHtml;
+  window.rcDoneItems = rcDoneItems;
   window.ptArchClose = ptArchClose;
   window.ptArchWish = ptArchWish;
   window.ptArcSetCls = ptArcSetCls;
@@ -33622,7 +34078,7 @@ function cwInit(){
   window.ptArcPrintBook = ptArcPrintBook;
   window.ptArcPrintCert = ptArcPrintCert;
   window.ptArcPrintSingleCard = ptArcPrintSingleCard;
-  window.ptCardOpen = ptCardOpen;
+  window.ptCardPreview = ptCardPreview;   /* vT247 纪念卡后台预览（ptCardOpen 是抽卡，别混） */
   window.ptCardDownloadOne = ptCardDownloadOne;
   window.ptCardDownloadImg = ptCardDownloadImg;
   window.ptCardDownloadAll = ptCardDownloadAll;
