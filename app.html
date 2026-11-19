@@ -17751,6 +17751,127 @@ function hmHwGroup(title,items){
 }
 
 /* 主渲染 */
+/* ===== vT245 工作台通知栏 =====
+   老师希望「有人抽到灵宠/灵杰、灵宠升级、家长提案待批」时，首页就能看到，不用自己去翻页。
+   · 事件型（抽到 / 升级 / 新提案）落本地日志 wb_noti_v1（60 条、保留 14 天），可标记已读/清空；
+   · 待批准提案是状态不是事件，渲染时实时从 parentQueue 取 pending，批完自动消失。 */
+var WB_NOTI_KEY = 'wb_noti_v1';
+function wbNotiAll() {
+  try { var a = JSON.parse(localStorage.getItem(WB_NOTI_KEY) || '[]'); return Array.isArray(a) ? a : [] } catch (e) { return [] }
+}
+function wbNotiSave(a) {
+  try {
+    var lim = Date.now() - 14 * 86400000;
+    localStorage.setItem(WB_NOTI_KEY, JSON.stringify((a || []).filter(function (x) { return x && x.t >= lim }).slice(0, 60)));
+  } catch (e) {}
+}
+function wbNotiAdd(text, page) {
+  if (!text) return;
+  try {
+    var a = wbNotiAll();
+    if (a[0] && a[0].text === String(text) && Date.now() - a[0].t < 2000) return;   /* 同一句 2 秒内去重 */
+    a.unshift({ id: 'n' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), t: Date.now(), text: String(text), page: page || 'home', read: 0 });
+    wbNotiSave(a);
+    try { if (typeof renderHome === 'function') renderHome() } catch (e2) {}
+  } catch (e) {}
+}
+function wbNotiMarkAll() {
+  var a = wbNotiAll(); a.forEach(function (x) { x.read = 1 }); wbNotiSave(a);
+  try { renderHome() } catch (e) {}
+}
+function wbNotiClear() {
+  if (!confirm('清空工作台通知？（只清这里的历史记录，不影响灵宠与提案数据）')) return;
+  try { localStorage.removeItem(WB_NOTI_KEY) } catch (e) {}
+  try { renderHome() } catch (e) {}
+}
+function wbNotiTimeText(t) {
+  try {
+    var d = new Date(t), n = new Date();
+    var hm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+    var sameDay = d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+    return sameDay ? hm : ((d.getMonth() + 1) + '-' + d.getDate() + ' ' + hm);
+  } catch (e) { return '' }
+}
+function wbNotiPendList() {
+  try {
+    var s = (typeof ptGet === 'function') ? ptGet() : null;
+    if (!s || !Array.isArray(s.parentQueue)) return [];
+    return s.parentQueue.filter(function (x) { return x && (x.status || 'pending') === 'pending'; })
+      .sort(function (a, b) { return (b.at || b.ts || 0) - (a.at || a.ts || 0) });
+  } catch (e) { return [] }
+}
+function wbNotiActName(x) {
+  var a = String((x && x.action) || '');
+  if (a === 'growdraw') return '抽成长灵宠';
+  if (a === 'growfeed') return '喂养灵宠' + (x && x.food ? ('（' + x.food + '）') : '');
+  return '抽灵杰卡';
+}
+function hmNotiCard() {
+  var pend = wbNotiPendList();
+  var list = wbNotiAll();
+  var unread = list.filter(function (x) { return !x.read }).length;
+  var c = el('div', 'hm-card');
+  c.id = 'hmNotiCard';
+  var hd = el('div', 'hm-hd');
+  var h4 = el('h4');
+  h4.textContent = '🔔 工作台通知' + ((unread || pend.length) ? (' · ' + (unread + pend.length) + ' 条要你看') : '');
+  hd.appendChild(h4);
+  if (list.length) {
+    var b1 = el('button', 'more', '全部已读'); b1.onclick = wbNotiMarkAll; hd.appendChild(b1);
+    var b2 = el('button', 'more', '清空'); b2.onclick = wbNotiClear; hd.appendChild(b2);
+  }
+  c.appendChild(hd);
+  var body = el('div', 'hm-noti');
+  body.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-top:2px';
+
+  /* ① 待批准提案（实时状态，批完就消失） */
+  if (pend.length) {
+    var ph = el('div', 'hm-noti-row');
+    ph.style.cssText = 'cursor:pointer;padding:8px 10px;border-radius:10px;background:#fff6e6;border:1px solid #f3d9a4';
+    ph.innerHTML = '<b>👪 家长提案待你批准 ' + pend.length + ' 条</b><span style="color:#8a6a2f;font-size:12px;margin-left:6px">点这里去批 →</span>';
+    ph.onclick = function () {
+      try { hmGo('pet'); setTimeout(function () { try { ptTab('parent') } catch (e) {} }, 60); } catch (e) {}
+    };
+    body.appendChild(ph);
+    pend.slice(0, 5).forEach(function (x) {
+      var r = el('div', 'hm-noti-row');
+      r.style.cssText = 'font-size:12.5px;color:#5a4a2a;padding-left:14px';
+      r.textContent = '· ' + (x.studentName || x.studentId || '?') + ' · ' + wbNotiActName(x) + ' · ' + wbNotiTimeText(x.at || x.ts || Date.now());
+      body.appendChild(r);
+    });
+  }
+  /* ② 事件（抽到 / 升级） */
+  if (list.length) {
+    list.slice(0, 8).forEach(function (x) {
+      var r = el('div', 'hm-noti-row');
+      r.style.cssText = 'display:flex;gap:8px;align-items:baseline;cursor:pointer;padding:6px 8px;border-radius:8px;' +
+        (x.read ? 'opacity:.62' : 'background:#f4f9f6');
+      var t = el('span', null, wbNotiTimeText(x.t));
+      t.style.cssText = 'font-size:11.5px;color:#8a9a91;flex:0 0 62px';
+      var txt = el('span', null, x.text);
+      txt.style.cssText = 'font-size:13px;line-height:1.5';
+      r.appendChild(t); r.appendChild(txt);
+      r.onclick = function () {
+        x.read = 1; var a = wbNotiAll();
+        for (var i = 0; i < a.length; i++) if (a[i].id === x.id) a[i].read = 1;
+        wbNotiSave(a);
+        try { hmGo(x.page || 'home') } catch (e) {}
+      };
+      body.appendChild(r);
+    });
+  }
+  if (!pend.length && !list.length) {
+    var e2 = el('div', 'hm-noti-empty', '暂时没有新通知。学生抽到灵宠 / 灵杰、灵宠升级、家长提案待批，都会出现在这里。');
+    e2.style.cssText = 'font-size:12.5px;color:#8a9a91;padding:6px 2px';
+    body.appendChild(e2);
+  }
+  c.appendChild(body);
+  return c;
+}
+window.wbNotiAdd = wbNotiAdd;
+window.wbNotiMarkAll = wbNotiMarkAll;
+window.wbNotiClear = wbNotiClear;
+
 function renderHome(){
   var host=document.getElementById('hmBody');
   if(!host)return;
@@ -17842,6 +17963,9 @@ function renderHome(){
   hero.appendChild(dtRow);
   setTimeout(dtSyncBtn,0);
   gf.appendChild(hero);
+
+  /* vT245 工作台通知栏（抽到灵宠/灵杰、灵宠升级、家长提案待批） */
+  try { gf.appendChild(hmNotiCard()); } catch (_ne) {}
 
   /* ---------- 2. 两栏：待办 / 每日一句 ---------- */
   var grid=el('div','hm-grid');
@@ -20713,9 +20837,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v244';
+var WB_VER_TAG = 'v245';
 var WB_MY_VER = '优化版 vT233 · 积分流水 LWW 同步（重新加的稳定上云不再闪消）';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.249';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.250';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -31360,6 +31484,7 @@ function cwInit(){
       fx.reveal({ kind: 'pet', name: sp.name, imgs: sp.imgs, img: sp.img, tier: sp.tier, rarity: sp.rarity,
         stage: 'baby', who: who, isNew: true });
       toastMsg('🎉 ' + who + ' 抽到成长灵宠「' + sp.name + '」（奶团子态）');
+      try { wbNotiAdd('🐾 ' + who + ' 抽到成长灵宠「' + sp.name + '」（奶团子）', 'pet') } catch (e) {}
       ptRenderHome(); ptRenderIncubator();
       return np;
     }).catch(function () { fx.abort(); });
@@ -31587,6 +31712,13 @@ function cwInit(){
   function ptEvolveCelebrate(evos, cb) {
     var list = (evos || []).filter(function (x) { return x && x.id; });
     if (!list.length) { if (cb) cb(); return; }
+    /* vT245 工作台通知：每只进化记一条「奶团子→幼年」 */
+    try {
+      list.forEach(function (ev) {
+        wbNotiAdd('🌱 ' + (ev.who || '') + ' 的「' + (ev.name || '灵宠') + '」升级：' +
+          (ptEvoStageName(ev.from) || '?') + '→' + (ptEvoStageName(ev.to) || '?'), 'pet');
+      });
+    } catch (e) {}
     if (!ptFxReady()) {   /* 演不了画面：一句提示就够，不挡功能 */
       if (typeof toastMsg === 'function') {
         toastMsg('🌟 ' + ptEvoNames(list) + ' 进化到「' + ptEvoStageName(list[0].to) + '」！');
@@ -32114,6 +32246,12 @@ function cwInit(){
         ? ('🎴 ' + (r.isHidden ? '隐藏款「' : '新卡「') + r.def.name + '」' + (r.pityHit ? '（5 抽保底）' : '') + (r.awakened ? '，已唤醒上墙！' : '！'))
         : ('🎴 又抽到「' + r.def.name + '」，这张已经有了（集卡不设等级，抽到就集齐）'));
       ptRenderHome(); ptRenderCards(); ptCodexRefresh();
+      /* vT245 工作台通知：抽到灵杰（标出品级，隐藏/典藏一眼可见） */
+      try {
+        wbNotiAdd('🎴 ' + who + (r.isNew ? ' 抽到' : ' 又抽到') + '灵杰「' + r.def.name + '」' +
+          (r.def.tier && r.def.tier !== '普通' ? ('（' + r.def.tier + '）') : '') +
+          (r.dup ? '·已有' : ''), 'pet');
+      } catch (e) {}
       return r;
     }).catch(function () { fx.abort(); return null; });
   }
@@ -32305,6 +32443,8 @@ function cwInit(){
         status: 'pending', by: x.by || 'parent', ts: x.ts || x.at || Date.now(),
         updatedAt: Date.now(), updatedBy: 'parent'
       });
+      /* vT245 工作台通知：新提案待批准（自动批准开着也可能因额度/条件不满足而留着） */
+      try { wbNotiAdd('👪 ' + (x.studentName || x.studentId || '有学生') + ' 提交「' + wbNotiActName(x) + '」待你批准', 'pet') } catch (_n) {}
       n++;
     });
     if (n) { s.parentQueue = s.parentQueue.slice(-800); ptSave(s); PET_DB = s; ptRenderParent(); }
