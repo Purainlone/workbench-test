@@ -1848,6 +1848,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2 sm primary" id="hwModeBtn" onclick="toggleHWMode()">✍️ 开始登记</button>
       <span class="mt" id="hwModeTip">先选等级，点「开始登记」后点格子才涂色</span>
       <button class="btn2 sm ghost" id="hwAutoBtn" onclick="hwToggleAuto()">🙈 已自动隐藏 0 列 · 显示</button>
+      <button class="btn2 sm ghost" id="hwDedupBtn" onclick="hwCleanDups()" title="飞书里同一笔作业若被登记两次会扣两次分，点此真删重复行">🧹 清理重复登记</button>
       <button class="btn2 sm ghost" onclick="openIgnorePicker()" title="三份名单：不参加诵读 / 不计入已背完判定 / 不参与作业登记">⚙️ 名单设置</button>
       <button class="btn2 sm danger" onclick="hwMarkAllOverdue()">⏰ 余下记超时未交（−2）</button>
     </div>
@@ -14354,6 +14355,42 @@ var HW_LV_SCHEMA=[];            /* 云端「等级」当前已有选项文本 */
 var GA_RANK_SCORE={1:5,2:3,3:2};
 var GA_DEFAULT_SCORE=1;
 var HW_ROWS=[],GA_ROWS=[],ST_ROWS=[];
+/* ===== vT231 作业登记去重（同一笔作业在飞书被登记两次 → 积分扣两遍 / 流水显示两条）=====
+   背景：《送元二使安西》改写（补）有同学在飞书 HW 表里被写了两条一模一样的记录
+   （云端 Gitee hw 表已去重、每人一条，但网页学生管理读的是飞书 HW_ROWS，没去重），
+   于是 stuPoints() 把这条作业分算了两次、openStuPanel() 流水也显示两条。
+   hwDedupRows() 按「姓名归一|作业名归一|日期|等级」业务键去重，一条保留、多余标记。
+   保留策略：优先保留有明确分值的；同分时保留 id 靠前的（稳定）。 */
+function hwRowBizKey(r){
+  try{
+    var n=String(fval(r,'学生姓名')||'').replace(/\s+/g,'');
+    var it=String(fval(r,'作业名称')||'').replace(/\s+/g,'').toLowerCase();
+    var d=String(fval(r,'日期')||'').slice(0,10);
+    var lv=String(fval(r,'等级')||'').replace(/\s+/g,'');
+    if(!n||!it||!d)return '';
+    return n+'|'+it+'|'+d+'|'+lv;
+  }catch(e){return ''}
+}
+function hwDedupRows(rows){
+  rows=rows||[];
+  var seen={},keep=[],dups=[];
+  rows.forEach(function(r){
+    var k=hwRowBizKey(r);
+    if(!k){keep.push(r);return}                 /* 键算不出来（占位行等）原样保留 */
+    if(seen[k]===undefined){seen[k]=keep.length;keep.push(r);return}
+    /* 已有一条：若本条分值更"实在"则替换保留位，本条（或旧条）作为重复记录返回 */
+    var prev=keep[seen[k]];
+    var pv=fval(prev,'分值'),cv=fval(r,'分值');
+    var pScore=isNaN(parseFloat(pv))?(HW_SCORE[fval(prev,'等级')]||0):parseFloat(pv);
+    var cScore=isNaN(parseFloat(cv))?(HW_SCORE[fval(r,'等级')]||0):parseFloat(cv);
+    if((isNaN(parseFloat(cv))?0:1)>(isNaN(parseFloat(pv))?0:1)){
+      dups.push(prev);keep[seen[k]]=r;           /* 用有明确分值的替换 */
+    }else{
+      dups.push(r);
+    }
+  });
+  return {keep:keep,dups:dups};
+}
 var HW_ITEMS=[];          /* 作业列（去重后的 作业名称+日期） */
 var HW_LV='优';
 var HW_MODE_KEY='hw_mode_v1';       /* 作业登记模式开关也记在本机 */
@@ -15196,6 +15233,46 @@ function hwAutoSplit(){
   return {vis:vis,hid:hid};
 }
 window.hwToggleAuto=function(){HW_SHOW_AUTO=!HW_SHOW_AUTO;renderHW()};
+/* ===== vT231 一键清理飞书里重复的作业登记 =====
+   现状：网页学生管理读飞书 HW_ROWS，若同一笔作业（姓名|作业|日期|等级）被写了两条，
+   积分会扣两次、流水显示两条。云端 Gitee hw 表已去重，所以这里把重复的飞书行真删掉，
+   并把重复行对应的"多扣分值"冲正：由于积分是从流水实时算的，删掉重复行后积分自动少扣一次，
+   不需要额外加回 —— 但为了确保桌面/小程序/家长已发出的旧快照也一致，删完立刻推一次同步。 */
+window.hwCleanDups=function(){
+  if(!dbReady){toastMsg('⚠️ 未连接资料库，无法清理');return}
+  var u=hwDedupRows(HW_ROWS);
+  var dups=u.dups||[];
+  if(!dups.length){toastMsg('✅ 没有发现重复的作业登记');return}
+  /* 按 姓名 · 作业 · 日期 汇总，让用户看清会删什么 */
+  var groups={},order=[];
+  dups.forEach(function(r){
+    var k=String(fval(r,'学生姓名'))+' · '+String(fval(r,'作业名称'))+' · '+String(fval(r,'日期')||'').slice(0,10);
+    if(!groups[k]){groups[k]=[];order.push(k)}
+    groups[k].push(r);
+  });
+  var preview=order.slice(0,12).map(function(k){return k+'（重复 '+groups[k].length+' 条）'}).join('\n');
+  if(order.length>12)preview+='\n…… 另有 '+(order.length-12)+' 组';
+  if(!confirm('发现 '+dups.length+' 条重复作业登记，删除后积分会自动少扣一次（多扣的分自动加回）。\n\n'+preview+'\n\n确定删除这些重复行吗？'))return;
+  toastMsg('⏳ 正在清理 '+dups.length+' 条重复登记…');
+  var ids=dups.map(recId).filter(Boolean),fail=0,i=0;
+  (function step(){
+    if(i>=ids.length){finish();return}
+    db.deleteRecord({databaseId:HW_DB,recordId:ids[i]}).then(function(){i++;step()},function(){fail++;i++;step()});
+  })();
+  function finish(){
+    var removeIds={};ids.forEach(function(x){removeIds[x]=1});
+    /* 本机只移除"没被保留的那条"：按对象 id 精确删，避免误删保留行 */
+    HW_ROWS=HW_ROWS.filter(function(r){var id=recId(r);return !(id&&removeIds[id])});
+    /* 若某些重复行没有 id（删不了），至少内存里按业务键再兜一次去重 */
+    HW_ROWS=hwDedupRows(HW_ROWS).keep;
+    try{renderHW()}catch(e){}
+    try{renderStu()}catch(e){}
+    setTimeout(function(){try{renderHome()}catch(e){}},0);
+    try{if(typeof syncScheduleSoon==='function')syncScheduleSoon()}catch(e){}
+    try{if(typeof kickSyncAfterScore==='function')kickSyncAfterScore()}catch(e){}
+    toastMsg(fail?('✅ 已清理 '+(ids.length-fail)+' 条，'+fail+' 条没删掉会自动同步补删'):('✅ 已清理 '+ids.length+' 条重复登记，积分已重新计算'));
+  }
+};
 /* vT43 作业列周次小字：按该列登记日期推算「第N周·周X」，方便快速了解每列作业的登记时间。
    本周内的列直接用 NOW_WEEK（与座位表/手动锁定周次一致），历史列用日历推算。 */
 function hwColWeek(ds){
@@ -16427,7 +16504,9 @@ function stuPoints(){
     if(v>0)incP[n]=(incP[n]||0)+v;
     else if(v<0)expP[n]=(expP[n]||0)-v;
   }
-  HW_ROWS.forEach(function(r){
+  /* vT231 去重：飞书里同一笔作业若被登记两次，积分只算一次、流水只显示一条 */
+  var _hwU=hwDedupRows(HW_ROWS);
+  _hwU.keep.forEach(function(r){
     var n=fval(r,'学生姓名');if(!n)return;
     var v=parseFloat(fval(r,'分值'));
     if(isNaN(v)){v=HW_SCORE[fval(r,'等级')]||0}
@@ -16641,7 +16720,9 @@ function openStuPanel(name){
   panel.appendChild(el('h3',null,'积分流水'));
   var ul=document.createElement('ul');
   var flow=[];
-  HW_ROWS.forEach(function(r){
+  /* vT231 去重：同一笔作业被登记两次时，流水只显示一条（与 stuPoints 去重口径一致） */
+  var _flowHw=hwDedupRows(HW_ROWS).keep;
+  _flowHw.forEach(function(r){
     if(fval(r,'学生姓名')!==name)return;
     var v=parseFloat(fval(r,'分值'));if(isNaN(v))v=HW_SCORE[fval(r,'等级')]||0;
     flow.push({d:fval(r,'日期'),t:'作业 · '+fval(r,'作业名称')+'（'+fval(r,'等级')+'）',v:v,src:'hw',id:recId(r)});
@@ -20228,9 +20309,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v230';
-var WB_MY_VER = '优化版 vT230 · 双端数据同步对齐（加分即时推送+流水去重+作业列）';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.239';
+var WB_VER_TAG = 'v231';
+var WB_MY_VER = '优化版 vT231 · 作业重复登记去重（多扣分自动加回+一键清理飞书重复行）';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.240';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
