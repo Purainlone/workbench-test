@@ -35451,7 +35451,6 @@ function cwInit(){
   var CK = 'wb_paadm_cache_v1';
   var ADM = { rows: null, at: 0, busy: false, cache: {}, miss: {} };
   var ACT_NAME = { open: '👀 打开', draw: '🎴 抽灵杰卡', feed: '🎴 抽灵杰卡', growdraw: '🐾 抽灵宠', growfeed: '🍚 喂养灵宠', quiz: '🧠 每日竞答' };
-  var ACT_SHORT = { draw: '抽灵杰', feed: '抽灵杰', growdraw: '抽灵宠', growfeed: '喂养', quiz: '竞答' };
 
   function pesc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
