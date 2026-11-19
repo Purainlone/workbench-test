@@ -24462,6 +24462,7 @@ document.getElementById('nav').addEventListener('click',e=>{
   if(b.dataset.s==='guard'){try{gdRender()}catch(e){console.error('[守护] 渲染失败',e)}}   /* 班级守护 */
   if(b.dataset.s==='comment'){try{cmThemeRender()}catch(e){}try{cmRosterRender()}catch(e){}try{cmResultRender()}catch(e){}}   /* vT14 学生评语 */
   if(b.dataset.s==='works'){try{wkRender()}catch(e){console.error('[作品] 渲染失败',e)}}
+  else{try{if(typeof wkGalleryClose==='function')wkGalleryClose()}catch(e){}}   /* 切走时退出放映，别让遮罩留在别的页面上 */
   /* 2.0.6：每次进诵读页都重新拉一次。以前只在页面加载时拉一次，
      导入互传包 / 换了数据源之后切回来还是老画面（"导入了没变化"）。 */
   if(b.dataset.s==='recite'){try{if(typeof loadReciteFromDB==='function')loadReciteFromDB()}catch(e){console.error('[诵读] 刷新失败',e)}}
