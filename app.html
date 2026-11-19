@@ -2866,11 +2866,83 @@ table.paper td.l{text-align:left;font-weight:600}
       <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>📱 家长端网页</b>（vT111）：免审核、不限人数的家长查看入口。家长点链接 → 填「接入码 + 孩子姓名 + 绑定码」即可看作业、积分、诵读、图鉴、成绩，还能抽图鉴（提交后由你审批，或开启自动批准）。小程序审核期间用这个最省事。</div>
         <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
-          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v224</code>
+          <code id="paWebUrl" style="font-size:12px;background:#f3f6fa;padding:5px 9px;border-radius:7px">https://purainlone.github.io/workbench-test/parent.html?v=v246</code>
           <button class="btn2" onclick="paCopyUrl()">📋 复制链接</button>
-          <button class="btn2" onclick="window.open('parent.html?v=v224','_blank')">🔗 打开看看</button>
+          <button class="btn2" onclick="window.open('parent.html?v=v246','_blank')">🔗 打开看看</button>
           <span class="syncstatus" id="paWebTip">群公告里建议写：请用微信打开，填老师发的接入码</span>
         </div>
+      </div>
+    </div>
+
+    <div class="synccard" id="paAdmCard">
+      <h3>👪 家长后台 · 绑定与使用统计（vT246）</h3>
+      <div class="syncdesc">家长每次打开家长端网页，会往提案仓库的 <code>pa/</code> 目录回一条「使用回执」（只记：打开次数、停留时长、抽卡 / 喂养 / 竞答次数、设备与页面版本）。这里把这些回执汇总成一张看板：
+        <b>谁已经绑定、谁一次都没点开、谁 7 天没来看、每天多少人打开、最近都做了什么操作</b>。
+        <br><span style="color:#2b7a4e">回执只有行为计数，<b>不含绑定码、不含成绩与作业内容</b>；家长端只在成功登录后写一次，网络差就延后重试，家长无感。</span></div>
+      <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center">
+        <button class="btn2 primary" onclick="paAdmOpen()">📊 打开家长后台</button>
+        <button class="btn2" onclick="paAdmFetch(true)">🔄 刷新统计</button>
+        <button class="btn2" onclick="paAdmCopyNeed()" title="把「还没绑定 + 7 天没打开」的学生名单复制出来，方便发到群里催一催">📋 复制待催名单</button>
+        <span id="paAdmStatus" class="syncstatus"></span>
+      </div>
+      <div class="syncdesc" id="paAdmHint" style="margin-top:6px"></div>
+    </div>
+
+    <div id="paAdmMask">
+      <style>
+        #paAdmMask{position:fixed;inset:0;z-index:9997;background:rgba(18,26,22,.46);display:none;align-items:center;justify-content:center;padding:18px}
+        #paAdmMask.on{display:flex}
+        #paAdmMask .paadm{width:min(1120px,100%);max-height:92vh;background:#f7faf8;border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.28);display:flex;flex-direction:column;overflow:hidden;font-size:13px;color:#20302a}
+        #paAdmMask .paadm-hd{display:flex;align-items:center;gap:10px;padding:12px 16px;background:linear-gradient(90deg,#eef7f1,#f7faf8);border-bottom:1px solid #e2ebe5;flex-wrap:wrap}
+        #paAdmMask .paadm-hd b{font-size:15px}
+        #paAdmMask .paadm-hd .sub{font-size:12px;color:#76867e}
+        #paAdmMask .paadm-hd .sp{flex:1}
+        #paAdmMask .paadm-hd button{border:1px solid #cfded5;background:#fff;color:#2f5c46;border-radius:9px;padding:5px 11px;font-size:12.5px;cursor:pointer}
+        #paAdmMask .paadm-hd button:hover{background:#eef7f1}
+        #paAdmMask .paadm-bd{overflow:auto;padding:14px 16px 20px}
+        #paAdmMask .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px}
+        #paAdmMask .tile{background:#fff;border:1px solid #e2ebe5;border-radius:13px;padding:10px 12px}
+        #paAdmMask .tile .k{font-size:11.5px;color:#7b8a82}
+        #paAdmMask .tile .v{font-size:21px;font-weight:800;color:#1f3b2d;line-height:1.25}
+        #paAdmMask .tile .v small{font-size:12px;font-weight:600;color:#7b8a82}
+        #paAdmMask .tile.warn .v{color:#b45309}
+        #paAdmMask .tile.bad .v{color:#c0392b}
+        #paAdmMask h4{margin:18px 0 8px;font-size:13.5px;color:#2f5c46}
+        #paAdmMask .chart{display:flex;align-items:flex-end;gap:6px;height:104px;background:#fff;border:1px solid #e2ebe5;border-radius:13px;padding:10px 12px}
+        #paAdmMask .chart .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;height:100%}
+        #paAdmMask .chart .bar{width:100%;max-width:26px;border-radius:5px 5px 0 0;background:linear-gradient(180deg,#7fc9a4,#4da57c);min-height:2px}
+        #paAdmMask .chart .bar.zero{background:#e6eee9}
+        #paAdmMask .chart .lb{font-size:10px;color:#9aa8a0;white-space:nowrap}
+        #paAdmMask table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e2ebe5}
+        #paAdmMask th,#paAdmMask td{padding:7px 9px;border-bottom:1px solid #eef3ef;text-align:left;font-size:12.5px;white-space:nowrap}
+        #paAdmMask th{background:#f2f8f4;color:#4a635a;font-weight:700;position:sticky;top:0;z-index:1}
+        #paAdmMask tr:last-child td{border-bottom:0}
+        #paAdmMask .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}
+        #paAdmMask .dot.on{background:#42a373}
+        #paAdmMask .dot.off{background:#d3ddd7}
+        #paAdmMask .dot.slow{background:#e0a63a}
+        #paAdmMask .tag{font-size:11px;border-radius:7px;padding:1px 6px;background:#eef7f1;color:#2f6b4f}
+        #paAdmMask .tag.off{background:#f4f6f4;color:#8c9a92}
+        #paAdmMask .tag.slow{background:#fdf6e6;color:#a97a11}
+        #paAdmMask .act{display:inline-block;background:#e9f4ed;border:1px solid #d8e9df;border-radius:6px;padding:1px 6px;margin-right:5px;font-size:11.5px;color:#3d6b52;font-weight:600}
+        #paAdmMask .ops{background:#fff;border:1px solid #e2ebe5;border-radius:12px;max-height:250px;overflow:auto}
+        #paAdmMask .op{display:flex;gap:8px;align-items:center;padding:7px 11px;border-bottom:1px solid #f1f5f2;font-size:12.5px}
+        #paAdmMask .op:last-child{border-bottom:0}
+        #paAdmMask .op .t{color:#9aa8a0;font-size:11.5px;width:96px;flex:0 0 auto}
+        #paAdmMask .op .n{font-weight:700;min-width:64px}
+        #paAdmMask .empty{color:#9aa8a0;text-align:center;padding:16px;font-size:12.5px}
+        #paAdmMask .note{font-size:11.5px;color:#9aa8a0;margin-top:8px;line-height:1.7}
+      </style>
+      <div class="paadm">
+        <div class="paadm-hd">
+          <b>👪 家长后台</b><span class="sub" id="paAdmSub">绑定与使用统计</span>
+          <span class="sp"></span>
+          <button onclick="paAdmFetch(true)">🔄 刷新</button>
+          <button onclick="paAdmCopyNeed()">📋 复制待催名单</button>
+          <button onclick="paAdmCsv()">⬇️ 导出 CSV</button>
+          <button onclick="paAdmClose()">✕ 关闭</button>
+        </div>
+        <div class="paadm-bd" id="paAdmBody"><div class="empty">正在读取…</div></div>
       </div>
     </div>
 
@@ -20837,9 +20909,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v245';
+var WB_VER_TAG = 'v246';
 var WB_MY_VER = '优化版 vT233 · 积分流水 LWW 同步（重新加的稳定上云不再闪消）';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.250';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.251';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -35367,6 +35439,356 @@ function cwInit(){
 
   /* 给测试脚本留的把手 */
   window.__wbAIapi = { ask: ask, doNotice: doNotice, doHomework: doHomework, doQueryUndone: doQueryUndone, doQueryPoints: doQueryPoints, doPoints: doPoints, doHwNew: doHwNew, doCodexGrant: doCodexGrant, doDetain: doDetain, labelOf: labelOf, parseJSON: parseJSON, findItem: findItem, cfg: CFG };
+})();
+</script>
+<script>
+/* ================= vT246 家长后台（绑定与使用统计） =================
+   数据来源：家长端 parent.html 成功登录后写的 pa/{学生姓名}.json
+     { name, firstAt, lastAt, opens, stay, acts:{}, days:{}, ev:[{t,a}], dev, ver }
+   这里把回执 + 本班名单合成一张看板：谁绑定了 / 谁一次没点开 / 谁 7 天没来看 /
+   每天多少人打开 / 最近都做了什么操作。回执文件按 sha 缓存，只在不变化时零请求。 */
+(function () {
+  var CK = 'wb_paadm_cache_v1';
+  var ADM = { rows: null, at: 0, busy: false, cache: {}, miss: {} };
+  var ACT_NAME = { open: '👀 打开', draw: '🎴 抽灵杰卡', feed: '🎴 抽灵杰卡', growdraw: '🐾 抽灵宠', growfeed: '🍚 喂养灵宠', quiz: '🧠 每日竞答' };
+  var ACT_SHORT = { draw: '抽灵杰', feed: '抽灵杰', growdraw: '抽灵宠', growfeed: '喂养', quiz: '竞答' };
+
+  function pesc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function ymdOf(ts) { var d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function hmOf(ts) { var d = new Date(ts); return pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+  function fmtDay(s) { return String(s || '').slice(5).replace('-', '/'); }
+  function fmtDate(ts) { if (!ts) return '—'; var d = new Date(ts); return pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()); }
+  function setStat(txt, color) {
+    ['paAdmStatus'].forEach(function (id) {
+      var el = document.getElementById(id); if (!el) return;
+      el.textContent = txt || '';
+      el.style.color = color || '#76867e';
+    });
+    var hint = document.getElementById('paAdmHint');
+    if (hint) hint.innerHTML = '回执从本版（vT246）开始记录：老家长下次打开家长端就会自动补上，不用做任何事。';
+  }
+
+  function admCfg() {
+    var c = (typeof paChannelGet === 'function') ? paChannelGet() : null;
+    if (c && c.owner && c.repo && c.token) return c;
+    var s = (typeof mpSyncSettings === 'function') ? mpSyncSettings() : null;
+    if (s && s.gOwner && s.gRepo) return { owner: s.gOwner, repo: (/-pt$/.test(s.gRepo) ? s.gRepo : (s.gRepo + '-pt')), token: s.gToken || '' };
+    return null;
+  }
+  function admUrl(c, sub) {
+    return GITEE_API + '/repos/' + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo) +
+      '/contents/' + sub + '?ref=master&access_token=' + encodeURIComponent(c.token);
+  }
+
+  /* ---------- 缓存（按文件 sha） ---------- */
+  function loadCache() {
+    try { ADM.cache = JSON.parse(localStorage.getItem(CK) || '{}') || {}; } catch (e) { ADM.cache = {}; }
+    if (!ADM.cache || typeof ADM.cache !== 'object' || Array.isArray(ADM.cache)) ADM.cache = {};
+  }
+  function saveCache() {
+    try {
+      var out = {}, n = 0;
+      Object.keys(ADM.cache).forEach(function (k) { if (n++ < 400) out[k] = ADM.cache[k]; });
+      localStorage.setItem(CK, JSON.stringify(out));
+    } catch (e) {}
+  }
+
+  /* ---------- 名单（按学号排序，去重） ---------- */
+  function roster() {
+    var out = [], seen = {};
+    try {
+      (DATA && DATA.seats ? DATA.seats : []).forEach(function (s) {
+        var n = s && String(s['姓名'] || '').trim();
+        if (!n || seen[n]) return;
+        seen[n] = 1;
+        out.push({ name: n, no: Number(s['学号']) || 999 });
+      });
+    } catch (e) {}
+    out.sort(function (a, b) { return a.no - b.no; });
+    return out;
+  }
+
+  /* ---------- 拉取回执 ---------- */
+  function fetchOne(c, f) {
+    var hit = ADM.cache[f.name];
+    if (hit && f.sha && hit.sha === f.sha && hit.rec) return Promise.resolve(hit.rec);
+    return fetch(admUrl(c, 'pa/' + encodeURIComponent(f.name))).then(function (r) {
+      if (!r.ok) throw new Error('读回执失败 ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      var rec = {};
+      try { rec = JSON.parse((typeof b64dUtf === 'function' ? b64dUtf(j.content) : '') || '{}') || {}; } catch (e) {}
+      ADM.cache[f.name] = { sha: f.sha || j.sha || '', rec: rec };
+      return rec;
+    });
+  }
+  function fetchAll(c) {
+    return fetch(admUrl(c, 'pa')).then(function (r) {
+      if (r.status === 404) return [];
+      return r.text().then(function (t) {
+        var j = null; try { j = JSON.parse(t); } catch (e) {}
+        if (!r.ok) throw new Error((j && j.message) || ('列目录失败 ' + r.status));
+        return Array.isArray(j) ? j : [];
+      });
+    }).then(function (list) {
+      var files = list.filter(function (f) { return f && f.type === 'file' && /\.json$/i.test(f.name); });
+      var out = [], i = 0;
+      function step() {
+        if (i >= files.length) return Promise.resolve(out);
+        var batch = files.slice(i, i + 4); i += 4;
+        return Promise.all(batch.map(function (f) {
+          return fetchOne(c, f).then(function (rec) {
+            out.push({ file: f.name, rec: rec || {} });
+          }, function () { /* 单个文件失败不影响整体 */ });
+        })).then(step);
+      }
+      return step();
+    });
+  }
+
+  function norm(rec) {
+    var o = {
+      name: String(rec.name || '').trim(), opens: Number(rec.opens) || 0, stay: Number(rec.stay) || 0,
+      acts: rec.acts && typeof rec.acts === 'object' ? rec.acts : {},
+      days: rec.days && typeof rec.days === 'object' ? rec.days : {},
+      ev: Array.isArray(rec.ev) ? rec.ev : [],
+      firstAt: Number(rec.firstAt) || 0, lastAt: Number(rec.lastAt) || 0,
+      dev: String(rec.dev || ''), ver: String(rec.ver || '')
+    };
+    return o;
+  }
+
+  window.paAdmFetch = function (manual) {
+    var c = admCfg();
+    if (!c) {
+      setStat('⚠️ 还没开通家长通道：先在下面「👪 家长端权限 · 提案仓库」填好并保存，再刷新统计', '#b45309');
+      var b = document.getElementById('paAdmBody');
+      if (b) b.innerHTML = '<div class="empty">还没开通家长通道，读不到家长回执。<br>请先在「👪 家长端权限 · 提案仓库」里保存用户名 / 仓库名 / 令牌。</div>';
+      return Promise.resolve();
+    }
+    if (ADM.busy) return Promise.resolve();
+    ADM.busy = true;
+    loadCache();
+    setStat('⏳ 正在读取家长回执…', '#76867e');
+    var body = document.getElementById('paAdmBody');
+    if (body && !ADM.rows) body.innerHTML = '<div class="empty">正在读取家长回执…</div>';
+    return fetchAll(c).then(function (list) {
+      ADM.rows = list.map(function (x) { return norm(x.rec); }).filter(function (r) { return r.name; });
+      ADM.at = Date.now();
+      saveCache();
+      ADM.busy = false;
+      var bound = ADM.rows.filter(function (r) { return r.opens > 0; }).length;
+      setStat('✅ 已读取 ' + ADM.rows.length + ' 份家长回执 · 已绑定 ' + bound + ' 人 · ' + hmOf(ADM.at), '#2b7a4e');
+      paint();
+    }).catch(function (e) {
+      ADM.busy = false;
+      var msg = (e && (e.message || e)) || '读取失败';
+      setStat('⚠️ ' + msg, '#c0392b');
+      var b2 = document.getElementById('paAdmBody');
+      if (b2 && !ADM.rows) b2.innerHTML = '<div class="empty">读取失败：' + pesc(msg) + '<br>检查「家长端权限 · 提案仓库」是否保存、令牌是否有该仓库读权限。</div>';
+      if (typeof toastMsg === 'function') toastMsg('⚠️ 家长回执读取失败：' + msg);
+    });
+  };
+
+  /* ---------- 合成看板数据 ---------- */
+  function analyze() {
+    var list = roster(), byName = {};
+    (ADM.rows || []).forEach(function (r) { if (r.name) byName[r.name] = r; });
+    var today = ymdOf(Date.now());
+    var rows = [], extra = [];
+    list.forEach(function (x) {
+      var rec = byName[x.name] || null;
+      rows.push({ name: x.name, no: x.no, rec: rec, extra: false });
+    });
+    /* 回执里有、名单里没有的（改过名 / 已转走）也列出来，别让老师以为丢数据 */
+    (ADM.rows || []).forEach(function (r) {
+      var hit = list.filter(function (x) { return x.name === r.name; })[0];
+      if (!hit) extra.push({ name: r.name, no: 9000, rec: r, extra: true });
+    });
+    rows = rows.concat(extra);
+    rows.forEach(function (x) {
+      var r = x.rec, d7 = Date.now() - 7 * 86400000, d1 = Date.now() - 86400000;
+      x.bound = !!(r && r.opens > 0);
+      x.today = !!(r && r.days && r.days[today] && Number(r.days[today].v) > 0);
+      x.week = !!(r && r.lastAt && r.lastAt >= d7);
+      x.slow = !!(x.bound && (!r.lastAt || r.lastAt < d7));
+      x.st = !x.bound ? 'none' : (x.slow ? 'slow' : 'on');
+      var acts = (r && r.acts) || {};
+      x.actN = Object.keys(acts).reduce(function (s, k) { return s + (Number(acts[k]) || 0); }, 0);
+    });
+    rows.sort(function (a, b) {
+      var ra = a.rec && a.rec.lastAt || 0, rb = b.rec && b.rec.lastAt || 0;
+      if (ra !== rb) return rb - ra;
+      return a.no - b.no;
+    });
+    var bound = rows.filter(function (x) { return x.bound; });
+    var tile = {
+      total: list.length,
+      bound: bound.length,
+      today: rows.filter(function (x) { return x.today; }).length,
+      week: rows.filter(function (x) { return x.week; }).length,
+      none: rows.filter(function (x) { return !x.bound && !x.extra; }).length,
+      slow: rows.filter(function (x) { return x.slow; }).length,
+      acts: rows.reduce(function (s, x) { return s + x.actN; }, 0)
+    };
+    var staySum = bound.reduce(function (s, x) { return s + (x.rec.stay || 0); }, 0);
+    var openSum = bound.reduce(function (s, x) { return s + (x.rec.opens || 0); }, 0);
+    tile.avgStay = openSum > 0 ? (staySum / openSum / 60) : 0;
+    /* 近 14 天趋势 */
+    var trend = [];
+    for (var i = 13; i >= 0; i--) {
+      var d = new Date(Date.now() - i * 86400000), k = ymdOf(d.getTime());
+      var v = rows.reduce(function (s, x) {
+        var day = x.rec && x.rec.days ? x.rec.days[k] : null;
+        return s + (day ? (Number(day.v) || 0) : 0);
+      }, 0);
+      trend.push({ k: k, v: v });
+    }
+    /* 最近操作 */
+    var ops = [];
+    rows.forEach(function (x) {
+      (x.rec && x.rec.ev || []).forEach(function (e) {
+        if (!e || !e.t) return;
+        ops.push({ t: Number(e.t) || 0, a: String(e.a || ''), name: x.name });
+      });
+    });
+    ops.sort(function (a, b) { return b.t - a.t; });
+    return { rows: rows, tile: tile, trend: trend, ops: ops.slice(0, 40), list: list };
+  }
+
+  function paint() {
+    var body = document.getElementById('paAdmBody');
+    if (!body) return;
+    if (!ADM.rows) { body.innerHTML = '<div class="empty">还没读取数据，点右上角「🔄 刷新」。</div>'; return; }
+    var A = analyze(), t = A.tile, max = 1;
+    A.trend.forEach(function (d) { if (d.v > max) max = d.v; });
+    var h = '';
+    h += '<div class="tiles">';
+    h += '<div class="tile"><div class="k">已绑定家长</div><div class="v">' + t.bound + '<small> / ' + t.total + ' 人</small></div></div>';
+    h += '<div class="tile"><div class="k">今日打开</div><div class="v">' + t.today + '<small> 人</small></div></div>';
+    h += '<div class="tile"><div class="k">近 7 天活跃</div><div class="v">' + t.week + '<small> 人</small></div></div>';
+    h += '<div class="tile bad"><div class="k">从未打开</div><div class="v">' + t.none + '<small> 人</small></div></div>';
+    h += '<div class="tile warn"><div class="k">7 天没来看</div><div class="v">' + t.slow + '<small> 人</small></div></div>';
+    h += '<div class="tile"><div class="k">平均停留</div><div class="v">' + (t.avgStay ? (Math.round(t.avgStay * 10) / 10) : 0) + '<small> 分钟/次</small></div></div>';
+    h += '<div class="tile"><div class="k">操作总次数</div><div class="v">' + t.acts + '<small> 次</small></div></div>';
+    h += '</div>';
+
+    h += '<h4>📅 近 14 天每天打开人数</h4><div class="chart">';
+    A.trend.forEach(function (d) {
+      var pct = max > 0 ? Math.round(d.v / max * 100) : 0;
+      h += '<div class="col" title="' + d.k + '：' + d.v + ' 次">' +
+        '<div class="bar' + (d.v ? '' : ' zero') + '" style="height:' + Math.max(2, pct) + '%"></div>' +
+        '<div class="lb">' + fmtDay(d.k) + '</div></div>';
+    });
+    h += '</div>';
+
+    h += '<h4>👨‍👩‍👧 绑定与使用明细</h4>';
+    h += '<table><thead><tr><th>学生</th><th>状态</th><th>首次</th><th>最近</th><th>打开</th><th>停留</th><th>动作</th><th>设备</th></tr></thead><tbody>';
+    A.rows.forEach(function (x) {
+      var r = x.rec || {};
+      var dot = x.st === 'on' ? 'on' : (x.st === 'slow' ? 'slow' : 'off');
+      var tag = x.st === 'on' ? '<span class="tag">已绑定 · 活跃</span>'
+        : x.st === 'slow' ? '<span class="tag slow">已绑定 · 7 天未看</span>'
+          : '<span class="tag off">未打开过</span>';
+      var acts = '';
+      var ra = r.acts || {};
+      [['抽灵杰', (Number(ra.draw) || 0) + (Number(ra.feed) || 0)],
+       ['抽灵宠', Number(ra.growdraw) || 0],
+       ['喂养', Number(ra.growfeed) || 0],
+       ['竞答', Number(ra.quiz) || 0]].forEach(function (g) {
+        if (g[1] > 0) acts += '<span class="act">' + g[0] + ' ' + g[1] + '</span>';
+      });
+      h += '<tr>' +
+        '<td><span class="dot ' + dot + '"></span>' + pesc(x.name) + (x.extra ? ' <span class="tag off">不在当前名单</span>' : '') + '</td>' +
+        '<td>' + tag + '</td>' +
+        '<td>' + fmtDate(r.firstAt) + '</td>' +
+        '<td>' + (r.lastAt ? (hmOf(r.lastAt)) : '—') + '</td>' +
+        '<td>' + (Number(r.opens) || 0) + '</td>' +
+        '<td>' + ((Number(r.stay) || 0) ? (Math.round((Number(r.stay) || 0) / 60) + ' 分') : '—') + '</td>' +
+        '<td>' + (acts || '—') + '</td>' +
+        '<td>' + pesc(r.dev || '—') + '</td>' +
+        '</tr>';
+    });
+    h += '</tbody></table>';
+
+    h += '<h4>🕘 最近操作</h4>';
+    if (!A.ops.length) h += '<div class="ops"><div class="empty">还没有操作记录（家长抽卡 / 喂养 / 竞答后会出现在这里）</div></div>';
+    else {
+      h += '<div class="ops">';
+      A.ops.forEach(function (o) {
+        h += '<div class="op"><span class="t">' + hmOf(o.t) + '</span><span class="n">' + pesc(o.name) + '</span><span>' + pesc(ACT_NAME[o.a] || o.a || '操作') + '</span></div>';
+      });
+      h += '</div>';
+    }
+    h += '<div class="note">· 停留时长按「两次操作间隔」累计，单次最多记 3 分钟，长看不操作不会无限增长。<br>' +
+      '· 「未打开过」= 从没成功进过家长端（没绑 / 没点开 / 填错绑定码都可能，建议把名单发群里再确认一次）。<br>' +
+      '· 回执只记行为计数：不含绑定码、不含成绩与作业内容。</div>';
+    body.innerHTML = h;
+    var sub = document.getElementById('paAdmSub');
+    if (sub) sub.textContent = '共 ' + t.total + ' 名学生 · 已绑定 ' + t.bound + ' 人 · 更新于 ' + hmOf(ADM.at || Date.now());
+  }
+
+  window.paAdmOpen = function () {
+    var m = document.getElementById('paAdmMask');
+    if (!m) return;
+    m.classList.add('on');
+    try { document.body.style.overflow = 'hidden'; } catch (e) {}
+    if (ADM.rows) paint(); else window.paAdmFetch(true);
+  };
+  window.paAdmClose = function () {
+    var m = document.getElementById('paAdmMask');
+    if (m) m.classList.remove('on');
+    try { document.body.style.overflow = ''; } catch (e) {}
+  };
+  window.paAdmCopyNeed = function () {
+    if (!ADM.rows) { window.paAdmFetch(true); if (typeof toastMsg === 'function') toastMsg('⏳ 正在读取，稍等一两秒再点一次'); return; }
+    var A = analyze();
+    var none = A.rows.filter(function (x) { return !x.bound && !x.extra; }).map(function (x) { return x.name; });
+    var slow = A.rows.filter(function (x) { return x.slow; }).map(function (x) { return x.name; });
+    var txt = '【家长端使用情况】\n';
+    txt += '还没打开过家长端（' + none.length + ' 人）：' + (none.length ? none.join('、') : '无') + '\n';
+    txt += '已绑定但 7 天没来看（' + slow.length + ' 人）：' + (slow.length ? slow.join('、') : '无');
+    function done() { if (typeof toastMsg === 'function') toastMsg('📋 待催名单已复制，可直接粘到群里'); }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(txt).then(done, function () { if (typeof paFallbackCopy === 'function') paFallbackCopy(txt, done); }); return; }
+    } catch (e) {}
+    if (typeof paFallbackCopy === 'function') paFallbackCopy(txt, done);
+  };
+  window.paAdmCsv = function () {
+    if (!ADM.rows) { window.paAdmFetch(true); return; }
+    var A = analyze();
+    var lines = ['学生,状态,首次打开,最近打开,打开次数,累计停留(分钟),抽灵杰卡,抽灵宠,喂养,竞答,设备,页面版本'];
+    A.rows.forEach(function (x) {
+      var r = x.rec || {};
+      var st = x.st === 'on' ? '活跃' : (x.st === 'slow' ? '7天未看' : '未打开过');
+      var acts = r.acts || {};
+      lines.push([
+        x.name, st,
+        r.firstAt ? ymdOf(r.firstAt) : '',
+        r.lastAt ? (ymdOf(r.lastAt) + ' ' + pad2(new Date(r.lastAt).getHours()) + ':' + pad2(new Date(r.lastAt).getMinutes())) : '',
+        Number(r.opens) || 0,
+        Math.round((Number(r.stay) || 0) / 60),
+        Number(acts.feed || 0) + Number(acts.draw || 0), Number(acts.growdraw || 0), Number(acts.growfeed || 0), Number(acts.quiz || 0),
+        String(r.dev || '').replace(/,/g, ' '), String(r.ver || '')
+      ].join(','));
+    });
+    var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '家长端使用统计_' + ymdOf(Date.now()) + '.csv';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(a.href); } catch (e) {} }, 1200);
+    if (typeof toastMsg === 'function') toastMsg('⬇️ 已导出 CSV');
+  };
+  try {
+    var mask = document.getElementById('paAdmMask');
+    if (mask) mask.addEventListener('click', function (e) { if (e.target === mask) window.paAdmClose(); });
+  } catch (e) {}
+  try { document.addEventListener('keydown', function (e) { if (e.key === 'Escape') window.paAdmClose(); }); } catch (e2) {}
+
+  /* 测试把手：离线核对统计口径 */
+  window.__paAdm = { analyze: analyze, norm: norm, roster: roster, setRows: function (r) { ADM.rows = (r || []).map(norm); }, paint: paint, cacheKey: CK };
 })();
 </script>
 </body>
