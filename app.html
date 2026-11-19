@@ -1821,8 +1821,9 @@ table.paper td.l{text-align:left;font-weight:600}
           <button class="btn2 sm" onclick="scBonusSelAll(true)">✅ 全选达成</button>
           <button class="btn2 sm ghost" onclick="scBonusSelAll(false)">🚫 清空勾选</button>
           <button class="btn2 primary" onclick="scBonusApply()">🏆 给勾选同学加分</button>
+          <button class="btn2 sm ghost" onclick="scBonusUndoOpen()">↩️ 撤销已加</button>
           <button class="btn2 sm ghost" onclick="scGoalPanelToggle()">🎯 设定目标分</button>
-          <span class="sctip" id="scBonusTip">选一场考试，按学生的目标一 / 二 / 三自动判断谁达标，勾选后一次写入积分</span>
+          <span class="sctip" id="scBonusTip">选一场考试，按学生的目标一 / 二 / 三自动判断谁达标，勾选后一次写入积分；加错了点「撤销已加」可全选批量撤</span>
         </div>
         <div class="scroll" id="scBonusBox" style="max-height:min(58vh,540px);margin-top:8px"></div>
       </div>
@@ -10207,7 +10208,7 @@ function scBonusRenderStatus() {
     box.appendChild(el('span', 'bn-st-t', '✅ 已加分：'));
     st.done.forEach(function (x) { box.appendChild(tag(x, 'done', x.n ? ('(' + x.n + '人) ') : '')); });
   }
-  box.appendChild(el('div', 'bn-empty', '说明：加分写在学生个人积分（奖惩流水），不计入每周小组总分。若考试改过名，旧名加过分可能仍显示「待加」，请点进去按实际勾选核对，避免重复加。'));
+  box.appendChild(el('div', 'bn-empty', '说明：加分写在学生个人积分（奖惩流水），不计入每周小组总分。若考试改过名，旧名加过分可能仍显示「待加」，请点进去按实际勾选核对，避免重复加。加错了？点「↩️ 撤销已加」可全选批量撤销本场加分，扣回会同步到小程序和教室桌面。'));
 }
 function scBonusRender(opts) {
   opts = opts || {};
@@ -10410,6 +10411,135 @@ function scBonusApply() {
   }).catch(function (err) {
     console.error('[成绩] 目标加分写入失败', err);
     toastMsg('⚠️ 部分没保存成功，请重试');
+    try { loadST().then(function () { scBonusRender({ keepPts: true }) }) } catch (e) {}
+  });
+}
+
+/* ===== vT234 目标加分撤销（scBonusApply 的反向操作）=====
+   场景：加错了 / 想重新加。旧路径只能去个人积分流水一条条删，太麻烦。
+   这里把本场考试「成绩达标 · 科目 考试名」的全部流水列进弹窗，默认全选，一键批量撤销。
+   每条撤销做三件事（缺一不可）：
+   ① tomAdd('st', stTombKeyOf(...)) 记录级墓碑 —— 小程序/教室桌面/导入层按同一业务键丢弃，
+      删除不再复活（键对齐 vT173，成绩达标类不含日期）；
+   ② 从 wb_st_created_v1 移除创建登记 —— 否则 vT233 LWW 会判「行比墓碑新」把墓碑作废，
+      撤销就白撤了（这里行是被主动删掉的，墓碑必须赢）；
+   ③ db.deleteRecord 真删飞书流水行（无 rid 的本地行只走 ①②）。
+   撤完 loadST + kickSyncAfterScore，全端立即生效。 */
+var SC_BONUS_UNDO = [];   /* 撤销弹窗的候选行快照（含 _on 勾选态） */
+function scBonusUndoRows(meta) {
+  var pre = '成绩达标 · ' + scBonusLabel(meta);
+  var out = [];
+  (ST_ROWS || []).forEach(function (r) {
+    var t = String(fval(r, '奖惩事项') || '');
+    if (t.indexOf(pre) !== 0) return;
+    var nm = fval(r, '姓名') || '';
+    if (!nm) return;
+    var d = fval(r, '日期');
+    out.push({ row: r, rid: recId(r), name: nm, reason: t,
+      pts: fnum(r, '奖惩分值') || 0,
+      date: d ? String(d).slice(0, 10) : '', _on: true });
+  });
+  return out;
+}
+function scBonusUndoOpen() {
+  if (typeof SC_BONUS_EXAM === 'undefined') return;
+  var meta = scBonusExamList().filter(function (x) { return (x.subj + '｜' + x.exam) === SC_BONUS_EXAM })[0];
+  if (!meta) return toastMsg('请先选择一场考试');
+  var rows = scBonusUndoRows(meta);
+  if (!rows.length) return toastMsg('这场考试还没有加分流水，无需撤销');
+  SC_BONUS_UNDO = rows;
+  var mask = document.createElement('div');
+  mask.id = 'scUndoMask';
+  mask.style.cssText = 'position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  var sum = 0;
+  rows.forEach(function (r) { sum += r.pts });
+  var h = '<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:82vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.25)">' +
+    '<div style="padding:14px 18px 10px;border-bottom:1px solid #e5e7eb">' +
+    '<b style="font-size:15px">↩️ 撤销目标加分 · ' + scBonusLabel(meta) + '</b>' +
+    '<div style="font-size:12px;color:#6b7280;margin-top:4px">共 ' + rows.length + ' 条流水 · 合计 +' + sum + ' 分。默认全选，去掉不要撤的勾，点「撤销勾选的加分」即可批量扣回。</div></div>' +
+    '<div id="scUndoList" style="flex:1;overflow:auto;padding:8px 14px">';
+  rows.forEach(function (r, i) {
+    h += '<label style="display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px dashed #f0f0f0;font-size:13px;cursor:pointer">' +
+      '<input type="checkbox" id="scUndoCk' + i + '" checked onchange="scBonusUndoToggle(' + i + ',this.checked)">' +
+      '<span style="flex:1">' + r.name + '　<span style="color:#6b7280">' + r.reason.replace('成绩达标 · ' + scBonusLabel(meta) + ' · ', '') +
+      (r.date ? '（' + r.date + '）' : '') + '</span></span>' +
+      '<b style="color:#0f7a46">+' + r.pts + '</b></label>';
+  });
+  h += '</div><div style="padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;align-items:center;gap:10px">' +
+    '<label style="font-size:13px;display:flex;align-items:center;gap:6px;margin-right:auto;cursor:pointer">' +
+    '<input type="checkbox" id="scUndoAll" checked onchange="scBonusUndoSelAll(this.checked)">全选</label>' +
+    '<span id="scUndoSum" style="font-size:13px;color:#374151"></span>' +
+    '<button class="btn2 primary sm" onclick="scBonusUndoApply()">↩️ 撤销勾选的加分</button>' +
+    '<button class="btn2 sm ghost" onclick="scBonusUndoClose()">取消</button></div></div>';
+  mask.innerHTML = h;
+  mask.addEventListener('click', function (e) { if (e.target === mask) scBonusUndoClose() });
+  document.body.appendChild(mask);
+  scBonusUndoRepaint();
+}
+function scBonusUndoToggle(i, on) {
+  var r = SC_BONUS_UNDO[i]; if (!r) return;
+  r._on = !!on;
+  scBonusUndoRepaint();
+}
+function scBonusUndoSelAll(on) {
+  SC_BONUS_UNDO.forEach(function (r) { r._on = !!on });
+  var mask = document.getElementById('scUndoMask'); if (!mask) return;
+  var cks = mask.querySelectorAll('input[id^=scUndoCk]');
+  [].forEach.call(cks, function (c) { c.checked = !!on });
+  scBonusUndoRepaint();
+}
+function scBonusUndoRepaint() {
+  var n = 0, sum = 0;
+  SC_BONUS_UNDO.forEach(function (r) { if (r._on) { n++; sum += r.pts } });
+  var s = document.getElementById('scUndoSum');
+  if (s) s.textContent = '已选 ' + n + ' 条 · 撤销 ' + (sum > 0 ? '+' + sum : String(sum)) + ' 分';
+  var all = document.getElementById('scUndoAll');
+  if (all) all.checked = n === SC_BONUS_UNDO.length && n > 0;
+}
+function scBonusUndoClose() {
+  var m = document.getElementById('scUndoMask');
+  if (m && m.parentNode) m.parentNode.removeChild(m);
+  SC_BONUS_UNDO = [];
+}
+function scBonusUndoApply() {
+  var picks = SC_BONUS_UNDO.filter(function (r) { return r._on });
+  if (!picks.length) return toastMsg('先勾选要撤销的记录');
+  if (!dbReady) { toastMsg('⚠️ 未连接数据表'); return; }
+  var sum = 0, lines = picks.map(function (r) {
+    sum += r.pts;
+    return '· ' + r.name + '　' + r.reason + '　+' + r.pts + (r.date ? '（' + r.date + '）' : '');
+  });
+  if (!confirm('撤销下面 ' + picks.length + ' 条目标加分（合计 +' + sum + '，将从个人积分扣回）？\n\n' + lines.join('\n') +
+    '\n\n会删除飞书流水行并写删除墓碑，小程序 / 教室桌面同步移除。')) return;
+  toastMsg('⏳ 正在撤销 ' + picks.length + ' 条…');
+  picks.forEach(function (r) {
+    /* ① 记录级墓碑（成绩达标键不含日期，date 传不传都不影响键） */
+    try { tomAdd('st', stTombKeyOf(r.name, r.reason, r.date, r.pts)) } catch (_te) {}
+    /* ② 移除创建登记：撤销场景墓碑必须赢过 vT233 LWW */
+    try {
+      var k = stTombKeyOf(r.name, r.reason, r.date, r.pts);
+      if (k) {
+        var m = stCreatedMap();
+        if (m[k]) { delete m[k]; localStorage.setItem('wb_st_created_v1', JSON.stringify(m)) }
+      }
+    } catch (_ce) {}
+  });
+  var jobs = picks.filter(function (r) { return r.rid }).map(function (r) {
+    return db.deleteRecord({ databaseId: ST_DB, recordId: r.rid }).then(function () { return 1 }, function () { return 0 });
+  });
+  Promise.all(jobs).then(function (oks) {
+    var okN = oks.filter(function (x) { return x }).length;
+    return loadST().then(function () {
+      renderStu();
+      try { if (typeof renderHome === 'function') renderHome() } catch (e) {}
+      scBonusRender({ keepPts: true });
+      if (okN === jobs.length) toastMsg('✅ 已撤销 ' + okN + ' 条加分（合计 +' + sum + ' 已扣回）');
+      else toastMsg('⚠️ 飞书删除 ' + okN + '/' + jobs.length + '，墓碑已写，稍后同步会补齐');
+      kickSyncAfterScore();
+    });
+  }).catch(function (err) {
+    console.error('[成绩] 目标加分撤销失败', err);
+    toastMsg('⚠️ 撤销没保存成功，请重试');
     try { loadST().then(function () { scBonusRender({ keepPts: true }) }) } catch (e) {}
   });
 }
@@ -20386,9 +20516,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v233';
+var WB_VER_TAG = 'v234';
 var WB_MY_VER = '优化版 vT233 · 积分流水 LWW 同步（重新加的稳定上云不再闪消）';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.242';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.243';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
