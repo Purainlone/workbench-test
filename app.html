@@ -20986,8 +20986,8 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v250';
-var WB_MY_VER = '优化版 vT250 · 修纪念卡寄语按钮';
+var WB_VER_TAG = 'v251';
+var WB_MY_VER = '优化版 vT251 · 启灵档案版式重做';
 var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.253';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
@@ -31579,32 +31579,60 @@ function cwInit(){
     var d2 = ptArcEvoAt(pet, 'baby'), d3 = ptArcEvoAt(pet, 'teen');
     var care = ptArcCare(pet), days = ptArcDays(pet);
     var now = ptArcStageNow(pet);
-    var steps = '<div class="ac-step"><i>①</i><b>启灵之日</b><span>' + ptEsc(d1) + '　' + ptEsc(pet.studentName || '') + ' 与「' + ptEsc(pet.name || '') + '」初次相遇</span></div>' +
-      (d2 ? '<div class="ac-step"><i>②</i><b>少年期</b><span>' + ptEsc(d2) + '　成长值攒满，第一次进化</span></div>'
-          : '<div class="ac-step"><i>②</i><b>少年期</b><span>还在幼年期，等待成长</span></div>') +
-      (d3 ? '<div class="ac-step"><i>③</i><b>成年期</b><span>' + ptEsc(d3) + '　完成最后一次进化，长成 ' + ptEsc(pet.name || '') + '</span></div>'
-          : '<div class="ac-step"><i>③</i><b>成年期</b><span>' + (now === 'adult' ? '已长成' : '尚未进化到成年') + '</span></div>');
+    var cs = ptArcCareSrc(pet);
+    var stName = pet.graduated ? '已毕业' : (({ baby: '幼年', teen: '少年', adult: '成年' })[now] || '成年');
+    /* vT251 重排版式：原来的档案「字小、页空」，1/3 页面是白的。
+       现在改成「抬头 → 姓名 → 三阶段立绘 → 时间轴 → 数据 → 寄语 → 签名」的分栏结构，
+       字号整体放大 2–3pt，段落之间用「— 小标题 —」隔开，四角加线角，落款处盖一枚红章。 */
+    function ev(when, ttl, desc, cls) {
+      return '<div class="ac-ev ' + cls + '"><em class="ac-when">' + ptEsc(when) + '</em>' +
+        '<div class="ac-what"><b>' + ttl + '</b><span>' + desc + '</span></div></div>';
+    }
+    /* 寄语越长字号越小：90 字的寄语不能把档案挤到第二页（A4 只给一页） */
+    function wishFs(t) {
+      var n = String(t || '').length;
+      return n > 64 ? 11.5 : (n > 44 ? 12.5 : 13.5);
+    }
+    var tl =
+      ev(d1, '启灵之日', '与「' + ptEsc(pet.name || '') + '」初次相遇，从此同行。', 'done') +
+      (d2 ? ev(d2, '第一次进化', '成长值攒满，长成少年模样。', 'done')
+          : ev('待成长', '第一次进化', '还在幼年期，再陪它玩几次就会长大。', 'todo')) +
+      (d3 ? ev(d3, '最后一次进化', '完成成人礼，长成 ' + ptEsc(pet.name || '') + '。', 'done')
+          : ev('待成长', '最后一次进化', now === 'adult' || now === 'grad' ? '已完成，等待记录日期。' : '尚未进化到成年。', 'todo'));
+    var pics = [['baby', '幼年'], ['teen', '少年'], ['adult', '成年']].map(function (k) {
+      var src = im[k[0]], cur = (k[0] === now);
+      return '<figure class="ac-pic' + (cur ? ' cur' : '') + '">' +
+        (src ? '<img src="' + ptEsc(src) + '">' : '<div class="ac-ph">·</div>') +
+        '<figcaption>' + k[1] + (cur ? '<i>当前</i>' : '') + '</figcaption></figure>';
+    }).join('');
+    var stats = '<div class="ac-st"><b>' + care + '</b><span>互动次数</span>' +
+        ((cs.web + cs.parent + cs.desk) > 0 ? '<i>台 ' + cs.web + ' · 家 ' + cs.parent + ' · 桌 ' + cs.desk + '</i>' : '<i>还没开始互动</i>') + '</div>' +
+      '<div class="ac-st"><b>' + days + '</b><span>相伴天数</span><i>从启灵那天算起</i></div>' +
+      '<div class="ac-st"><b>' + ptEsc(stName) + '</b><span>当前阶段</span><i>' + (now === 'adult' || now === 'grad' ? '已经长大' : '再陪陪它就会长大') + '</i></div>' +
+      '<div class="ac-st"><b>' + ptEsc(pet.tier || '普通') + '</b><span>灵宠品级</span><i>灵宠「' + ptEsc(pet.name || '') + '」</i></div>';
     return '<div class="acert">' +
       '<div class="ac-frame">' +
-        '<div class="ac-hd"><span>启 灵 档 案</span><i>SPIRIT COMPANION RECORD</i></div>' +
-        '<div class="ac-name"><b>' + ptEsc(pet.studentName || '') + '</b> 同学</div>' +
-        '<div class="ac-sub">与灵宠「' + ptEsc(pet.name || '') + '」共同走过的日子</div>' +
-        '<div class="ac-pics">' +
-          (im.baby ? '<img src="' + ptEsc(im.baby) + '">' : '') +
-          (im.teen ? '<img src="' + ptEsc(im.teen) + '">' : '') +
-          (im.adult ? '<img src="' + ptEsc(im.adult) + '">' : '') +
+        '<i class="ac-cor tl"></i><i class="ac-cor tr"></i><i class="ac-cor bl"></i><i class="ac-cor br"></i>' +
+        '<div class="ac-hd">' +
+          '<div class="ac-orn"><i></i><span>✦</span><i class="r"></i></div>' +
+          '<h1>启 灵 档 案</h1>' +
+          '<div class="ac-en">SPIRIT COMPANION RECORD</div>' +
         '</div>' +
-        '<div class="ac-steps">' + steps + '</div>' +
-        '<div class="ac-stat"><div><b>' + care + '</b><span>互动次数</span>' +
-          ((function (c) { return (c.web + c.parent + c.desk) > 0 ? ('<i class="ac-src">台 ' + c.web + ' · 家 ' + c.parent + ' · 桌 ' + c.desk + '</i>') : ''; })(ptArcCareSrc(pet))) +
-          '</div>' +
-          '<div><b>' + days + '</b><span>相伴天数</span></div>' +
-          '<div><b>' + ptEsc(PT_ARC_STAGE[now] || '—') + '</b><span>当前阶段</span></div>' +
-          '<div><b>' + ptEsc(pet.tier || '普通') + '</b><span>灵宠品级</span></div></div>' +
-        '<div class="ac-wish"><i>老师寄语</i><p>' + ptEsc(ptArcWish(pet)) + '</p></div>' +
+        '<div class="ac-name"><b>' + ptEsc(pet.studentName || '') + '</b><em>同学</em></div>' +
+        '<div class="ac-sub">与灵宠「' + ptEsc(pet.name || '') + '」共同走过的日子</div>' +
+        '<div class="ac-pics">' + pics + '</div>' +
+        '<div class="ac-band"><i></i><span>成 长 时 间 轴</span><i></i></div>' +
+        '<div class="ac-tl">' + tl + '</div>' +
+        '<div class="ac-band"><i></i><span>相 伴 数 据</span><i></i></div>' +
+        '<div class="ac-stats">' + stats + '</div>' +
+        '<div class="ac-band"><i></i><span>老 师 寄 语</span><i></i></div>' +
+        '<div class="ac-wish"><span class="q l">“</span><p style="font-size:' + wishFs(ptArcWish(pet)) + 'pt">' + ptEsc(ptArcWish(pet)) + '</p><span class="q r">”</span></div>' +
+        '<div class="ac-sign"><em class="ac-sg">班主任签名<span class="ln"></span></em>' +
+          '<i class="ac-seal"><b>启</b><b>灵</b><b>档</b><b>案</b></i>' +
+          '<em>' + ptArcD(Date.now()) + '</em></div>' +
         '<div class="ac-ft"><span>' + ptEsc(ptArcCls() || '') + '</span>' +
           '<span>' + (pet.gradCode ? '毕业卡号 ' + ptEsc(pet.gradCode) : '') + '</span>' +
-          '<span>' + ptArcD(Date.now()) + '</span></div>' +
+          '<span>教室工作台 · 启灵档案</span></div>' +
       '</div>' +
     '</div>';
   }
@@ -31636,33 +31664,73 @@ function cwInit(){
       'display:flex;justify-content:space-between;gap:1mm}',
     '.acert{page-break-after:always;break-after:page;padding:0}',
     '.acert:last-child{page-break-after:auto;break-after:auto}',
-    '.ac-frame{border:1.4mm double #c9a45c;border-radius:4mm;padding:12mm 14mm;min-height:277mm;' +
-      'background:radial-gradient(circle at 50% 0%,#fffdf6,#fffaf0 70%);display:flex;flex-direction:column}',
+    '.ac-frame{position:relative;border:.6mm solid #c9a45c;border-radius:2.5mm;padding:10.5mm 15mm 9mm;min-height:270mm;' +
+      'display:flex;flex-direction:column;background:#fffdf8}',
+    '.ac-frame:before{content:"";position:absolute;left:2.2mm;right:2.2mm;top:2.2mm;bottom:2.2mm;' +
+      'border:.3mm solid #e7d5ae;border-radius:1.4mm}',
+    '.ac-cor{position:absolute;width:8mm;height:8mm;border:.5mm solid #d9b96f;z-index:1}',
+    '.ac-cor.tl{left:4.4mm;top:4.4mm;border-right:0;border-bottom:0}',
+    '.ac-cor.tr{right:4.4mm;top:4.4mm;border-left:0;border-bottom:0}',
+    '.ac-cor.bl{left:4.4mm;bottom:4.4mm;border-right:0;border-top:0}',
+    '.ac-cor.br{right:4.4mm;bottom:4.4mm;border-left:0;border-top:0}',
     '.ac-hd{text-align:center}',
-    '.ac-hd span{font-size:24pt;letter-spacing:8pt;color:#8a5a2b;font-weight:700}',
-    '.ac-hd i{display:block;font-size:7pt;letter-spacing:3pt;color:#b99a68;font-style:normal;margin-top:1.5mm}',
-    '.ac-name{text-align:center;margin:8mm 0 1mm;font-size:13pt;color:#6b4a22}',
-    '.ac-name b{font-size:20pt;letter-spacing:2pt;color:#4a2f12;border-bottom:.4mm solid #d9b96f;padding:0 3mm 1mm}',
-    '.ac-sub{text-align:center;font-size:9.5pt;color:#9a7a52;margin-bottom:6mm}',
-    '.ac-pics{display:flex;justify-content:center;gap:6mm;margin-bottom:7mm}',
-    '.ac-pics img{height:38mm;object-fit:contain}',
-    '.ac-steps{display:flex;flex-direction:column;gap:3.2mm;margin:0 4mm}',
-    '.ac-step{display:flex;align-items:baseline;gap:2.5mm;font-size:9.5pt;color:#5f4726;' +
-      'border-left:1mm solid #e7cf9c;padding:1mm 0 1mm 4mm}',
-    '.ac-step i{font-style:normal;color:#c49a4e;font-size:11pt;font-weight:700;width:6mm}',
-    '.ac-step b{width:22mm;color:#7a5322}',
-    '.ac-step span{flex:1;color:#6b5334}',
-    '.ac-stat{display:flex;justify-content:space-around;margin:8mm 0 6mm;padding:4mm 0;' +
-      'border-top:.25mm dashed #e2cda0;border-bottom:.25mm dashed #e2cda0}',
-    '.ac-stat div{text-align:center}',
-    '.ac-stat b{display:block;font-size:16pt;color:#8a5a2b}',
-    '.ac-stat span{font-size:7.5pt;color:#a08457}',
-    '.ac-src{display:block;font-style:normal;font-size:6pt;color:#c0a77e;margin-top:.6mm;letter-spacing:.2pt}',
-    '.ac-wish{margin:2mm 6mm;text-align:center}',
-    '.ac-wish i{font-style:normal;font-size:8pt;color:#b99a68;letter-spacing:2pt}',
-    '.ac-wish p{margin-top:2mm;font-size:10pt;line-height:1.8;color:#5f4726}',
-    '.ac-ft{margin-top:auto;display:flex;justify-content:space-between;font-size:7.5pt;color:#a08457;' +
-      'border-top:.25mm solid #e8d6ae;padding-top:2.5mm}'
+    '.ac-orn{display:flex;align-items:center;justify-content:center;gap:3.5mm;margin-bottom:4mm}',
+    '.ac-orn i{display:block;width:32mm;height:.35mm;background:#dcc59a}',
+    '.ac-orn span{font-size:8pt;color:#c9a45c;line-height:1}',
+    '.ac-hd h1{font-size:27pt;letter-spacing:9pt;color:#7b4f1d;font-weight:700;' +
+      'font-family:"STZhongsong","Songti SC","SimSun",serif;line-height:1.15}',
+    '.ac-en{font-size:7.5pt;letter-spacing:4pt;color:#bda275;margin-top:2.4mm}',
+    '.ac-name{text-align:center;margin-top:5.5mm}',
+    '.ac-name b{font-size:23pt;letter-spacing:2.5pt;color:#4a2f12;padding:0 6mm 1.6mm;' +
+      'border-bottom:.3mm solid #e2cda0;font-family:"STZhongsong","Songti SC","SimSun",serif}',
+    '.ac-name em{font-style:normal;font-size:11pt;color:#8a7250;margin-left:3mm;letter-spacing:1pt}',
+    '.ac-sub{text-align:center;font-size:11pt;color:#9a7a52;margin-top:3.4mm;letter-spacing:.5pt}',
+    '.ac-pics{display:flex;justify-content:center;align-items:flex-end;gap:10mm;margin:3.2mm 0 0}',
+    '.ac-pic{margin:0;text-align:center}',
+    '.ac-pic img{height:38mm;object-fit:contain;display:block;margin:0 auto}',
+    '.ac-pic .ac-ph{width:34mm;height:34mm;line-height:34mm;text-align:center;font-size:18pt;color:#d8c7a8}',
+    '.ac-pic figcaption{font-size:8pt;color:#a08b68;margin-top:2.2mm;letter-spacing:1.5pt}',
+    '.ac-pic.cur img{height:44mm}',
+    '.ac-pic.cur figcaption{color:#8a5a2b;font-weight:700}',
+    '.ac-pic.cur figcaption i{font-style:normal;font-size:7.4pt;font-weight:400;color:#fff;' +
+      'background:#c9a45c;border-radius:6mm;padding:.3mm 1.6mm;margin-left:1.2mm;letter-spacing:0}',
+    '.ac-band{display:flex;align-items:center;gap:4mm;margin:4.2mm 0 2.8mm}',
+    '.ac-band i{flex:1;height:.3mm;background:#e8d9b8}',
+    '.ac-band span{font-size:8.6pt;color:#a5844f;letter-spacing:3pt;white-space:nowrap}',
+    '.ac-tl{position:relative;padding-left:2mm}',
+    '.ac-tl:before{content:"";position:absolute;left:7.2mm;top:3.5mm;bottom:3.5mm;width:.35mm;background:#e6d3ac}',
+    '.ac-ev{position:relative;display:flex;gap:6mm;padding:1.9mm 0 1.9mm 14mm}',
+    '.ac-ev:before{content:"";position:absolute;left:6.1mm;top:4.4mm;width:2.2mm;height:2.2mm;border-radius:50%;' +
+      'background:#c9a45c}',
+    '.ac-ev.todo:before{background:#fffdf8;border:.4mm solid #dcc79a}',
+    '.ac-when{flex:0 0 31mm;font-size:10pt;color:#8a5a2b;text-align:right;padding-top:.6mm;white-space:nowrap}',
+    '.ac-what{flex:1}',
+    '.ac-what b{display:block;font-size:11.5pt;color:#4a2f12;letter-spacing:.6pt}',
+    '.ac-what span{display:block;font-size:11pt;color:#7a6242;margin-top:1.4mm;line-height:1.55}',
+    '.ac-stats{display:flex;margin:0 2mm}',
+    '.ac-st{flex:1;text-align:center;position:relative;padding:1.2mm 0}',
+    '.ac-st+.ac-st:before{content:"";position:absolute;left:0;top:2.4mm;bottom:2.4mm;width:.25mm;background:#eee0c4}',
+    '.ac-st b{display:block;font-size:19pt;color:#8a5a2b;line-height:1.2;' +
+      'font-family:"STZhongsong","Songti SC","SimSun",serif}',
+    '.ac-st span{display:block;font-size:9.5pt;color:#a08457;letter-spacing:1pt;margin-top:.6mm}',
+    '.ac-st i{display:block;font-style:normal;font-size:7.6pt;color:#c0a77e;margin-top:1.2mm;letter-spacing:.2pt}',
+    '.ac-wish{position:relative;text-align:center;padding:0 16mm;min-height:17mm;display:flex;' +
+      'align-items:center;justify-content:center}',
+    '.ac-wish .q{position:absolute;font-size:26pt;color:#e8d8b6;line-height:1;font-family:Georgia,serif}',
+    '.ac-wish .q.l{left:4mm;top:1mm}',
+    '.ac-wish .q.r{right:4mm;bottom:1mm}',
+    '.ac-wish p{font-size:13.5pt;line-height:2;color:#57401f;letter-spacing:.6pt;margin:0}',
+    '.ac-sign{display:flex;justify-content:space-between;align-items:center;margin:4.5mm 4mm 0;' +
+      'font-size:9.5pt;color:#8a7250;letter-spacing:.5pt}',
+    '.ac-sign em{font-style:normal;display:flex;align-items:flex-end}',
+    '.ac-sign .ln{display:inline-block;width:40mm;height:5mm;border-bottom:.3mm solid #d6bf96;margin-left:2mm}',
+    '.ac-sign em+em{color:#a08457}',
+    '.ac-seal{flex:0 0 auto;width:12mm;height:12mm;margin:0 13mm 0 auto;border:.45mm solid #b5453a;' +
+      'border-radius:.8mm;color:#b5453a;opacity:.46;transform:rotate(-7deg);display:grid;' +
+      'grid-template-columns:1fr 1fr;place-items:center;font-family:"STKaiti","KaiTi",serif;font-size:7.4pt}' +
+      '.ac-seal b{border:0;padding:0;font-weight:400;line-height:1}',
+    '.ac-ft{margin-top:auto;display:flex;justify-content:space-between;align-items:center;' +
+      'border-top:.25mm solid #e8d6ae;padding-top:3mm;font-size:8.2pt;color:#a08457;letter-spacing:.5pt}',
   ].join('');
 
   /* 打印：写进隐藏 iframe，图片加载完（或超时）再调起打印 */
