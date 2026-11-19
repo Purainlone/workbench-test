@@ -136,6 +136,10 @@
     background:linear-gradient(135deg,#f7fbf8,#eaf2ee);background-repeat:no-repeat;background-position:center}
   .cx .nm{font-size:12px;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .cx .sr{font-size:10px;color:#9aa8a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* vT246 灵杰卡：品级用颜色区分（普通灰 / 隐藏紫 / 典藏金），后面接分类 */
+  .cx .sr .tg{font-weight:700;color:#9aa8a0}
+  .cx .sr .tg.h{color:#7a5cbf}
+  .cx .sr .tg.j{color:#b8860b}
   .cx .ph{width:100%;aspect-ratio:1/1;border-radius:9px;background:#f2f6f3;display:flex;align-items:center;justify-content:center;font-size:26px}
   .tier{position:absolute;left:5px;top:5px;font-size:9px;padding:1px 6px;border-radius:7px;background:rgba(255,255,255,.88);color:#8a6a15;font-weight:700}
   .cx .st{position:absolute;right:5px;top:5px;font-size:9px;letter-spacing:-1px;padding:1px 5px;border-radius:7px;background:rgba(255,244,214,.94);color:#b8860b;font-weight:700}
@@ -376,6 +380,8 @@
 
   var GITEE = 'https://gitee.com/api/v5';
   var SNAP = 'wb_parent_snap.json';
+  var PA_PAGE_VER = 'v246';   /* vT246：灵杰卡「名称 + 品级·分类」+ 家长使用回执（老师端家长后台） */
+  try { window.PA_PAGE_VER = PA_PAGE_VER; } catch (e) {}
   var K_ACCESS = 'wb_pa_access', K_NAME = 'wb_pa_name', K_CODE = 'wb_pa_code', K_PEND = 'wb_pa_pending';
 
   /* ---------- 编解码（与小程序 ptcloud.js 同一套算法） ---------- */
@@ -796,8 +802,11 @@
   }
   function cxCard(p, i) {
     var srcs = pickSrcs(petRel(p));
+    var ispet = cxIsPet(p);
+    /* vT246 灵杰卡不再借用灵宠的「品级角标」：灵杰显示「名称 + 品级·分类」
+       （品级＝普通 / 隐藏 / 典藏，分类＝series），灵宠才保留角标 + 阶段/成长值。 */
     var fx = (p.tier === '典藏') ? 'fx-gold' : (p.tier === '隐藏') ? 'fx-purple' : '';
-    var tier = (p.tier && p.tier !== '普通') ? ('<span class="tier">' + esc(p.tier) + '</span>') : '';
+    var tier = (ispet && p.tier && p.tier !== '普通') ? ('<span class="tier">' + esc(p.tier) + '</span>') : '';
     /* vT210：img 加 data-pi 供看门狗定位；loaded 类在加载成功后由 onload 打上 */
     var inner = srcs.length
       ? '<img src="' + esc(srcs[0]) + '" data-i="' + i + '" data-pi="' + i + '" onerror="window.__paImgErr(this)" onload="this.className=\'ld\'" alt="">'
@@ -805,15 +814,21 @@
     /* vT113 卡面显示星级（重复卡升星，满 5 星） */
     var st = Number(p.stars) || 1;
     var starHtml = (st > 1) ? ('<div class="st">' + '★'.repeat(Math.min(5, st)) + '</div>') : '';
-    /* vT136 灵宠卡可点击互动（灵杰卡不互动）；有互动记录的先带上 ❤ 角标 */
-    var ispet = cxIsPet(p);
-    var n = ispet ? petFunCntOf(p) : 0;
-    /* vT137 成长灵宠显示成长值进度（能不能喂食一看就知道） */
-    var sub = esc(p.series || '');
-    if (p.grow && Number(p.gneed) > 0) {
-      var stn = ({ baby: '奶团子', teen: '幼年', adult: '成年', grad: '成年' })[p.stage] || '';
-      sub = '🌱 ' + (Number(p.gx) || 0) + '/' + p.gneed + (stn ? (' · ' + stn) : '');
+    var sub;
+    if (ispet) {
+      /* vT137 成长灵宠显示成长值进度（能不能喂食一看就知道） */
+      sub = esc(p.series || '');
+      if (p.grow && Number(p.gneed) > 0) {
+        var stn = ({ baby: '奶团子', teen: '幼年', adult: '成年', grad: '成年' })[p.stage] || '';
+        sub = '🌱 ' + (Number(p.gx) || 0) + '/' + p.gneed + (stn ? (' · ' + stn) : '');
+      }
+    } else {
+      var tgName = String(p.tier || '').trim() || '普通';
+      var tgCls = tgName === '典藏' ? 'j' : (tgName === '隐藏' ? 'h' : '');
+      sub = '<span class="tg ' + tgCls + '">' + esc(tgName) + '</span>' + (p.series ? (' · ' + esc(p.series)) : '');
     }
+    /* vT136 灵宠卡可点击互动（灵杰卡不互动）；有互动记录的先带上 ❤ 角标 */
+    var n = ispet ? petFunCntOf(p) : 0;
     /* vT162 灵宠按阶段加动效 class：奶团子轻飘 / 幼年弹跳 / 成年(含毕业)金晕；灵杰卡(非灵宠)不动 */
     var psCls = '';
     if (ispet && p.stage) psCls = ' ps-' + (p.stage === 'grad' ? 'adult' : p.stage);
@@ -1137,6 +1152,7 @@
         localStorage.setItem(K_ACCESS, ac); localStorage.setItem(K_NAME, nm); localStorage.setItem(K_CODE, cd);
       } catch (e) {}
       renderMain();
+      try { paRepOpenOnce(); } catch (e4) {}
     }).catch(function (e) {
       btn.disabled = false; btn.textContent = '进入家长端';
       err.textContent = (e && e.message) || '读取失败，请检查网络后重试';
@@ -1508,6 +1524,7 @@
         qzSave();
         ST.pending = { id: rec.id, name: ST.name, action: 'quiz', label: '每日竞答', at: rec.at, status: 'pending' };
         savePending(); renderMain(); startPoll();
+        try { paRepAdd('quiz'); } catch (e7) {}
       })
       .catch(function (e) { toast('提交失败：' + ((e && e.message) || '网络问题')); });
   }
@@ -1777,7 +1794,7 @@
       h += '</div>';
     }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v235</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 v246</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
     /* vT210 取消灵宠迎宾弹窗：改为置顶板块内联欢迎（见上方 pethero 卡），不再弹 */
@@ -1891,6 +1908,157 @@
     renderLogin('');
   }
 
+  /* ---------- vT246 家长使用回执（老师端「👪 家长后台」统计用） ----------
+     家长端是纯静态页，老师以前完全看不到"谁绑定过、谁天天在看、谁一次没点开"。
+     现在家长成功进入后，往提案仓库写一份 pa/{学生姓名}.json：
+       name / firstAt / lastAt / opens(累计打开) / stay(累计停留秒) / days(每日打开与动作)
+       / acts(动作合计) / ev(最近 40 条动作时间线) / dev(设备) / ver(页面版本)
+     只写这些行为计数，**不写绑定码、不写成绩与作业内容**。
+     合并式写入（GET→合并→PUT），失败静默补回待发队列，绝不阻塞家长的任何操作。 */
+  var PA_REP_MKV = 'wb_pa_rep_v1';
+  var PA_REP = { pend: { opens: 0, stay: 0, acts: {}, days: {}, ev: [] }, timer: 0, busy: false, dirty: false, last: Date.now(), opened: false };
+  var PA_REP_MAX_EV = 40, PA_REP_MAX_DAY = 90;
+  function paRepVer() { return (window.PA_PAGE_VER || 'v246'); }
+  function paRepDayKey(ts) {
+    var d = ts ? new Date(ts) : new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+  function paRepDev() {
+    var ua = String((navigator && navigator.userAgent) || '');
+    var os = /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : (/Android/i.test(ua) ? 'Android' : (/Windows/i.test(ua) ? 'Windows' : (/Macintosh|Mac OS/i.test(ua) ? 'Mac' : '其他')));
+    var app = /MicroMessenger/i.test(ua) ? '微信' : (/QQ\//i.test(ua) ? 'QQ' : (/Edg\//i.test(ua) ? 'Edge' : (/Chrome\//i.test(ua) ? 'Chrome' : (/Safari\//i.test(ua) ? 'Safari' : '浏览器'))));
+    return { dev: os + ' · ' + app, ua: ua.slice(0, 160) };
+  }
+  function paRepUrl(withToken) {
+    var owner = (ST.snap && ST.snap.parentEssayOwner) || '', repo = (ST.snap && ST.snap.parentEssayRepo) || '';
+    return GITEE + '/repos/' + enc(owner) + '/' + enc(repo) + '/contents/pa/' + enc(ST.name || '') + '.json' +
+      (withToken ? ('?ref=master&access_token=' + enc((ST.snap && ST.snap.parentEssayToken) || '')) : '');
+  }
+  /* 记一次行为：act = open / draw / feed / growdraw / growfeed / quiz */
+  function paRepAdd(act) {
+    var p = PA_REP.pend, now = Date.now();
+    var gap = Math.round((now - PA_REP.last) / 1000);
+    if (gap > 0) p.stay += Math.min(180, gap);   /* 停留时长：按两次动作间隔估算，单次最多算 3 分钟 */
+    PA_REP.last = now;
+    if (act === 'open') p.opens += 1;
+    if (act && act !== 'open') {
+      p.acts[act] = (Number(p.acts[act]) || 0) + 1;
+      var dk = paRepDayKey(now), dd = p.days[dk] || (p.days[dk] = { v: 0 });
+      dd[act] = (Number(dd[act]) || 0) + 1;
+      p.ev.push({ t: now, a: act });
+      if (p.ev.length > 12) p.ev = p.ev.slice(-12);
+    } else if (act === 'open') {
+      var dk2 = paRepDayKey(now), dd2 = p.days[dk2] || (p.days[dk2] = { v: 0 });
+      dd2.v = (Number(dd2.v) || 0) + 1;
+    }
+    paRepQueue();
+  }
+  function paRepQueue(ms) {
+    if (PA_REP.timer) return;
+    PA_REP.timer = setTimeout(function () { PA_REP.timer = 0; paRepFlush(); }, ms || 2500);
+  }
+  function paRepDup(o) {
+    return {
+      opens: Number(o.opens) || 0, stay: Number(o.stay) || 0,
+      acts: Object.assign({}, o.acts || {}), days: JSON.parse(JSON.stringify(o.days || {})), ev: (o.ev || []).slice()
+    };
+  }
+  /* 合并：本地待发 + 云端已有（计数相加，天/动作逐项相加，时间线合并去重后保留最近 40 条） */
+  function paRepMerge(base, add, name) {
+    base = base && typeof base === 'object' ? base : {};
+    var out = { v: 1, name: name || base.name || '', firstAt: Number(base.firstAt) || 0, lastAt: Number(base.lastAt) || 0 };
+    out.opens = (Number(base.opens) || 0) + (Number(add.opens) || 0);
+    out.stay = (Number(base.stay) || 0) + (Number(add.stay) || 0);
+    out.acts = {};
+    [base.acts || {}, add.acts || {}].forEach(function (m) {
+      Object.keys(m).forEach(function (k) { out.acts[k] = (Number(out.acts[k]) || 0) + (Number(m[k]) || 0); });
+    });
+    out.days = {};
+    [base.days || {}, add.days || {}].forEach(function (m) {
+      Object.keys(m).forEach(function (d) {
+        var src = m[d] || {}, dst = out.days[d] || (out.days[d] = {});
+        Object.keys(src).forEach(function (k) { dst[k] = (Number(dst[k]) || 0) + (Number(src[k]) || 0); });
+      });
+    });
+    var dk = Object.keys(out.days).sort();
+    if (dk.length > PA_REP_MAX_DAY) { dk.slice(0, dk.length - PA_REP_MAX_DAY).forEach(function (d) { delete out.days[d]; }); }
+    var ev = (base.ev || []).concat(add.ev || []).filter(function (e) { return e && e.t; });
+    ev.sort(function (a, b) { return a.t - b.t; });
+    var seen = {};
+    out.ev = ev.filter(function (e) { var k = e.t + '|' + e.a; if (seen[k]) return false; seen[k] = 1; return true; }).slice(-PA_REP_MAX_EV);
+    out.dev = base.dev || ''; out.ua = base.ua || ''; out.ver = paRepVer();
+    if (!out.dev) { var d = paRepDev(); out.dev = d.dev; out.ua = d.ua; }
+    out.firstAt = out.firstAt || Date.now();
+    out.lastAt = Math.max(Number(base.lastAt) || 0, Date.now());
+    return out;
+  }
+  function paRepFlush(done) {
+    var fin = typeof done === 'function' ? done : function () {};
+    var snap = ST.snap || {};
+    if (!ST.name || !snap.parentEssayToken || !snap.parentEssayRepo) { fin(false); return; }
+    var pend = PA_REP.pend;
+    if (!pend.opens && !pend.stay && !Object.keys(pend.acts).length) { fin(false); return; }
+    if (PA_REP.busy) { PA_REP.dirty = true; fin(false); return; }
+    PA_REP.busy = true;
+    var mine = paRepDup(pend);                 /* 本次要发的增量 */
+    PA_REP.pend = { opens: 0, stay: 0, acts: {}, days: {}, ev: [] };
+    var restore = function () {                 /* 失败：把增量并回待发队列 */
+      var p = PA_REP.pend;
+      p.opens += mine.opens; p.stay += mine.stay;
+      Object.keys(mine.acts).forEach(function (k) { p.acts[k] = (Number(p.acts[k]) || 0) + mine.acts[k]; });
+      Object.keys(mine.days).forEach(function (d) {
+        var src = mine.days[d], dst = p.days[d] || (p.days[d] = {});
+        Object.keys(src).forEach(function (k) { dst[k] = (Number(dst[k]) || 0) + (Number(src[k]) || 0); });
+      });
+      p.ev = p.ev.concat(mine.ev);
+    };
+    var body = { access_token: snap.parentEssayToken };
+    var write = function (rec, sha) {
+      var payload = { access_token: snap.parentEssayToken, content: b64en(utf8Encode(JSON.stringify(rec))), message: '家长回执 ' + ST.name };
+      if (sha) payload.sha = sha;
+      return api(paRepUrl(false), {
+        method: sha ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    };
+    api(paRepUrl(true)).then(function (j) {
+      var base = {};
+      try { base = JSON.parse(b64Json(j.content)) || {}; } catch (e) {}
+      return write(paRepMerge(base, mine, ST.name), j.sha);
+    }, function (e) {
+      if (e && (e.status === 404 || e.status === 400)) {
+        return write(paRepMerge({}, mine, ST.name), '');
+      }
+      throw e;
+    }).then(function () {
+      PA_REP.busy = false;
+      fin(true);
+      if (PA_REP.dirty) { PA_REP.dirty = false; paRepQueue(1200); }
+    }).catch(function () {
+      restore();
+      PA_REP.busy = false;
+      fin(false);
+      paRepQueue(30000);   /* 网络差就 30 秒后再试，家长完全无感 */
+    });
+  }
+  /* 打开页面只记一次（同一会话内刷新不再累加打开数，避免刷一次涨一次） */
+  function paRepOpenOnce() {
+    if (PA_REP.opened) return;
+    PA_REP.opened = true;
+    try {
+      var k = PA_REP_MKV + '_s';
+      var last = Number(sessionStorage.getItem(k) || 0);
+      if (Date.now() - last < 30 * 60 * 1000) { PA_REP.last = Date.now(); return; }   /* 半小时内算同一次浏览 */
+      sessionStorage.setItem(k, String(Date.now()));
+    } catch (e) {}
+    paRepAdd('open');
+    paRepQueue(1500);
+  }
+  try { window.addEventListener('pagehide', function () { paRepFlush(); }); } catch (e) {}
+  try { document.addEventListener('visibilitychange', function () { if (document.hidden) paRepFlush(); }); } catch (e) {}
+  window.__paRep = { add: paRepAdd, flush: paRepFlush, pend: function () { return PA_REP.pend; }, merge: paRepMerge, reset: function () { PA_REP = { pend: { opens: 0, stay: 0, acts: {}, days: {}, ev: [] }, timer: 0, busy: false, dirty: false, last: Date.now(), opened: false }; } };
+
   /* ---------- 抽图鉴 / 集卡：写 pq/ 提案 → 轮询结果 ---------- */
   function proposalUrl(name, withToken) {
     var owner = ST.snap.parentEssayOwner || '', repo = ST.snap.parentEssayRepo || '';
@@ -1994,6 +2162,7 @@
       ST.busy = false;
       ST.pending = { id: rec.id, name: ST.name, action: action, label: actName, at: rec.at, status: 'pending' };
       if (action === 'growfeed') petFeedThanksFx(extra);   /* vT198 喂养成功的小特效 */
+      try { paRepAdd(action === 'growdraw' ? 'growdraw' : (action === 'growfeed' ? 'growfeed' : 'feed')); } catch (e6) {}
       savePending(); renderMain(); startPoll();
     }).catch(function (e) {
       ST.busy = false;
@@ -2035,6 +2204,7 @@
   /* ---------- 启动 ---------- */
   /* 测试 / 自检钩子：把纯数据函数挂出来，方便离线核对统计口径（不参与页面渲染） */
   window.__paHwStat = hwStatOf;
+  window.__paCard = cxCard;   /* vT246 卡面渲染（测试用：核对灵杰「名称 + 品级·分类」） */
   window.__paBuildView = buildView;
   window.__paAnaFeedback = anaOf;
   window.__paPetRel = petRel;
@@ -2057,6 +2227,7 @@
       if (!b) throw new Error('名单里没有「' + ST.name + '」');
       ST.per = unsealBlock(b.data, ST.code);
       renderMain();
+      try { paRepOpenOnce(); } catch (e5) {}
     }).catch(function (e) {
       renderLogin((e && e.message) || '读取失败，请重试');
     });
