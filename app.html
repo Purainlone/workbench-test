@@ -20675,9 +20675,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v237';
+var WB_VER_TAG = 'v238';
 var WB_MY_VER = '优化版 vT233 · 积分流水 LWW 同步（重新加的稳定上云不再闪消）';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.245';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.246';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -22880,7 +22880,24 @@ function mpFromDeskBuild(o) {
     var _stTomAt = {};
     if (typeof tomLoad === 'function') tomLoad().forEach(function (x) { if (x && x.t === 'st' && x.k) _stTomAt[x.k] = Number(x.at) || 0 });
     /* vT236 达标类同键重复行只推最新一条，小程序/桌面快照不再带重复 */
-    var _stSrc = (typeof stDedupBonus === 'function') ? stDedupBonus(ST_ROWS).keep : ST_ROWS;
+    /* vT238 关键修复（三端分数不一致的根因）：数据源从内存 ST_ROWS 换成【本轮刚从云端
+       读到的完整流水表 o[ST_DB]】。原来只要推送发生在 loadST 未完成/失败/只写了本次几条时，
+       ST_ROWS 里就只有刚写的那几行，打包后把几乎空的 st 表覆盖到 Gitee
+       （rev7366 只剩 5 条，其中 3 条是本地 MPS_ id 的新写行）→ 小程序/桌面个人积分普遍偏低，
+       网页自己算的是对的不受影响，于是"改来改去都对不上"。 */
+    var _stSrcRows = ST_ROWS;
+    try {
+      var _oSt = (o && Array.isArray(o[ST_DB])) ? o[ST_DB] : null;
+      if (_oSt && _oSt.length) {
+        _stSrcRows = _oSt.map(function (r) {
+          var p = (r && (r.properties || r.fields)) || r || {};
+          var flat = { id: (r && (r.id || r._id || r.recordId || r.record_id)) || '' };
+          Object.keys(p).forEach(function (k) { if (k !== 'id' && k !== '_id') flat[k] = p[k] });
+          return flat;
+        });
+      }
+    } catch (_oe) {}
+    var _stSrc = (typeof stDedupBonus === 'function') ? stDedupBonus(_stSrcRows).keep : _stSrcRows;
     _stSrc.forEach(function (r) {
       var n = fval(r, '姓名'); if (!n) return;
       var v = parseFloat(fval(r, '奖惩分值')); if (isNaN(v)) v = 0;
@@ -22898,6 +22915,16 @@ function mpFromDeskBuild(o) {
                    date: syncDateOnly(fval(r, '日期')) || '', pet: fval(r, '备注') === '宠物' });
     });
   } catch (_se) {}
+  /* vT238 骤减保护：新快照比上一版少一半以上、且少了 10 条以上 → 判本轮读表不完整（分页失败/
+     表还在加载），保留上一版 st，绝不用残缺数据覆盖。真正的批量撤销不会一次掉这么多。 */
+  try {
+    var _prevStOut = (o && Array.isArray(o.st)) ? o.st : [];
+    if (_prevStOut.length && stOut.length < _prevStOut.length * 0.5 && stOut.length < _prevStOut.length - 10) {
+      try { console.warn('[gitee-sync] st 打包骤减 ' + _prevStOut.length + '→' + stOut.length + '，保留上一版快照') } catch (_we) {}
+      window.__WB_ST_KEEP_PREV__ = _prevStOut.length;
+      stOut = _prevStOut;
+    } else if (window) { window.__WB_ST_KEEP_PREV__ = 0 }
+  } catch (_pe) {}
   if (!stOut.length && Array.isArray(o && o.st) && o.st.length) stOut = o.st;
   var hwadjOut = [];
   try {
@@ -22973,8 +23000,13 @@ function mpSyncPush() {
   return mpSyncCall({ action: 'push', baseRev: base, tables: tables }).then(function (res) {
     try { localStorage.setItem('wb_sync_rev', String(res.rev)) } catch (e) {}
     var n = (tables.students || []).length + (tables.hw || []).length + (tables.rc || []).length + (tables.scores || []).length;
-    if (st) st.textContent = '✅ 已推送 ' + n + ' 条（rev=' + res.rev + '）';
-    toastMsg('✅ 已推送到云端，小程序里「从云端拉取」即可拿到');
+    /* vT238：把奖惩流水条数一并显示，条数骤减一眼可见（以前 st 被打包成 5 条也看不出来） */
+    var stN = (tables.st || []).length;
+    if (st) st.textContent = '✅ 已推送 ' + n + ' 条（奖惩流水 ' + stN + ' 条 · rev=' + res.rev + '）' +
+      (window.__WB_ST_KEEP_PREV__ ? '｜⚠️ 本轮流水读取不完整，已保留上一版，请刷新后再同步' : '');
+    toastMsg(window.__WB_ST_KEEP_PREV__
+      ? '⚠️ 本轮奖惩流水只读到部分数据，已保留上一版快照；请刷新页面后再点同步'
+      : '✅ 已推送到云端（奖惩流水 ' + stN + ' 条），小程序里「从云端拉取」即可拿到');
   });
   }).catch(function (e) {
     if (e && e.conflict) {
