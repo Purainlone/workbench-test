@@ -10390,15 +10390,15 @@ function scBonusApply() {
     });
   });
   Promise.all(jobs).then(function () {
-    /* vT232 关键修复：作废同业务键的历史 st 墓碑，否则本次加分写回云端时
+    /* vT232/vT233 关键修复：创建登记 + 作废同业务键的历史 st 墓碑，否则本次加分写回云端时
        会被旧墓碑判成「已删除」过滤掉，小程序/桌面永远看不到目标加分。
        日期用今天（与写入的「日期」字段一致，stTombKeyOf 对成绩达标类忽略日期）。 */
     var _today = ymd(new Date()), _dropped = 0;
     picks.forEach(function (r) {
       var _reason = '成绩达标 · ' + lbl + ' · 达目标' + ['', '一', '二', '三'][r.lv];
-      try { _dropped += stTombDrop(r.name, _reason, _today, r.pts) } catch (_e) {}
+      try { stMarkCreated(r.name, _reason, _today, r.pts); _dropped++ } catch (_e) {}
     });
-    if (_dropped) { try { console.info('[目标加分] 已作废 ' + _dropped + ' 条同键历史墓碑（本次加分得以复活）') } catch (_ce) {} }
+    if (_dropped) { try { console.info('[目标加分] 已创建登记并作废旧墓碑 ' + _dropped + ' 条（本次加分稳定上云）') } catch (_ce) {} }
     return loadST();
   }).then(function () {
     renderStu();
@@ -12352,6 +12352,7 @@ function actAddPts(nm,gno,delta){
     '日期':{date:ymd(new Date())},'备注':{text:'小组活动座位表 · 第'+gno+'组'}
   }}).then(function(r){
     if(!(r&&r.id))throw new Error('addRecord 未返回 id');
+    try{stMarkCreated(nm,tag,ymd(new Date()),v)}catch(_smE){}   /* vT233 创建登记+作废旧墓碑 */
     return loadST();
   }).then(function(){
     /* 2.6.60 加分后弹窗不关，便于连续加减；按来源重开到原座位旁 */
@@ -14548,6 +14549,10 @@ function stPurge(rows) {
     });
     if (hasT) {
       var used = {};
+      /* vT233 LWW：本端创建登记比墓碑新 → 行赢（撤销后又重新加的分流不再被藏） */
+      var _stCr = (typeof stCreatedMap === 'function') ? stCreatedMap() : {};
+      var _stTomAt = {};
+      if (typeof tomLoad === 'function') tomLoad().forEach(function (x) { if (x && x.t === 'st' && x.k) _stTomAt[x.k] = Number(x.at) || 0 });
       for (var i = 0; i < keep.length; i++) {
         var r2 = keep[i];
         var rs = String((typeof fval === 'function' ? fval(r2, '奖惩事项') : '') || '').trim();
@@ -14555,6 +14560,11 @@ function stPurge(rows) {
         var d = (typeof syncDateOnly === 'function') ? syncDateOnly(fval(r2, '日期')) : String(fval(r2, '日期') || '').slice(0, 10);
         var tk = (typeof stTombKeyOf === 'function') ? stTombKeyOf(fval(r2, '姓名'), rs, d, parseFloat(fval(r2, '奖惩分值'))) : '';
         if (!tk || !T[tk] || used[tk]) continue;
+        var _crTs = (typeof stCreatedFresh === 'function') ? stCreatedFresh(fval(r2, '姓名'), rs, d, parseFloat(fval(r2, '奖惩分值'))) : 0;
+        if (_crTs && _crTs > (_stTomAt[tk] || 0)) {
+          if (typeof wbTombInvalidate === 'function') wbTombInvalidate('st', tk);
+          continue;
+        }
         used[tk] = 1;
         kill.push(r2); keep.splice(i, 1); i--;
       }
@@ -16850,6 +16860,7 @@ function stuAddRw(name,title,val){
     '日期':{date:ymd(new Date())},'备注':{text:(stu.学号||stu.组别||stu.职务?'':'roster-miss')}
   }}).then(function(r){
     if(!(r&&r.id))throw new Error('addRecord 未返回 id');
+    try{stMarkCreated(name,title,ymd(new Date()),val)}catch(_smE){}   /* vT233 创建登记+作废旧墓碑 */
     return loadST();
   }).then(function(){
     var m=document.querySelector('.stpanel');
@@ -16901,6 +16912,7 @@ function stuEditRw(name){
     '日期':{date:ymd(new Date())},'备注':{text:'编辑积分：'+cur+' → '+v+(stu.学号||stu.组别||stu.职务?'':' · roster-miss')}
   }}).then(function(r){
     if(!(r&&r.id))throw new Error('addRecord 未返回 id');
+    try{stMarkCreated(name,'积分修正（编辑）',ymd(new Date()),delta)}catch(_smE){}   /* vT233 创建登记+作废旧墓碑 */
     return loadST();
   }).then(function(){
     renderStu();
@@ -19140,6 +19152,44 @@ function stTombDrop(name, reason, date, score) {
   if (hit) tomSave(out);
   return hit;
 }
+/* ---------- vT233 st 流水 LWW（与 vT220 hw 记录同一不变量）----------
+   不变量：墓碑只杀「比它旧」的记录；记录比墓碑新 → 记录赢，墓碑作废。
+   飞书 Bitable 行没有可靠时间戳（wbRecTs 读不到），“记录比墓碑新”没法从行判断；
+   网页端是 st 流水的唯一生产者 —— 创建那一刻就在这里登记（localStorage 持久化），
+   stPurge / stOut 据此判定行的新旧。
+   病根复盘（11-19）：上午撤销流水留下一批同键墓碑 → 下午重新加分的新行
+   在 stPurge 被藏（网页看不到）、在 stOut 被过滤（推不上云）→ 小程序/桌面
+   永远对不上；且行上云后下一轮又被墓碑杀掉，出现「闪现又消失」。 */
+function stCreatedMap() {
+  try { return JSON.parse(localStorage.getItem('wb_st_created_v1') || '{}') || {} } catch (e) { return {} }
+}
+function stMarkCreated(name, reason, date, score) {
+  try {
+    var k = (typeof stTombKeyOf === 'function') ? stTombKeyOf(name, reason, date, score) : '';
+    if (!k) return;
+    var m = stCreatedMap();
+    m[k] = Date.now();
+    var ks = Object.keys(m);
+    if (ks.length > 300) {   /* 超限裁剪最旧的登记 */
+      ks.sort(function (a, b) { return m[a] - m[b] });
+      ks.slice(0, ks.length - 300).forEach(function (x) { delete m[x] });
+    }
+    localStorage.setItem('wb_st_created_v1', JSON.stringify(m));
+    /* 创建即复活：同键旧墓碑本地移除 + 出站作废（下一轮写回时从云端真正移除） */
+    if (typeof stTombDrop === 'function') stTombDrop(name, reason, date, score);
+    if (typeof wbTombInvalidate === 'function') wbTombInvalidate('st', k);
+  } catch (e) {}
+}
+function stCreatedFresh(name, reason, date, score) {
+  try {
+    var k = (typeof stTombKeyOf === 'function') ? stTombKeyOf(name, reason, date, score) : '';
+    if (!k) return 0;
+    var t = Number(stCreatedMap()[k]) || 0;
+    if (!t) return 0;
+    if (Date.now() - t > 45 * 86400000) return 0;   /* 登记过期（墓碑寿命 90 天，早已完成同步） */
+    return t;
+  } catch (e) { return 0 }
+}
 function tomPrune() {
   var lim = Date.now() - 90 * 86400000, a = tomLoad();
   var b = a.filter(function (x) { return (x.at || 0) >= lim });
@@ -20336,9 +20386,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v232';
-var WB_MY_VER = '优化版 vT232 · 课前展示按节次排班 + 目标加分复活同步 + 误删恢复';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.241';
+var WB_VER_TAG = 'v233';
+var WB_MY_VER = '优化版 vT233 · 积分流水 LWW 同步（重新加的稳定上云不再闪消）';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.242';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -22536,12 +22586,23 @@ function mpFromDeskBuild(o) {
     /* vT173 墓碑兜底：本端已删的流水（墓碑还在）若因删除失败/旧缓存仍留在飞书档案表里，
        也绝不随整表重建写回云端 —— 删除不能复活 */
     var _stTomOut = (typeof stTombSet === 'function') ? stTombSet() : {};
+    /* vT233 LWW：本端创建登记比墓碑新 → 行赢（放行写回 + 出站作废墓碑）；
+       无创建登记或比墓碑旧 → 仍按墓碑过滤（删除不能复活）。 */
+    var _stTomAt = {};
+    if (typeof tomLoad === 'function') tomLoad().forEach(function (x) { if (x && x.t === 'st' && x.k) _stTomAt[x.k] = Number(x.at) || 0 });
     ST_ROWS.forEach(function (r) {
       var n = fval(r, '姓名'); if (!n) return;
       var v = parseFloat(fval(r, '奖惩分值')); if (isNaN(v)) v = 0;
       if (!v) return;
       var _tkOut = (typeof stTombKeyOf === 'function') ? stTombKeyOf(n, fval(r, '奖惩事项'), syncDateOnly(fval(r, '日期')), v) : '';
-      if (_tkOut && _stTomOut[_tkOut]) return;
+      if (_tkOut && _stTomOut[_tkOut]) {
+        var _crTsOut = (typeof stCreatedFresh === 'function') ? stCreatedFresh(n, fval(r, '奖惩事项'), syncDateOnly(fval(r, '日期')), v) : 0;
+        if (_crTsOut && _crTsOut > (_stTomAt[_tkOut] || 0)) {
+          if (typeof wbTombInvalidate === 'function') wbTombInvalidate('st', _tkOut);
+        } else {
+          return;
+        }
+      }
       stOut.push({ id: recId(r) || '', name: n, score: v, reason: fval(r, '奖惩事项') || '',
                    date: syncDateOnly(fval(r, '日期')) || '', pet: fval(r, '备注') === '宠物' });
     });
@@ -28664,6 +28725,7 @@ function cwInit(){
       '职务': { text: stu.职务 || '' }, '奖惩事项': { text: title }, '奖惩分值': { number: val },
       '日期': { date: ptYmd(new Date()) }, '备注': { text: '宠物' }
     } }).then(function (r) {
+      try { stMarkCreated(name, title, ptYmd(new Date()), val) } catch (_smE) {}   /* vT233 创建登记+作废旧墓碑 */
       if (!(r && r.id)) throw new Error('no id');
       if (typeof loadST === 'function') return loadST();
     }).then(function () {
