@@ -14808,8 +14808,12 @@ function stPurge(rows) {
           var cr = (typeof stCreatedFresh === 'function') ? stCreatedFresh(fval(r2, '姓名'), fval(r2, '奖惩事项'), (typeof syncDateOnly === 'function' ? syncDateOnly(fval(r2, '日期')) : String(fval(r2, '日期') || '').slice(0, 10)), parseFloat(fval(r2, '奖惩分值'))) : 0;
           if (cr > newestCr) newestCr = cr;
         });
-        if (newestCr > (_stTomAt[tk] || 0)) {
+        if (newestCr > (_stTomAt[tk] || 0) || (typeof stKeptHas === 'function' && stKeptHas(tk))) {
+          /* vT242：保名单命中 → 这行早已被裁决为「活下来的较新行」，保持裁决、并作废墓碑，
+             否则下一轮删掉旧行后组里只剩它一条，又会被当"残留行"杀掉（3 分来回闪）。 */
           if (typeof wbTombInvalidate === 'function') wbTombInvalidate('st', tk);
+          /* vT242：整组保住 → 记入保名单，出站（stOut）据此放行，两端一致 */
+          if (typeof stKeptMark === 'function') stKeptMark(tk);
           return;
         }
         var victim = g.slice().sort(function (a, b) {
@@ -14823,6 +14827,9 @@ function stPurge(rows) {
         })[0];
         var idx = keep.indexOf(victim);
         if (idx >= 0) { kill.push(victim); keep.splice(idx, 1) }
+        /* vT242：只杀了最旧一条、组内还有存活行 → 这行是「活着的较新行」，记入保名单。
+           否则 stOut 仍按「命中墓碑整条丢弃」把它挡在云外 —— 小程序/桌面就一直少这几分。 */
+        if (g.some(function (x) { return keep.indexOf(x) >= 0 })) { if (typeof stKeptMark === 'function') stKeptMark(tk) }
       });
     }
     /* vT236 达标去重段：同键（姓名|事项|分值，成绩达标类）多行 → 保留日期最新，
@@ -14875,7 +14882,10 @@ function stManDead(x) {
     var T = (typeof stTombSet === 'function') ? stTombSet() : null;
     if (!T || !Object.keys(T).length) return false;
     var tk = (typeof stTombKeyOf === 'function') ? stTombKeyOf(n, rs, String(x.date || '').slice(0, 10), v) : '';
-    return !!(tk && T[tk]);
+    if (!tk || !T[tk]) return false;
+    /* vT242：入站已裁决这行活着（同键墓碑只杀了更旧那条）→ 不算死 */
+    if (typeof stKeptHas === 'function' && stKeptHas(tk)) return false;
+    return true;
   } catch (e) { return false }
 }
 function pullST(onDone,onFail){
@@ -19388,6 +19398,8 @@ function tomAddScore(sub, exam, name, date) {
 /* vT173 通用墓碑登记：按类型+键去重，已有则只刷新时间（与 tomAddScore 同一套清单） */
 function tomAdd(t, k) {
   if (!k) return;
+  /* vT242：新墓碑 = 这次是真删 → 撤掉同键的「保名单」（否则出站会把它当存活行放行） */
+  if (t === 'st' && typeof stKeptClear === 'function') stKeptClear(k);
   var a = tomLoad();
   for (var i = 0; i < a.length; i++) { if (a[i].t === t && a[i].k === k) { a[i].at = Date.now(); tomSave(a); return } }
   a.push({ t: t, k: k, at: Date.now() }); tomSave(a);
@@ -19449,6 +19461,32 @@ function stTombDrop(name, reason, date, score) {
    病根复盘（11-19）：上午撤销流水留下一批同键墓碑 → 下午重新加分的新行
    在 stPurge 被藏（网页看不到）、在 stOut 被过滤（推不上云）→ 小程序/桌面
    永远对不上；且行上云后下一轮又被墓碑杀掉，出现「闪现又消失」。 */
+/* ---------- vT242 墓碑裁决「一份裁决、两处执行」----------
+   症状：网页个人积分是对的，小程序/教室桌面总少那几分，云端快照里就是缺这一条。
+   根因：入站 stPurge（vT236 起）是「同键多条只杀最旧一条」，剩下的较新行照常显示在网页；
+        出站 stOut 仍是「命中墓碑就整条丢弃」→ 这行永远推不上云。
+        两端各判一套，于是"网页看得见、云端没有"。
+   做法：stPurge 裁决完，把「被保住的行」的业务键记进 wb_st_kept_v1；
+        stOut / stManDead 命中墓碑时，若该键在保名单里 → 放行。
+        新写墓碑（tomAdd）时清掉对应键，删除照样生效，不会复活。 */
+var ST_KEPT_KEY = 'wb_st_kept_v1';
+function stKeptMap() { try { return JSON.parse(localStorage.getItem(ST_KEPT_KEY) || '{}') || {} } catch (e) { return {} } }
+function stKeptMark(k) {
+  if (!k) return;
+  try {
+    var m = stKeptMap(); m[k] = Date.now();
+    var ks = Object.keys(m);
+    if (ks.length > 200) { ks.sort(function (a, b) { return m[a] - m[b] }); ks.slice(0, ks.length - 200).forEach(function (x) { delete m[x] }) }
+    localStorage.setItem(ST_KEPT_KEY, JSON.stringify(m));
+  } catch (e) {}
+}
+function stKeptHas(k) {
+  if (!k) return false;
+  try { var t = Number(stKeptMap()[k]) || 0; return !!t && (Date.now() - t < 3 * 86400000) } catch (e) { return false }
+}
+function stKeptClear(k) {
+  try { if (!k) return; var m = stKeptMap(); if (m[k]) { delete m[k]; localStorage.setItem(ST_KEPT_KEY, JSON.stringify(m)) } } catch (e) {}
+}
 function stCreatedMap() {
   try { return JSON.parse(localStorage.getItem('wb_st_created_v1') || '{}') || {} } catch (e) { return {} }
 }
@@ -20675,9 +20713,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v241';
+var WB_VER_TAG = 'v243';
 var WB_MY_VER = '优化版 vT233 · 积分流水 LWW 同步（重新加的稳定上云不再闪消）';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.247';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.248';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -22907,6 +22945,9 @@ function mpFromDeskBuild(o) {
         var _crTsOut = (typeof stCreatedFresh === 'function') ? stCreatedFresh(n, fval(r, '奖惩事项'), syncDateOnly(fval(r, '日期')), v) : 0;
         if (_crTsOut && _crTsOut > (_stTomAt[_tkOut] || 0)) {
           if (typeof wbTombInvalidate === 'function') wbTombInvalidate('st', _tkOut);
+        } else if (typeof stKeptHas === 'function' && stKeptHas(_tkOut)) {
+          /* vT242：入站 stPurge 已裁决这行是「同键里活下来的较新行」→ 出站放行。
+             以前这里无脑 return，网页看得见、云端永远缺这条（小程序/桌面少分的真凶）。 */
         } else {
           return;
         }
@@ -22915,6 +22956,19 @@ function mpFromDeskBuild(o) {
                    date: syncDateOnly(fval(r, '日期')) || '', pet: fval(r, '备注') === '宠物' });
     });
   } catch (_se) {}
+  /* vT242 可见度自检：网页能看见的流水条数 vs 本次真正推上去的条数。
+     差额 > 0 就说明还有行被挡在云外（正是「网页对、小程序少分」的表征），
+     同步面板直接把数字摊开提示，不再静默少几分。 */
+  try {
+    var _stVis = 0;
+    (ST_ROWS || []).forEach(function (r) {
+      if (!r) return;
+      if (!fval(r, '姓名')) return;
+      if (!(parseFloat(fval(r, '奖惩分值')) || 0)) return;
+      _stVis++;
+    });
+    window.__WB_ST_VISIBLE__ = _stVis;
+  } catch (_ve) { try { window.__WB_ST_VISIBLE__ = 0 } catch (_ve2) {} }
   /* vT238 骤减保护：新快照比上一版少一半以上、且少了 10 条以上 → 判本轮读表不完整（分页失败/
      表还在加载），保留上一版 st，绝不用残缺数据覆盖。真正的批量撤销不会一次掉这么多。 */
   try {
@@ -23002,11 +23056,17 @@ function mpSyncPush() {
     var n = (tables.students || []).length + (tables.hw || []).length + (tables.rc || []).length + (tables.scores || []).length;
     /* vT238：把奖惩流水条数一并显示，条数骤减一眼可见（以前 st 被打包成 5 条也看不出来） */
     var stN = (tables.st || []).length;
-    if (st) st.textContent = '✅ 已推送 ' + n + ' 条（奖惩流水 ' + stN + ' 条 · rev=' + res.rev + '）' +
+    /* vT242：同时显示「本端可见」条数，差额即被挡在云外的行 */
+    var stVis = Number(window.__WB_ST_VISIBLE__) || 0;
+    var stGap = (stVis > stN) ? (stVis - stN) : 0;
+    if (st) st.textContent = '✅ 已推送 ' + n + ' 条（奖惩流水 ' + stN + ' 条' +
+      (stGap ? ' / 本端可见 ' + stVis + ' 条 ⚠️ 有 ' + stGap + ' 条没上云' : '') + ' · rev=' + res.rev + '）' +
       (window.__WB_ST_KEEP_PREV__ ? '｜⚠️ 本轮流水读取不完整，已保留上一版，请刷新后再同步' : '');
     toastMsg(window.__WB_ST_KEEP_PREV__
       ? '⚠️ 本轮奖惩流水只读到部分数据，已保留上一版快照；请刷新页面后再点同步'
-      : '✅ 已推送到云端（奖惩流水 ' + stN + ' 条），小程序里「从云端拉取」即可拿到');
+      : (stGap
+        ? ('⚠️ 已推送，但有 ' + stGap + ' 条奖惩流水没进云（本端可见 ' + stVis + ' 条 / 实推 ' + stN + ' 条）；请刷新页面再点一次「立即同步」')
+        : ('✅ 已推送到云端（奖惩流水 ' + stN + ' 条），小程序里「从云端拉取」即可拿到')));
   });
   }).catch(function (e) {
     if (e && e.conflict) {
@@ -29992,10 +30052,16 @@ function cwInit(){
     /* vT124 集卡不再有星级：重复抽到只算「已经有了」，卡面只报集卡张数 */
     var myCardN = 0;
     if (!o.grouped) myCardN = ptCardsOf(ptGet(), pet.studentName).length;
-    var meta = o.grouped
-      ? ('<div class="ph-stage">' + (PT_STAGE_EMOJI[stage] || '') + ' ' + PetCore.stageName(stage) + '</div>')
-      : ('<div class="pet-own">主人：' + ptEsc(pet.studentName) + (isPhoto ? ' <span class="pet-stu">手绘</span>' : '') + ' <span class="pet-stu">' + PetCore.stageName(stage) + '</span></div>' +
-         '<div class="pet-lv">🎴 已集 ' + myCardN + ' 张卡</div>');
+    /* vT243 图鉴灵杰（codex 卡）没有成长等级 —— 以前卡面照搬成长灵宠的「阶段」，
+       于是「绿髯青龙将」下面也会写一行「🍼 奶团子」，被误读成它还是奶团子。
+       灵杰卡与成长灵宠是两套东西：灵杰只集卡，不显示阶段。 */
+    var meta = isCxPic
+      ? (o.grouped ? '' : ('<div class="pet-own">主人：' + ptEsc(pet.studentName) + (isPhoto ? ' <span class="pet-stu">手绘</span>' : '') + '</div>' +
+         '<div class="pet-lv">🎴 已集 ' + myCardN + ' 张卡</div>'))
+      : (o.grouped
+        ? ('<div class="ph-stage">' + (PT_STAGE_EMOJI[stage] || '') + ' ' + PetCore.stageName(stage) + '</div>')
+        : ('<div class="pet-own">主人：' + ptEsc(pet.studentName) + (isPhoto ? ' <span class="pet-stu">手绘</span>' : '') + ' <span class="pet-stu">' + PetCore.stageName(stage) + '</span></div>' +
+           '<div class="pet-lv">🎴 已集 ' + myCardN + ' 张卡</div>'));
     /* vT162 灵宠卡片不再放「抽卡」按钮：这里是灵宠（成长/喂养/进化），抽卡抽的是图鉴灵杰，两者分开。
        抽卡只在「灵杰集卡」页顶部入口（ptCardsDraw）进行，避免灵宠与灵杰混在一张卡上。 */
     var revokeBtn = '<button class="btn2 sm" onclick="ptRevoke(\'' + pet.id + '\')" title="误发了可以收回（可在后台赠送记录里恢复）">↩ 收回</button>';
