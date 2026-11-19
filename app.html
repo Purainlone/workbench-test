@@ -20713,9 +20713,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v243';
+var WB_VER_TAG = 'v244';
 var WB_MY_VER = '优化版 vT233 · 积分流水 LWW 同步（重新加的稳定上云不再闪消）';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.248';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.249';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -29070,7 +29070,7 @@ function cwInit(){
   /* ---------------- 工具 ---------------- */
   function ptYmd(d) { d = d || new Date(); function p(n) { return ('0' + n).slice(-2); } return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
   function ptEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function ptRarClass(r) { return ({ '普通': 'n', '稀有': 'r', '隐藏': 'h', '传说': 'm' })[r] || 'n'; }
+  function ptRarClass(r) { return ({ '普通': 'n', '稀有': 'r', '隐藏': 'h', '传说': 'm', '典藏': 'm' })[r] || 'n'; }
   function ptLevelExp(lv) { return 100 + (lv - 1) * 60; }
   function ptLevelUp(pet) { while ((pet.exp || 0) >= ptLevelExp(pet.level || 1)) { pet.exp -= ptLevelExp(pet.level || 1); pet.level = (pet.level || 1) + 1; } }
   function ptNewId(p) { return (p || 'x') + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -30078,7 +30078,10 @@ function cwInit(){
         (ptAdminUnlocked() ? '<button class="btn2 sm" onclick="ptPetRemove(false,\'' + pet.id + '\')" title="删除这条已发放记录（回收站可恢复）">🗑 删除</button>' : '');
     }
     return '<div class="pet-card ps-' + stage + (o.grouped ? ' ph-pet' : '') + '">' + svg +
-      '<div class="pet-nm">' + ptEsc(pet.name) + ' <span class="pet-rare r-' + ptRarClass(pet.rarity) + '">' + ptEsc(pet.rarity) + '</span></div>' +
+      /* vT243 品级分两套：灵宠是 普通/稀有/传说；灵杰（图鉴卡）是 普通/隐藏/典藏。
+         以前图鉴卡照搬 pet.rarity，于是「隐藏款」的绿髯青龙将顶着「普通」标签。 */
+      '<div class="pet-nm">' + ptEsc(pet.name) + ' <span class="pet-rare r-' + ptRarClass(isCxPic ? (pet.tier || '普通') : pet.rarity) + '">' +
+      ptEsc(isCxPic ? (pet.tier || '普通') : (pet.rarity || '普通')) + '</span></div>' +
       meta + growLine +
       '<div class="pet-acts">' + acts + '</div>' + grad + '</div>';
   }
