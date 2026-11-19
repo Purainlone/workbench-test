@@ -10396,6 +10396,7 @@ function scBonusApply() {
     picks.forEach(function (r) { SC_BONUS_SEL[r.name] = 1; });
     scBonusRender({ keepPts: true });
     toastMsg('✅ 已加分：' + picks.length + ' 人 · 合计 +' + sum + ' 分');
+    kickSyncAfterScore();   /* vT230 目标加分立刻推云端，不再等 10 分钟周期 */
   }).catch(function (err) {
     console.error('[成绩] 目标加分写入失败', err);
     toastMsg('⚠️ 部分没保存成功，请重试');
@@ -16739,6 +16740,13 @@ function openStuPanel(name){
   mask.onclick=function(e){if(e.target===mask){mask.remove();renderStu()}};
   document.body.appendChild(mask);
 }
+/* vT230 奖惩 / 目标加分写完立刻推一次云同步：
+   以前加分只 loadST()+renderStu()，网页本地马上看到，但 st 表要等 10 分钟的
+  自动同步周期（且需 gAuto 开着）才推上 Gitee → 小程序/桌面迟迟拿不到，
+  老师以为「同步不到」。这里沿用其它写操作的 1.2s 延时触发（等飞书表写完）。 */
+function kickSyncAfterScore(){
+  setTimeout(function(){try{if(typeof syncCycle==='function')syncCycle(false)}catch(e){}},1200);
+}
 function stuAddRw(name,title,val){
   if(!dbReady){toastMsg('⚠️ 未连接数据表');return}
   var stu=stuRosterInfo(name);   /* vT173：花名册→座位表两段查找，别再轻易写全空记录 */
@@ -16758,6 +16766,7 @@ function stuAddRw(name,title,val){
     if(m)m.remove();
     renderStu();openStuPanel(name);
     toastMsg((val>=0?'+':'')+val+'　'+name+' · '+title);
+    kickSyncAfterScore();   /* vT230 立刻推云端，小程序/桌面几秒内可见 */
   }).catch(function(err){
     console.error('[database] 奖惩写入失败:',err);
     toastMsg('⚠️ 没保存成功');
@@ -16950,9 +16959,9 @@ function stuUndoClear(){
       if(ids.indexOf('qd0ZfL69wR0A4jjn3NbIUO')>=0){loadMemosFromDB();setTimeout(function(){try{renderHome()}catch(e){}},700)}
       if(ids.indexOf('oVnl3FwN3QWFXeWcAwzaAt')>=0)loadReciteFromDB();
       if(ids.indexOf('SI9EURtanpWC0y4lVipmQQ')>=0)loadScoresFromDB();
-      if(ids.indexOf(HW_DB)>=0)loadHW().then(function(){renderHW();renderStu();setTimeout(function(){try{renderHome()}catch(e){}},0)});
+      if(ids.indexOf(HW_DB)>=0)loadHW().then(function(){renderHW();renderStu();setTimeout(function(){try{renderHome()}catch(e){}},0);kickSyncAfterScore()});   /* vT230 作业登记立刻推云端，小程序/桌面几秒内看到完成状态 */
       if(ids.indexOf(GA_DB)>=0)loadGA().then(function(){renderGroup();renderStu()});
-      if(ids.indexOf(ST_DB)>=0)loadST().then(function(){renderStu();renderHW();renderGroup()});
+      if(ids.indexOf(ST_DB)>=0)loadST().then(function(){renderStu();renderHW();renderGroup();kickSyncAfterScore()});   /* vT230 奖惩表任何变动立刻推云端 */
     });
   }
  }catch(e){
@@ -20219,9 +20228,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v227';
-var WB_MY_VER = '优化版 vT227 · 积分流水删除不复活';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.238';
+var WB_VER_TAG = 'v230';
+var WB_MY_VER = '优化版 vT230 · 双端数据同步对齐（加分即时推送+流水去重+作业列）';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.239';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
