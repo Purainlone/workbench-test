@@ -20675,9 +20675,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v238';
+var WB_VER_TAG = 'v241';
 var WB_MY_VER = '优化版 vT233 · 积分流水 LWW 同步（重新加的稳定上云不再闪消）';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.246';
+var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.247';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -32174,9 +32174,42 @@ function cwInit(){
   }
   function ptApproveParent(id) {
     if (!ptPlayable()) return toastMsg('⏸ 模块暂停 / 关停中，不能批准消耗类提案');
-    ptApproveParentCore(id, false).then(function (r) {
+    /* vT241 修复「提案在列表里但手动批准点不动」：
+       ①列表来自云端 pq/，本地 parentQueue 里可能还没有这条（只被渲染、没被合入）→
+         以前 ptApproveParentCore 直接报「提案不存在」，按钮看起来像没反应。现在先按
+         id 直读 pq/{id}.json 并合入本地，再走同一套入账逻辑。
+       ②本地已入账、云端文件仍是 pending 的（上一轮回写状态失败）→ 本地会返回 dup，
+         这里补写云端状态，不再重复扣分。
+       ③所有失败都给出明确提示，不再"点了没动静"。 */
+    toastMsg('⏳ 正在批准…');
+    var _pre;
+    try {
+      var _s = (typeof window.ptQueueStatus === 'function') ? window.ptQueueStatus(id) : '';
+      if (_s) {
+        _pre = Promise.resolve();
+      } else if (typeof window.ptaFetchOne === 'function') {
+        _pre = window.ptaFetchOne(id).then(function (r) {
+          try { window.ptIngestParentProposals([r.rec]) } catch (_e) {}
+          return r;
+        });
+      } else {
+        _pre = Promise.reject(new Error('这条提案还没同步到本地，请先点「🔄 立即扫描」'));
+      }
+    } catch (_e2) { _pre = Promise.resolve() }
+    _pre.then(function () {
+      return ptApproveParentCore(id, false);
+    }).then(function (r) {
       toastMsg(r.dup ? ('ℹ️ ' + r.msg) : ('✅ ' + r.msg));
-    }).catch(function (e) { toastMsg('⚠️ ' + ((e && e.message) || '批准失败')); });
+      /* 把云端提案文件标成已办（失败不影响本地结果，下一轮手动扫描会补） */
+      try {
+        if (typeof window.ptaMarkId === 'function') {
+          window.ptaMarkId(id, { status: 'done', doneAt: Date.now(), result: r.msg || '', doneBy: 'teacher' });
+        }
+      } catch (_m) {}
+      try { ptRenderParent() } catch (_r) {}
+    }).catch(function (e) {
+      toastMsg('⚠️ ' + ((e && e.message) || '批准失败'));
+    });
   }
 
   /* ===== vT111 家长提案自动批准（执行器在网页端：定时拉 pq/ → 交给这里判定与入账） ===== */
@@ -33213,6 +33246,14 @@ function cwInit(){
   window.ptGradReq = ptGradReq;
   window.ptGradApprove = ptGradApprove;
   window.ptApproveParent = ptApproveParent;
+  /* vT241 供扫描器判断「本地是否已有这条提案/它是什么状态」 */
+  window.ptQueueStatus = function (id) {
+    try {
+      var s = ptGet();
+      var it = (s.parentQueue || []).filter(function (x) { return x && x.id === id })[0];
+      return it ? String(it.status || 'pending') : '';
+    } catch (e) { return '' }
+  };
   /* vT111 自动批准：网页端引擎调这几个 */
   window.ptIngestParentProposals = ptIngestParentProposals;
   window.ptAutoJudge = ptAutoJudge;
@@ -34310,8 +34351,12 @@ function cwInit(){
     if (typeof window.ptAutoCfg !== 'function') return Promise.resolve();
     var st = window.ptAutoCfg();
     if (!st.on && !manual) { ptaBadge('自动批准未开启 · 家长提案需你手动批准'); return Promise.resolve(); }
+    /* vT241 手动「立即扫描」= 真正重扫：清掉已跳过名单。
+       以前 seen 记下后永不重试，某次回写失败（409/网络）就让这条提案永远 pending
+       又永远「无新提案」——用户在列表里看得见却批不动、也不会自动批准。 */
+    if (manual) PTA.seen = {};
     PTA.busy = true;
-    var n = 0, okN = 0, heldN = 0;
+    var n = 0, okN = 0, heldN = 0, dupN = 0;
     ptaBadge('正在扫描家长提案…');
     return ptaParentCfg(false).then(function (cfg) {
       return ptaList(cfg).then(function (list) {
@@ -34336,6 +34381,15 @@ function cwInit(){
                   return ptaMark(cfg, f.name, got.sha, rec, { status: 'held', heldReason: (r && r.msg) || '竞答校验未通过', heldAt: Date.now() });
                 }).catch(function (e) { console.warn('[竞答提案] 处理失败', f.name, e); });
               }
+              /* vT241 幂等：本地已入账（老师手批过 / 上一轮已扣分但回写失败）→ 只补写云端状态，绝不重复扣分 */
+              var _ls = '';
+              try { _ls = (typeof window.ptQueueStatus === 'function') ? window.ptQueueStatus(rec.id) : '' } catch (_e0) {}
+              if (_ls === 'done' || _ls === 'rejected') {
+                dupN++;
+                return ptaMark(cfg, f.name, got.sha, rec, {
+                  status: _ls === 'done' ? 'done' : 'rejected', doneAt: Date.now(), result: '本地已处理，补齐云端状态', doneBy: 'teacher'
+                });
+              }
               try { window.ptIngestParentProposals([rec]); } catch (e) {}
               var v = window.ptAutoJudge(rec.id);
               if (!v.ok) {
@@ -34349,6 +34403,12 @@ function cwInit(){
                 }
                 heldN++;
                 return ptaMark(cfg, f.name, got.sha, rec, { status: 'held', heldReason: (r && r.msg) || '未通过判定', heldAt: Date.now() });
+              }).catch(function (e) {
+                /* vT241 入账异常也必须落状态：否则文件永远 pending、下一轮又被 seen 跳过 */
+                heldN++;
+                var msg = (e && e.message) || '入账异常';
+                try { console.warn('[家长提案] 入账失败', rec.id, msg) } catch (_e1) {}
+                return ptaMark(cfg, f.name, got.sha, rec, { status: 'held', heldReason: msg, heldAt: Date.now() });
               });
             }).catch(function (e) { console.warn('[家长提案] 单条处理失败', f.name, e); });
           });
@@ -34357,7 +34417,7 @@ function cwInit(){
       });
     }).then(function () {
       PTA.lastAt = Date.now();
-      ptaBadge('上次扫描 ' + ptaHm(PTA.lastAt) + (n ? (' · 处理 ' + n + ' 条（自动批准 ' + okN + ' / 待你处理 ' + heldN + '）') : ' · 无新提案'));
+      ptaBadge('上次扫描 ' + ptaHm(PTA.lastAt) + (n ? (' · 处理 ' + n + ' 条（自动批准 ' + okN + ' / 待你处理 ' + heldN + (dupN ? ' / 已办补状态 ' + dupN : '') + '）') : ' · 无新提案'));
     }).catch(function (e) {
       ptaBadge('⚠️ ' + ptaErrText(e));
     }).then(function () { PTA.busy = false; });
@@ -34369,6 +34429,23 @@ function cwInit(){
   }
   window.ptaScan = ptaScan;
   window.ptaKick = function () { return ptaScan(true); };
+  /* vT241 按 id 直接操作 pq/{id}.json（文件名就是提案 id）：
+     ①ptaFetchOne(id)：本地 parentQueue 没有这条时，页面上的「批准」也能取到它再入账；
+     ②ptaMarkId(id, patch)：老师手动批完后把云端文件标成已办，避免下轮扫描又当新提案。 */
+  window.ptaFetchOne = function (id) {
+    return ptaParentCfg(false).then(function (cfg) {
+      return ptaGet(cfg, id + '.json').then(function (got) {
+        return { cfg: cfg, rec: got.rec || {}, sha: got.sha, name: id + '.json' };
+      });
+    });
+  };
+  window.ptaMarkId = function (id, patch) {
+    return ptaParentCfg(false).then(function (cfg) {
+      return ptaGet(cfg, id + '.json').then(function (got) {
+        return ptaMark(cfg, id + '.json', got.sha, got.rec, patch || {}).then(function () { return true });
+      });
+    }).catch(function (e) { try { console.warn('[家长提案] 回写状态失败', id, e) } catch (_e) {} return false });
+  };
   /* vT226：老师刚改了「提案仓库」三项时，下一次扫描必须立刻用新配置，不能吃 5 分钟缓存 */
   window.ptaCfgReset = function () { PTA.cfg = null; PTA.cfgAt = 0; };
   if (document.readyState === 'complete') ptaStart(); else window.addEventListener('load', ptaStart);
