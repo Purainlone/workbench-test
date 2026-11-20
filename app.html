@@ -17082,11 +17082,11 @@ function wbPointsReconcile() {
   /* 跨表重复：manual 里与 st 完全同键（姓名|事项|日期|分值）的行 —— 小程序/桌面会把两份都加进总分 */
   var stKeys = {}, dupBy = {}, dupRows = 0, dupSum = 0;
   (c.st || []).forEach(function (x) {
-    try { var k = stTombKeyOf(x.name, x.reason, x.date, x.score); if (k) stKeys[k] = 1 } catch (e) {}
+    try { var k = stTombKeyOf(x.name, x.reason, String(x.date == null ? '' : x.date).slice(0, 10), x.score); if (k) stKeys[k] = 1 } catch (e) {}
   });
   (c.manual || []).forEach(function (x) {
     try {
-      var k = stTombKeyOf(x.name, x.reason, x.date, x.score);
+      var k = stTombKeyOf(x.name, x.reason, String(x.date == null ? '' : x.date).slice(0, 10), x.score);
       if (k && stKeys[k]) {
         var n = S(x.name), v = Number(x.score) || 0;
         dupBy[n] = (dupBy[n] || 0) + v; dupRows++; dupSum += v;
@@ -17107,6 +17107,27 @@ function wbPointsReconcile() {
   rows.sort(function (a, b) { return Math.abs(b.d) - Math.abs(a.d) });
   var bad = rows.filter(function (r) { return Math.abs(r.d) > 0.05 });
   var worst = bad.length ? bad[0].d : 0;
+  /* vT254：云端「少了哪几条加分」——本机奖惩流水里有、云端 st 里没有的行。
+     小程序 / 教室桌面只认云端 st，缺一条就少这几分；网页读本机流水，所以照常显示。
+     这是「网页对、手机和桌面一起少」的唯一解释路径，直接把行列出来，不再猜。 */
+  var miss = [], sumMiss = 0;
+  try {
+    var _live = (typeof stDedupBonus === 'function') ? stDedupBonus(ST_ROWS).keep : (ST_ROWS || []);
+    var _tomb = (typeof stTombSet === 'function') ? stTombSet() : {};
+    (_live || []).forEach(function (r) {
+      var n = S(fval(r, '姓名')); if (!n) return;
+      var v = parseFloat(fval(r, '奖惩分值')) || 0; if (!v) return;
+      var rs = S(fval(r, '奖惩事项')); if (!rs) return;
+      var d = String(fval(r, '日期') || '').slice(0, 10);
+      var k = '';
+      try { k = stTombKeyOf(n, rs, d, v) } catch (e) { k = '' }
+      if (!k) return;
+      if (stKeys[k]) return;
+      miss.push({ n: n, rs: rs, d: d, v: v, k: k, tomb: !!_tomb[k] });
+      sumMiss += v;
+    });
+  } catch (_me) {}
+  sumMiss = Math.round(sumMiss * 10) / 10;
   var old = document.getElementById('ptRecOv'); if (old) old.remove();
   var ov = document.createElement('div');
   ov.id = 'ptRecOv';
@@ -17119,7 +17140,8 @@ function wbPointsReconcile() {
     '<div style="font-size:13px;color:#556;line-height:1.75;margin-bottom:10px">' +
     '学生管理 = 作业 + 奖惩流水（同键只算一次）。小程序/桌面 = 云端 <b>hw + st + manual</b> 三表直接相加。<br>' +
     '对不上的 ' + bad.length + ' 人' + (bad.length ? '，差最多 <b style="color:#c2410c">' + worst + '</b> 分' : '') +
-    '；云端跨表重复 <b>' + dupRows + '</b> 条（合计 ' + (Math.round(dupSum * 10) / 10) + ' 分，小程序会把它们多算一遍）。' +
+    '；云端跨表重复 <b>' + dupRows + '</b> 条（合计 ' + (Math.round(dupSum * 10) / 10) + ' 分）。' +
+    (miss.length ? '云端还少了 <b style="color:#c2410c">' + miss.length + '</b> 条加分行，见下方明细。' : '') +
     '</div>';
   var tb = '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
     '<thead><tr style="background:#f4f7fb;color:#334">' +
@@ -17140,16 +17162,53 @@ function wbPointsReconcile() {
       '<td style="text-align:center;padding:6px 8px;color:' + (r.dup ? '#c2410c' : '#94a3b8') + '">' + r.dup + '</td></tr>';
   });
   tb += '</tbody></table>';
+  /* 云端缺失行明细：小程序/桌面少的那几分到底少在哪一条 */
+  var missHtml = '';
+  if (miss.length) {
+    missHtml = '<div style="margin-top:14px;border-top:1px dashed #e5e7eb;padding-top:10px">' +
+      '<div style="font-size:13.5px;font-weight:700;color:#c2410c;margin-bottom:6px">' +
+      '⚠️ 云端少了 ' + miss.length + ' 条加分行（合计 ' + sumMiss + ' 分）—— 小程序/教室桌面永远不会显示这些分</div>' +
+      '<div style="font-size:12.5px;color:#556;margin-bottom:6px">下面这些行本机有、云端 st 表没有。' +
+      (miss.filter(function (m) { return /成绩达标/.test(m.rs) }).length ? '其中 <b>' + miss.filter(function (m) { return /成绩达标/.test(m.rs) }).length + '</b> 条是<b>成绩达标</b>加分。' : '') +
+      '</div><table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
+      '<thead><tr style="background:#fef2f2;color:#7f1d1d"><th style="text-align:left;padding:5px 8px">姓名</th>' +
+      '<th style="text-align:left;padding:5px 8px">奖惩事项</th><th style="padding:5px 8px">日期</th>' +
+      '<th style="padding:5px 8px">分值</th><th style="padding:5px 8px">被删除标记挡住</th></tr></thead><tbody>';
+    miss.slice(0, 25).forEach(function (m) {
+      missHtml += '<tr style="border-top:1px solid #f3e8e8"><td style="padding:5px 8px">' + m.n + '</td>' +
+        '<td style="padding:5px 8px;color:#7f1d1d">' + m.rs + '</td>' +
+        '<td style="text-align:center;padding:5px 8px">' + (m.d || '—') + '</td>' +
+        '<td style="text-align:center;padding:5px 8px">+' + m.v + '</td>' +
+        '<td style="text-align:center;padding:5px 8px">' + (m.tomb ? '✅ 是（墓碑误杀）' : '—') + '</td></tr>';
+    });
+    missHtml += '</tbody></table>' +
+      '<button class="btn2 sm primary" id="ptRecPush" style="margin-top:8px">🔄 把这 ' + miss.length + ' 条补推上云端（同时清掉误杀它们的删除标记）</button>' +
+      '</div>';
+  }
   var foot = '<div style="margin-top:12px;font-size:12.5px;color:#556;line-height:1.8">' +
     '<b>怎么看：</b>差额为正 = 小程序偏高（云端多算了）；为负 = 小程序偏低（云端缺行）。<br>' +
     '「其中跨表重复」不为 0，就是同一次加分在 st 和 manual 各存了一份，小程序把两份都加。<br>' +
-    '<button class="btn2 sm primary" id="ptRecFix" style="margin-top:8px">🩹 按学生管理口径修正云端（删掉重复的手动分并推一次）</button>' +
+    '<button class="btn2 sm primary" id="ptRecFix" style="margin-top:8px">🩹 删掉重复的手动分并推一次</button>' +
     '</div>';
-  bx.innerHTML = head + tb + foot;
+  bx.innerHTML = head + tb + missHtml + foot;
   ov.appendChild(bx); document.body.appendChild(ov);
   function close() { try { ov.remove() } catch (e) {} }
   document.getElementById('ptRecX').onclick = close;
   ov.onclick = function (e) { if (e.target === ov) close() };
+  var pushBtn = document.getElementById('ptRecPush');
+  if (pushBtn) pushBtn.onclick = function () {
+    if (!confirm('把云端缺少的 ' + miss.length + ' 条加分行（合计 ' + sumMiss + ' 分）补推上去？\n\n会同时清掉误杀这些行的旧删除标记，然后立即同步一次。')) return;
+    var n = 0;
+    miss.forEach(function (m) {
+      try { if (typeof stMarkCreated === 'function') stMarkCreated(m.n, m.rs, m.d, m.v) } catch (e) {}
+      try { if (m.tomb && typeof wbTombInvalidate === 'function') wbTombInvalidate('st', m.k) } catch (e) {}
+      n++;
+    });
+    try { wbMarkLocalDirty() } catch (e) {}
+    try { syncCycle(1) } catch (e) {}
+    close();
+    try { toastMsg('⏳ 已补推 ' + n + ' 条，几秒后刷新小程序 / 教室桌面看看') } catch (e) {}
+  };
   document.getElementById('ptRecFix').onclick = function () {
     if (!confirm('把云端 manual 表里「与奖惩流水完全同一条」的重复行剔除，并立即同步一次？\n\n只会删完全重复的手动分，其它记录不动。')) return;
     try { wbMarkLocalDirty() } catch (e) {}
@@ -21987,6 +22046,18 @@ function wbAlignLocalToCloud(mpTables) {
     });
     var keep = cur.filter(function (r) {
       if (!r) return false;
+      /* vT254 关键：奖惩流水行绝不能按「云端 students 里没有」剪掉。
+         奖惩流水和学生档案共用同一张表（ST_DB = 学生表），而云端 students 里
+         只放档案占位行（mpFromDeskBuild 明确把奖惩行剔出 students）——
+         所以每一行奖惩都"云端 students 没有"，旧逻辑会把它们全判成陈旧行删掉。
+         删掉之后下轮打包 st 表就缺这些行 → 云端 st 被写瘦 → 小程序/教室桌面
+         永远少这些分（尤其「成绩达标」目标加分），而且每开一次少一点，看起来就是"总是倒退"。
+         流水行的删除只认墓碑（stTombSet），不认「云端没有」。 */
+      var _rs = '';
+      try {
+        _rs = String(fval(r, '奖惩事项') || fval((r && r.properties) || {}, '奖惩事项') || '').trim();
+      } catch (eRs) {}
+      if (_rs) return true;
       if (r.id && byId[String(r.id)]) return true;
       var fp = '';
       try { fp = recFingerprint(r) } catch (e) {}
@@ -22599,7 +22670,34 @@ function syncCycleCore(manual) {
         var _localsDiff = wbLocalsSig(doc.locals) !== wbLocalsSig(out.locals);
         var _verDiff = String(doc.releaseVer || '') !== WB_VER_TAG;
         var _staleDoc = wbIsStaleDoc(doc);
-        var _needPut = _unsent || res.empty || _verDiff || _staleDoc || _localsDiff;
+        /* vT254：本机有奖惩流水、云端 st 里却没有 → 这不是“云端删了”，而是从没推上去
+           （成绩达标加分最常这样）。只拉不推的闸门会让这些分永远停在网页，小程序/桌面永远少这几分。
+           这里把它当作「有一批没上云的写入」，本轮必须推一次。 */
+        var _stMissN = 0;
+        try {
+          var _ck = {};
+          (Array.isArray(tables.st) ? tables.st : []).forEach(function (x) {
+            if (!x) return;
+            var k = '';
+            try { k = stTombKeyOf(x.name, x.reason, String(x.date == null ? '' : x.date).slice(0, 10), x.score) } catch (e1) { k = '' }
+            if (k) _ck[k] = 1;
+          });
+          (Array.isArray(out.tables.st) ? out.tables.st : []).forEach(function (x) {
+            if (!x) return;
+            var k = '';
+            try { k = stTombKeyOf(x.name, x.reason, String(x.date == null ? '' : x.date).slice(0, 10), x.score) } catch (e2) { k = '' }
+            /* 只补推「本端登记过创建」且没有墓碑的行：这类行的语义就是「本机新加、还没上云」
+               （成绩达标加分必经 stMarkCreated）。没有创建登记的老数据/别处刚清掉的数据一律不推，
+               避免把「另一台电脑清空积分」又复活回来。 */
+            if (k && !_ck[k]) {
+              var _cr = 0;
+              try { _cr = (typeof stCreatedFresh === 'function') ? stCreatedFresh(x.name, x.reason, String(x.date == null ? '' : x.date).slice(0, 10), x.score) : 0 } catch (eCr) { _cr = 0 }
+              if (_cr) _stMissN++;
+            }
+          });
+          if (_stMissN) { try { console.info('[gitee-sync] 本机有 ' + _stMissN + ' 条奖惩流水云端没有 → 本轮补推') } catch (e3) {} }
+        } catch (_stME) {}
+        var _needPut = _unsent || res.empty || _verDiff || _staleDoc || _localsDiff || _stMissN > 0;
         if (_needPut) {
           try {
             console.info('[gitee-sync] 写回判定：dirty=' + WB_LOCAL_DIRTY +
@@ -22631,6 +22729,9 @@ function syncCycleCore(manual) {
         return giteePut(out, res.empty ? '' : res.sha).then(function (r2) {
         GITEE_RETRY = 0;
         wbSnapSave(out); wbSetRev(out.rev);
+        /* vT254：刚推上去的这份就是云端现状 → 顺手刷新「云端缓存」，
+           否则积分对账面板要等下一轮拉取才看到新 st，会显示成"还差几分"的假象。 */
+        try { if (typeof gdCloudCache === 'function') gdCloudCache(out.tables || {}) } catch (_gcc) {}
         /* vT172 真推送成功 → 立刻发 MQTT 信号，教室桌面/其它端 1~3 秒内就拉新数据，
            不用再等它自己的 15 秒兜底轮询（这是「推云到别端看见」的最后一公里）。 */
         try { if (typeof mqttPublishSignal === 'function') mqttPublishSignal() } catch (_ms) {}
@@ -23663,14 +23764,35 @@ function mpFromDeskBuild(o) {
        网页自己算的是对的不受影响，于是"改来改去都对不上"。 */
     var _stSrcRows = ST_ROWS;
     try {
+      /* vT254 关键修复（「小程序/桌面总缺目标加分」的病根）：
+         以前是「o[ST_DB] 非空就用它，否则用 ST_ROWS」。
+         但 o[ST_DB] 是本机库快照，冷启动对齐/写库时序都可能让它只含花名册行、
+         不含奖惩流水行 —— 一旦非空，就会用一份没有奖惩的源去打包 st，
+         云端 st 被写瘦，小程序/桌面立刻少分（网页自己读飞书表所以看不出问题）。
+         现在改成【两边取并集】：ST_ROWS ∪ o[ST_DB]，按业务键去重，
+         谁都不会因为另一份"非空但残缺"而消失。 */
       var _oSt = (o && Array.isArray(o[ST_DB])) ? o[ST_DB] : null;
       if (_oSt && _oSt.length) {
-        _stSrcRows = _oSt.map(function (r) {
+        var _seenK = {};
+        var _uni = [];
+        function _pushSt(r) {
+          var n = fval(r, '姓名'); if (!n) return;
+          var rs = String(fval(r, '奖惩事项') || '').trim(); if (!rs) return;
+          var v = parseFloat(fval(r, '奖惩分值')); if (isNaN(v)) v = 0;
+          var k = '';
+          try { k = stTombKeyOf(n, rs, syncDateOnly(fval(r, '日期')), v) } catch (eK) { k = '' }
+          if (k && _seenK[k]) return;
+          if (k) _seenK[k] = 1;
+          _uni.push(r);
+        }
+        (ST_ROWS || []).forEach(_pushSt);
+        _oSt.forEach(function (r) {
           var p = (r && (r.properties || r.fields)) || r || {};
           var flat = { id: (r && (r.id || r._id || r.recordId || r.record_id)) || '' };
           Object.keys(p).forEach(function (k) { if (k !== 'id' && k !== '_id') flat[k] = p[k] });
-          return flat;
+          _pushSt(flat);
         });
+        if (_uni.length) _stSrcRows = _uni;
       }
     } catch (_oe) {}
     var _stSrc = (typeof stDedupBonus === 'function') ? stDedupBonus(_stSrcRows).keep : _stSrcRows;
