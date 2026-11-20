@@ -36079,13 +36079,20 @@ function cwInit(){
                 heldN++;
                 return ptaMark(cfg, f.name, got.sha, rec, { status: 'held', heldReason: v.reason, heldAt: Date.now() });
               }
-              return window.ptAutoApproveOne(rec.id).then(function (r) {
-                if (r && r.ok) {
-                  okN++;
-                  return ptaMark(cfg, f.name, got.sha, rec, { status: 'done', doneAt: Date.now(), result: r.msg, doneBy: 'auto' });
-                }
-                heldN++;
-                return ptaMark(cfg, f.name, got.sha, rec, { status: 'held', heldReason: (r && r.msg) || '未通过判定', heldAt: Date.now() });
+              /* vT255 入账前再读一次文件：小程序端也会自动批准（老师不开电脑时），
+                 两边同时批有极小概率各批一次（会多给一张卡）。这里动手前确认文件仍是
+                 pending —— 手机刚标过 done 就直接跳过，把窗口压到一次 GET 的时间。 */
+              return ptaGet(cfg, f.name).then(function (now2) {
+                var st2 = (now2 && now2.rec && (now2.rec.status || 'pending')) || 'pending';
+                if (now2 && now2.rec && st2 !== 'pending') { dupN++; return null }
+                return window.ptAutoApproveOne(rec.id).then(function (r) {
+                  if (r && r.ok) {
+                    okN++;
+                    return ptaMark(cfg, f.name, got.sha, rec, { status: 'done', doneAt: Date.now(), result: r.msg, doneBy: 'auto' });
+                  }
+                  heldN++;
+                  return ptaMark(cfg, f.name, got.sha, rec, { status: 'held', heldReason: (r && r.msg) || '未通过判定', heldAt: Date.now() });
+                });
               }).catch(function (e) {
                 /* vT241 入账异常也必须落状态：否则文件永远 pending、下一轮又被 seen 跳过 */
                 heldN++;
