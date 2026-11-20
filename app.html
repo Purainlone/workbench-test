@@ -3743,6 +3743,7 @@ table.paper td.l{text-align:left;font-weight:600}
       th=th.map(function(x){return Math.max(0,Math.round(x))});
       try{localStorage.setItem('wb_gd_cfg_v1',JSON.stringify({th:th}))}catch(e){}
     }
+    wbDirtyTag();
     gdRender();
   }
   window.gdSyncNow = gdSyncNow;
@@ -13966,6 +13967,7 @@ function rcStatStudents(){
 function rcStatExSave(o){
   RC_STAT_EX=o||{};
   try{localStorage.setItem(RC_STAT_EX_KEY,JSON.stringify(RC_STAT_EX))}catch(e){}
+  wbDirtyTag();
   try{renderRecite()}catch(e){}
 }
 function rcKey(name,title){return name+'||'+title}
@@ -14591,7 +14593,7 @@ function openRCManager(){
   /* vT16 学期归档：换学期一键归档本学期篇目并清空，随时恢复查看 */
   var ARCH='wb_rc_archive_v1';
   function archAll(){try{return JSON.parse(localStorage.getItem(ARCH)||'[]')||[]}catch(e){return[]}}
-  function archSave(a){localStorage.setItem(ARCH,JSON.stringify(a.slice(-8)))}
+  function archSave(a){localStorage.setItem(ARCH,JSON.stringify(a.slice(-8)));wbDirtyTag()}
   var arow=el('div','addrow');arow.style.marginTop='10px';
   var aBtn=el('button','btn','📦 归档本学期篇目并清空（开始新学期）');
   aBtn.style.whiteSpace='nowrap';
@@ -17753,6 +17755,7 @@ function hmIsIgnored(n){return !!(HM_IGNORE&&HM_IGNORE[n])}
 function hmIgnoreSave(o){
   HM_IGNORE=o||{};
   try{localStorage.setItem(HM_IGNORE_KEY,JSON.stringify(HM_IGNORE))}catch(e){}
+  wbDirtyTag();
   try{renderIgnoreBars()}catch(e){}
   try{renderHW()}catch(e){}
   try{renderRecite()}catch(e){}
@@ -19147,7 +19150,24 @@ var CLOUD_LOCALS_KEYS = ['seat_base_v1','seat_base_week','seat_data_v1','seat_fi
      reward_items_v1   积分兑换奖品清单
      wb_st_created_v1  奖惩「创建登记」（特殊：按并集合并，见 cloudMergeLocals） */
   'sc_targets_v1','sc_bonus_pts_v1','sc_subj_extra_v1','wb_goal_math_v1','wb_goal_en_v1',
-  'wb_hw_subj','wb_classes_v1','tt_over_v1','reward_items_v1','wb_st_created_v1'];
+  'wb_hw_subj','wb_classes_v1','tt_over_v1','reward_items_v1','wb_st_created_v1',
+  /* ===== vT253 补齐剩余业务数据（语料 / 名单 / 配置）=====
+     这些以前只写本机：换电脑就要重攒、重设，两台电脑的名单口径还不一样。
+     合并策略：整份同步（LWW，看哪边最后改的）。**故意不做并集**——
+       评语模板是「整批保存覆盖」的，做并集会把老师删掉的句子又补回来；
+       名单类做并集会把已取消勾选的同学又勾回来。
+     安全性由 vT252 的闸门保证：没写过的电脑不会推，开机只拉云端。
+       wb_cm_tpl_v1          评语模板语料（主题 → 句子）
+       wb_cm_trait_v1        学生特点（评语生成用）
+       wb_rc_archive_v1      诵读学期归档（每学期篇目清单）
+       wb_ignore_students_v1 诵读「不参加」名单
+       wb_rc_stat_exclude_v1 诵读「不计入已背完判定」名单
+       wb_gd_cfg_v1          班级守护阈值配置
+     不上云的（有意排除）：wb_cm_ai_v1 / wb_ai_cfg_v1（含密钥）、
+       wb_cur_class_v1（当前班级，各班设备各自看的班不同）、
+       wb_works_v1 / wb_nt_v1 / wb_tc_v1 / wb_pet_db_v1（都是 tables 的本机镜像缓存） */
+  'wb_cm_tpl_v1','wb_cm_trait_v1','wb_rc_archive_v1','wb_ignore_students_v1',
+  'wb_rc_stat_exclude_v1','wb_gd_cfg_v1'];
 /* 读/写本机"电脑侧数据最后同步时间" */
 function cloudLocalsAt(v){
   try{
@@ -19207,6 +19227,26 @@ function cloudCollectLocals(){
   try{ if(typeof EB_CASES !== 'undefined' && EB_CASES && EB_CASES.length) o.ebCases = EB_CASES }catch(e){}
   return o;
 }
+/* vT253：名单/配置类数据上云后，把「本页内存里的那一份」也跟着刷新。
+   否则会出现「云端已经拉回来了，界面上还是旧名单」——老师会以为同步没成功。
+   HM_IGNORE / RC_STAT_EX 是页面加载时读进内存的全局量，必须显式重读并重渲染。 */
+function wbHotReloadLists(){
+  var chg = 0;
+  try{
+    var a = JSON.parse(localStorage.getItem('wb_ignore_students_v1') || 'null');
+    if(a && typeof a === 'object'){ window.HM_IGNORE = a; chg++ }
+  }catch(e){}
+  try{
+    var b = JSON.parse(localStorage.getItem('wb_rc_stat_exclude_v1') || 'null');
+    if(b && typeof b === 'object'){ window.RC_STAT_EX = b; chg++ }
+  }catch(e){}
+  if(!chg) return 0;
+  try{ if(typeof renderIgnoreBars === 'function') renderIgnoreBars() }catch(e){}
+  try{ if(typeof renderHW === 'function') renderHW() }catch(e){}
+  try{ if(typeof renderRecite === 'function') renderRecite() }catch(e){}
+  try{ if(typeof renderHome === 'function') renderHome() }catch(e){}
+  return chg;
+}
 /* 把云端 locals 应用到本机，返回实际应用的项数 */
 function cloudApplyLocals(o){
   if(!o || typeof o !== 'object') return 0;
@@ -19256,6 +19296,8 @@ function cloudApplyLocals(o){
     try{ if(typeof actRender === 'function') actRender() }catch(e){}
     try{ if(typeof renderHome === 'function') renderHome() }catch(e){}
   }
+  /* vT253 名单类：内存态同步刷新，别让界面显示旧名单 */
+  try{ if(wbHotReloadLists()) n++ }catch(e){}
   return n;
 }
 /* vT252 奖惩「创建登记」按并集合并（唯一不能整份 LWW 的键）
@@ -21123,9 +21165,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v252';
-var WB_MY_VER = '优化版 vT252 · 云端为准同步';
-var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.254';
+var WB_VER_TAG = 'v253';
+var WB_MY_VER = '优化版 vT253 · 业务数据全上云';
+var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.255';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -21803,6 +21845,11 @@ function wbDirtyAt() {
 function wbMarkLocalDirty() {
   WB_LOCAL_DIRTY = true;
   try { localStorage.setItem(WB_DIRTY_AT_KEY, String(Date.now())) } catch (e) {}
+}
+/* vT253：只写 localStorage 的「配置/语料」类改动（评语模板、名单、守护阈值…）
+   以前不算写入，下一轮同步若云端较新就会被静默覆盖。统一从这里打脏标记。 */
+function wbDirtyTag() {
+  try { wbMarkLocalDirty() } catch (e) {}
 }
 function wbClearLocalDirty() {
   WB_LOCAL_DIRTY = false;
@@ -27113,9 +27160,9 @@ function cwInit(){
     try { var o = JSON.parse(localStorage.getItem(CM_TPL_KEY) || 'null'); if (o && o.themes) return o } catch (e) {}
     return { themes: {} };
   }
-  function cmTplStore(db) { try { localStorage.setItem(CM_TPL_KEY, JSON.stringify(db)) } catch (e) {} }
+  function cmTplStore(db) { try { localStorage.setItem(CM_TPL_KEY, JSON.stringify(db)) } catch (e) {} wbDirtyTag() }
   function cmTraitLoad() { try { var o = JSON.parse(localStorage.getItem(CM_TRAIT_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} } }
-  function cmTraitStore(o) { try { localStorage.setItem(CM_TRAIT_KEY, JSON.stringify(o)) } catch (e) {} }
+  function cmTraitStore(o) { try { localStorage.setItem(CM_TRAIT_KEY, JSON.stringify(o)) } catch (e) {} wbDirtyTag() }
   function cmAiCfg() { try { var o = JSON.parse(localStorage.getItem(CM_AI_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} } }
   window.cmThemeSelRender = function () {
     var sel = document.getElementById('cmThemeSel'); if (!sel) return;
