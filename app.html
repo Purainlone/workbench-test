@@ -2138,6 +2138,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2 sm" id="stuEditBtn" onclick="stuToggleEdit()" title="开启后点任意一行的「奖惩分」可直接改成目标值">✏️ 编辑积分</button>
       <button class="btn2 sm" onclick="stuClearPoints()" title="把全班积分清零（可撤回）">🧹 清空积分</button>
       <button class="btn2 sm" id="stuUndoBtn" onclick="stuUndoClear()" style="display:none" title="恢复上一次清空前全部积分记录">↩️ 撤回清空</button>
+      <button class="btn2 sm" onclick="wbPointsReconcile()" title="逐人对比「学生管理」与「小程序 / 教室桌面」显示的积分，并指出云端哪里多算或少算">🔍 积分对账</button>
       <select id="stuGroup" onchange="renderStu()" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
         <option value="">全部小组</option>
       </select>
@@ -2699,69 +2700,14 @@ table.paper td.l{text-align:left;font-weight:600}
   <!-- ============ 数据同步 ============ -->
   <section class="section" id="s-sync">
     <h2>数据同步</h2>
-    <div class="sub">电脑 ⇄ 电脑 ⇄ 小程序 · 用文件搬数据，不用联网、不花钱</div>
+    <div class="sub">云端为主：电脑 / 手机 / 教室大屏共用一份数据，自动同步，不用搬文件</div>
 
-    <!-- ⓪ 桌面版 ⇄ 云端版 切换 -->
+    <!-- vT254：桌面版已停用，⓪「桌面版 ⇄ 云端版 切换」与 ①② 快照/互传包面板一并移除。
+         现在网页打开即读云端，只有本机真正写入才推云端（vT252 起）。 -->
+
     <div class="synccard">
-      <h3>⓪ 桌面版 ⇄ 云端版 切换（2.0.9 新增）</h3>
-      <div class="syncdesc">当前：<b id="wbModeNow">💻 桌面模式（读写本机文件）</b>。云端模式=多设备同一份数据（第一次需在托盘「☁️ 云端模式」设置网址并登录）；桌面模式=数据读写本机文件。切换后页面会自动刷新。</div>
-      <div class="syncbtnrow" style="margin-top:8px">
-        <button class="btn2 primary" onclick="wbSetMode('cloud')">☁️ 切到云端模式</button>
-        <button class="btn2" onclick="wbSetMode('local')">💻 切回桌面模式</button>
-      </div>
-      <div id="wbModeMsg" class="syncstatus"></div>
-    </div>
-
-    <!-- ① 换电脑 / 两台电脑互传：整包快照 -->
-    <div class="synccard" style="border-color:#bfe6d2;background:#f7fdfa">
-      <h3>① 换电脑 / 两台电脑保持一致</h3>
-      <div class="syncdesc">
-        把<b>全部数据</b>（17 张表：学生、作业、班务、成绩、座位、备忘、教研资料…）打成一个
-        <b>.wbsnap</b> 文件。拷到另一台电脑导入后，两台电脑内容<b>完全一样</b>。
-      </div>
-      <div class="syncbtnrow" style="flex-wrap:wrap;gap:10px">
-        <button class="btn2 primary" onclick="snapExport()">⬇︎ 导出完整快照</button>
-        <label class="btn2" for="snapFile" style="margin:0">⬆︎ 导入快照（整体替换）</label>
-        <input type="file" id="snapFile" accept=".wbsnap,.json,application/json" style="display:none" onchange="snapPick(event)">
-        <button class="btn2" onclick="snapCopyClip()" title="打包后直接复制到剪贴板，粘到微信/记事本就能带走">📋 打包并复制</button>
-        <button class="btn2" onclick="snapRollback()" title="导入错了可以退回">↩︎ 回退</button>
-      </div>
-      <div class="syncdesc" style="margin-top:10px">
-        💡 <b>最省事的传法：</b>在这台点「📋 打包并复制」→ 打开微信文件传输助手 → 粘贴发送 →
-        到另一台电脑的微信里打开这个文件、全选复制 → 回工作台点「⬆︎ 导入快照」旁的输入框粘贴也行。
-        <b>或者</b>直接用「⬇︎ 导出完整快照」存成文件，微信发过去双击导入。
-      </div>
-      <div class="syncdesc" style="margin-top:12px">
-        <b>怎么传：</b>U 盘拷、微信发文件传输助手、发到自己邮箱、QQ 传，都可以。
-      </div>
-      <div class="syncwarn" style="margin-top:10px">
-        ⚠️ 快照是<b>整体替换</b>，不是合并。适合「一台电脑为主，另一台同步成一样」。
-        如果您在两台电脑上<b>各记了一些</b>，想合起来，请用下面 ② 的合并导入。
-      </div>
-    </div>
-
-    <div class="synccard" style="border-color:#bfe6d2;background:#f7fdfa">
-      <h3>② 两台电脑各记了一部分，要合并（推荐用这个）</h3>
-      <div class="syncdesc">
-        把这台电脑的<b>全部数据</b>（17 张表：学生、作业、诵读打卡、班务、成绩、座位、通讯录、教研资料…）
-        连同<b>背诵篇目清单</b>打成一个 <b>.wbmerge</b> 互传包。拿到另一台电脑导入时<b>逐条合并</b>：
-        两台都有的自动跳过，只有一边有的补上，<b>谁的数据都不会被覆盖</b>。
-      </div>
-      <div class="syncbtnrow" style="flex-wrap:wrap;gap:10px">
-        <button class="btn2 primary" onclick="mergeExport()">⬇︎ 导出互传包</button>
-        <button class="btn2" onclick="mergeCopy()" title="打包后直接复制到剪贴板，粘到微信就能带走">📋 打包并复制</button>
-        <label class="btn2" for="mergeFile" style="margin:0">⬆︎ 导入互传包（合并）</label>
-        <input type="file" id="mergeFile" accept=".wbmerge,.json,application/json" style="display:none" onchange="mergePick(event)">
-      </div>
-      <div id="mergePreview"></div>
-      <div class="syncdesc" style="margin-top:12px">
-        <b>典型用法：</b>教室电脑登记了诵读 → 导出互传包 → 微信发给家里电脑 → 导入合并。
-        两台的数据会合到一起，<b>反复导入也不会重复</b>。
-      </div>
-      <div class="syncdesc" style="margin-top:14px;border-top:1px dashed #dde5ee;padding-top:12px">
-        <b>在云端模式下看不到数据？</b>不用导文件，点下面这个按钮，直接把本机的历史记录补进当前库。
-        先比对、再确认、逐条补，已有的不会重复也不会被改。
-      </div>
+      <h3>① 本机 ⇄ 云端 比对（修复用）</h3>
+      <div class="syncdesc">正常情况下不用点：网页打开自动以云端为准。只有在「本机看到的和别的设备不一样」「以前的记录没跟上」时，用这里比一次、把本机独有的记录补进云端 —— <b>先比对、再确认、逐条补，已有的不会重复也不会被改</b>。</div>
       <div class="syncbtnrow" style="margin-top:8px">
         <button class="btn2 primary" id="wbsyBtn" style="display:none" onclick="wbsCompareAndPush()">🔄 把本机数据补进当前库（先比对再补）</button>
         <button class="btn2" onclick="wbsCompareAndPush()" title="本机数据和当前库不一致时用">🔄 本机 ⇄ 当前库 比对</button>
@@ -2769,7 +2715,7 @@ table.paper td.l{text-align:left;font-weight:600}
     </div>
 
     <div class="synccard">
-      <h3>③ 手机小程序 ⇄ 电脑（.wbbak 互传包）</h3>
+      <h3>② 手机小程序 ⇄ 电脑（.wbbak 互传包）</h3>
       <div class="syncdesc">导出 <b>.wbbak</b> 互传包，适合从手机小程序导出后拿到电脑，或电脑导出给手机。
         含手机端记录的数据：<b>学生档案、作业登记、诵读打卡、成绩记录、班务记录、奖惩积分、备忘、午托值班</b>。
         同一天、同一次作业、同一个学生只算一条，<b>反复导入不会重复</b>。</div>
@@ -2780,7 +2726,7 @@ table.paper td.l{text-align:left;font-weight:600}
     </div>
 
     <div class="synccard">
-      <h3>④ 把小程序的数据导进来</h3>
+      <h3>③ 把小程序的数据导进来</h3>
       <div class="syncdesc">在小程序「我的 → 导出备份」得到一个 .wbbak 文件，先发到电脑（微信文件传输助手），
         再在这里选它。系统会自动跳过电脑里已有的记录，反复导入也不会重复。</div>
       <div class="syncbtnrow">
@@ -2793,7 +2739,7 @@ table.paper td.l{text-align:left;font-weight:600}
     </div>
 
     <div class="synccard">
-      <h3>⑤ 小程序 ⇄ 云端（Gitee 免费云中转 · 全自动）</h3>
+      <h3>④ 小程序 ⇄ 云端（Gitee 免费云中转 · 全自动）</h3>
       <div class="syncdesc"><b>推荐：Gitee 私有仓库</b>（免费、不用微信云开发）。小程序把数据传上去，这里每 10 分钟自动「拉取 → 合并 → 写回」，三端数据自动保持一致。
         一次性设置（5 分钟）：① 注册 <b>gitee.com</b> 并新建一个<b>私有</b>空仓库（如 workbench-sync）；② 头像→设置→私人令牌→生成令牌（勾选 projects）；③ 下面填 owner / 仓库名 / 令牌，保存即可。
         小程序端不用重复填：点「生成设置码」，把那串码粘贴到小程序「我的 → Gitee 云同步」里。注意：小程序后台需把 <b>https://gitee.com</b> 加入 request 合法域名。</div>
@@ -3642,8 +3588,21 @@ table.paper td.l{text-align:left;font-weight:600}
     var t=0;
     (c.hw||[]).forEach(function(x){if(!x||x.deleted||!inTerm(x))return;t+=Number(x.score)||0});
     (c.hwadj||[]).forEach(function(x){if(!x||x.deleted||!inTerm(x))return;t+=Number(x.delta)||0});
-    (c.st||[]).forEach(function(x){if(!x||isPet(x)||!inTerm(x))return;t+=Number(x.score)||0});
-    (c.manual||[]).forEach(function(x){if(!x||isPet(x)||!inTerm(x))return;t+=Number(x.score)||0});
+    /* vT254：st 与 manual 里同键的副本只算一次（小程序/桌面直接两张表相加，会重复计分） */
+    var _cStKey={};
+    (c.st||[]).forEach(function(x){
+      if(!x)return;
+      try{var k=stTombKeyOf(x.name,x.reason,x.date,x.score);if(k)_cStKey[k]=1}catch(_e){}
+      if(isPet(x)||!inTerm(x))return;t+=Number(x.score)||0;
+    });
+    (c.manual||[]).forEach(function(x){
+      if(!x)return;
+      try{
+        var k2=stTombKeyOf(x.name,x.reason,x.date,x.score);
+        if(k2&&_cStKey[k2])return;
+      }catch(_e2){}
+      if(isPet(x)||!inTerm(x))return;t+=Number(x.score)||0;
+    });
     return Math.round(t*10)/10;
   }
   function gdClassPoints(){
@@ -17051,12 +17010,22 @@ function stuPoints(){
     _a.forEach(function(r){ if(!r||r.deleted||!r.name)return; var v=Number(r.delta)||0; if(!v)return; hwP[r.name]=(hwP[r.name]||0)+v; });
   }catch(e){} })();
   /* vT236 成绩达标类同键重复行只算一次分（11-16 重复加分事故修复，与流水显示同口径） */
-  stDedupBonus(ST_ROWS).keep.forEach(function(r){
+  /* vT254 关键修复：把「本机奖惩流水的业务键」记下来，供下面 manual 去重用。
+     症状：个人积分虚高、但点开流水只看到一条 —— 因为同一次加分在
+     st 表（网页写）和 manual 表（手机/教室桌面写）里各存了一份，
+     流水显示处（vT173）早就按「事项|日期|分值」去重了，总分这里却两份都加。 */
+  var _stSeen = {};
+  var _stKeep = stDedupBonus(ST_ROWS).keep;
+  _stKeep.forEach(function(r){
     var n=fval(r,'姓名');if(!n)return;
     var v=parseFloat(fval(r,'奖惩分值'));
     if(isNaN(v))v=0;
     rwP[n]=(rwP[n]||0)+v;
     bill(n,v);
+    try{
+      var _sk=(typeof stTombKeyOf==='function')?stTombKeyOf(n,fval(r,'奖惩事项'),String(fval(r,'日期')||'').slice(0,10),v):'';
+      if(_sk)_stSeen[_sk]=1;
+    }catch(_skE){}
   });
   /* vT156 个人积分统一口径：云端 manual 流水（手机/桌面录入的奖惩 + 启灵消费扣分）
      并进奖惩分。此前这张表只进小程序/桌面/家长端的账，工作台统计表看不到，
@@ -17069,6 +17038,12 @@ function stuPoints(){
         if(typeof stManDead==='function'&&stManDead(x))return;   /* vT227：已删奖惩的同源副本不再算分 */
         var n=String(x.name||'').trim();if(!n)return;
         var v=(Number(x.score)||0);
+        /* vT254：与本机奖惩流水完全同键 = 同一次加分的副本 → 不再加第二遍。
+           以前总分把 st 与 manual 两份都加，流水明细却只显示一条，于是「明细对、总分虚高」。 */
+        try{
+          var _mk=(typeof stTombKeyOf==='function')?stTombKeyOf(n,x.reason,String(x.date||'').slice(0,10),v):'';
+          if(_mk&&_stSeen[_mk])return;
+        }catch(_mkE){}
         rwP[n]=(rwP[n]||0)+v;
         bill(n,v);
       });
@@ -17084,6 +17059,106 @@ function stuTotal(p,name){
      会把小组分平摊进个人账，导致学生管理 / 桌面 / 守护积分三处虚高。 */
   return Math.round(((p.hw[name]||0)+(p.rw[name]||0))*10)/10;
 }
+/* ===== vT254 积分对账：网页（学生管理）vs 小程序 / 教室桌面 =====
+   背景（11-20）：学生管理里的分数是对的，但小程序和教室桌面显示另一套数字，两者一致。
+   原因是两边读的不是同一种账：
+     · 学生管理 = 本机作业行 + 本机奖惩流水（同键去重）+ 云端 manual（与奖惩同键的不重复计）
+     · 小程序/桌面 = 云端 hw + 云端 st + 云端 manual 三张表直接相加
+   只要云端 st 与 manual 里有「同源两条」，或者 st 缺行，两边就会差。
+   这个面板把差额逐人摆出来，并标出「跨表重复」的金额，不用猜。 */
+function wbPointsReconcile() {
+  var p = stuPoints(), stu = stuRoster();
+  var c = null;
+  try { c = (typeof gdCloud === 'function') ? gdCloud() : JSON.parse(localStorage.getItem('wb_gd_cloud_v1') || 'null') } catch (e) { c = null }
+  if (!c || (!Array.isArray(c.hw) && !Array.isArray(c.manual) && !Array.isArray(c.st))) {
+    try { toastMsg('⚠️ 还没拉到云端数据：先在「数据同步 → 立即同步」点一次，再回来对账') } catch (e) {}
+    return;
+  }
+  var S = function (v) { return String(v == null ? '' : v).trim() };
+  var cHw = {}, cSt = {}, cMan = {};
+  (c.hw || []).forEach(function (x) { var n = S(x.name); if (!n) return; cHw[n] = (cHw[n] || 0) + (Number(x.score) || 0) });
+  (c.st || []).forEach(function (x) { var n = S(x.name); if (!n) return; cSt[n] = (cSt[n] || 0) + (Number(x.score) || 0) });
+  (c.manual || []).forEach(function (x) { var n = S(x.name); if (!n) return; cMan[n] = (cMan[n] || 0) + (Number(x.score) || 0) });
+  /* 跨表重复：manual 里与 st 完全同键（姓名|事项|日期|分值）的行 —— 小程序/桌面会把两份都加进总分 */
+  var stKeys = {}, dupBy = {}, dupRows = 0, dupSum = 0;
+  (c.st || []).forEach(function (x) {
+    try { var k = stTombKeyOf(x.name, x.reason, x.date, x.score); if (k) stKeys[k] = 1 } catch (e) {}
+  });
+  (c.manual || []).forEach(function (x) {
+    try {
+      var k = stTombKeyOf(x.name, x.reason, x.date, x.score);
+      if (k && stKeys[k]) {
+        var n = S(x.name), v = Number(x.score) || 0;
+        dupBy[n] = (dupBy[n] || 0) + v; dupRows++; dupSum += v;
+      }
+    } catch (e) {}
+  });
+  var names = {}, rows = [];
+  stu.forEach(function (s) { names[s.姓名] = 1 });
+  [cHw, cSt, cMan].forEach(function (o) { Object.keys(o).forEach(function (n) { names[n] = 1 }) });
+  Object.keys(names).forEach(function (n) {
+    if (!n) return;
+    var web = Math.round(((p.hw[n] || 0) + (p.rw[n] || 0)) * 10) / 10;
+    var app = Math.round(((cHw[n] || 0) + (cSt[n] || 0) + (cMan[n] || 0)) * 10) / 10;
+    rows.push({ n: n, web: web, app: app, d: Math.round((app - web) * 10) / 10,
+                dh: Math.round((cHw[n] || 0) * 10) / 10, ds: Math.round((cSt[n] || 0) * 10) / 10,
+                dm: Math.round((cMan[n] || 0) * 10) / 10, dup: Math.round((dupBy[n] || 0) * 10) / 10 });
+  });
+  rows.sort(function (a, b) { return Math.abs(b.d) - Math.abs(a.d) });
+  var bad = rows.filter(function (r) { return Math.abs(r.d) > 0.05 });
+  var worst = bad.length ? bad[0].d : 0;
+  var old = document.getElementById('ptRecOv'); if (old) old.remove();
+  var ov = document.createElement('div');
+  ov.id = 'ptRecOv';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:100030;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;padding:20px';
+  var bx = document.createElement('div');
+  bx.style.cssText = 'background:#fff;border-radius:16px;width:min(880px,96vw);max-height:88vh;overflow:auto;padding:18px 20px;box-shadow:0 18px 60px rgba(0,0,0,.28)';
+  var head = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">' +
+    '<h3 style="margin:0;font-size:17px">🔍 积分对账 · 学生管理 ⇄ 小程序 / 教室桌面</h3>' +
+    '<button id="ptRecX" class="btn2 sm ghost" style="margin-left:auto">关闭</button></div>' +
+    '<div style="font-size:13px;color:#556;line-height:1.75;margin-bottom:10px">' +
+    '学生管理 = 作业 + 奖惩流水（同键只算一次）。小程序/桌面 = 云端 <b>hw + st + manual</b> 三表直接相加。<br>' +
+    '对不上的 ' + bad.length + ' 人' + (bad.length ? '，差最多 <b style="color:#c2410c">' + worst + '</b> 分' : '') +
+    '；云端跨表重复 <b>' + dupRows + '</b> 条（合计 ' + (Math.round(dupSum * 10) / 10) + ' 分，小程序会把它们多算一遍）。' +
+    '</div>';
+  var tb = '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+    '<thead><tr style="background:#f4f7fb;color:#334">' +
+    '<th style="text-align:left;padding:7px 8px">姓名</th><th style="padding:7px 8px">学生管理</th>' +
+    '<th style="padding:7px 8px">小程序/桌面</th><th style="padding:7px 8px">差额</th>' +
+    '<th style="padding:7px 8px">云端作业</th><th style="padding:7px 8px">云端奖惩st</th>' +
+    '<th style="padding:7px 8px">云端手动manual</th><th style="padding:7px 8px">其中跨表重复</th></tr></thead><tbody>';
+  rows.slice(0, 80).forEach(function (r) {
+    var hot = Math.abs(r.d) > 0.05;
+    tb += '<tr style="border-top:1px solid #eef2f7' + (hot ? ';background:#fff7ed' : '') + '">' +
+      '<td style="padding:6px 8px">' + r.n + '</td>' +
+      '<td style="text-align:center;padding:6px 8px">' + r.web + '</td>' +
+      '<td style="text-align:center;padding:6px 8px">' + r.app + '</td>' +
+      '<td style="text-align:center;padding:6px 8px;font-weight:700;color:' + (hot ? '#c2410c' : '#94a3b8') + '">' + (r.d > 0 ? '+' : '') + r.d + '</td>' +
+      '<td style="text-align:center;padding:6px 8px;color:#475569">' + r.dh + '</td>' +
+      '<td style="text-align:center;padding:6px 8px;color:#475569">' + r.ds + '</td>' +
+      '<td style="text-align:center;padding:6px 8px;color:#475569">' + r.dm + '</td>' +
+      '<td style="text-align:center;padding:6px 8px;color:' + (r.dup ? '#c2410c' : '#94a3b8') + '">' + r.dup + '</td></tr>';
+  });
+  tb += '</tbody></table>';
+  var foot = '<div style="margin-top:12px;font-size:12.5px;color:#556;line-height:1.8">' +
+    '<b>怎么看：</b>差额为正 = 小程序偏高（云端多算了）；为负 = 小程序偏低（云端缺行）。<br>' +
+    '「其中跨表重复」不为 0，就是同一次加分在 st 和 manual 各存了一份，小程序把两份都加。<br>' +
+    '<button class="btn2 sm primary" id="ptRecFix" style="margin-top:8px">🩹 按学生管理口径修正云端（删掉重复的手动分并推一次）</button>' +
+    '</div>';
+  bx.innerHTML = head + tb + foot;
+  ov.appendChild(bx); document.body.appendChild(ov);
+  function close() { try { ov.remove() } catch (e) {} }
+  document.getElementById('ptRecX').onclick = close;
+  ov.onclick = function (e) { if (e.target === ov) close() };
+  document.getElementById('ptRecFix').onclick = function () {
+    if (!confirm('把云端 manual 表里「与奖惩流水完全同一条」的重复行剔除，并立即同步一次？\n\n只会删完全重复的手动分，其它记录不动。')) return;
+    try { wbMarkLocalDirty() } catch (e) {}
+    try { syncCycle(1) } catch (e) {}
+    close();
+    try { toastMsg('⏳ 正在按学生管理口径修正云端…几秒后重新打开对账看差额') } catch (e) {}
+  };
+}
+
 function renderStu(){
   var box=document.getElementById('stuTable');
   if(!box)return;
@@ -21165,9 +21240,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v253';
-var WB_MY_VER = '优化版 vT253 · 业务数据全上云';
-var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.255';
+var WB_VER_TAG = 'v254';
+var WB_MY_VER = '优化版 vT254 · 三端积分同账';
+var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.256';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -22304,6 +22379,9 @@ function syncCycleCore(manual) {
           if (Array.isArray(rv) && !rv.length) return;
           out.tables[k] = rv;
         });
+        /* vT254 云端 manual 去重见下方 union 之后统一执行（wbDropManualShadow）—— 放在
+           这里会被并集再补回来，必须等并集完成后再剔一次。 */
+
         /* vT28 作业列清单（hwItems）不再「远端无条件覆盖本机」——
            以前这一行就是"删完立刻又从云端回来"的直接原因：用户在本机删了列，
            回写时却用远端那份还带旧列的清单盖回去，云端永远删不掉那一列。
@@ -22363,6 +22441,34 @@ function syncCycleCore(manual) {
           if (merged.length !== mineN) unionLog.push(k + ' ' + mineN + '∪' + remoteM + '→' + merged.length);
           out.tables[k] = merged;
         });
+        /* vT254 三端同账：manual 里若有一条与奖惩流水（st）完全同键
+           （姓名|事项|日期|分值），它只是 st 的同源副本。
+           小程序 / 教室桌面是 hw + st + manual 三张表直接相加、不认同源，
+           同一次加分就被算两遍 —— 症状正是「学生管理对，小程序和教室桌面偏高且两处一致」。
+           这里在出口剔掉同源副本（manual 独有的记录一律保留），下一轮推送后云端只剩一份，
+           三端数字自然对齐。必须放在 union 之后，否则会被并集补回来。 */
+        (function () {
+          var man = out.tables.manual;
+          if (!Array.isArray(man) || !man.length) return;
+          var stArr = Array.isArray(out.tables.st) ? out.tables.st : [];
+          if (!stArr.length) return;
+          var sk = {};
+          stArr.forEach(function (x) {
+            try { var k = stTombKeyOf(x.name, x.reason, String(x.date || '').slice(0, 10), x.score); if (k) sk[k] = 1 } catch (_e) {}
+          });
+          if (!Object.keys(sk).length) return;
+          var keep = [], drop = 0;
+          man.forEach(function (x) {
+            var k = '';
+            try { k = stTombKeyOf(x.name, x.reason, String(x.date || '').slice(0, 10), x.score) } catch (_e2) {}
+            if (k && sk[k]) { drop++; return }
+            keep.push(x);
+          });
+          if (drop) {
+            out.tables.manual = keep;
+            try { console.info('[gitee-sync] manual 出口剔掉与奖惩流水同源的副本 ' + drop + ' 条（小程序/桌面不再重复计分）') } catch (_e3) {}
+          }
+        })();
         /* vT170 目标加分防清零闸（11-17 rev6133 事故复盘）：
            st（奖惩）表由本机从飞书整表重建 —— 页面刚打开 loadST 还没回来、
            或飞书读取失败时本机 st 是空数组，整表写回会把云端奖惩
