@@ -14887,6 +14887,15 @@ function stDeadAdd(id) {
 function stIsBonusRow(r) {
   return String(fval(r, '奖惩事项') || '').indexOf('成绩达标') === 0;
 }
+/* vT255 消费类流水：抽灵杰卡 / 抽灵宠 / 喂养 / 进化。
+   这一类「同一天、同一事项、同一分值」会合法地重复很多次，每一笔都是真花钱，
+   绝不能按业务键折叠 —— 折叠一次，账上就少扣一次，余额虚高，学生就能透支着一直抽。
+   它是全库唯一需要「按记录 id 逐笔区分」的类别；其它奖惩仍按业务键去重
+   （那是为了压掉重复写入的老事故，行为保持不变）。 */
+function stIsSpendReason(rs) {
+  var s0 = String(rs == null ? '' : rs);
+  return /启灵图鉴|成长灵宠|灵宠/.test(s0);
+}
 function stBonusRowKey(r) {
   return stTombKeyOf(fval(r, '姓名'), fval(r, '奖惩事项'), syncDateOnly(fval(r, '日期')), parseFloat(fval(r, '奖惩分值')));
 }
@@ -21299,9 +21308,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v254';
-var WB_MY_VER = '优化版 vT254 · 三端积分同账';
-var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.256';
+var WB_VER_TAG = 'v255';
+var WB_MY_VER = '优化版 vT255 · 余额闸门 + 同步修复';
+var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.257';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -23348,9 +23357,21 @@ function mpBizKey(k, r) {
   if (k === 'scores') return nm ? 'sc|' + s(r.subject) + '|' + s(r.exam) + '|' + nm + '|' + s(r.date).slice(0, 10) : '';
   if (k === 'duty') return s(r.date) ? 'duty|' + s(r.date).slice(0, 10) + '|' + s(r.slot) : '';
   /* vT171 奖惩流水 / 手动积分：姓名+事项+日期+分值（原来没有键 → 推送并集不认，
-     两台电脑各自的加分行整表互相覆盖，谁后推谁赢 —— 目标加分「倒回去」根源之一） */
-  if (k === 'st') return nm ? 'st|' + nm + '|' + s(r.reason) + (s(r.reason).indexOf('成绩达标') === 0 ? '' : ('|' + s(r.date).slice(0, 10))) + '|' + (Number(r.score) || 0) : '';
-  if (k === 'manual') return nm ? 'man|' + nm + '|' + s(r.reason) + '|' + s(r.date).slice(0, 10) + '|' + (Number(r.score) || 0) : '';
+     两台电脑各自的加分行整表互相覆盖，谁后推谁赢 —— 目标加分「倒回去」根源之一）
+     vT255：非「成绩达标」的流水必须带记录 id —— 同一天同一事项同一分值
+     （抽卡 -10、喂养 -10、课堂 +5）是**不同的几笔**，按业务键并集会折叠成一笔，
+     并集回写时云端 st 被写少（日志「st 5∪5→1」），小程序/桌面的账就少扣了。 */
+  if (k === 'st' || k === 'manual') {
+    if (!nm) return '';
+    var _rz = s(r.reason), _id = String(r.id == null ? '' : r.id);
+    var _pre = (k === 'st') ? 'st|' : 'man|';
+    var _base = _pre + nm + '|' + _rz +
+      ((k === 'st' && _rz.indexOf('成绩达标') === 0) ? '' : ('|' + s(r.date).slice(0, 10))) +
+      '|' + (Number(r.score) || 0);
+    /* 成绩达标：历史重复写入事故 → 仍按业务键合；其余：有 id 就按 id 区分每一笔 */
+    if (_rz.indexOf('成绩达标') === 0 || !_id || !stIsSpendReason(_rz)) return _base;
+    return _base + '|id:' + _id;
+  }
   /* 2.6.82 班务记录：日期+类型+标题+学生姓名（与 recBizKey 的 aff| 键同构） */
   if (k === 'affairs') return (s(r.title) || s(r.body)) ? ('aff|' + s(r.date).slice(0, 10) + '|' + s(r.type) + '|' + s(r.title) + '|' + s(r.stu)) : '';
   if (k === 'hwItems') return s(r.item) ? 'hwi|' + s(r.item) + '|' + s(r.date).slice(0, 10) : '';
@@ -23781,6 +23802,15 @@ function mpFromDeskBuild(o) {
           var v = parseFloat(fval(r, '奖惩分值')); if (isNaN(v)) v = 0;
           var k = '';
           try { k = stTombKeyOf(n, rs, syncDateOnly(fval(r, '日期')), v) } catch (eK) { k = '' }
+          /* vT255 关键修复（「余额已为负还能继续抽卡」的根因之一）：
+             这里以前一律按业务键去重 —— 同一天、同事项、同分值只留一条。
+             可「抽卡 -10 / 喂养 -10 / 课堂表现 +5」这类操作一天会重复很多次，
+             每次都是真的一笔，折叠之后云端只留一条，小程序/桌面拿到的账就少扣了，
+             余额虚高 → 明明透支还能继续消费。
+             现在只有「成绩达标」类才按业务键去重（那是历史重复写入的事故），
+             其它行用「业务键 + 记录 id」区分，一笔一笔各算各的。 */
+          var _rid = String(recId(r) || '');
+          if (k && _rid && stIsSpendReason(rs)) k = k + '|id:' + _rid;
           if (k && _seenK[k]) return;
           if (k) _seenK[k] = 1;
           _uni.push(r);
@@ -25589,12 +25619,17 @@ function cwInit(){
     for (var i = 0; i < a.length; i++) if (a[i] && a[i].id === rec.id) { a[i] = rec; hit = true; break }
     if (!hit) a.push(rec);
     db[tid] = a; ntSave(db);
+    /* vT255：写本机 NT 表就是一次用户操作 → 必须打脏。
+       以前只有 syncScheduleSoon 打脏，而 ntChanged 走的是 ntNotifyDesks（直接 syncCycle），
+       于是 vT252 的推送闸门判定「没有新写入」→ 不写回云端。
+       症状：网页上点「自省补责完成」/布置作业/录留堂，本机看得见，小程序永远收不到。 */
+    try { if (typeof wbMarkLocalDirty === 'function') wbMarkLocalDirty() } catch (_d1) {}
   }
   /* 删除某条记录（用于「关闭」通知） */
   window.ntDel = function (tid, id) {
     var db = ntLoad(), a = Array.isArray(db[tid]) ? db[tid] : [];
     var b = a.filter(function (r) { return !(r && r.id === id) });
-    if (b.length !== a.length) { db[tid] = b; ntSave(db); return true }
+    if (b.length !== a.length) { db[tid] = b; ntSave(db); try { if (typeof wbMarkLocalDirty === 'function') wbMarkLocalDirty() } catch (_d2) {} return true }
     return false;
   };
   /* LWW：按 id 配对，ts 新者胜 */
@@ -25663,7 +25698,7 @@ function cwInit(){
   function pad2(n) { return (n < 10 ? '0' : '') + n }
   function dstr(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) }
   function nowStr() { var d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) }
-  function ntChanged() { try { ntNotifyDesks() } catch (e) { try { syncScheduleSoon() } catch (e2) {} try { mqttPublishSignal() } catch (e3) {} } try { if (typeof ptwSchedule === 'function') ptwSchedule(); } catch (e) {} }
+  function ntChanged() { try { if (typeof wbMarkLocalDirty === 'function') wbMarkLocalDirty() } catch (_d0) {} try { ntNotifyDesks() } catch (e) { try { syncScheduleSoon() } catch (e2) {} try { mqttPublishSignal() } catch (e3) {} } try { if (typeof ptwSchedule === 'function') ptwSchedule(); } catch (e) {} }
   function ntSha256Hex(s) {
     function sha1free(str) { /* crypto.subtle 不可用时的兜底（非加密级，仅用于口令哈希防窥视） */
       var h = 5381, i = str.length;
@@ -30117,8 +30152,27 @@ function cwInit(){
   }
   function ptStuPoints(name) {
     if (typeof stuPoints !== 'function' || typeof stuTotal !== 'function') return 0;
-    var p = stuPoints(); return stuTotal(p, name);
+    var p = stuPoints(); var v = stuTotal(p, name);
+    return isFinite(v) ? v : 0;
   }
+  /* vT255 统一「能不能买得起」判定：所有扣积分的地方都走这里。
+     老师反馈「积分已经为负还能继续消费」——除了余额被去重算高的老问题，
+     各入口的判断写法也不统一（有的漏判、有的把 NaN 当成 0 直接放行）。
+     这里一次性定死三条：
+       ① 花费按 0.1 精度取整，负数/非法值一律当 0（免费）；
+       ② 余额必须是有效数字，算不出来按 0 处理（宁可拦住，也不让透支）；
+       ③ 余额 < 花费 → 拒绝，并把「要多少 / 还剩多少」写在提示里。 */
+  function ptAfford(name, cost) {
+    var need = Math.round((Number(cost) || 0) * 10) / 10;
+    if (!(need > 0)) return { ok: true, bal: ptStuPoints(name), need: 0 };
+    var bal = Math.round(ptStuPoints(name) * 10) / 10;
+    if (bal < need) {
+      return { ok: false, bal: bal, need: need,
+        msg: '⚠️ ' + name + ' 积分不足：这笔要 ' + need + ' 分，现有 ' + bal + ' 分（不能透支，先加分再来）' };
+    }
+    return { ok: true, bal: bal, need: need };
+  }
+  window.ptAfford = ptAfford;
   window.ptAddManual = ptAddManual;   /* vT217 竞答乱答扣分走同一条积分流水通道 */
   function ptNames() {
     var stus = (typeof stuRoster === 'function') ? stuRoster() : [];
@@ -32863,7 +32917,8 @@ function cwInit(){
     var pool = ptGrowthDrawPool(s).filter(function (p) { return !owned[p.id]; });
     if (!pool.length) return toastMsg('⚠️ 没有可抽的成长灵宠了（已全部拥有 / 池为空）');
     var cost = ptCost('petDraw');
-    if (ptStuPoints(who) < cost) return toastMsg('⚠️ ' + who + ' 积分不足（抽灵宠需 ' + cost + ' 分）');
+    var _afDraw = ptAfford(who, cost);
+    if (!_afDraw.ok) return toastMsg(_afDraw.msg);
     var sp = ptGrowWeightedPick(pool);   /* vT133 普通100 : 稀有30 加权抽取 */
     var fx = ptFxBegin('pet', who);   /* vT125 抽灵宠同样有演出 */
     return ptAddManual(who, '成长灵宠 · 抽取', -cost).then(function () {
@@ -33182,8 +33237,9 @@ function cwInit(){
     }
     var who = pet.studentName;
     var cost = Math.min(food.v, gs.left);
-    if (cost > 0 && ptStuPoints(who) < cost) {
-      return toastMsg('⚠️ ' + who + ' 积分不足（这份「' + food.n + '」需 ' + cost + ' 分）');
+    if (cost > 0) {
+      var _afFeed = ptAfford(who, cost);
+      if (!_afFeed.ok) return toastMsg('⚠️ ' + who + ' 积分不足：这份「' + food.n + '」要 ' + cost + ' 分，现有 ' + _afFeed.bal + ' 分（不能透支）');
     }
     var go = function () {
       pet.growExp = (Number(pet.growExp) || 0) + cost;
@@ -33227,8 +33283,9 @@ function cwInit(){
     /* vT123 只补差额：已经喂进去的成长值直接抵扣 */
     var have = Math.min(need, Math.max(0, Math.round(Number(pet.growExp) || 0)));
     var pay = Math.max(0, need - have);
-    if (pay > 0 && ptStuPoints(who) < pay) {
-      return toastMsg('⚠️ ' + who + ' 积分不足（还差 ' + pay + ' 分；也可以先「🍚 喂养」慢慢攒成长值）');
+    if (pay > 0) {
+      var _afEvo = ptAfford(who, pay);
+      if (!_afEvo.ok) return toastMsg('⚠️ ' + who + ' 积分不足：进化还差 ' + pay + ' 分，现有 ' + _afEvo.bal + ' 分（也可以先「🍚 喂养」慢慢攒成长值）');
     }
     var done = function () {
       pet.level = Math.max(Number(pet.level) || 1, toLevel);
@@ -33622,7 +33679,8 @@ function cwInit(){
     if (!ptPlayable()) return toastMsg('⏸ 图鉴模块已暂停 / 关停');
     if (!who) return toastMsg('请先选择学生');
     var cost = ptCost('feed');
-    if (ptStuPoints(who) < cost) return toastMsg('⚠️ ' + who + ' 积分不足（需 ' + cost + '）');
+    var _afCard = ptAfford(who, cost);
+    if (!_afCard.ok) return toastMsg(_afCard.msg);
     var fx = ptFxBegin('card', who);   /* vT125 先起蓄力演出，结果回来才翻牌；vT127 默认等满 3 秒 */
     return ptAddManual(who, '启灵图鉴 · 抽卡', -cost).then(function () {
       var s = ptGet();
@@ -33705,7 +33763,8 @@ function cwInit(){
       if (c0.parentFeed === false) return Promise.reject(new Error('家长端喂养已关闭'));
       var plan = ptParentFeedPlan(s, it);
       if (!plan.ok) return Promise.reject(new Error(plan.reason));
-      if (ptStuPoints(who) < plan.cost) return Promise.reject(new Error(who + ' 积分不足（这份「' + plan.food.n + '」需 ' + plan.cost + ' 分）'));
+      var _afPF = ptAfford(who, plan.cost);
+      if (!_afPF.ok) return Promise.reject(new Error(who + ' 积分不足：这份「' + plan.food.n + '」要 ' + plan.cost + ' 分，现有 ' + _afPF.bal + ' 分'));
       return ptAddManual(who, '成长灵宠 · 家长喂养（' + plan.food.n + '）' + (byAuto ? '（自动批准）' : ''), -plan.cost).then(function () {
         var pet2 = plan.pet;
         var st2 = PetCore.stageOf(pet2.level, pet2.graduated, ptStageCfg());   /* vT155 记下进化前阶段，演出要对比 */
@@ -33738,7 +33797,8 @@ function cwInit(){
       if (ptCfg().parentDraw === false) return Promise.reject(new Error('家长端抽灵宠已关闭'));
       var g = ptParentGrowDraw(s, who);
       if (!g.ok) return Promise.reject(new Error(g.reason));
-      if (ptStuPoints(who) < g.cost) return Promise.reject(new Error(who + ' 积分不足（抽灵宠需 ' + g.cost + ' 分）'));
+      var _afPG = ptAfford(who, g.cost);
+      if (!_afPG.ok) return Promise.reject(new Error(who + ' 积分不足：抽灵宠要 ' + g.cost + ' 分，现有 ' + _afPG.bal + ' 分'));
       return ptAddManual(who, '成长灵宠 · 家长抽取' + (byAuto ? '（自动批准）' : ''), -g.cost).then(function () {
         var np = ptMkPet(who, g.sp); np.fromPetDraw = 1; np.fromParent = 1;
         s.pets.push(np);
@@ -33887,7 +33947,8 @@ function cwInit(){
       });
       if (used >= lim) return { ok: false, reason: who + ' 今日自动批准已用完（' + used + '/' + lim + '）' };
     }
-    if (ptStuPoints(who) < cost) return { ok: false, reason: who + ' 积分不足（需 ' + cost + '，现有 ' + Math.round(ptStuPoints(who)) + '）' };
+    var _afAuto = ptAfford(who, cost);
+    if (!_afAuto.ok) return { ok: false, reason: who + ' 积分不足（需 ' + cost + '，现有 ' + _afAuto.bal + '）' };
     return { ok: true, action: it.action, who: who, cost: cost };
   }
   /* 自动批准的日志（本地环形 20 条，面板展示用） */
