@@ -3750,7 +3750,9 @@ function gdRoseBuild(svg){
   const glow=gdRel("circle",{cx:GD_RCX,cy:GD_RCY-4,r:58,fill:"url(#gdGGlow)",opacity:0});svg._glow=glow;svg.appendChild(glow);
 
   // 花冠：同一朵花，0 分是闭合花苞（花瓣聚拢朝上），随积分舒展绽放
-  const bg=gdRel("g",{id:"gdBloom",style:"transform-box:fill-box;transform-origin:center"});svg._gdBloom=bg;svg.appendChild(bg);
+  /* vT256：去掉 transform-box/transform-origin —— 它会把 SVG transform 的缩放中心
+     从 (150,170) 挪到花冠包围盒中心，缩放后花被推到茎的右下方「落在地上」。 */
+  const bg=gdRel("g",{id:"gdBloom"});svg._gdBloom=bg;svg.appendChild(bg);
   // 绿色花萼（花苞/花朵底部的绿托），随花一起缩放
   for(let k=0;k<3;k++){const g=gdRel("g",{transform:`rotate(${k*120} ${GD_RCX} ${GD_RCY})`});g.appendChild(gdRel("path",{d:`M${GD_RCX-3} ${GD_RCY+1} q -11 9 -7 24 q 13 -7 13 -21 z`,fill:"url(#gdGLeaf)"}));bg.appendChild(g);}
   const layers=[{n:8,L:56,W:29,grad:"gdGPetalOuter",rot:0},{n:8,L:45,W:24,grad:"gdGPetalOuter",rot:22.5},{n:6,L:32,W:19,grad:"gdGPetalInner",rot:11},{n:5,L:20,W:14,grad:"gdGPetalInner",rot:0}];
@@ -21308,9 +21310,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v255';
-var WB_MY_VER = '优化版 vT255 · 余额闸门 + 同步修复';
-var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.257';
+var WB_VER_TAG = 'v256';
+var WB_MY_VER = '优化版 vT256 · 玫瑰归枝 + 同步修复';
+var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.258';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
