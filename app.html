@@ -20385,6 +20385,8 @@ function mergeCommit() {
     toastMsg('⚠️ 本机存储已满：数据量超过浏览器上限（约5MB）。请先点「导出备份」存到电脑，清理浏览器本站数据后再导入；或改用桌面版。');
     return;
   }
+  /* vT252：导入备份包 = 用户明确写入 → 打脏标记，保证这批数据会推到云端 */
+  try { if (typeof wbMarkLocalDirty === 'function') wbMarkLocalDirty() } catch (_mdm) {}
 
   toastMsg('✅ 已合并 ' + added + ' 条，正在刷新…');
   MERGE_PENDING = null;
@@ -23779,6 +23781,9 @@ function snapPick(ev) {
     });
     try {
       localStorage.setItem('wb_local_db_v1', JSON.stringify(clean));
+      /* vT252：导入快照是「用户明确的写入」→ 必须打脏标记，
+         否则新闸门（只认脏标记才推）会把这批数据一直留在本机，永远不上云。 */
+      try { if (typeof wbMarkLocalDirty === 'function') wbMarkLocalDirty() } catch (_sd) {}
       toastMsg('✅ 已导入，正在刷新…');
       setTimeout(function () { location.reload() }, 700);
     } catch (e) {
@@ -23805,6 +23810,7 @@ function snapRollback() {
   try {
     localStorage.setItem('wb_local_db_v1', localStorage.getItem(last));
     localStorage.removeItem(last);
+    try { if (typeof wbMarkLocalDirty === 'function') wbMarkLocalDirty() } catch (_rb) {}
     location.reload();
   } catch (e) { toastMsg('⚠️ 恢复失败') }
 }
