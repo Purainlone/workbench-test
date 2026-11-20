@@ -1863,6 +1863,7 @@ table.paper td.l{text-align:left;font-weight:600}
           <button class="btn2 primary" onclick="scBonusApply()">🏆 给勾选同学加分</button>
           <button class="btn2 sm ghost" onclick="scBonusUndoOpen()">↩️ 撤销已加</button>
           <button class="btn2 sm ghost" onclick="stCleanBonusDups()">🧹 清理重复加分</button>
+          <button class="btn2 sm ghost" onclick="stCleanExactDups()">🧽 清理完全重复</button>
           <button class="btn2 sm ghost" onclick="scGoalPanelToggle()">🎯 设定目标分</button>
           <span class="sctip" id="scBonusTip">选一场考试，按学生的目标一 / 二 / 三自动判断谁达标，勾选后一次写入积分；加错了点「撤销已加」可全选批量撤；发现有人加分重复显示，点「🧹 清理重复加分」一键清掉全班的重复行</span>
         </div>
@@ -5936,6 +5937,14 @@ function wbForceSave(){
   }catch(e){try{console.warn('立即写盘失败',e)}catch(_){}}
 }
 function wbScheduleSave(){
+  /* ===== vT252 关键修复：写库即打脏标记 =====
+     以前脏标记（WB_LOCAL_DIRTY）只在 syncScheduleSoon 里打，而 syncScheduleSoon 只在
+     这个函数末尾被调到 —— 末尾又在 `wbDesktopBridge()` 为空的提前 return 之后。
+     于是【浏览器/发布链接】模式下任何写库（加分、登记作业、改成绩）都不打脏标记，
+     同步只能靠「内容指纹不同」兜底：每台电脑一开机，本机那份旧数据与云端不同 → 整份写回，
+     把别台电脑已经改好/删掉的数据又顶回去（「考试加分复原」「加分重复」的直接来源）。
+     现在改为：只要真的写了库，第一件事就是打脏标记。 */
+  try{ if(typeof wbMarkLocalDirty==='function') wbMarkLocalDirty() }catch(_md){}
   if(!window.__WB_LOCAL__)return;
   if(WB_SAVE_T)clearTimeout(WB_SAVE_T);
   WB_SAVE_T=setTimeout(function(){
@@ -10473,6 +10482,23 @@ function scBonusApply() {
   if (!meta) return toastMsg('请先选择一场考试');
   var picks = SC_BONUS_ROWS.filter(function (r) { return r.can && SC_BONUS_SEL[r.name] && r.lv > 0; });
   if (!picks.length) return toastMsg('还没有勾选任何达标的同学');
+  /* ===== vT252 写入前二次防重（考试目标加分反复重复的根治点）=====
+     页面刚打开时 ST_ROWS 还没从云端/数据表加载完，或某次同步刚把别端的记录并进来，
+     「已加分」标记是按旧快照算的 → 一按加分就把已经加过的再写一遍，积分翻倍。
+     这里在真正写库之前，用当下的奖惩流水再筛一次：
+       · 流水都还没加载出来 → 直接拒绝写（宁可让老师等 3 秒，也不写脏数据）
+       · 已经加过这场考试的同学 → 跳过并告知跳过了几个 */
+  if (!(ST_ROWS || []).length) {
+    toastMsg('⚠️ 奖惩流水还没加载完，请等 3 秒再点一次');
+    try { loadST().then(function () { try { scBonusRender({ keepPts: true }) } catch (e) {} }) } catch (e) {}
+    return;
+  }
+  var _awardedNow = {};
+  try { _awardedNow = scBonusAwardedSet(meta) } catch (e) { _awardedNow = {} }
+  var _skipN = 0;
+  picks = picks.filter(function (r) { if (_awardedNow[r.name]) { _skipN++; return false } return true });
+  if (!picks.length) { toastMsg('✅ 本场考试的达标同学都已经加过分了，无需重复加'); return }
+  if (_skipN) toastMsg('⏭ 已跳过 ' + _skipN + ' 位已经加过分的同学');
   if (!dbReady) { toastMsg('⚠️ 未连接数据表'); return; }
   var sum = 0, lines = picks.map(function (r) {
     sum += r.pts;
@@ -10701,6 +10727,56 @@ function stCleanBonusDups() {
     });
   }).catch(function (err) {
     console.error('[清理] 重复加分清理失败', err);
+    toastMsg('⚠️ 清理没完成，请重试');
+  });
+}
+
+/* ===== vT252 清理「完全重复」的加分行 =====
+   场景（11-20 甄俊泓事故）：学生管理里给同一个学生加了一次分，云端却出现两条
+   一模一样的流水（同姓名 + 同事项 + 同一天 + 同分值），积分被算了两遍。
+   与「🧹 清理重复加分」的分工：那个只治成绩达标类（一场考试只算一次）；
+   这个治普通加减分 —— 但只认四要素完全相同的行。
+   同一天「家长喂食两次」这类正常重复，只要事项或分值不同就不会被误删。
+   删除前逐条列出来让老师过目，删完立刻推云，避免下次拉取又复活。 */
+function stCleanExactDups() {
+  if (!db || !dbReady) { toastMsg('⚠️ 数据通道未就绪，稍后再试'); return }
+  var seen = {}, dups = [];
+  (ST_ROWS || []).forEach(function (r) {
+    var nm = String(fval(r, '姓名') || '').replace(/\s+/g, '');
+    var rs = String(fval(r, '奖惩事项') || '').trim();
+    if (!nm || !rs) return;                       /* 没有事项的是档案行，不参与 */
+    var dt = syncDateOnly(fval(r, '日期'));
+    var sc = String(Number(fval(r, '奖惩分值')) || 0);
+    var k = nm + '|' + rs + '|' + dt + '|' + sc;
+    if (seen[k]) { dups.push({ r: r, nm: nm, rs: rs, dt: dt, sc: sc }); return }
+    seen[k] = 1;
+  });
+  if (!dups.length) { toastMsg('✅ 没有完全重复的加分记录'); return }
+  var lines = dups.slice(0, 30).map(function (x) {
+    return '· ' + x.nm + '　' + x.rs + '　' + (x.dt || '无日期') + '　' + (Number(x.sc) > 0 ? '+' : '') + x.sc + ' 分';
+  });
+  if (!confirm('发现 ' + dups.length + ' 条完全重复的加分记录（同人 / 同事项 / 同日 / 同分值，每组只留一条）。\n\n' +
+    lines.join('\n') + (dups.length > 30 ? '\n…等共 ' + dups.length + ' 条' : '') +
+    '\n\n确定清理？清理后相关同学的积分会立刻减少，并马上推到云端。')) return;
+  toastMsg('⏳ 正在清理 ' + dups.length + ' 条重复记录…');
+  var jobs = dups.map(function (x) {
+    try { stDeadAdd(recId(x.r)) } catch (e) {}     /* 本端先隐藏，防闪烁 */
+    return db.deleteRecord({ databaseId: ST_DB, recordId: recId(x.r) }).then(function () { return 1 }, function (e) {
+      console.error('[清理重复] 删除失败', e); return 0;
+    });
+  });
+  return Promise.all(jobs).then(function (oks) {
+    var okN = oks.filter(function (x) { return x }).length;
+    return loadST().then(function () {
+      renderStu();
+      try { if (typeof renderHome === 'function') renderHome() } catch (e) {}
+      try { if (typeof scBonusRender === 'function') scBonusRender({ keepPts: true }) } catch (e) {}
+      if (okN === jobs.length) toastMsg('✅ 已清理 ' + okN + ' 条重复加分');
+      else toastMsg('⚠️ 删除 ' + okN + '/' + jobs.length + ' 成功，刷新后再点一次可清剩余');
+      try { kickSyncAfterScore() } catch (e) {}
+    });
+  }).catch(function (err) {
+    console.error('[清理重复] 失败', err);
     toastMsg('⚠️ 清理没完成，请重试');
   });
 }
@@ -17295,8 +17371,21 @@ function openStuPanel(name){
 function kickSyncAfterScore(){
   setTimeout(function(){try{if(typeof syncCycle==='function')syncCycle(false)}catch(e){}},1200);
 }
+/* vT252 防重复提交：双击 / 面板连点 / 事件重复触发，都会在 1 秒内对同一学生
+   同一事项同一分值写两次 → 云端出现两条一模一样的加分行，积分被算两遍
+   （11-20 甄俊泓 +分重复的直接原因）。这里做 3 秒同参去重：
+   同一人同一事项同一分值 3 秒内只认第一次，第二次直接忽略并轻提示。
+   超过 3 秒的重复是老师真的想再加一次（如「家长喂食两次」），照常写入。 */
+var STU_RW_GUARD = {};
 function stuAddRw(name,title,val){
   if(!dbReady){toastMsg('⚠️ 未连接数据表');return}
+  var _gk = String(name||'')+'|'+String(title||'')+'|'+String(Number(val)||0);
+  var _now = Date.now();
+  if(STU_RW_GUARD[_gk] && (_now - STU_RW_GUARD[_gk]) < 3000){
+    toastMsg('⏳ 刚才已经加过了，这次重复点击已忽略');
+    return;
+  }
+  STU_RW_GUARD[_gk] = _now;
   var stu=stuRosterInfo(name);   /* vT173：花名册→座位表两段查找，别再轻易写全空记录 */
   if(!stu){
     stu={学号:'',组别:'',职务:''};
@@ -17318,6 +17407,7 @@ function stuAddRw(name,title,val){
     kickSyncAfterScore();   /* vT230 立刻推云端，小程序/桌面几秒内可见 */
   }).catch(function(err){
     console.error('[database] 奖惩写入失败:',err);
+    try{ delete STU_RW_GUARD[_gk] }catch(_ge){}   /* 没写成功 → 放行重试 */
     toastMsg('⚠️ 没保存成功');
   });
 }
@@ -19043,7 +19133,21 @@ var CLOUD_LOCALS_AT = 'wb_cloud_locals_at';
 var CLOUD_LOCALS_KEYS = ['seat_base_v1','seat_base_week','seat_data_v1','seat_fixed_v1','seat_mode',
   'seat_week','seat_week_anchor','seat_act_v1','seat_order_v1','rc_titles_v1','wb_now_week',
   'wb_stu_sort_v1','wb_stu_sort_dir_v1','eb_star_v1','eb_notes_v1',
-  'wb_hw_undone_exclude_v1'];   /* vT231 作业登记排除名单上云：小程序据此判定"全班已登记"，与网页同口径 */
+  'wb_hw_undone_exclude_v1',
+  /* ===== vT252 补齐「只在本机」的业务配置 =====
+     这些东西以前只写本机 localStorage，换电脑/换浏览器就回到默认值，
+     两台电脑的加分规则还不一样 —— 现在随 locals 段一起上云。
+     sc_targets_v1     各科目标分（成绩矩阵上色、达标判定的依据）
+     sc_bonus_pts_v1   目标一/二/三各加多少分
+     sc_subj_extra_v1  额外科目设置
+     wb_goal_math_v1 / wb_goal_en_v1  数学 / 英语目标分
+     wb_hw_subj        作业列 → 科目 的对应关系（语文与科任分列的依据）
+     wb_classes_v1     班级列表
+     tt_over_v1        课表与调课
+     reward_items_v1   积分兑换奖品清单
+     wb_st_created_v1  奖惩「创建登记」（特殊：按并集合并，见 cloudMergeLocals） */
+  'sc_targets_v1','sc_bonus_pts_v1','sc_subj_extra_v1','wb_goal_math_v1','wb_goal_en_v1',
+  'wb_hw_subj','wb_classes_v1','tt_over_v1','reward_items_v1','wb_st_created_v1'];
 /* 读/写本机"电脑侧数据最后同步时间" */
 function cloudLocalsAt(v){
   try{
@@ -19154,11 +19258,38 @@ function cloudApplyLocals(o){
   }
   return n;
 }
+/* vT252 奖惩「创建登记」按并集合并（唯一不能整份 LWW 的键）
+   wb_st_created_v1 是「这条奖惩是什么时候创建的」记载，合并层靠它判断
+   「记录比墓碑新 → 墓碑作废」。整份 LWW 会把另一台电脑刚登记的加分覆盖掉 →
+   那条加分行就被旧墓碑判成「已删除」直接从同步里消失（目标加分时有时无）。
+   两边键取并集、同键取较晚时间，谁都不会丢。 */
+var WB_STC_KEY = 'wb_st_created_v1';
+function wbStCreatedUnion(target, srcJson){
+  try{
+    if(!target) return target;
+    if(!target.kv) target.kv = {};
+    var a = {}, b = {};
+    try{ a = JSON.parse(target.kv[WB_STC_KEY] || '{}') || {} }catch(e){ a = {} }
+    try{ b = JSON.parse(srcJson || '{}') || {} }catch(e){ b = {} }
+    var hit = 0;
+    Object.keys(b).forEach(function(k){
+      var v = Number(b[k]) || 0;
+      var cur = Number(a[k]) || 0;
+      if(!cur){ a[k] = v; hit++; return }
+      if(v > cur){ a[k] = v; hit++ }
+    });
+    target.kv[WB_STC_KEY] = JSON.stringify(a);
+    if(hit){ try{ localStorage.setItem(WB_STC_KEY, JSON.stringify(a)) }catch(e){} }
+  }catch(e){}
+  return target
+}
 /* LWW：返回"该写回云端"的那份；云端更新时顺带回灌本机 */
 function cloudMergeLocals(remote){
   var mine = cloudCollectLocals();
   var rAt = Number(remote && remote.__at) || 0;
   var mAt = cloudLocalsAt();
+  var _stcMine = '';
+  try{ _stcMine = (mine.kv || {})[WB_STC_KEY] || '' }catch(e){}
   /* vT39 座次键择优：把更完整一侧的座次带入目标副本，任何一侧空/残缺都不冲掉另一侧的好数据 */
   function seatKeysBest(target, src){
     ['seat_data_v1','seat_base_v1','seat_base_week','seat_order_v1','seat_act_v1'].forEach(function(sk){
@@ -19175,9 +19306,13 @@ function cloudMergeLocals(remote){
       ['seat_data_v1','seat_base_v1','seat_base_week','seat_order_v1','seat_act_v1'].forEach(function(sk){ var v=localStorage.getItem(sk); if(v!=null) _locMap[sk]=v; });
       seatKeysBest(remote, { kv: _locMap });
     }catch(_e){}
+    /* vT252 云端较新：创建登记仍要与本机并集，不能因整份回灌丢掉本机刚登记的加分 */
+    try{ wbStCreatedUnion(remote, _stcMine) }catch(_s1){}
     return remote;
   }
   seatKeysBest(mine, remote); /* 本机较新：用云端更完整的座次补全本机副本，避免回写时把云端第N周座次冲掉 */
+  /* vT252 本机较新：把云端的创建登记也并进来（云端可能登记过本机没有的加分） */
+  try{ wbStCreatedUnion(mine, (remote && remote.kv) ? remote.kv[WB_STC_KEY] : '') }catch(_s2){}
   cloudLocalsAt(mine.__at);
   return mine;
 }
@@ -20986,9 +21121,9 @@ try {
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v251';
-var WB_MY_VER = '优化版 vT251 · 启灵档案版式重做';
-var WB_BUILD_DATE = '11-19', WB_BUILD_NO = '2.6.253';
+var WB_VER_TAG = 'v252';
+var WB_MY_VER = '优化版 vT252 · 云端为准同步';
+var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.254';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -21579,7 +21714,29 @@ var GITEE_BUSY = false, GITEE_RETRY = 0;
    彼此读到的是同一份旧状态，于是同一批数据被写 N 遍（学生 51→102→153）。
    localStorage 是同源共享的，用它做互斥锁：谁先抢到谁同步，其余页面跳过本轮。
    锁带时间戳，超过 LOCK_TTL 视为死锁自动释放（页面崩溃时不会永久卡住）。 */
-var SYNC_LOCK_KEY = '__wb_gitee_sync_lock__', SYNC_LOCK_TTL = 5 * 60 * 1000;
+var SYNC_LOCK_KEY = '__wb_gitee_sync_lock__', SYNC_LOCK_TTL = 90 * 1000;
+var WB_PAGE_START = Date.now();
+/* vT252：页面重新打开时清掉上一页面残留的死锁。
+   以前 TTL 是 5 分钟 —— 只要在同步进行中刷新/关页面，锁就留在 localStorage 里，
+   新页面接下来的 5 分钟内每轮同步都被判成「另一个标签页正在同步」直接跳过：
+   老师看到的现象就是「打开工作台半天不更新，还是昨天/别台电脑的旧数据」。
+   现在：开机时若锁已存在且超过 12 秒（真正在跑的一轮不会这么久），直接清掉；
+   TTL 也从 5 分钟收到 90 秒。 */
+function syncLockResetOnBoot() {
+  try {
+    var raw = localStorage.getItem(SYNC_LOCK_KEY);
+    if (!raw) return;
+    var o = null;
+    try { o = JSON.parse(raw) } catch (e) { o = null }
+    if (!o || !o.at) { localStorage.removeItem(SYNC_LOCK_KEY); return }
+    /* ① 锁的创建时间早于本页面开始加载 → 一定不是本页面的同步，属于上一页面的残留
+       ② 即使时间对不上，超过 12 秒的锁也不会是一轮真正在跑的同步 */
+    if (Number(o.at) < WB_PAGE_START || Date.now() - Number(o.at) > 12000) {
+      localStorage.removeItem(SYNC_LOCK_KEY);
+      try { console.info('[vT252] 已清掉上一页面残留的同步锁') } catch (e2) {}
+    }
+  } catch (e) {}
+}
 function syncLockAcquire() {
   try {
     var raw = localStorage.getItem(SYNC_LOCK_KEY);
@@ -21613,6 +21770,123 @@ function wbAutoReloadOk() {
     sessionStorage.setItem('wb_auto_rl', String(Date.now()));
     return true;
   } catch (e) { return false }
+}
+
+/* ================= vT252「以云端为准」同步策略 =================
+   规则（老师原话）：
+     · 网页新打开时只拉云端数据，不把本机那份往回写
+     · 只有本机真的写了新数据，才同步到云端
+     · 云端始终是最新的那一份
+   为此需要三件东西：
+     ① 脏标记：写库即打，并持久化到 localStorage（怕「登记完立刻关页面」丢改动）
+     ② 冷启动对齐：本机没有未上云的改动时，把本机库里「云端已经没有的行」剪掉，
+        让本机成为云端的干净镜像（否则这些旧行会在下一次推送时又跑回云端）
+     ③ 推送闸门：没有脏标记就不写回（见 syncCycleCore 的 _needPut）
+   ------------------------------------------------------------ */
+var WB_DIRTY_AT_KEY = 'wb_local_dirty_at';
+var WB_BOOT_ALIGNED = false;      /* 本页面是否已完成一次冷启动对齐 */
+/* vT252 升级过渡标记：升级后【第一次】打开时，本机那份「还没上云的现场」要先保下来
+   （推一次云端，不删任何本机数据）；从下次打开起才启用「云端为准」的剪枝。
+   这样升级当天不会把老师昨天没推上去的加分/作业直接剪掉。 */
+var WB_ALIGN_SEEN_KEY = 'wb_align_v1';
+function wbAlignSeen() {
+  try { return localStorage.getItem(WB_ALIGN_SEEN_KEY) === '1' } catch (e) { return true }
+}
+function wbAlignSeenSet() {
+  try { localStorage.setItem(WB_ALIGN_SEEN_KEY, '1') } catch (e) {}
+}
+function wbDirtyAt() {
+  try { return Number(localStorage.getItem(WB_DIRTY_AT_KEY)) || 0 } catch (e) { return 0 }
+}
+function wbMarkLocalDirty() {
+  WB_LOCAL_DIRTY = true;
+  try { localStorage.setItem(WB_DIRTY_AT_KEY, String(Date.now())) } catch (e) {}
+}
+function wbClearLocalDirty() {
+  WB_LOCAL_DIRTY = false;
+  try { localStorage.removeItem(WB_DIRTY_AT_KEY) } catch (e) {}
+}
+/* 本机是否有「云端还不知道」的改动：内存标记 或 落盘时间晚于云端最后一次提交。
+   注意云端 updatedAt 是 ISO 字符串（giteePut 写的），必须用 wbTsOf 归一，
+   直接 Number() 会得 NaN → 被当成「0」→ 判断永远成立，每次开机都误推一遍。 */
+function wbHasUnsentLocal(cloudUpdatedAt) {
+  if (WB_LOCAL_DIRTY) return true;
+  var t = wbDirtyAt();
+  if (!t) return false;
+  var c = 0;
+  try { c = (typeof wbTsOf === 'function') ? wbTsOf(cloudUpdatedAt) : (Number(cloudUpdatedAt) || 0) } catch (e) { c = 0 }
+  return t > c;
+}
+/* 电脑侧数据段（座位/通讯录/设置）的内容签名：__at 每次合并都会刷新，必须剔除 */
+function wbLocalsSig(lc) {
+  if (!lc) return 'n';
+  try {
+    var o = {};
+    Object.keys(lc).forEach(function (k) { if (k !== '__at') o[k] = lc[k] });
+    return wbHash32(JSON.stringify(o));
+  } catch (e) { return '-' }
+}
+/* 冷启动对齐：把本机库里「云端已经没有了」的行剪掉。
+   只处理同步覆盖得到的四张主表；云端该表为空则整表不动（防误删）。
+   判据与合并层完全一致：id / 内容指纹 / 业务键 任一命中即算「云端有」，
+   三项全不命中才判为本机遗留旧行；算不出业务键的行一律保留。 */
+function wbAlignLocalToCloud(mpTables) {
+  if (!mpTables) return 0;
+  var desk = null;
+  try { desk = mpToDesk(mpTables) } catch (e) { return 0 }
+  if (!desk) return 0;
+  var raw = '';
+  try { raw = localStorage.getItem('wb_local_db_v1') || '' } catch (e) { return 0 }
+  var local = null;
+  try { local = JSON.parse(raw || '{}') } catch (e) { return 0 }
+  if (!local || typeof local !== 'object') return 0;
+  var GUARD = [
+    String((window.MP_SYNC && MP_SYNC.stu && MP_SYNC.stu.table) || '2mthbbHsJeABzmnerNt6sK'),
+    String((window.MP_SYNC && MP_SYNC.hw && MP_SYNC.hw.table) || 'fCfl0cuMIVzFDi0iDuAEv2'),
+    String((window.MP_SYNC && MP_SYNC.score && MP_SYNC.score.table) || 'SI9EURtanpWC0y4lVipmQQ'),
+    String((window.MP_SYNC && MP_SYNC.rc && MP_SYNC.rc.table) || '')
+  ];
+  var dropped = 0;
+  GUARD.forEach(function (tid) {
+    if (!tid) return;
+    var inc = Array.isArray(desk[tid]) ? desk[tid] : null;
+    var cur = Array.isArray(local[tid]) ? local[tid] : null;
+    if (!inc || !cur || !inc.length || !cur.length) return;
+    var byId = {}, byFp = {}, byBiz = {};
+    inc.forEach(function (r) {
+      if (!r) return;
+      if (r.id) byId[String(r.id)] = 1;
+      try { byFp[recFingerprint(r)] = 1 } catch (e) {}
+      var b = '';
+      try { b = recBizKey(tid, r) } catch (e) { b = '' }
+      if (b) byBiz[b] = 1;
+    });
+    var keep = cur.filter(function (r) {
+      if (!r) return false;
+      if (r.id && byId[String(r.id)]) return true;
+      var fp = '';
+      try { fp = recFingerprint(r) } catch (e) {}
+      if (fp && byFp[fp]) return true;
+      var b = '';
+      try { b = recBizKey(tid, r) } catch (e) { b = '' }
+      if (!b) return true;            /* 判不了 → 保留 */
+      if (byBiz[b]) return true;
+      dropped++;
+      return false;
+    });
+    if (keep.length !== cur.length) local[tid] = keep;
+  });
+  if (!dropped) return 0;
+  try { localStorage.setItem('wb_local_db_v1.bak_align_' + Date.now(), raw) } catch (e) {}
+  var ok = false;
+  try {
+    ok = (typeof wbSafeSetDB === 'function')
+      ? wbSafeSetDB(JSON.stringify(local))
+      : (localStorage.setItem('wb_local_db_v1', JSON.stringify(local)), true);
+  } catch (e) { ok = false }
+  if (!ok) return 0;
+  try { console.warn('[vT252] 冷启动对齐：剪掉本机陈旧行 ' + dropped + ' 条（云端已无）') } catch (e) {}
+  return dropped;
 }
 
 function syncCycle(manual) {
@@ -21774,6 +22048,36 @@ function syncCycleCore(manual) {
         return isCloud ? tomApplyCloud() : Promise.resolve(tomApplyLocal());
       });
       return pTom.then(function () {
+      /* ===== vT252 冷启动对齐（一次性，每页面一次）=====
+         条件：本页面还没对齐过、云端不是空的、本机没有未上云的改动。
+         做法：把本机库里「云端已经删掉/从来没有」的行剪掉，再并入云端内容。
+         效果就是老师要的那句「网页新打开只拉云端」——
+         本机昨天残留的旧加分、已被别台电脑清掉的重复行，开机就被清出场，
+         不会在下一轮推送时又跑回云端（这是「加分复原」反复出现的最后一环）。 */
+      if (!WB_BOOT_ALIGNED) {
+        WB_BOOT_ALIGNED = true;
+        var _firstRunAlign = !wbAlignSeen();
+        try {
+          /* 只有在「本端从来没留下未上云的改动」时才敢剪。
+             wb_dirty_at 存在 = 这台电脑有过没推上去的写入（哪怕时间对不上），
+             宁可这轮不剪，也绝不把可能的未上云数据删掉。
+             升级后的第一次打开一律不剪（先按老规矩把本机现场推上去保住）。 */
+          if (!_firstRunAlign && !res.empty && !WB_LOCAL_DIRTY && !wbDirtyAt()) {
+            var _alignN = wbAlignLocalToCloud(tables);
+            if (_alignN > 0) {
+              try { toastMsg('🧹 已按云端清理本机陈旧记录 ' + _alignN + ' 条'); } catch (_at) {}
+              try { if (typeof loadST === 'function') loadST(); } catch (_als) {}
+              try { if (typeof renderStu === 'function') renderStu(); } catch (_ars) {}
+              try { if (typeof renderHome === 'function') renderHome(); } catch (_arh) {}
+            }
+          }
+        } catch (_alignE) { try { console.warn('[vT252] 冷启动对齐失败', _alignE) } catch (_ae2) {} }
+        /* 标记「本机已进入云端为准模式」：本轮之后的每一轮、以及下次打开，都以云端为准 */
+        try { wbAlignSeenSet(); } catch (_asE) {}
+        if (_firstRunAlign) {
+          try { console.info('[vT252] 升级后首次打开：先保住本机现场（本轮允许推一次），下次打开起以云端为准') } catch (_frE) {}
+        }
+      }
       var pAdd = res.empty ? Promise.resolve(0) : Promise.resolve(giteeMergeIntoLocal(tables));
       return pAdd.then(function (nAdd) {
         added = nAdd;
@@ -22123,29 +22427,29 @@ function syncCycleCore(manual) {
         /* 2.6.56 电脑侧数据（座位表 / 通讯录 / 本机设置）并入云端 locals 段。
            tables 段保持原样，小程序读的是 tables，因此不受影响。 */
         try{ out.locals = cloudMergeLocals(doc.locals) }catch(eCL){ try{ console.warn('[gitee-sync] locals 合并失败', eCL) }catch(_c){} }
-        /* ===== vT172 只有真的变了才写回云端 =====
-           本机有写入（WB_LOCAL_DIRTY） / 云端为空 / 内容指纹不同 / 版本标记或协议不一致
-           —— 任一成立才 PUT。否则跳过，rev 不变，别端探测不到「新提交」，来回互推就此停止。 */
-        var _fpR = wbLedgerFp(doc), _fpL = wbLedgerFp(out);
-        var _needPut = WB_LOCAL_DIRTY || res.empty || _fpR !== _fpL ||
-                       String(doc.releaseVer || '') !== WB_VER_TAG || wbIsStaleDoc(doc);
+        /* ===== vT252 推送闸门：只有「本机确实写了新东西」才回写云端 =====
+           老师定的规则：网页打开只拉云端，除非有新写入才同步上去，云端永远是最新的。
+           旧逻辑的第四个条件 `_fpR !== _fpL`（内容指纹不同就写回）是这几起事故的根：
+           一台电脑开机时本机那份旧数据与云端天然不同 → 立刻整份写回 →
+           别台电脑已经改好/删掉的加分又被顶回来（「考试加分复原」「加分重复」）。
+           现在写回只由这几件事触发：
+             ① 本端有未上云的写入（脏标记，写库即打，持久化，怕关页面丢）
+             ② 云端为空（首次建库）
+             ③ 发布版本标记不一致（版本要跟着数据走，旧标签页据此自修）
+             ④ 云端协议版本过旧（自愈修复，防旧版写脏）
+             ⑤ 电脑侧数据段（座位表/通讯录/上面那些设置）确实变了
+           —— 内容指纹只用于日志观察，不再作为写回依据。 */
+        var _firstRun = !wbAlignSeen();
+        var _unsent = WB_LOCAL_DIRTY || wbHasUnsentLocal(doc.updatedAt) || _firstRun;
+        var _localsDiff = wbLocalsSig(doc.locals) !== wbLocalsSig(out.locals);
+        var _verDiff = String(doc.releaseVer || '') !== WB_VER_TAG;
+        var _staleDoc = wbIsStaleDoc(doc);
+        var _needPut = _unsent || res.empty || _verDiff || _staleDoc || _localsDiff;
         if (_needPut) {
           try {
-            var _dt = [];
-            if (_fpR !== _fpL) {
-              var _tk = {};
-              Object.keys(doc.tables || {}).forEach(function (k) { _tk[k] = 1 });
-              Object.keys(out.tables || {}).forEach(function (k) { _tk[k] = 1 });
-              Object.keys(_tk).forEach(function (k) {
-                var _a = (doc.tables || {})[k], _b = (out.tables || {})[k];
-                var _ha = wbHash32(JSON.stringify(_a || null)), _hb = wbHash32(JSON.stringify(_b || null));
-                if (_ha !== _hb) _dt.push(k + '(' + (Array.isArray(_a) ? _a.length : 0) + '→' + (Array.isArray(_b) ? _b.length : 0) + ')');
-              });
-            }
-            console.info('[gitee-sync] 写回判定：dirty=' + WB_LOCAL_DIRTY + ' empty=' + !!res.empty +
-              ' fp同=' + (_fpR === _fpL) + ' ver同=' + (String(doc.releaseVer || '') === WB_VER_TAG) +
-              ' stale=' + wbIsStaleDoc(doc) + ' rev=' + (doc.rev || 0) +
-              ' 差异=' + (_dt.length ? _dt.join(',') : '-'));
+            console.info('[gitee-sync] 写回判定：dirty=' + WB_LOCAL_DIRTY +
+              ' 未上云=' + _unsent + ' empty=' + !!res.empty + ' ver不同=' + _verDiff +
+              ' stale=' + _staleDoc + ' locals变=' + _localsDiff + ' rev=' + (doc.rev || 0));
           } catch (_dp) {}
         }
         if (!_needPut) {
@@ -22166,7 +22470,9 @@ function syncCycleCore(manual) {
           } else if (manual) { toastMsg('✅ 云端已是最新（' + remoteN + ' 条，无改动）') }
           return { skipped: 'nochange', rev: doc.rev };
         }
-        WB_LOCAL_DIRTY = false;
+        /* vT252：先把脏标记清掉（本轮要写的内容已经打包好了）。
+           推送失败时下面的 catch 会重新置脏，下次同步照样重推 —— 不会「清早了丢改动」。 */
+        wbClearLocalDirty();
         return giteePut(out, res.empty ? '' : res.sha).then(function (r2) {
         GITEE_RETRY = 0;
         wbSnapSave(out); wbSetRev(out.rev);
@@ -22209,6 +22515,8 @@ function syncCycleCore(manual) {
       });
       });
     }).catch(function (e) {
+      /* vT252：没写进云端 → 本机内容仍是「未上云」，重新置脏，下一轮必须重推 */
+      try { wbMarkLocalDirty() } catch (_dmk) {}
       if (e && e.conflict && GITEE_RETRY < 3) { GITEE_RETRY++; setst('⚠️ 云端冲突，重试 ' + GITEE_RETRY + '/3…'); return cycle() }
       GITEE_RETRY = 0;
       var _m = (e && e.message) || '同步失败';
@@ -22423,6 +22731,7 @@ function ntNotifyDesks() {
   fire();
 }
 /* 2.6.64 启动 3 秒后即从云端恢复（打开即同步），不再等 30 秒 */
+try { syncLockResetOnBoot() } catch (_slr) {}
 /* v133：启动这轮不算「手动」—— 以前传 true，开机自动同步一旦并入数据就刷新页面，
    配合存储满时（写库静默失败）就是无限刷新；现在启动同步只提示不刷新。 */
 setTimeout(function () { if (mpSyncSettings().gAuto) syncCycle(false) }, 3 * 1000);
