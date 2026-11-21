@@ -359,6 +359,26 @@
 #petFeedFx .pff-sub{margin-top:4px;font-size:12px;color:#b07a8c;text-align:center}
 #petFeedFx .pff-h{position:absolute;left:50%;top:50%;font-size:20px;animation:pffFloat 1.6s ease-out forwards;opacity:0}
 @keyframes pffFloat{0%{opacity:0;transform:translate(0,0) scale(.5)}15%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(1.1) rotate(var(--rot))}}
+/* vT260 真即时揭晓：翻牌开奖动画 */
+#drawFx{position:fixed;inset:0;z-index:9999;background:rgba(20,16,28,.72);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+#drawFx.out{opacity:0;transition:opacity .4s ease}
+#drawFx .dfx-stage{display:flex;flex-direction:column;align-items:center;gap:18px}
+#drawFx .dfx-card{width:168px;height:228px;border-radius:18px;position:relative;transform-style:preserve-3d;transition:transform .7s cubic-bezier(.3,1.2,.5,1)}
+#drawFx.flip .dfx-card{transform:rotateY(180deg)}
+#drawFx .dfx-face{position:absolute;inset:0;backface-visibility:hidden;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 20px 50px rgba(0,0,0,.4);overflow:hidden}
+#drawFx .dfx-back{background:linear-gradient(150deg,#6d4ba8,#3b2a63);border:2px solid #b79ae8}
+#drawFx .dfx-back .q{font-size:82px;animation:dfxGlow 1s ease-in-out infinite alternate}
+#drawFx .dfx-back .t{margin-top:12px;color:#e6d8ff;font-size:13px;letter-spacing:2px}
+@keyframes dfxGlow{from{opacity:.6;transform:scale(1)}to{opacity:1;transform:scale(1.12)}}
+#drawFx .dfx-front{background:linear-gradient(160deg,#fffdf6,#f6ead0);border:3px solid #e0b34a;transform:rotateY(180deg)}
+#drawFx .dfx-front.hidden-tier{border-color:#a24bd6;background:linear-gradient(160deg,#fdf4ff,#efe0ff)}
+#drawFx .dfx-img{width:120px;height:120px;object-fit:contain}
+#drawFx .dfx-emo{font-size:76px;line-height:1}
+#drawFx .dfx-tier{position:absolute;top:10px;left:0;right:0;text-align:center;font-size:12px;font-weight:700;letter-spacing:1px;color:#a5791d}
+#drawFx .dfx-front.hidden-tier .dfx-tier{color:#8b34bf}
+#drawFx .dfx-nm{margin-top:6px;font-size:18px;font-weight:800;color:#5a4320;text-align:center;padding:0 8px}
+#drawFx .dfx-cap{color:#ffe9a8;font-size:16px;font-weight:700;letter-spacing:1px;text-align:center}
+#drawFx .dfx-sub{color:#dfd4c0;font-size:12px;text-align:center;opacity:.9}
 </style>
 </head>
 <body>
@@ -1164,6 +1184,17 @@
     var lb = p.label ? ('「' + esc(p.label) + '」') : '';
     if (p.status === 'done') return '<div class="pend">✅ ' + lb + '已生效：' + esc(p.msg || '老师已批准') + '（点刷新查看）</div>';
     if (p.status === 'held') return '<div class="pend bad">⚠️ ' + lb + esc(p.msg || '老师需要手动处理') + '</div>';
+    /* vT260 真即时揭晓：pending 且带预抽结果 → 立即显示抽到什么，不再干等批准 */
+    if (p.status === 'pending' && p.pick && p.pick.name) {
+      var k = p.pick;
+      var isHid = !!k.isHidden;
+      return '<div class="pend wait" style="background:#fffaf0;border-color:#e6c980">' +
+        '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+          (k.img ? '<img src="' + esc(k.img) + '" style="width:56px;height:56px;object-fit:contain;border-radius:10px">' : '<span style="font-size:38px">' + (p.action === 'growdraw' ? '🐾' : '🎴') + '</span>') +
+          '<div><div style="font-weight:800;color:#7a5b18;font-size:15px">🎉 抽到「' + esc(k.name) + '」' + (isHid ? ' ✦隐藏款' : '') + '</div>' +
+          '<div style="color:#a1843c;font-size:12px;margin-top:3px">结果已锁定 · 老师批准时正式入账，卡片会自动出现在你的图鉴里</div></div>' +
+        '</div></div>';
+    }
     return '<div class="pend wait">⏳ ' + lb + '已提交，正在等待入账…' + (ST.snap && ST.snap.autoApprove ? '（自动批准已开启，通常 10 秒内生效）' : '（需老师批准，批准后这里会变成已生效）') + '</div>';
   }
 
@@ -2099,6 +2130,35 @@
       setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 2700);
     } catch (e) {}
   }
+  /* vT260 真即时揭晓：翻牌开奖动画。先亮背面「？？？」转 1.1 秒，
+     再翻到正面显示预抽到的卡/灵宠；动画放完由 pendText 接着显示「抽到 XX」大卡面。
+     pick = {defId,name,img,tier,isHidden}（抽卡）或 {defId,name,img,tier}（抽灵宠）。 */
+  function drawRevealFx(pick, action) {
+    try {
+      var old = document.getElementById('drawFx');
+      if (old && old.parentNode) old.parentNode.removeChild(old);
+      if (!pick || !pick.name) return;   /* 没有预抽结果（快照未含）→ 跳过动画，退回等待 */
+      var hid = !!pick.isHidden;
+      var d = document.createElement('div');
+      d.id = 'drawFx';
+      d.innerHTML = '<div class="dfx-stage">' +
+        '<div class="dfx-card">' +
+          '<div class="dfx-face dfx-back"><div class="q">❔</div><div class="t">揭 晓 中…</div></div>' +
+          '<div class="dfx-face dfx-front' + (hid ? ' hidden-tier' : '') + '">' +
+            '<div class="dfx-tier">' + (hid ? '✦ 隐藏款 ✦' : esc(pick.tier || '普通款')) + '</div>' +
+            (pick.img ? '<img class="dfx-img" src="' + esc(pick.img) + '" alt="">' : '<div class="dfx-emo">' + (action === 'growdraw' ? '🐾' : '🎴') + '</div>') +
+            '<div class="dfx-nm">' + esc(pick.name) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="dfx-cap">✨ 抽到「' + esc(pick.name) + '」！</div>' +
+        '<div class="dfx-sub">结果已锁定，老师批准时就会正式入账</div>' +
+      '</div>';
+      document.body.appendChild(d);
+      setTimeout(function () { d.classList.add('flip'); }, 1100);
+      setTimeout(function () { d.classList.add('out'); }, 3200);
+      setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 3700);
+    } catch (e) {}
+  }
   /* ---------- vT210 灵宠欢迎语池：改为置顶板块内联显示，不再弹窗 ----------
      家长反馈弹窗要等数据到、还要手动关；现在欢迎语直接渲染在「孩子的灵宠」卡片里，
      随页面出现，随机挑一只灵宠说一句。 */
@@ -2127,10 +2187,16 @@
     if (!confirm('帮「' + ST.name + '」' + actName + '，消耗 ' + cost + ' 启灵积分？\n（' +
       (ST.snap.autoApprove ? '老师已开启自动批准，提交后自动入账' : '需老师批准后生效') + '）')) return;
     ST.busy = true;
+    /* vT260 真即时揭晓：从本生加密块的预抽结果里取这一抽的卡片/灵宠。
+       抽卡(action=feed) 用 preDraw.card；抽灵宠(growdraw) 用 preDraw.pet。
+       pickDefId 随提案提交，老师批准时采信它；pick 存本地供动画后立即揭晓。 */
+    var pd = (ST.per && ST.per.preDraw) || {};
+    var pick = (action === 'growdraw') ? (pd.pet || null) : (action === 'feed' ? (pd.card || null) : null);
     var rec = {
       id: 'pq_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       studentId: ST.name, studentName: ST.name, action: action, item: '',
       petId: extra.petId || '', defId: extra.defId || '', food: extra.food || '',
+      pickDefId: pick ? (pick.defId || '') : '', pickBy: pick ? 'preDraw' : '',
       at: Date.now(), atText: ymd(), status: 'pending', by: 'parent-web',
       ts: Date.now(), updatedAt: Date.now(), updatedBy: 'parent'
     };
@@ -2160,8 +2226,10 @@
       throw e;
     }).then(function () {
       ST.busy = false;
-      ST.pending = { id: rec.id, name: ST.name, action: action, label: actName, at: rec.at, status: 'pending' };
+      ST.pending = { id: rec.id, name: ST.name, action: action, label: actName, at: rec.at,
+                     status: 'pending', pick: pick };   /* vT260 pick 供 pendText 即时揭晓 */
       if (action === 'growfeed') petFeedThanksFx(extra);   /* vT198 喂养成功的小特效 */
+      else if (pick) drawRevealFx(pick, action);           /* vT260 抽卡/抽灵宠：翻牌即时揭晓 */
       try { paRepAdd(action === 'growdraw' ? 'growdraw' : (action === 'growfeed' ? 'growfeed' : 'feed')); } catch (e6) {}
       savePending(); renderMain(); startPoll();
     }).catch(function (e) {
@@ -2238,7 +2306,9 @@
     if (String(location.search || '').indexOf('test=1') >= 0) {
       window.__ppTest = {
         set: function (nm, snap, per) { ST.access = 'test'; ST.name = nm; ST.snap = snap; ST.per = per; ST.code = 'TEST'; renderMain(); },
-        st: ST
+        st: ST,
+        pendText: function () { return pendText() },   /* vT260 验收即时揭晓文案 */
+        submitProposal: submitProposal                 /* vT260 验收提案带 pickDefId */
       };
     }
   } catch (e) {}
