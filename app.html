@@ -36506,6 +36506,7 @@ function cwInit(){
   }
   window.ptwPublishNow = ptwPublishNow;
   window.ptwBuildSnap = ptwBuildSnap;   /* vT273 验收 / 控制台排查用：只构建快照对象，不上传 */
+  window.ptwPublishSnapToGitee = ptwPublishSnapToGitee;   /* vT273 验收用：可注入 snap 直接走发布组包 */
   /* vT129 快照自愈：别的端（小程序 / 另一台电脑）改了灵宠，这台网页收到同步后
      只更新本地库、不会主动重发家长快照 —— 家长端就会一直看到「旧形象」和
      「已经收回的灵宠」。这里每 90 秒比一次灵宠库指纹（条数 + 已收回数 + 最大更新时间），
