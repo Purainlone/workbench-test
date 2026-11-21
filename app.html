@@ -21305,7 +21305,7 @@ try {
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
 var WB_VER_TAG = 'v257';
-var WB_MY_VER = '优化版 vT264 · 每日竞答分层回避出题（错题隔离7天，相邻天不重复）';
+var WB_MY_VER = '优化版 vT265 · 竞答移除错题优先（答错不提前重复）+ 分层回避出题';
 var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.259';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
@@ -26941,7 +26941,7 @@ function cwInit(){
   /* ================= vT187 每日竞答（家长端）=================
      数据表：s-quiz 题库 / s-quizdone 每生每题只答一次 / s-quizlog 每日出题记录 / s-quizcfg 设置。
      规则（老师已确认）：每天 1~10 题（默认 6）；vT261 按答对题数阶梯计净分（单次一条流水）——6 题 +3 / 5 题 +2 / 4 题 +1 / 3 题 0 / 2 题 −0.5 / 1 题 −1 / 0 题 −1.5，非 6 题按同一曲线外推；答错给答案；同一题跨天也只计一次分；
-     普通题 60 天内不重复，高频错题可提前重复；同一天全班题目一致。 */
+     普通题 60 天内不重复，vT265 起不再错题优先（答错不提前重复）；同一天全班题目一致。 */
   var QZ_CATS = ['课内知识', '古文词语', '文学文化常识', '快乐读书吧'];
   var QZ_PER_SCORE = 0.5;
   /* vT261 满分 = 全对（答对题数=n）对应的净分，用与计分同一条曲线 */
@@ -26998,9 +26998,9 @@ function cwInit(){
     ntUpsert('s-quizcfg', c);
     return QZ_SEED.length;
   }
-  /* 抽题：同一天全班一致；vT264 分层回避——优先 60 天没出过 → 其次 7 天没出过 →
-     再次昨天没出过 → 最后才兜底；错题提前重复也必须隔开 7 天（vT263 前：错题不受限，
-     仅有的几道高频错题天天上榜，导致相邻天重复一半）。 */
+  /* 抽题：同一天全班一致；vT265 移除「错题优先」（不再因答错提前重复），
+     分层回避——优先 60 天没出过 → 其次 7 天没出过 → 再次昨天没出过 →
+     最后按最久未出（LRU）兜底。相邻天尽量零重复。 */
   function qzPickDay(dateStr, n) {
     dateStr = dateStr || qzToday();
     n = Math.max(1, Math.min(10, parseInt(n, 10) || qzPerDay()));
@@ -27016,20 +27016,13 @@ function cwInit(){
       return s;
     }
     var recent60 = recentSet(60), recent7 = recentSet(7), recent1 = recentSet(1);
-    var wrong = {};
-    ntRows('s-quizdone').forEach(function (r) {
-      if (r && !r.deleted && r.ok === false && r.qid) wrong[r.qid] = (wrong[r.qid] || 0) + 1;
-    });
     var seed = qzHash(dateStr + '|' + n), rank = {};
     bank.forEach(function (x) { rank[x.id] = qzRand(seed ^ qzHash(x.id)); });
     var pool = bank.slice().sort(function (a, b) { return rank[a.id] - rank[b.id]; });
-    /* vT264 错题提前重复也设隔离期：只挑最近 7 天没出过的错题，仍最多占一半 */
-    var wrongAll = pool.filter(function (x) { return wrong[x.id] > 0 && !recent7[x.id]; })
-      .sort(function (a, b) { return (wrong[b.id] || 0) - (wrong[a.id] || 0); });
-    var picks = wrongAll.slice(0, Math.min(wrongAll.length, Math.ceil(n / 2)));
     function take(list) {
       list.forEach(function (x) { if (picks.length < n && picks.indexOf(x) < 0) picks.push(x); });
     }
+    var picks = [];
     take(pool.filter(function (x) { return !recent60[x.id]; }));   /* ① 60 天没出过 */
     take(pool.filter(function (x) { return !recent7[x.id]; }));    /* ② 7 天没出过 */
     take(pool.filter(function (x) { return !recent1[x.id]; }));    /* ③ 昨天没出过 */
