@@ -52,8 +52,9 @@
   .points .big small{font-size:13px;font-weight:500;color:var(--ink2);margin-left:3px}
   .points .side{font-size:12px;color:var(--ink2);line-height:1.7;padding-bottom:3px}
   /* vT269 三分类（奖励/扣罚/消费）子类明细 */
-  .ptsub{font-size:11px;color:#7d8a82;line-height:1.75;margin-top:7px;padding:7px 9px;background:#f7faf8;border-radius:9px}
-  .ptsub b{font-weight:600;color:var(--ink2);margin-right:3px}
+  .ptsub{font-size:11px;color:#6f7c74;line-height:1.75;margin-top:7px;padding:7px 9px;background:#f7faf8;border-radius:9px}
+  .ptsub>div+div{margin-top:1px}
+  .ptsub b{font-weight:600;margin-right:5px}
   .kpis{display:flex;gap:8px;margin-top:12px}
   .kpi{flex:1;background:#f7faf8;border-radius:12px;padding:9px 10px;text-align:center}
   .kpi b{display:block;font-size:18px;color:var(--ink)}
@@ -1630,20 +1631,22 @@
             : ('作业 ' + R9(P9.hw) + ' · 平时 ' + R9(P9.manual) + ga9);
           var o9 = '<div class="points"><div class="big">' + Math.round(P9.total || 0) + '<small>分</small></div>' +
             '<div class="side">' + side9 + '</div></div>';
-          /* 子类明细只在快照带子类字段时展示（从 ptFlow 兜底算出的大类没有子类拆分，交给下方流水看） */
+          /* 子类明细只在快照带子类字段时展示（从 ptFlow 兜底算出的大类没有子类拆分，交给下方流水看）。
+             三类各占一行：手机窄屏也不会把「消费」挤到第二行末尾。 */
           if (C9 && (C9.rwHw != null || C9.pnHw != null || C9.csDraw != null)) {
             var nz9 = function (x) { return Math.abs(x) >= 0.05; };
-            var seg9 = function (label, items) {
+            var row9 = function (label, color, items) {
               var hit9 = items.filter(function (it) { return nz9(it[1]); });
-              if (!hit9.length) return label + ' —';
-              return label + ' ' + hit9.map(function (it) { return it[0] + ' ' + R9(it[1]); }).join(' · ');
+              var body9 = hit9.length
+                ? hit9.map(function (it) { return it[0] + ' ' + R9(it[1]); }).join(' · ')
+                : '无';
+              return '<div><b style="color:' + color + '">' + label + '</b> ' + body9 + '</div>';
             };
-            var sub9 = [
-              seg9('奖励', [['作业加分', C9.rwHw || 0], ['目标达成', C9.rwGoal || 0], ['课堂参与', C9.rwClass || 0], ['每日竞答', C9.rwQuiz || 0], ['其他奖励', C9.rwOther || 0]]),
-              seg9('扣罚', [['作业扣分', C9.pnHw || 0], ['课堂扣分', C9.pnClass || 0], ['其他扣分', C9.pnOther || 0]]),
-              seg9('消费', [['抽奖', C9.csDraw || 0], ['喂养', C9.csFeed || 0]])
-            ];
-            o9 += '<div class="ptsub">' + sub9.join('　｜　') + '</div>';
+            o9 += '<div class="ptsub">' +
+              row9('奖励', '#12a150', [['作业加分', C9.rwHw || 0], ['目标达成', C9.rwGoal || 0], ['课堂参与', C9.rwClass || 0], ['每日竞答', C9.rwQuiz || 0], ['其他奖励', C9.rwOther || 0]]) +
+              row9('扣罚', '#c62828', [['作业扣分', C9.pnHw || 0], ['课堂扣分', C9.pnClass || 0], ['其他扣分', C9.pnOther || 0]]) +
+              row9('消费', '#c77700', [['抽奖', C9.csDraw || 0], ['喂养', C9.csFeed || 0]]) +
+              '</div>';
           }
           return o9;
         })() +
