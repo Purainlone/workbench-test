@@ -3624,6 +3624,9 @@ table.paper td.l{text-align:left;font-weight:600}
       ST_ROWS.forEach(function(r){
         if(fval(r,'备注')==='宠物')return;
         var v=parseFloat(fval(r,'奖惩分值'));if(isNaN(v))v=0;
+        /* vT273 修正：本地兜底也剔除灵宠消费（抽卡 / 喂养 / 进化），
+           与云端口径、教室桌面一致 —— 否则没连上云端时玫瑰会少算一截。 */
+        if(v<0&&/灵宠|启灵图鉴|成长灵宠/.test(String(fval(r,'奖惩事项')||'')))return;
         t+=v;
       });
       try{
@@ -36502,6 +36505,7 @@ function cwInit(){
     });
   }
   window.ptwPublishNow = ptwPublishNow;
+  window.ptwBuildSnap = ptwBuildSnap;   /* vT273 验收 / 控制台排查用：只构建快照对象，不上传 */
   /* vT129 快照自愈：别的端（小程序 / 另一台电脑）改了灵宠，这台网页收到同步后
      只更新本地库、不会主动重发家长快照 —— 家长端就会一直看到「旧形象」和
      「已经收回的灵宠」。这里每 90 秒比一次灵宠库指纹（条数 + 已收回数 + 最大更新时间），
