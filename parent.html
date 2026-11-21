@@ -400,7 +400,7 @@
 
   var GITEE = 'https://gitee.com/api/v5';
   var SNAP = 'wb_parent_snap.json';
-  var PA_PAGE_VER = 'v246';   /* vT246：灵杰卡「名称 + 品级·分类」+ 家长使用回执（老师端家长后台） */
+  var PA_PAGE_VER = 'v247';   /* vT269：积分流水三分类(奖励/扣罚/消费)标签与汇总 */
   try { window.PA_PAGE_VER = PA_PAGE_VER; } catch (e) {}
   var K_ACCESS = 'wb_pa_access', K_NAME = 'wb_pa_name', K_CODE = 'wb_pa_code', K_PEND = 'wb_pa_pending';
 
@@ -1620,9 +1620,11 @@
         if (!flow9.length) return '';
         var rows9 = flow9.map(function (f9) {
           var n9 = Number(f9.v) || 0, pos9 = n9 > 0, neg9 = n9 < 0;
-          var tag9 = f9.k === 'hw' ? '作业' : (f9.k === 'rw' ? '奖惩' : '手动');
-          var bg9 = f9.k === 'hw' ? '#e8f1ff' : (f9.k === 'rw' ? '#fff3e0' : '#eef7ee');
-          var c9 = f9.k === 'hw' ? '#3a6fd8' : (f9.k === 'rw' ? '#c77700' : '#2e7d32');
+          /* vT269 三分类标签（老快照无 c 字段时回退旧三类） */
+          var tag9 = f9.ct || (f9.k === 'hw' ? '作业' : (f9.k === 'rw' ? '奖惩' : '手动'));
+          var cc9 = f9.c || '';
+          var bg9 = cc9 === 'reward' ? '#eef8f1' : cc9 === 'penalty' ? '#fdecec' : cc9 === 'consume' ? '#fff3e0' : (f9.k === 'hw' ? '#e8f1ff' : (f9.k === 'rw' ? '#fff3e0' : '#eef7ee'));
+          var c9 = cc9 === 'reward' ? '#12a150' : cc9 === 'penalty' ? '#c62828' : cc9 === 'consume' ? '#c77700' : (f9.k === 'hw' ? '#3a6fd8' : (f9.k === 'rw' ? '#c77700' : '#2e7d32'));
           var col9 = pos9 ? '#2e7d32' : (neg9 ? '#c62828' : '#888');
           return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed #e5e8e2;">' +
             '<span style="flex:none;font-size:11px;padding:2px 7px;border-radius:4px;background:' + bg9 + ';color:' + c9 + ';">' + tag9 + '</span>' +
@@ -1630,12 +1632,18 @@
             '<span style="flex:none;font-size:11px;color:#999;">' + esc(String(f9.d || '').slice(5)) + '</span>' +
             '<span style="flex:none;font-size:13px;font-weight:600;color:' + col9 + ';min-width:36px;text-align:right;">' + (pos9 ? '+' : '') + f9.v + '</span></div>';
         }).join('');
-        var hwS9 = 0, rwS9 = 0;
-        flow9.forEach(function (f92) { if (f92.k === 'hw') hwS9 += (Number(f92.v) || 0); else rwS9 += (Number(f92.v) || 0); });
+        var sumR9 = 0, sumP9 = 0, sumC9 = 0, hasCls9 = false;
+        flow9.forEach(function (f92) {
+          if (f92.c) hasCls9 = true;
+          var av9 = Math.abs(Number(f92.v) || 0);
+          if (f92.c === 'reward') sumR9 += av9; else if (f92.c === 'penalty') sumP9 += av9; else if (f92.c === 'consume') sumC9 += av9;
+        });
+        var foot9 = hasCls9
+          ? ('奖励 +' + (Math.round(sumR9 * 10) / 10) + ' · 扣罚 -' + (Math.round(sumP9 * 10) / 10) + ' · 消费 -' + (Math.round(sumC9 * 10) / 10) + '（合计按奖励−扣罚−消费，与老师端、小程序完全同口径。）')
+          : (function () { var hwS = 0, rwS = 0; flow9.forEach(function (fX) { if (fX.k === 'hw') hwS += (Number(fX.v) || 0); else rwS += (Number(fX.v) || 0); }); return '作业合计 +' + (Math.round(hwS * 10) / 10) + ' · 平时合计 ' + (Math.round(rwS * 10) / 10) + '（含老师奖惩、每日竞答、课堂加分、灵宠消费扣分），与老师端、小程序完全同口径。'; })();
         return '<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:13px;color:#2e7d32;user-select:none;list-style:none;">📋 积分流水（' + flow9.length + ' 条）· 点击展开 ▾</summary>' +
           '<div style="margin-top:6px;">' + rows9 + '</div>' +
-          '<div style="margin-top:8px;font-size:11px;color:#999;line-height:1.6;">作业合计 +' + (Math.round(hwS9 * 10) / 10) + ' · 平时合计 ' + (Math.round(rwS9 * 10) / 10) +
-          '（含老师奖惩、每日竞答、课堂加分、灵宠消费扣分），与老师端、小程序完全同口径。</div></details>';
+          '<div style="margin-top:8px;font-size:11px;color:#999;line-height:1.6;">' + foot9 + '</div></details>';
       })() +
       '</div>';
     }
