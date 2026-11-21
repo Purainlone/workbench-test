@@ -21305,7 +21305,7 @@ try {
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
 var WB_VER_TAG = 'v257';
-var WB_MY_VER = '优化版 vT261 · 竞答按答对题数阶梯计净分';
+var WB_MY_VER = '优化版 vT262 · 家长端积分流水（折叠查看）';
 var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.259';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
@@ -35370,6 +35370,63 @@ function cwInit(){
       });
     } catch (_we3) {}
 
+    /* vT262 家长端「积分流水」逐笔明细（折叠展开查看）：
+       与工作台 stuPoints / 小程序「学生积分」完全同口径的三类流水 ——
+       ① 作业逐笔（含等级）；② 奖惩流水 st（老师奖惩 / 每日竞答 / 灵宠消费）；
+       ③ 手动加减分（手机/教室桌面录入，与 st 同键的副本只算一次）。
+       按姓名分组、每个孩子只带自己的流水，随加密块下发；家长端默认折叠、点击展开。
+       老快照没有 ptFlow 字段时家长端不显示折叠区，完全兼容。 */
+    var ptFlowMap = {}, ptFlowLim = lim120;
+    function pushFlow(nm, dt, kind, sc, ttl) {
+      nm = String(nm || '').trim(); dt = String(dt || '').slice(0, 10);
+      if (!nm || !dt || dt < ptFlowLim) return;
+      var v = Math.round((Number(sc) || 0) * 10) / 10;
+      ttl = String(ttl || '').trim().slice(0, 60);
+      if (!ttl) return;
+      if (kind !== 'hw' && !v) return;   /* 作业 0 分（合格/中）也保留，家长才知道这项交了得几分 */
+      (ptFlowMap[nm] || (ptFlowMap[nm] = [])).push({ k: kind, d: dt, t: ttl, v: v });
+    }
+    try {
+      (local.hw || []).forEach(function (r) {
+        if (!r || r.deleted) return;
+        var vF1 = Number(r.score); if (isNaN(vF1)) vF1 = 0;
+        pushFlow(r.name, r.date, 'hw', vF1, (r.item || '作业') + (r.level ? ('·' + r.level) : ''));
+      });
+    } catch (_fe1) {}
+    var _fStSeen = {};
+    try {
+      (typeof stDedupBonus === 'function' && typeof ST_ROWS !== 'undefined' ? stDedupBonus(ST_ROWS).keep : []).forEach(function (rF2) {
+        var nmF2 = fval(rF2, '姓名'); if (!nmF2) return;
+        var vF2 = parseFloat(fval(rF2, '奖惩分值')); if (isNaN(vF2)) vF2 = 0;
+        vF2 = Math.round(vF2 * 10) / 10;
+        var rsnF2 = fval(rF2, '奖惩事项') || '老师奖惩';
+        var dtF2 = String(fval(rF2, '日期') || '').slice(0, 10);
+        var petF2 = /灵宠|启灵|抽卡|喂养|进化|竞答/.test(String(rsnF2));
+        if (vF2) pushFlow(nmF2, dtF2, 'rw', vF2, String(rsnF2) + (petF2 ? '·灵宠' : ''));
+        var skF2 = (typeof stTombKeyOf === 'function') ? stTombKeyOf(nmF2, rsnF2, dtF2, vF2) : '';
+        if (skF2) _fStSeen[skF2] = 1;
+      });
+    } catch (_fe2) {}
+    try {
+      var gcF3 = (typeof gdCloud === 'function') ? gdCloud() : null;
+      var mnF3 = (gcF3 && Array.isArray(gcF3.manual)) ? gcF3.manual : [];
+      mnF3.forEach(function (xF3) {
+        if (!xF3) return;
+        if (typeof stManDead === 'function' && stManDead(xF3)) return;
+        var nmF3 = String(xF3.name || '').trim(); if (!nmF3) return;
+        var vF3 = Math.round((Number(xF3.score) || 0) * 10) / 10;
+        var dtF3 = String(xF3.date || '').slice(0, 10) || (xF3.ts ? ptwDstr(new Date(xF3.ts)) : '');
+        var mkF3 = (typeof stTombKeyOf === 'function') ? stTombKeyOf(nmF3, xF3.reason, dtF3, vF3) : '';
+        if (mkF3 && _fStSeen[mkF3]) return;
+        pushFlow(nmF3, dtF3, 'man', vF3, xF3.reason || '手动调整');
+      });
+    } catch (_fe3) {}
+    Object.keys(ptFlowMap).forEach(function (nmF4) {
+      ptFlowMap[nmF4].sort(function (aF4, bF4) {
+        return String(bF4.d).localeCompare(String(aF4.d)) || (bF4.v > aF4.v ? 1 : bF4.v < aF4.v ? -1 : 0);
+      });
+    });
+
     /* 教师点评（c-comment，最近 60 天） */
     var comments = [];
     try {
@@ -35545,7 +35602,8 @@ function cwInit(){
       points: points, comments: comments, grades: grades, gAvg: gAvg, gRank: gRank, detain: detain,
       quiz: quiz,
       codexPool: codexPool, codexPets: codexPets,
-      weekly: weekly, weeklyFrom: lim14
+      weekly: weekly, weeklyFrom: lim14,
+      ptFlow: ptFlowMap   /* vT262 家长端积分流水（按姓名分组，随加密块下发各自孩子的） */
     };
   }
 
@@ -35615,7 +35673,9 @@ function cwInit(){
         /* vT260 真即时揭晓：老师端只读预抽，随加密块下发；家长端动画后立即显示，不泄露给别的孩子 */
         preDraw: (function () {
           try { return ptPreDraw(ptGet(), st.name) } catch (_pd) { return { card: null, pet: null } }
-        })()
+        })(),
+        /* vT262 积分流水（折叠查看）：只带这个孩子自己的逐笔流水；老快照无此字段时家长端不显示 */
+        ptFlow: (snap.ptFlow || {})[st.name] || []
       };
       blocks[st.name] = { code: String(st.code || '').toUpperCase(), data: seal(per, st.code || st.name) };
     });
