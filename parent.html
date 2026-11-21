@@ -790,7 +790,9 @@
       /* vT129 老师已收回（deleted）的灵宠绝不显示；老快照里也许还留着，这里再兜一层 */
       codex: (per.codex || []).filter(function (p) { return p && !p.deleted && !p.purged; }),
       /* vT163 本周表现：三类奖惩明细按本周（周一 00:00 起）过滤汇总 */
-      weekly: weekOf(per)
+      weekly: weekOf(per),
+      /* vT262 积分流水（折叠查看）：老师端随加密块下发的该生逐笔流水；老快照无此字段 → 不显示 */
+      ptFlow: per.ptFlow || null
     };
   }
 
@@ -1610,7 +1612,32 @@
         '<div class="kpis"><div class="kpi"><b>' + v.hwDone + '/' + v.hwN + '</b><span>今日作业完成</span></div>' +
         '<div class="kpi"><b>' + (v.rcLegacy ? v.rc.length : (v.rcDoneN + '/' + v.rcPlanN)) + '</b><span>' + (v.rcLegacy ? '今日诵读' : '诵读进度') + '</span></div>' +
         '<div class="kpi"><b>' + petN + '</b><span>已养灵宠</span></div>' +
-        '<div class="kpi"><b>' + cardN + '</b><span>已集灵杰</span></div></div></div>';
+        '<div class="kpi"><b>' + cardN + '</b><span>已集灵杰</span></div></div>' +
+      /* vT262 积分流水（折叠状态，点击展开）：与老师端/小程序完全同口径的逐笔流水，
+         解决「奖惩 -7 这种汇总数看不出明细构成」的对账问题。流水区在积分卡片内部，卡片随后闭合。 */
+      (function () {
+        var flow9 = v.ptFlow || [];
+        if (!flow9.length) return '';
+        var rows9 = flow9.map(function (f9) {
+          var n9 = Number(f9.v) || 0, pos9 = n9 > 0, neg9 = n9 < 0;
+          var tag9 = f9.k === 'hw' ? '作业' : (f9.k === 'rw' ? '奖惩' : '手动');
+          var bg9 = f9.k === 'hw' ? '#e8f1ff' : (f9.k === 'rw' ? '#fff3e0' : '#eef7ee');
+          var c9 = f9.k === 'hw' ? '#3a6fd8' : (f9.k === 'rw' ? '#c77700' : '#2e7d32');
+          var col9 = pos9 ? '#2e7d32' : (neg9 ? '#c62828' : '#888');
+          return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed #e5e8e2;">' +
+            '<span style="flex:none;font-size:11px;padding:2px 7px;border-radius:4px;background:' + bg9 + ';color:' + c9 + ';">' + tag9 + '</span>' +
+            '<span style="flex:1;min-width:0;font-size:13px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(f9.t) + '</span>' +
+            '<span style="flex:none;font-size:11px;color:#999;">' + esc(String(f9.d || '').slice(5)) + '</span>' +
+            '<span style="flex:none;font-size:13px;font-weight:600;color:' + col9 + ';min-width:36px;text-align:right;">' + (pos9 ? '+' : '') + f9.v + '</span></div>';
+        }).join('');
+        var hwS9 = 0, rwS9 = 0;
+        flow9.forEach(function (f92) { if (f92.k === 'hw') hwS9 += (Number(f92.v) || 0); else rwS9 += (Number(f92.v) || 0); });
+        return '<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:13px;color:#2e7d32;user-select:none;list-style:none;">📋 积分流水（' + flow9.length + ' 条）· 点击展开 ▾</summary>' +
+          '<div style="margin-top:6px;">' + rows9 + '</div>' +
+          '<div style="margin-top:8px;font-size:11px;color:#999;line-height:1.6;">作业合计 +' + (Math.round(hwS9 * 10) / 10) + ' · 平时合计 ' + (Math.round(rwS9 * 10) / 10) +
+          '（含老师奖惩、每日竞答、课堂加分、灵宠消费扣分），与老师端、小程序完全同口径。</div></details>';
+      })() +
+      '</div>';
     }
     /* vT163 本周表现：作业 / 课堂 / 手动奖惩三类加分综合评价 */
     if (on('weekly')) {
