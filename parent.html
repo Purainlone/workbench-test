@@ -415,7 +415,7 @@
 
   var GITEE = 'https://gitee.com/api/v5';
   var SNAP = 'wb_parent_snap.json';
-  var PA_PAGE_VER = 'v249';   /* vT270：新增「🌹 班级玫瑰」（页面最末，老师可开关）；vT269 积分卡三分类+v248 */
+  var PA_PAGE_VER = 'v250';   /* vT271：作业合格淡蓝标签、竞答行去掉多余「灵宠」；vT270 班级玫瑰 v249 */
   try { window.PA_PAGE_VER = PA_PAGE_VER; } catch (e) {}
   var K_ACCESS = 'wb_pa_access', K_NAME = 'wb_pa_name', K_CODE = 'wb_pa_code', K_PEND = 'wb_pa_pending';
 
@@ -1850,11 +1850,13 @@
         if (!flow9.length) return '';
         var rows9 = flow9.map(function (f9) {
           var n9 = Number(f9.v) || 0, pos9 = n9 > 0, neg9 = n9 < 0;
+          /* vT271 作业「合格」等 0 分：标签叫「作业合格」并上淡蓝（老快照也认，按分值为 0 判断） */
+          var hwZero9 = (f9.k === 'hw' && !n9);
           /* vT269 三分类标签（老快照无 c 字段时回退旧三类） */
-          var tag9 = f9.ct || (f9.k === 'hw' ? '作业' : (f9.k === 'rw' ? '奖惩' : '手动'));
+          var tag9 = hwZero9 ? '作业合格' : (f9.ct || (f9.k === 'hw' ? '作业' : (f9.k === 'rw' ? '奖惩' : '手动')));
           var cc9 = f9.c || '';
-          var bg9 = cc9 === 'reward' ? '#eef8f1' : cc9 === 'penalty' ? '#fdecec' : cc9 === 'consume' ? '#fff3e0' : (f9.k === 'hw' ? '#e8f1ff' : (f9.k === 'rw' ? '#fff3e0' : '#eef7ee'));
-          var c9 = cc9 === 'reward' ? '#12a150' : cc9 === 'penalty' ? '#c62828' : cc9 === 'consume' ? '#c77700' : (f9.k === 'hw' ? '#3a6fd8' : (f9.k === 'rw' ? '#c77700' : '#2e7d32'));
+          var bg9 = hwZero9 ? '#eaf2ff' : (cc9 === 'reward' ? '#eef8f1' : cc9 === 'penalty' ? '#fdecec' : cc9 === 'consume' ? '#fff3e0' : (f9.k === 'hw' ? '#e8f1ff' : (f9.k === 'rw' ? '#fff3e0' : '#eef7ee')));
+          var c9 = hwZero9 ? '#4b84dd' : (cc9 === 'reward' ? '#12a150' : cc9 === 'penalty' ? '#c62828' : cc9 === 'consume' ? '#c77700' : (f9.k === 'hw' ? '#3a6fd8' : (f9.k === 'rw' ? '#c77700' : '#2e7d32')));
           var col9 = pos9 ? '#2e7d32' : (neg9 ? '#c62828' : '#888');
           return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed #e5e8e2;">' +
             '<span style="flex:none;font-size:11px;padding:2px 7px;border-radius:4px;background:' + bg9 + ';color:' + c9 + ';">' + tag9 + '</span>' +
