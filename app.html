@@ -14892,6 +14892,56 @@ function stIsSpendReason(rs) {
   var s0 = String(rs == null ? '' : rs);
   return /启灵图鉴|成长灵宠|灵宠/.test(s0);
 }
+/* ===== vT268 MPS_ 抽卡影子流水去重（网页端仍显示两条扣分的真正病根）=====
+   复盘：vT267 把消费流水改成「按记录 id 去重」，但同一笔抽卡在云端会有两条：
+     ① 真源 id=Lmwpy4…（家长端/老师端写入的原始流水）
+     ② 同步桥副本 id=MPS_<hash>（mpFromDeskBuild 本地模式跨电脑桥接生成）
+   两者 id 不同，vT267 的键规则反而把它们当成两笔都留下。11-21 的清理
+   （rev7812）做完 3 分钟后就被网页自己的「工作台自动同步」整表推回
+   （rev7813-7815），网页详情流水依旧显示两条 -10。
+   修法：只把「有真源同键」的 MPS_ 副本当影子剔掉；没有任何真源的 MPS_
+   消费（纯本地模式产生的真交易）一律保留，绝不误删。计数安全：2 笔真
+   抽卡 + 1 条影子 → 留 2 笔真源；不会因为同键而把真源折叠成一笔。
+   三处应用：loadST（网页显示+积分）、ptwBuildSnap（家长折叠流水）、
+   mpFromDeskBuild 出口 + mpUnionTable（阻止影子再推回云端）。 */
+function stSpendField(r, cn, en) {
+  var p = (r && r.properties && typeof r.properties === 'object') ? r.properties : r;
+  if (!p) return '';
+  var v = (p[cn] != null) ? p[cn] : p[en];
+  if (v == null) return '';
+  if (typeof v === 'object') {
+    if (v.text != null) return v.text;
+    if (v.number != null) return v.number;
+    if (v.date != null) return v.date;
+  }
+  return v;
+}
+function stIsMpsRow(r) { return String(recId(r) || '').indexOf('MPS_') === 0 }
+function stMpsShadowKey(r) {
+  var nm = String(stSpendField(r, '姓名', 'name') || '').replace(/\s+/g, '');
+  var rs = String(stSpendField(r, '奖惩事项', 'reason') || '');
+  var v = Math.round((Number(stSpendField(r, '奖惩分值', 'score')) || 0) * 10) / 10;
+  return nm + '|' + rs.replace(/\s+/g, '') + '|' + v;
+}
+function stStripMpsSpendShadows(rows) {
+  if (!Array.isArray(rows)) return rows;
+  var realKey = {}, out = [];
+  rows.forEach(function (r) {
+    if (!r || stIsMpsRow(r)) return;
+    var rs = String(stSpendField(r, '奖惩事项', 'reason') || '');
+    if (stIsSpendReason(rs)) realKey[stMpsShadowKey(r)] = 1;
+  });
+  if (!Object.keys(realKey).length) return rows;   /* 没有真源 → 全部保留（真交易不能丢） */
+  rows.forEach(function (r) {
+    if (!r) return;
+    if (stIsMpsRow(r)) {
+      var rs = String(stSpendField(r, '奖惩事项', 'reason') || '');
+      if (stIsSpendReason(rs) && realKey[stMpsShadowKey(r)]) return;  /* 有真源的 MPS_ 副本 → 影子，剔除 */
+    }
+    out.push(r);
+  });
+  return out;
+}
 function stBonusRowKey(r) {
   return stTombKeyOf(fval(r, '姓名'), fval(r, '奖惩事项'), syncDateOnly(fval(r, '日期')), parseFloat(fval(r, '奖惩分值')));
 }
@@ -15103,6 +15153,8 @@ function loadST(){return new Promise(function(res){
   pullST(function(rows){
     /* vT227：命中「已删 id / st 墓碑」的行直接剔掉并再删一次，防止删了又回来 */
     ST_ROWS=(typeof stPurge==='function')?stPurge(rows):rows;
+    /* vT268：剔掉「有真源同键」的 MPS_ 抽卡影子副本 —— 网页详情流水原本显示两条扣分、积分算两遍的根因 */
+    if(typeof stStripMpsSpendShadows==='function')ST_ROWS=stStripMpsSpendShadows(ST_ROWS);
     res();
   },function(err){dbFail('学生档案',err);res()});
 })}
@@ -21305,7 +21357,7 @@ try {
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
 var WB_VER_TAG = 'v257';
-var WB_MY_VER = '优化版 vT267 · 抽卡流水按记录id去重（修复家长端抽卡重复扣分）';
+var WB_MY_VER = '优化版 vT268 · 抽卡影子流水去重（剔除有真源的MPS副本，修复网页端重复扣分）';
 var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.259';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
@@ -22514,6 +22566,8 @@ function syncCycleCore(manual) {
           var remoteM = Array.isArray(tables[k]) ? tables[k].length : 0;
           if (!remoteM) return;
           var merged = mpUnionTable(k, out.tables[k], tables[k]);
+          /* vT268：st 并集后再剔一次 MPS_ 抽卡影子 —— 远端旧缓存仍带副本时，这里挡住并集把它救活 */
+          if (k === 'st' && typeof stStripMpsSpendShadows === 'function') merged = stStripMpsSpendShadows(merged);
           if (merged.length !== mineN) unionLog.push(k + ' ' + mineN + '∪' + remoteM + '→' + merged.length);
           out.tables[k] = merged;
         });
@@ -23883,6 +23937,9 @@ function mpFromDeskBuild(o) {
     } else if (window) { window.__WB_ST_KEEP_PREV__ = 0 }
   } catch (_pe) {}
   if (!stOut.length && Array.isArray(o && o.st) && o.st.length) stOut = o.st;
+  /* vT268 推送出口：剔掉「有真源同键」的 MPS_ 抽卡影子，避免网页自动同步把云端清理过的副本又整表推回
+     （11-21 rev7812 清理完 3 分钟就被 rev7813 推回，就是这个缺口）。放在所有兜底之后，覆盖 keep-prev 分支。 */
+  if (typeof stStripMpsSpendShadows === 'function') stOut = stStripMpsSpendShadows(stOut);
   var hwadjOut = [];
   try {
     var _adjDb = JSON.parse(localStorage.getItem('wb_nt_v1') || '{}');
