@@ -1356,11 +1356,17 @@
   }
   /* ================= vT187 每日竞答挑战 =================
      题目随老师快照下发（quiz.bank + quiz.today）；同一天全班题目一致。
-     答对 +0.5 分；vT217 防乱答阶梯扣分：一次提交错 1 题不扣、错 2 题扣 0.5、错 3 题及以上扣 1。
+     vT261 按答对题数阶梯算一个净分（单次只记一条流水）：6 题 +3 / 5 题 +2 / 4 题 +1 / 3 题 0 / 2 题 −0.5 / 1 题 −1 / 0 题 −1.5。
      vT235 全做完才能交：作答只做勾选标记（不显示对错、不显示答案），全部题目答完才允许提交，
      提交后统一揭晓答案与解析 —— 防止学生「只挑会做的题、不会的跳过」或边答边抄答案。
      同一题跨天也只计一次分；提交走 pq/ 提案，老师端或教室桌面自动批准后进个人积分。 */
   var QZ_STATE = null, QZ_LS = 'wb_pa_quiz_v1';
+  /* vT261 老师新规：按答对题数算净分，一次竞答只记一条流水（正或负）。
+     答对≤3: n×0.5−1.5；答对>3: n−3。6 题制：6→+3 / 5→+2 / 4→+1 / 3→0 / 2→−0.5 / 1→−1 / 0→−1.5。 */
+  function qzNetScore(n) {
+    n = Math.max(0, parseInt(n, 10) || 0);
+    return Math.round((n <= 3 ? (n * 0.5 - 1.5) : (n - 3)) * 10) / 10;
+  }
   function qzToday() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
   function qzHash(s) {
     var h = 2166136261, i;
@@ -1447,7 +1453,7 @@
       if (p == null) return;
       n++; if (Number(p) === Number(q.ans)) right++;
     });
-    return { answered: n, right: right, add: Math.round(right * (st.score || 0.5) * 10) / 10, total: st.items.length };
+    return { answered: n, right: right, add: qzNetScore(right), total: st.items.length };
   }
   function qzCardHtml() {
     var st = qzState();
@@ -1455,7 +1461,7 @@
     var done = qzDoneAll(), s = qzStat();
     var h = '<div class="card" id="quizCard"><h2>🧠 每日竞答挑战 <em>' + esc(st.date) + ' · ' + st.items.length + ' 题</em></h2>';
     /* vT235：全部做完才能提交。作答阶段只勾选不判卷，提交后统一揭晓答案 —— 防止只挑会做的题、边答边抄答案 */
-    h += '<div style="font-size:12.5px;color:#7a8a80;line-height:1.7;margin-bottom:6px">答对 1 题 +0.5 分；请认真作答：一次提交<b>答错 2 题扣 0.5 分，答错 3 题及以上扣 1 分</b>（错 1 题不扣）。<b>全部题目作答后才能提交；提交前不显示对错（可以改选），提交后统一揭晓答案与解析</b>；同一题只算一次分。</div>';
+    h += '<div style="font-size:12.5px;color:#7a8a80;line-height:1.7;margin-bottom:6px"><b>按答对题数给分（以 ' + st.items.length + ' 题为例）：答对 ' + st.items.length + ' 题 +' + qzNetScore(st.items.length) + '、' + Math.max(0, st.items.length - 1) + ' 题 +' + qzNetScore(st.items.length - 1) + '、' + Math.max(0, st.items.length - 2) + ' 题 +' + qzNetScore(st.items.length - 2) + ' …… 全错 ' + qzNetScore(0) + ' 分</b>，一次提交只记一条净分流水。<b>全部题目作答后才能提交；提交前不显示对错（可以改选），提交后统一揭晓答案与解析</b>；同一题只算一次分。</div>';
     if (st.submitted) {
       h += '<div style="background:#eef7f2;border:1px solid #cfe7db;border-radius:10px;padding:9px 11px;font-size:13px;color:#25574a;margin-bottom:8px">✅ 已提交：' + esc(st.msg || '等待老师端入账') + '</div>';
     }
@@ -1487,7 +1493,7 @@
             mark + 'ABCD'.charAt(k) + '. ' + esc(o) + '</span>';
         }).join('') + '</div>' +
         (reveal ? '<div style="font-size:12px;color:' + (wasDone ? '#7a8a80' : (Number(p) === Number(q.ans) ? '#1f6b3a' : '#b3403a')) + ';margin-top:5px">' +
-          (wasDone ? '这道题之前答过了，不再计分。' : (Number(p) === Number(q.ans) ? '答对了，+0.5 分。' : '答错了。')) +
+          (wasDone ? '这道题之前答过了，不再计分。' : (Number(p) === Number(q.ans) ? '答对了。' : '答错了。')) +
           ' 正确答案：' + 'ABCD'.charAt(q.ans) + '．' + esc((q.opts || [])[q.ans] || '') +
           (q.exp ? '　解析：' + esc(q.exp) : '') + '</div>'
         : (answered ? '<div style="font-size:12px;color:#6a7f95;margin-top:5px">已作答：' + 'ABCD'.charAt(p) + '．' + esc((q.opts || [])[p] || '') + '（提交前可改选）</div>' : '<div style="font-size:12px;color:#9aa8a0;margin-top:5px">未作答 —— 全部答完才能提交</div>')) +
@@ -1498,7 +1504,7 @@
       '<div style="font-size:13px;color:#33413a">已答 <b>' + s.answered + '</b>/' + s.total + ' 题' +
       (allDone ? '' : ' · <b style="color:#b3403a">还差 ' + (s.total - s.answered) + ' 题</b>') +
       ' · 答对（提交后揭晓） <b>' + (st.submitted ? s.right : '—') + '</b> 题' +
-      (st.submitted ? ' · 本次 <b style="color:#1f6b3a">+' + s.add + '</b> 分' : '') + '</div>' +
+      (st.submitted ? ' · 本次 <b style="color:' + (s.add > 0 ? '#1f6b3a' : (s.add < 0 ? '#b3403a' : '#7a8a80')) + '">' + (s.add > 0 ? '+' : '') + s.add + '</b> 分' : '') + '</div>' +
       (st.submitted ? ''
         : '<button class="btn2 primary" onclick="qzSubmit()"' + (allDone ? '' : ' disabled style="opacity:.5"') + '>' +
           (allDone ? '提交全部答案' : '全部答完才能提交（' + s.answered + '/' + s.total + '）') + '</button>') +
@@ -1551,7 +1557,8 @@
         answers.forEach(function (a) { dm[a.q] = 1; });
         try { localStorage.setItem(QZ_LS + '_done', JSON.stringify(dm)); } catch (e2) {}
         st.submitted = true;
-        st.msg = '答对 ' + right + ' / ' + answers.length + ' 题，+' + (Math.round(right * 0.5 * 10) / 10) + ' 分，等待入账';
+        var _net = qzNetScore(right);
+        st.msg = '答对 ' + right + ' / ' + answers.length + ' 题，' + (_net > 0 ? '+' : '') + _net + ' 分，等待入账';
         qzSave();
         ST.pending = { id: rec.id, name: ST.name, action: 'quiz', label: '每日竞答', at: rec.at, status: 'pending' };
         savePending(); renderMain(); startPoll();
