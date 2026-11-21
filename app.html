@@ -2038,7 +2038,7 @@ table.paper td.l{text-align:left;font-weight:600}
     </div>
 
     <div class="chartbox" id="qzPane-wrong" style="margin:10px 0;display:none">
-      <h3 style="font-size:14px">📊 答题情况 · 错题库 <span style="font-size:12px;font-weight:400;color:#6b7c72">谁答了、错在哪</span></h3>
+      <h3 style="font-size:14px">📊 答题情况 · 错题库 <span style="font-size:12px;font-weight:400;color:#6b7c72">谁答了、错在哪 · 点任意一题放大讲解</span></h3>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">
         <button class="btn2 sm" id="qzWTabQ" onclick="qzWrongRender('q')">📋 按题目（错题排行）</button>
         <button class="btn2 sm" id="qzWTabS" onclick="qzWrongRender('s')">🧑‍🎓 按学生（答题明细）</button>
@@ -2047,6 +2047,8 @@ table.paper td.l{text-align:left;font-weight:600}
         <span class="sub" id="qzWrongTip"></span>
       </div>
       <div id="qzWrong" style="margin-top:8px;max-height:520px;overflow-y:auto"></div>
+      <!-- vT270 错题放大讲解层（点击题目卡片打开，Esc / 点空白关闭） -->
+      <div id="qzExplain" style="display:none"></div>
     </div>
 
     <div class="chartbox" id="qzPane-bank" style="margin:10px 0;display:none">
@@ -2804,6 +2806,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="gradeAna" checked> 评价分析反馈</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="codex" checked> 📖 启灵图鉴</label>
         <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="quiz" checked> 🧠 每日竞答</label>
+        <label style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" data-pk="guard" checked> 🌹 班级玫瑰</label>
       </div>
       <div id="ptGradeModeBox" style="margin-top:12px;padding-top:10px;border-top:1px dashed #dde5ee">
         <div class="syncdesc"><b>🏅 素养评价显示方式（vT141）</b>：家长端「🏅 素养评价」用哪种方式显示，由你决定。分数方式显示具体分数；等级方式只显示 A+ / A / B / C / D / E（A+ ≥95，A 90–94，B 80–89，C 70–79，D 60–69，E &lt;60）。</div>
@@ -20910,7 +20913,7 @@ function paFallbackCopy(txt, done) {  try {
 }
 /* vT131 修复：hwstat（vT129 加的「📊 作业统计」）之前漏在默认表外 —— 勾选框压根不保存；
    本轮新增 hwtodo（⚠️ 未完成作业），一并补进默认表 */
-function ptPanelsDefault() { return { detain: true, points: true, weekly: true, hw: true, hwtodo: true, hwstat: true, rc: true, rcclass: true, cmt: true, grade: true, gradeAna: true, codex: true, quiz: true, gradeMode: 'score' }; }
+function ptPanelsDefault() { return { detain: true, points: true, weekly: true, hw: true, hwtodo: true, hwstat: true, rc: true, rcclass: true, cmt: true, grade: true, gradeAna: true, codex: true, quiz: true, guard: true, gradeMode: 'score' }; }
 function ptPanelsGet() {
   var d = ptPanelsDefault();
   try {
@@ -21392,7 +21395,7 @@ try {
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
 var WB_VER_TAG = 'v257';
-var WB_MY_VER = '优化版 vT269 · 积分三分类(奖励/扣罚/消费)+守护rose口径+家长端积分卡';
+var WB_MY_VER = '优化版 vT270 · 错题放大讲解+已讲解入库 · 家长端班级玫瑰';
 var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.259';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
@@ -27391,6 +27394,121 @@ function cwInit(){
      联表 s-quiz 题库拿题干 / 分类 / 正确答案。出题端 vT187 已有「错题优先」（错得多的题
      不受 60 天回避限制提前重复），这里补老师侧的可见性：错题排行 + 学生明细 + 导出。 */
   var qzWrongMode = 'q';
+  /* ===== vT270 错题放大讲解层 =====
+     老师的用法：错题库里点任意一题 → 大字号题干 + 四个选项（正确答案绿底打勾）+ 解析 + 谁答错，
+     直接投屏讲；讲完勾「已讲解」，该题入库并从待讲列表隐藏。
+     标记写在题库行 s-quiz.taughtAt 上（不新建表、不动答题记录），随题库 LWW 同步到云端，
+     换电脑 / 小程序 / 教室桌面都看得到；讲完之后又有人答错 → 自动回到待讲区。 */
+  (function () {
+    if (document.getElementById('qzXStyle')) return;
+    var st = document.createElement('style'); st.id = 'qzXStyle';
+    st.textContent = [
+      '#qzExplain{position:fixed;inset:0;z-index:9998;background:rgba(16,26,22,.55);display:flex;align-items:center;justify-content:center;padding:16px}',
+      '#qzExplain .qx-card{background:#fff;border-radius:20px;max-width:880px;width:100%;max-height:92vh;overflow:auto;padding:24px 28px 18px;box-shadow:0 0 0 100vmax rgba(16,26,22,.55),0 24px 60px rgba(0,0,0,.32);animation:qxIn .16s ease-out}',
+      '@keyframes qxIn{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:none}}',
+      '#qzExplain .qx-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:#6b7c72}',
+      '#qzExplain .qx-x{margin-left:auto;border:0;background:#f1f5f2;color:#5c6b62;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:15px;line-height:1}',
+      '#qzExplain .qx-stem{font-size:26px;line-height:1.7;font-weight:800;margin:14px 0 16px;color:#182a22}',
+      '#qzExplain .qx-opt{font-size:19px;line-height:1.6;padding:11px 14px;border-radius:12px;border:1.5px solid #e3ede7;margin-bottom:10px;color:#2b3a33;display:flex;gap:12px;align-items:flex-start;background:#fcfdfc}',
+      '#qzExplain .qx-opt .k{font-weight:800;color:#8a9b92;flex:none}',
+      '#qzExplain .qx-opt.ok{border-color:#2d7a4f;background:#eaf6ee}',
+      '#qzExplain .qx-opt.ok .k{color:#2d7a4f}',
+      '#qzExplain .qx-exp{font-size:16px;line-height:1.8;color:#41544a;background:#f5f9f6;border-radius:12px;padding:12px 14px;margin-top:6px}',
+      '#qzExplain .qx-wrongs{font-size:15px;color:#c2410c;margin-top:14px;line-height:1.8}',
+      '#qzExplain .qx-foot{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:18px;padding-top:14px;border-top:1px dashed #e3ede7}',
+      '#qzExplain .qx-foot label{display:flex;align-items:center;gap:9px;font-size:15.5px;color:#2d7a4f;cursor:pointer;font-weight:600}',
+      '#qzExplain .qx-foot input{width:18px;height:18px;cursor:pointer}',
+      '#qzExplain .qx-hint{font-size:12px;color:#9aa8a0;margin-top:8px;line-height:1.7}',
+      '@media(max-width:640px){#qzExplain .qx-stem{font-size:21px}#qzExplain .qx-opt{font-size:17px}#qzExplain .qx-card{padding:18px 16px}}'
+    ].join('\n');
+    document.head.appendChild(st);
+  })();
+  function qzTeachAt(q) { return (q && q.taughtAt) ? String(q.taughtAt).slice(0, 10) : ''; }
+  function qzLastWrong(x) {
+    var mx = '';
+    (x.wrong || []).forEach(function (r) { var dW = String(r.date || '').slice(0, 10); if (dW > mx) mx = dW; });
+    return mx;
+  }
+  function qzTeachMark(qid, on) {
+    var rec = null;
+    try { rec = ntRows('s-quiz').filter(function (x) { return x && x.id === qid; })[0] || null; } catch (e) {}
+    if (!rec) return false;
+    if (on) rec.taughtAt = new Date().toISOString();
+    else { try { delete rec.taughtAt; } catch (e2) { rec.taughtAt = ''; } }
+    rec.ts = Date.now();                       /* LWW：ts 必须刷新，否则云端旧行会把标记盖回去 */
+    rec.updatedAt = new Date().toISOString();
+    rec.updatedBy = 'teach';
+    try { ntUpsert('s-quiz', rec); ntChanged(); } catch (e3) {}
+    try { qzWrongRender(); } catch (e4) {}
+    return true;
+  }
+  function qzTeachQuick(qid, on) {
+    if (!qzTeachMark(qid, on)) { try { (typeof toast === 'function') && toast('这道题已不在题库里，无法标记'); } catch (e) {} return; }
+    try { (typeof toast === 'function') && toast(on ? '✅ 已讲解，已入库并从待讲列表隐藏' : '已撤销讲解标记，题目回到待讲区'); } catch (e2) {}
+  }
+  function qzExplainClose() {
+    var el = document.getElementById('qzExplain');
+    if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+    try { document.body.style.overflow = ''; } catch (e) {}
+  }
+  function qzExplainOpen(qid) {
+    var el = document.getElementById('qzExplain'); if (!el) return;
+    if (!/^[A-Za-z0-9_\-]+$/.test(String(qid))) return;
+    /* 挂到 body 下：错题库所在的板块可能被切走（section display:none），
+       弹层若留在里面就会跟着一起不显示。 */
+    if (el.parentNode !== document.body) { try { document.body.appendChild(el); } catch (e0) {} }
+    var d = qzWrongData(), q = d.bank[qid];
+    var all = d.rows.filter(function (r) { return r && r.qid === qid; });
+    var wrong = all.filter(function (r) { return r.ok === false; });
+    var taught = qzTeachAt(q), ansIdx = q ? (Number(q.ans) || 0) : -1;
+    var opts = (q && Array.isArray(q.opts)) ? q.opts : [];
+    var names = [], nd = {};
+    wrong.forEach(function (r) {
+      if (names.indexOf(r.name) < 0) names.push(r.name);
+      var dd = String(r.date || '').slice(0, 10); if (dd) nd[dd] = (nd[dd] || 0) + 1;
+    });
+    var dateList = Object.keys(nd).sort().map(function (dd) { return dd.slice(5) + '（' + nd[dd] + '人）'; }).join('、');
+    var h = '<div class="qx-card" onclick="event.stopPropagation()">';
+    h += '<div class="qx-head">' +
+      '<span style="padding:2px 8px;border-radius:6px;background:#fdeee8;color:#c2410c">错 ' + wrong.length + ' 人 / 共 ' + all.length + ' 人答</span>' +
+      (q && q.cat ? '<span style="padding:2px 8px;border-radius:6px;background:#eef4ff;color:#3b6fb0">' + esc(q.cat) + '</span>' : '') +
+      (taught ? '<span style="padding:2px 8px;border-radius:6px;background:#eaf6ee;color:#2d7a4f">已于 ' + esc(taught) + ' 讲解</span>' : '') +
+      '<button class="qx-x" onclick="qzExplainClose()" title="关闭（Esc）">✕</button></div>';
+    h += '<div class="qx-stem">' + esc((q && q.stem) || ('（' + qid + '：题目可能已被删除）')) + '</div>';
+    opts.forEach(function (t, i) {
+      var okk = (i === ansIdx);
+      h += '<div class="qx-opt' + (okk ? ' ok' : '') + '"><span class="k">' + 'ABCD'.charAt(i) + '</span>' +
+        '<span style="flex:1">' + esc(t) + (okk ? '<b style="font-size:14px;color:#2d7a4f">　✓ 正确答案</b>' : '') + '</span></div>';
+    });
+    if (q && q.exp) h += '<div class="qx-exp"><b>解析：</b>' + esc(q.exp) + '</div>';
+    h += '<div class="qx-wrongs">答错的 ' + names.length + ' 名学生：' + (esc(names.join('、')) || '—') +
+      (dateList ? '<br><span style="color:#9aa8a0;font-size:13px">错误日期：' + esc(dateList) + '</span>' : '') + '</div>';
+    h += '<div class="qx-foot">' +
+      '<label><input type="checkbox" id="qxDoneChk"' + (taught ? ' checked' : '') + '> 已讲解（勾选后自动入库，并从待讲列表隐藏）</label>' +
+      '<span class="qx-hint" id="qxDoneTip" style="margin:0"></span>' +
+      '<button class="btn2" style="margin-left:auto" onclick="qzExplainClose()">关闭</button></div>';
+    h += '<div class="qx-hint">讲解标记存在题库里，换电脑 / 教室桌面都能看到；若讲完之后又有人答错，这道题会自动回到待讲区。</div>';
+    h += '</div>';
+    el.innerHTML = h;
+    el.style.display = 'flex';
+    try { document.body.style.overflow = 'hidden'; } catch (e7) {}
+    el.onclick = qzExplainClose;                 /* 点空白处关闭 */
+    var chk = document.getElementById('qxDoneChk');
+    if (chk) chk.onchange = function () {
+      if (!qzTeachMark(qid, chk.checked)) {
+        chk.checked = !chk.checked;
+        var tp = document.getElementById('qxDoneTip');
+        if (tp) tp.textContent = '这道题已不在题库里，无法标记';
+        return;
+      }
+      qzExplainClose();
+      try { (typeof toast === 'function') && toast(chk.checked ? '✅ 已讲解，已入库并从待讲列表隐藏' : '已撤销讲解标记'); } catch (e5) {}
+    };
+    try { var card = el.querySelector('.qx-card'); if (card) card.scrollTop = 0; } catch (e6) {}
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e && (e.key === 'Escape' || e.keyCode === 27)) qzExplainClose();
+  });
   function qzWrongData() {
     var bank = {}, rows = [];
     try { qzBank().forEach(function (q) { if (q && q.id) bank[q.id] = q; }); } catch (e1) {}
@@ -27422,25 +27540,49 @@ function cwInit(){
         return { qid: qid, q: d.bank[qid], wrong: agg[qid].wrong, right: agg[qid].right };
       }).filter(function (x) { return x.wrong.length > 0; })
         .sort(function (a, b) { return b.wrong.length - a.wrong.length || (b.wrong.length + b.right) - (a.wrong.length + a.right); });
-      if (tip) tip.textContent = '题库 ' + Object.keys(d.bank).length + ' 题 · 有错误记录 ' + list.length + ' 题';
       if (!list.length) {
+        if (tip) tip.textContent = '题库 ' + Object.keys(d.bank).length + ' 题 · 有错误记录 0 题';
         html = '<div class="sub">🎉 到目前为止没有学生答错过任何题。</div>';
       } else {
-        html = list.map(function (x) {
+        /* vT270 按「已讲解」拆成两段：待讲（默认展示，点开可放大）+ 已讲解入库（折叠，可撤销） */
+        var todoL = [], doneL = [];
+        list.forEach(function (x) {
+          var tA = qzTeachAt(x.q), lw = qzLastWrong(x);
+          x._taught = tA;
+          x._again = !!(tA && lw && lw > tA);       /* 讲完以后又有人答错 → 回到待讲 */
+          if (tA && !x._again) doneL.push(x); else todoL.push(x);
+        });
+        if (tip) tip.textContent = '题库 ' + Object.keys(d.bank).length + ' 题 · 待讲 ' + todoL.length +
+          ' 题 · 已讲 ' + doneL.length + ' 题（点题目放大讲解）';
+        var qzCardOf = function (x) {
           var total = x.wrong.length + x.right;
           var rate = Math.round(x.wrong.length * 100 / total);
           var names = x.wrong.map(function (r) { return esc(r.name); }).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).join('、');
           var dates = x.wrong.map(function (r) { return String(r.date || '').slice(0, 10); }).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).join('、');
-          return '<div style="padding:8px 0;border-bottom:1px dashed #e3ede7">' +
+          var qid = String(x.qid).replace(/[^A-Za-z0-9_\-]/g, '');
+          return '<div onclick="qzExplainOpen(\'' + qid + '\')" style="padding:9px 10px 8px;border-bottom:1px dashed #e3ede7;border-radius:10px;cursor:zoom-in" onmouseover="this.style.background=\'#f7fbf8\'" onmouseout="this.style.background=\'\'">' +
             '<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">' +
             '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#fdeee8;color:#c2410c;flex-shrink:0">错 ' + x.wrong.length + ' 人 / 共 ' + total + ' 人答 · 错误率 ' + rate + '%</span>' +
             (x.q && x.q.cat ? '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#eef4ff;color:#3b6fb0;flex-shrink:0">' + esc(x.q.cat) + '</span>' : '') +
+            (x._again ? '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#fff4e5;color:#a16207;flex-shrink:0">讲过 · 又有新错</span>' : '') +
+            (x._taught && !x._again ? '<span style="font-size:11px;padding:1px 6px;border-radius:6px;background:#eaf6ee;color:#2d7a4f;flex-shrink:0">已于 ' + esc(x._taught) + ' 讲解</span>' : '') +
+            '<span style="margin-left:auto;font-size:11.5px;color:#8a9b92;flex-shrink:0">点击放大讲解 ⤢</span>' +
             '</div>' +
             '<div style="font-size:13px;font-weight:600;margin-top:4px">' + esc((x.q && x.q.stem) || '（' + x.qid + '：题目可能已被删除）') + '</div>' +
             (x.q ? '<div style="font-size:11.5px;color:#2d7a4f;margin-top:2px">✓ 正确答案：' + 'ABCD'.charAt(Number(x.q.ans) || 0) + '．' + esc((x.q.opts || [])[x.q.ans] || '') + (x.q.exp ? '　解析：' + esc(x.q.exp) : '') + '</div>' : '') +
             '<div style="font-size:12px;color:#c2410c;margin-top:3px">答错的学生：' + (names || '—') + (dates ? '　<span style="color:#9aa8a0">（' + dates + '）</span>' : '') + '</div>' +
-            '</div>';
-        }).join('');
+            '<div style="margin-top:6px;display:flex;gap:8px;justify-content:flex-end">' +
+            (x._taught
+              ? '<button class="btn2 sm ghost" onclick="event.stopPropagation();qzTeachQuick(\'' + qid + '\',false)" title="取消讲解标记，题目回到待讲区">↩ 撤销已讲</button>'
+              : '<button class="btn2 sm" onclick="event.stopPropagation();qzTeachQuick(\'' + qid + '\',true)" title="标记已讲解：自动入库并从待讲列表隐藏">✅ 标记已讲</button>') +
+            '</div></div>';
+        };
+        html = todoL.map(qzCardOf).join('');
+        if (!todoL.length) html = '<div class="sub" style="color:#2d7a4f">✅ 待讲的错题都讲完了。下面「已讲解入库」里还能翻回去看，也可以撤销标记。</div>';
+        if (doneL.length) {
+          html += '<details style="margin-top:10px"><summary style="cursor:pointer;font-size:13px;color:#2d7a4f;user-select:none;list-style:none">📚 已讲解入库（' + doneL.length + ' 题）· 点击展开 ▾</summary>' +
+            '<div style="margin-top:6px">' + doneL.map(qzCardOf).join('') + '</div></details>';
+        }
       }
     } else {
       var stu = {};
@@ -27534,6 +27676,8 @@ function cwInit(){
   window.qzOpenImport = qzOpenImport; window.qzCloseImport = qzCloseImport;
   window.qzImportPreview = qzImportPreview; window.qzImportDo = qzImportDo; window.qzSaveCfg = qzSaveCfg;
   window.qzWrongRender = qzWrongRender; window.qzWrongExport = qzWrongExport;   /* vT215 错题库 */
+  window.qzExplainOpen = qzExplainOpen; window.qzExplainClose = qzExplainClose;  /* vT270 错题放大讲解 */
+  window.qzTeachQuick = qzTeachQuick;
   window.qzTab = qzTab;                                                          /* vT215c 页面切换 */
   try { qzInit(); } catch (e) { console.warn('[quiz] 初始化失败', e); }
 
@@ -35726,6 +35870,15 @@ function cwInit(){
         };
       }
     } catch (_q3) {}
+    /* vT270 班级守护玫瑰：只下发「全班累计」与五阶段阈值，不含任何学生姓名/个人分；
+       gdClassPoints() 与网页「班级守护」板块同一口径（作业+作业调整+奖惩，剔灵宠消费），
+       老师若校准过阈值（wb_gd_cfg_v1），家长端看到的阶段与老师端完全一致。 */
+    var guardSnap = null;
+    try {
+      var _gpts = (typeof gdClassPoints === 'function') ? gdClassPoints() : 0;
+      var _gth = (typeof gdTh === 'function') ? gdTh() : [0, 300, 800, 1600, 3000];
+      guardSnap = { pts: Math.round((Number(_gpts) || 0) * 10) / 10, th: _gth, at: Date.now() };
+    } catch (_g1) {}
     return {
       app: '李老师工作台·家长端', ver: 3, ts: Date.now(),
       classId: (s2 && s2.classId) || '', className: '',
@@ -35737,6 +35890,7 @@ function cwInit(){
       quiz: quiz,
       codexPool: codexPool, codexPets: codexPets,
       weekly: weekly, weeklyFrom: lim14,
+      guard: guardSnap,   /* vT270 班级玫瑰：全班累计积分 + 五阶段阈值 */
       ptFlow: ptFlowMap   /* vT262 家长端积分流水（按姓名分组，随加密块下发各自孩子的） */
     };
   }
