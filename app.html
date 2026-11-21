@@ -3710,6 +3710,10 @@ table.paper td.l{text-align:left;font-weight:600}
   }
   window.gdSyncNow = gdSyncNow;
   window.gdCalibrate = gdCalibrate;
+  /* vT273 家长端班级玫瑰：快照模块在另一个 IIFE 里，必须显式外发，
+     否则那边 typeof gdClassPoints === 'function' 恒为 false，玫瑰永远 0 分。 */
+  window.gdClassPoints = gdClassPoints;
+  window.gdTh = gdTh;
   /* --- 玫瑰渲染（提取自预览并 gd 前缀化；阈值可校准） --- */
   const GD_NS="http://www.w3.org/2000/svg", GD_RCX=150, GD_RCY=170, GD_RMAX=3000;
 const GD_RSTAGES=[
@@ -17560,8 +17564,16 @@ function openStuPanel(name){
            （成绩达标键不含日期），这正是「删一条重复、整组都对不上」的病根。
            没有兄弟行 → 照旧写墓碑防复活，并移除创建登记。 */
         var _r=f.row||null;
+        /* vT273 抽卡 / 抽灵宠的消费行：删掉就等于退分，同源的灵宠与灵杰卡要一起收回。
+           这类行绝不写业务键墓碑 —— 同一天抽两次、同价同事项键完全一样，
+           写墓碑会把另一笔也连坐抹掉（vT236 踩过的坑）。 */
+        var _isDraw=false;
         try{
-          if(_r&&typeof stTombKeyOf==='function'){
+          var _rz=String(f.t||'').replace(/^奖惩\s*·\s*/,'');
+          _isDraw=(f.v<0)&&(typeof window.ptDrawTitle==='function')&&window.ptDrawTitle(_rz);
+        }catch(_de){}
+        try{
+          if(_r&&!_isDraw&&typeof stTombKeyOf==='function'){
             var _tk=stTombKeyOf(fval(_r,'姓名'),fval(_r,'奖惩事项'),syncDateOnly(fval(_r,'日期')),parseFloat(fval(_r,'奖惩分值')));
             if(_tk){
               var _sib=(typeof stBonusSiblingAlive==='function')?stBonusSiblingAlive(_tk,_r):false;
@@ -17577,8 +17589,16 @@ function openStuPanel(name){
         }catch(_te){}
         try{ if(typeof stDeadAdd==='function'&&f.id) stDeadAdd(f.id); }catch(_te2){}
         stDelRow(_r||{id:f.id},false).then(function(){
+          /* vT273：先按扣分记录 id 收回同源灵宠 / 灵杰卡；旧数据没有 srcId 时按「同学生+同一天+唯一」兜底 */
+          var _rev=0,_leg=-2;
+          try{ if(typeof window.ptRevokeBySrc==='function') _rev=window.ptRevokeBySrc(f.id)||0; }catch(_e1){}
+          if(!_rev&&_isDraw){
+            try{ _leg=(typeof window.ptRevokeLegacyDraw==='function')?window.ptRevokeLegacyDraw(name,f.d):-2; }catch(_e2){}
+          }
           loadST().then(function(){renderStu();openStuPanel(name)});
-          toastMsg('已删除');
+          if(_rev||_leg>0) toastMsg('已删除，并自动收回对应的灵宠 / 灵杰卡');
+          else if(_leg===-1) toastMsg('已删除。这天不止一只灵杰，无法确定收回哪一只，请到「灵宠家园」手动收回');
+          else toastMsg('已删除');
         }).catch(function(err){console.error(err);toastMsg('⚠️ 没删掉')});
       };
       li.appendChild(x);
@@ -21397,7 +21417,7 @@ try {
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
 var WB_VER_TAG = 'v257';
-var WB_MY_VER = '优化版 vT272 · 错题先出题后揭晓（答案与解析点击才显示）';
+var WB_MY_VER = '优化版 vT273 · 抽卡消费与灵宠/灵杰卡双向联动 + 恢复班级玫瑰';
 var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.259';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
@@ -30428,6 +30448,10 @@ function cwInit(){
     };
   }
   /* 复用现有加减分写路径：追加一条奖惩记录（正=加分/赠送，负=消耗） */
+  /* vT273 返回值改为「这条奖惩记录的 id」——
+     抽卡 / 抽灵宠 / 家长提案入账都把 id 写回灵宠与灵杰卡（srcId + cost），
+     这样「删流水 → 自动收卡」和「收回 → 自动退分」才有确切的对应关系，
+     不会靠日期 / 分值猜测（同一天抽两次、同价 10 分根本分不开）。 */
   function ptAddManual(name, title, val) {
     if (typeof dbReady === 'undefined' || !dbReady) { if (typeof toastMsg === 'function') toastMsg('⚠️ 未连接数据表'); return Promise.reject('nodb'); }
     var stu = (typeof stuRoster === 'function') ? (stuRoster().filter(function (x) { return x.姓名 === name; })[0] || { 学号: '', 组别: '', 职务: '' }) : { 学号: '', 组别: '', 职务: '' };
@@ -30435,13 +30459,15 @@ function cwInit(){
       '学号': { text: stu.学号 || '' }, '姓名': { text: name }, '组别': { text: stu.组别 || '' },
       '职务': { text: stu.职务 || '' }, '奖惩事项': { text: title }, '奖惩分值': { number: val },
       '日期': { date: ptYmd(new Date()) }, '备注': { text: '宠物' }
-    } }).then(function (r) {
+    }     }).then(function (r) {
       try { stMarkCreated(name, title, ptYmd(new Date()), val) } catch (_smE) {}   /* vT233 创建登记+作废旧墓碑 */
       if (!(r && r.id)) throw new Error('no id');
-      if (typeof loadST === 'function') return loadST();
-    }).then(function () {
-      if (typeof renderStu === 'function') renderStu();
-      return true;
+      var _rid = String(r.id);
+      if (typeof loadST !== 'function') return _rid;
+      return Promise.resolve(loadST()).then(function () {
+        if (typeof renderStu === 'function') renderStu();
+        return _rid;
+      });
     }).catch(function (err) {
       console.error('[pet] 积分写入失败', err); if (typeof toastMsg === 'function') toastMsg('⚠️ 积分没保存成功'); throw err;
     });
@@ -30562,7 +30588,8 @@ function cwInit(){
     var cid = ptCardIdOf(who, sp.id);
     var ex = (s.petCards || []).filter(function (c) { return c && c.id === cid; })[0];
     var res = { def: sp, isNew: false, dup: false, awakened: false,
-                isHidden: (sp.tier || '普通') === '隐藏', pityHit: force };
+                isHidden: (sp.tier || '普通') === '隐藏', pityHit: force,
+                cardRec: null, petRec: null };   /* vT273 供抽卡调用方回写 srcId / cost */
     if (ex) {
       /* vT124 取消星级：重复抽到只是「已经有了」，不再升星 */
       ex.updatedAt = Date.now();
@@ -30572,6 +30599,7 @@ function cwInit(){
              img: sp.img || '', rarity: sp.rarity || '普通', createdAt: Date.now(), updatedAt: Date.now() };
       (s.petCards = s.petCards || []).push(ex);
       res.isNew = true;
+      res.cardRec = ex;
       /* vT112 抽到新卡 = 唤醒：墙上还没有这位灵杰就补一只（典藏不抽，自然不会走到这里） */
       if (!ptPetOfDef(s, who, sp.id)) {
         var np = ptMkPet(who, sp);
@@ -30579,6 +30607,7 @@ function cwInit(){
         if (fromParent) np.fromParent = 1;   /* vT153 家长端抽到的：桌面只在早上窗口集中报喜 */
         (s.pets = s.pets || []).push(np);
         res.awakened = true;
+        res.petRec = np;
       }
     }
     /* 保底计数：出隐藏归零，否则 +1（封顶 4，下一抽必出） */
@@ -33265,8 +33294,9 @@ function cwInit(){
     if (!_afDraw.ok) return toastMsg(_afDraw.msg);
     var sp = ptGrowWeightedPick(pool);   /* vT133 普通100 : 稀有30 加权抽取 */
     var fx = ptFxBegin('pet', who);   /* vT125 抽灵宠同样有演出 */
-    return ptAddManual(who, '成长灵宠 · 抽取', -cost).then(function () {
+    return ptAddManual(who, '成长灵宠 · 抽取', -cost).then(function (rid) {
       var np = ptMkPet(who, sp); np.fromPetDraw = 1;
+      try { np.srcId = String(rid || ''); np.cost = cost; } catch (_b1) {}   /* vT273 绑定扣分记录 */
       (s.pets = s.pets || []).push(np);
       ptSave(s); PET_DB = s; ptKickSync();
       fx.reveal({ kind: 'pet', name: sp.name, imgs: sp.imgs, img: sp.img, tier: sp.tier, rarity: sp.rarity,
@@ -33647,33 +33677,223 @@ function cwInit(){
     if (pay > 0) return ptAddManual(who, '成长灵宠 · 进化补差', -pay).then(done).catch(function () {});
     return done();
   }
-  /* vT65 误发收回：打 deleted 标记（不真删，便于反悔恢复，且同步不会被云端旧数据复活） */
+  /* ================= vT273 抽卡 ↔ 收回 双向联动 =================
+     老师的真实场景：抽错了 / 学生反悔 / 家长提案误批。以前两条路各自为政——
+       · 在「学生管理 → 积分流水」删掉那笔「启灵图鉴 · 抽卡 -10」，卡和灵宠还在学生手上；
+       · 在灵宠家园点「收回」，宠没了，但那 10 分照扣。
+     现在抽卡入账时把那条奖惩记录的 id 写回灵宠与灵杰卡（srcId），花费写 cost：
+       ① 删流水 → 自动收回同源的灵宠与灵杰卡（扣分记录没了，积分自然回到学生账上）；
+       ② 收回灵宠 / 灵杰卡 → 自动删掉那笔消费记录（等同于退分）；
+       ③ 老师直接发放 / 免费唤醒的（没有 srcId、cost=0）收回时不退分，只收回东西。
+     旧数据（vT273 之前抽的）没有 srcId：只在「同一学生 + 同一天 + 唯一一张卡/一只宠」时
+     兜底认一次，多个候选一概不猜，提示老师手动收回。 */
+  function ptBindDraw(res, rid, cost) {
+    if (!res || !rid) return;
+    var c = Math.round((Number(cost) || 0) * 10) / 10;
+    if (res.cardRec) { res.cardRec.srcId = String(rid); res.cardRec.cost = c; res.cardRec.updatedAt = Date.now(); }
+    if (res.petRec) { res.petRec.srcId = String(rid); res.petRec.cost = c; res.petRec.updatedAt = Date.now(); }
+  }
+  /* 一次「收回」会牵动哪些记录：灵宠、灵杰卡、对应的扣分记录、应退多少分 */
+  function ptDrawBundle(s, q) {
+    s = s || ptGet();
+    var out = { pets: [], cards: [], srcIds: [], refund: 0 };
+    var pet0 = null;
+    if (q && q.petId) pet0 = (s.pets || []).filter(function (p) { return p && p.id === q.petId && !p.deleted; })[0] || null;
+    if (pet0) {
+      out.pets.push(pet0);
+      (s.petCards || []).forEach(function (c) {
+        if (!c || c.deleted) return;
+        var sameSrc = pet0.srcId && c.srcId && String(c.srcId) === String(pet0.srcId);
+        var sameDef = String(c.studentName) === String(pet0.studentName) && String(c.defId) === String(pet0.defId);
+        /* 有 srcId 就只认同源；没有（旧数据 / 老师发放）才按「同学生 + 同灵杰」认 */
+        if (sameSrc || (!pet0.srcId && sameDef)) out.cards.push(c);
+      });
+    }
+    if (q && q.defId) {
+      (s.petCards || []).forEach(function (c) {
+        if (!c || c.deleted) return;
+        if (String(c.defId) !== String(q.defId)) return;
+        if (q.who && String(c.studentName) !== String(q.who)) return;
+        if (out.cards.indexOf(c) < 0) out.cards.push(c);
+      });
+      /* 旧数据 / 老师发放的宠物可能压根没有卡记录，这里独立按「学生 + 灵杰」再捞一遍 */
+      (s.pets || []).forEach(function (p) {
+        if (!p || p.deleted) return;
+        if (String(p.defId) !== String(q.defId)) return;
+        if (q.who && String(p.studentName) !== String(q.who)) return;
+        if (out.pets.indexOf(p) < 0) out.pets.push(p);
+      });
+    }
+    var seen = {};
+    out.pets.concat(out.cards).forEach(function (x) {
+      if (!x || !x.srcId) return;
+      var k = String(x.srcId);
+      if (seen[k]) return;
+      seen[k] = 1; out.srcIds.push(k);
+      out.refund += Math.max(0, Number(x.cost) || 0);
+    });
+    out.refund = Math.round(out.refund * 10) / 10;
+    return out;
+  }
+  /* 删掉那笔消费记录（= 退分）。只按记录 id 精确删，绝不写业务键墓碑 ——
+     同一天抽两次、同价同事项，业务键完全一样，写墓碑会把另一笔也连坐抹掉。 */
+  function ptCancelDrawCost(ids) {
+    var list = (ids || []).filter(Boolean);
+    if (!list.length) return Promise.resolve(0);
+    var rows = [];
+    list.forEach(function (id) {
+      var hit = null;
+      try {
+        (typeof ST_ROWS !== 'undefined' ? ST_ROWS : []).forEach(function (r) { if (r && String(recId(r)) === String(id)) hit = r; });
+      } catch (e) {}
+      if (hit) rows.push(hit);
+    });
+    if (!rows.length) return Promise.resolve(0);
+    var n = 0;
+    return rows.reduce(function (p, r) {
+      return p.then(function () {
+        try { if (typeof stDeadAdd === 'function') stDeadAdd(String(recId(r))); } catch (e) {}
+        return stDelRow(r, false).then(function (k) { n += (k ? 1 : 0); });
+      });
+    }, Promise.resolve()).then(function () {
+      if (typeof loadST !== 'function') return n;
+      return Promise.resolve(loadST()).then(function () { try { renderStu(); } catch (e) {} return n; });
+    });
+  }
+  /* 打回收回标记 + 记一条赠送记录（撤销收回时按 petId 找回） */
+  function ptApplyRevoke(s, b, note) {
+    var now = Date.now(), ym = ptYmd(new Date()), n = 0;
+    b.pets.forEach(function (p) {
+      p.deleted = true; p.deletedAt = now; p.updatedAt = now;
+      p.refunded = (Number(p.cost) || 0) > 0 ? 1 : 0;   /* 记下「这只有没有退过分」，恢复时要补扣 */
+      n++;
+      s.petGift.push({ id: ptNewId('gf'), studentName: p.studentName, kind: 'revoke', item: '收回灵杰：' + p.name,
+        qty: 1, petId: p.id, at: now, atText: ym, note: note || '误发收回' });
+    });
+    b.cards.forEach(function (c) {
+      c.deleted = true; c.deletedAt = now; c.updatedAt = now; n++;
+      s.petGift.push({ id: ptNewId('gf'), studentName: c.studentName, kind: 'revoke', item: '收回灵杰卡：' + (c.name || c.defId),
+        qty: 1, cardId: c.id, at: now, atText: ym, note: note || '误发收回' });
+    });
+    return n;
+  }
+  function ptRenderAfterPetChange() {
+    try { ptRenderHome(); } catch (e) {}
+    try { ptRenderGrad(); } catch (e) {}
+    try { if (typeof ptRenderCards === 'function') ptRenderCards(); } catch (e) {}
+    try { if (typeof ptRenderIncubator === 'function') ptRenderIncubator(); } catch (e) {}
+    try { if (typeof ptCodexRefresh === 'function') ptCodexRefresh(); } catch (e) {}
+    try { if (ptAdminUnlocked()) ptRenderAdmin(); } catch (e) {}
+  }
+  function ptDrawTitle(t) { return /启灵图鉴|成长灵宠\s*·\s*(家长)?抽取/.test(String(t || '')); }
+  /* 删流水时调用：按扣分记录 id 收回同源的灵宠与灵杰卡（积分已随记录删除回到账上，不再退一次） */
+  function ptRevokeBySrc(rid) {
+    if (!rid) return 0;
+    var s = ptGet(), b = { pets: [], cards: [], srcIds: [], refund: 0 };
+    (s.pets || []).forEach(function (p) { if (p && !p.deleted && p.srcId && String(p.srcId) === String(rid)) b.pets.push(p); });
+    (s.petCards || []).forEach(function (c) { if (c && !c.deleted && c.srcId && String(c.srcId) === String(rid)) b.cards.push(c); });
+    if (!b.pets.length && !b.cards.length) return 0;
+    var n = ptApplyRevoke(s, b, '删除抽卡流水自动收回');
+    ptSave(s); PET_DB = s; ptRenderAfterPetChange();
+    return n;
+  }
+  /* 旧数据兜底：同一学生 + 同一天，只有唯一一个灵杰（卡/宠同一只算一个）才认 */
+  function ptRevokeLegacyDraw(who, dateStr) {
+    var s = ptGet(), d = String(dateStr || '').slice(0, 10);
+    if (!who || d.length < 10) return 0;
+    var defs = {}, n = 0;
+    (s.pets || []).forEach(function (p) {
+      if (!p || p.deleted || p.srcId) return;
+      if (String(p.studentName) !== String(who)) return;
+      if (ptYmd(new Date(Number(p.obtainedAt) || 0)) !== d) return;
+      if (!defs[p.defId]) { defs[p.defId] = 1; n++; }
+    });
+    (s.petCards || []).forEach(function (c) {
+      if (!c || c.deleted || c.srcId) return;
+      if (String(c.studentName) !== String(who)) return;
+      if (ptYmd(new Date(Number(c.createdAt) || 0)) !== d) return;
+      if (!defs[c.defId]) { defs[c.defId] = 1; n++; }
+    });
+    if (n !== 1) return -1;                      /* 0=没找到，>1=有歧义 → 都不猜 */
+    var only = Object.keys(defs)[0];
+    var b = ptDrawBundle(s, { defId: only, who: who });
+    if (!b.pets.length && !b.cards.length) return 0;
+    ptApplyRevoke(s, b, '删除旧抽卡流水自动收回');
+    ptSave(s); PET_DB = s; ptRenderAfterPetChange();
+    return b.pets.length + b.cards.length;
+  }
+  /* vT65 误发收回：打 deleted 标记（不真删，便于反悔恢复，且同步不会被云端旧数据复活）
+     vT273：花积分抽到的，收回时连带删掉那笔消费 → 积分自动退回；老师发放的不退分。 */
   function ptRevoke(petId) {
     if (!ptNeedAdmin()) return;
     var s = ptGet();
     var pet = s.pets.filter(function (p) { return p && p.id === petId && !p.deleted; })[0];
     if (!pet) return toastMsg('这只灵杰已经不在墙上了');
-    if (!confirm('收回「' + pet.name + '」？\n主人：' + pet.studentName + '\n\n收回后全班各端（网页 / 小程序 / 教室桌面）都不再显示这只宠物；\n如需反悔，1 天内可在「🎁 直接赠送 → 赠送记录」或「♻️ 回收站」里恢复。')) return;
-    pet.deleted = true; pet.deletedAt = Date.now(); pet.updatedAt = Date.now();
-    s.petGift.push({ id: ptNewId('gf'), studentName: pet.studentName, kind: 'revoke', item: '收回灵杰：' + pet.name, qty: 1, petId: pet.id, at: Date.now(), atText: ptYmd(new Date()), note: '误发收回' });
-    ptSave(s); PET_DB = s;
-    toastMsg('↩ 已收回「' + pet.name + '」（' + pet.studentName + '）');
-    ptRenderHome(); ptRenderGrad();
-    if (ptAdminUnlocked()) ptRenderAdmin();
+    var b = ptDrawBundle(s, { petId: petId });
+    var tip = '收回「' + pet.name + '」？\n主人：' + pet.studentName + '\n\n';
+    if (b.refund > 0) {
+      tip += '这只灵宠是花 ' + b.refund + ' 分抽到的：收回会同时删掉那笔消费，' + b.refund + ' 分自动退回' + pet.studentName + '的积分。\n';
+    } else {
+      tip += '这只灵宠是老师发放 / 免费唤醒的，没有抽卡消费，收回不涉及退分。\n';
+    }
+    if (b.cards.length) tip += '同源的灵杰卡 ' + b.cards.length + ' 张也会一起收回，图鉴格子随之熄灭。\n';
+    tip += '\n收回后全班各端（网页 / 小程序 / 教室桌面）都不再显示；\n1 天内可在「🎁 直接赠送 → 赠送记录」或「♻️ 回收站」里恢复（已退的分会在恢复时按原价补扣）。';
+    if (!confirm(tip)) return;
+    ptApplyRevoke(s, b, '误发收回');
+    ptSave(s); PET_DB = s; ptRenderAfterPetChange();
+    var done = function () {
+      toastMsg('↩ 已收回「' + pet.name + '」（' + pet.studentName + '）' +
+        (b.refund > 0 ? (' · 已退回 ' + b.refund + ' 分') : '') +
+        (b.cards.length ? (' · 连带收回 ' + b.cards.length + ' 张灵杰卡') : ''));
+    };
+    if (b.srcIds.length) ptCancelDrawCost(b.srcIds).then(done, done); else done();
   }
-  /* vT65 反悔：把收回的宠物放回原位（等级/经验/背包都原样保留） */
+  /* vT65 反悔：把收回的宠物放回原位（等级/经验/背包都原样保留）
+     vT273：当初退回的分，恢复时按原价补扣，账目才对得上（否则等于白送一次抽卡）。 */
   function ptRevive(petId) {
     if (!ptNeedAdmin()) return;
     var s = ptGet();
     var pet = s.pets.filter(function (p) { return p && p.id === petId; })[0];
     if (!pet) return toastMsg('找不到这条灵杰记录');
     if (!pet.deleted) return toastMsg('这只灵杰本来就在墙上');
+    var need = pet.refunded ? Math.max(0, Number(pet.cost) || 0) : 0;
+    if (need > 0 && !confirm('恢复「' + pet.name + '」？\n\n当初收回时已把那笔 ' + need + ' 分退回给 ' + pet.studentName + '，\n恢复灵宠会按原价重新扣回 ' + need + ' 分（账目保持一致）。')) return;
     pet.deleted = false; pet.updatedAt = Date.now();
     s.petGift.push({ id: ptNewId('gf'), studentName: pet.studentName, kind: 'revive', item: '恢复灵杰：' + pet.name, qty: 1, petId: pet.id, at: Date.now(), atText: ptYmd(new Date()), note: '撤销收回' });
-    ptSave(s); PET_DB = s;
+    ptSave(s); PET_DB = s; ptRenderAfterPetChange();
+    if (need > 0) {
+      ptAddManual(pet.studentName, '启灵图鉴 · 抽卡（恢复灵宠）', -need).then(function (rid) {
+        pet.srcId = String(rid || ''); pet.cost = need; pet.refunded = 0; pet.updatedAt = Date.now();
+        ptSave(s); PET_DB = s;
+        toastMsg('↩️ 已恢复「' + pet.name + '」，并按原价重新扣回 ' + need + ' 分');
+        ptRenderAfterPetChange();
+      }, function () {
+        toastMsg('↩️ 已恢复「' + pet.name + '」，但补扣 ' + need + ' 分没写成功（可到学生管理手动扣）');
+      });
+      return;
+    }
     toastMsg('↩️ 已恢复「' + pet.name + '」（' + pet.studentName + '）');
-    ptRenderHome(); ptRenderGrad();
-    if (ptAdminUnlocked()) ptRenderAdmin();
+  }
+  /* 图鉴上按卡收回：老师点卡面「↩」→ 收卡 + 收同源灵宠 + 删消费退分 */
+  function ptCardRevokeDef(defId) {
+    if (!ptNeedAdmin()) return;
+    var s = ptGet();
+    var cards = (s.petCards || []).filter(function (c) { return c && !c.deleted && String(c.defId) === String(defId); });
+    if (!cards.length) return toastMsg('这张卡还没有发给任何同学');
+    var who = cards[0].studentName;
+    var b = ptDrawBundle(s, { defId: defId, who: who });
+    var tip = '收回灵杰卡「' + (cards[0].name || defId) + '」？\n持有：' + who + '\n\n';
+    if (b.refund > 0) tip += '这张卡是花 ' + b.refund + ' 分抽到的：收回会同时删掉那笔消费，' + b.refund + ' 分自动退回' + who + '的积分。\n';
+    else tip += '这张卡是老师发放的，没有抽卡消费，收回不涉及退分。\n';
+    if (b.pets.length) tip += '同源的灵宠 ' + b.pets.length + ' 只也会一起收回。\n';
+    tip += '\n收回后该灵杰回到卡池，可以再抽 / 再发。';
+    if (!confirm(tip)) return;
+    ptApplyRevoke(s, b, '收回灵杰卡');
+    ptSave(s); PET_DB = s; ptRenderAfterPetChange();
+    var done = function () {
+      toastMsg('↩ 已收回「' + (cards[0].name || defId) + '」（' + who + '）' + (b.refund > 0 ? (' · 已退回 ' + b.refund + ' 分') : ''));
+    };
+    if (b.srcIds.length) ptCancelDrawCost(b.srcIds).then(done, done); else done();
   }
   /* ================= vT125 抽卡演出（音效 + 特效） =================
      一次抽取的动作节奏：蓄力（符文光阵收束，约 0.7s）→ 爆闪 → 卡面翻出 → 收下。
@@ -34026,10 +34246,12 @@ function cwInit(){
     var _afCard = ptAfford(who, cost);
     if (!_afCard.ok) return toastMsg(_afCard.msg);
     var fx = ptFxBegin('card', who);   /* vT125 先起蓄力演出，结果回来才翻牌；vT127 默认等满 3 秒 */
-    return ptAddManual(who, '启灵图鉴 · 抽卡', -cost).then(function () {
+    return ptAddManual(who, '启灵图鉴 · 抽卡', -cost).then(function (rid) {
       var s = ptGet();
       var r = ptCardDrawOne(s, who);
       if (!r) { fx.abort(); toastMsg('灵杰都被同学抽走了，等老师发放新卡'); ptRenderHome(); ptRenderCards(); ptCodexRefresh(); return null; }
+      /* vT273 把这次扣分记录绑到卡与灵宠上：删流水能自动收回，收回能自动退分 */
+      try { ptBindDraw(r, rid, cost); } catch (_bd) {}
       ptSave(s); PET_DB = s; ptKickSync();
       fx.reveal({ kind: 'card', name: r.def.name, img: r.def.img, tier: r.def.tier, rarity: r.def.rarity,
         series: r.def.series, isNew: r.isNew, dup: r.dup, awakened: r.awakened, who: who,
@@ -34145,8 +34367,9 @@ function cwInit(){
       if (!g.ok) return Promise.reject(new Error(g.reason));
       var _afPG = ptAfford(who, g.cost);
       if (!_afPG.ok) return Promise.reject(new Error(who + ' 积分不足：抽灵宠要 ' + g.cost + ' 分，现有 ' + _afPG.bal + ' 分'));
-      return ptAddManual(who, '成长灵宠 · 家长抽取' + (byAuto ? '（自动批准）' : ''), -g.cost).then(function () {
+      return ptAddManual(who, '成长灵宠 · 家长抽取' + (byAuto ? '（自动批准）' : ''), -g.cost).then(function (rid) {
         var np = ptMkPet(who, g.sp); np.fromPetDraw = 1; np.fromParent = 1;
+        try { np.srcId = String(rid || ''); np.cost = g.cost; } catch (_b2) {}
         s.pets.push(np);
         it.status = 'done'; it.doneAt = Date.now(); it.doneBy = byAuto ? 'auto' : 'teacher';
         ptSave(s); PET_DB = s; ptKickSync();
@@ -34161,9 +34384,10 @@ function cwInit(){
     /* vT112 抽卡即唤醒；vT124 兑换随商城下线，家长提案一律按「抽卡」入账 */
     var cost = ptCost('feed');
     var actName = '抽卡';
-    return ptAddManual(who, '启灵图鉴 · 家长' + actName + (byAuto ? '（自动批准）' : ''), -cost).then(function () {
+    return ptAddManual(who, '启灵图鉴 · 家长' + actName + (byAuto ? '（自动批准）' : ''), -cost).then(function (rid) {
       var cardMsg = '';
       var cr = ptCardDrawOne(s, who, true, it.pickDefId || '');   /* vT260 采信预抽 def；家长端提案标记来源，桌面延迟到早上集中显示 */
+      try { ptBindDraw(cr, rid, cost); } catch (_b3) {}
       if (cr) {
         cardMsg = cr.isNew
           ? ('，抽到新卡「' + cr.def.name + '」' + (cr.awakened ? '并唤醒上墙' : ''))
@@ -34562,7 +34786,9 @@ function cwInit(){
           : ' title="' + ptEsc(p.blessing || '') + '"') + '>' +
         tierTag +
         (admin ? '<button type="button" title="✏️ 编辑这只灵杰的资料" class="cx-op" style="right:4px" onclick="event.stopPropagation();ptDefEditPick(\'' + ptAt(p.id) + '\')">✏️</button>' +
-        '<button type="button" title="🗑 移出图鉴（回收站可恢复，已发给同学的不受影响）" class="cx-op" style="right:32px" onclick="event.stopPropagation();ptDefRemove(false,\'' + ptAt(p.id) + '\')">🗑</button>' : '') +
+        '<button type="button" title="🗑 移出图鉴（回收站可恢复，已发给同学的不受影响）" class="cx-op" style="right:32px" onclick="event.stopPropagation();ptDefRemove(false,\'' + ptAt(p.id) + '\')">🗑</button>' +
+        /* vT273 收回灵杰卡：花积分抽到的会连带删掉那笔消费、积分退回；老师发放的不退分 */
+        (a ? '<button type="button" title="↩ 收回' + ptEsc(a.studentName) + '手上的这张卡（花积分抽到的会退回积分）" class="cx-op" style="right:60px" onclick="event.stopPropagation();ptCardRevokeDef(\'' + ptAt(p.id) + '\')">↩</button>' : '') : '') +
         ptCodexImgHtml(p) +
         '<div class="cx-nm">' + ptEsc(p.name) + '</div>' +
         '<div class="cx-own">' + ptEsc(p.series || '') + (a ? ' · 🐾 ' + ptEsc(a.studentName) + ' 已唤醒' : ' · 🥚 待唤醒') + '</div>' +
@@ -35299,6 +35525,13 @@ function cwInit(){
   /* vT67 修复：误发收回 / 反悔恢复漏挂全局，卡片上的 onclick 会报 ReferenceError（内联事件只在全局作用域找函数） */
   window.ptRevoke = ptRevoke;
   window.ptRevive = ptRevive;
+  /* vT273 抽卡 ↔ 收回 双向联动：删流水自动收卡 / 按卡收回并退分（学生管理抽屉与图鉴卡面调用） */
+  window.ptCardRevokeDef = ptCardRevokeDef;
+  window.ptRevokeBySrc = ptRevokeBySrc;
+  window.ptRevokeLegacyDraw = ptRevokeLegacyDraw;
+  window.ptDrawTitle = ptDrawTitle;
+  window.ptDrawBundle = ptDrawBundle;
+  window.ptGet = ptGet;   /* 控制台 / 验收用：读灵宠库活对象（改完记得 ptSave） */
   window.ptRenderIncubator = ptRenderIncubator;
   window.ptRenderParent = ptRenderParent;
   window.ptRenderSub = ptRenderSub;
@@ -35909,8 +36142,10 @@ function cwInit(){
        老师若校准过阈值（wb_gd_cfg_v1），家长端看到的阶段与老师端完全一致。 */
     var guardSnap = null;
     try {
-      var _gpts = (typeof gdClassPoints === 'function') ? gdClassPoints() : 0;
-      var _gth = (typeof gdTh === 'function') ? gdTh() : [0, 300, 800, 1600, 3000];
+      /* 用 window.* 取：快照模块与班级守护模块不在同一个 IIFE 里，
+         直接写裸函数名在这块作用域里取不到（vT273 修复玫瑰一直 0 分）。 */
+      var _gpts = (typeof window.gdClassPoints === 'function') ? window.gdClassPoints() : 0;
+      var _gth = (typeof window.gdTh === 'function') ? window.gdTh() : [0, 300, 800, 1600, 3000];
       guardSnap = { pts: Math.round((Number(_gpts) || 0) * 10) / 10, th: _gth, at: Date.now() };
     } catch (_g1) {}
     return {
@@ -36006,6 +36241,10 @@ function cwInit(){
        家长端读 ST.snap.rcClass 永远是 null → 班级诵读进度 / 成绩对比都看不到。只有聚合数，无姓名。 */
     doc.rcClass = snap.rcClass || null;
     doc.gAvg = snap.gAvg || {};
+    /* vT273 修复「家长端班级玫瑰不显示」：玫瑰数据（全班累计分 + 五阶段阈值）是公开层字段，
+       但这条加密块发布路径从来没把 snap.guard 抄进 doc —— 老师重发多少次快照，
+       家长端读到的都是 undefined，卡片整块不渲染。这里补上，并保持老快照兼容（null 时家长端不显示）。 */
+    doc.guard = snap.guard || null;
     /* vT181 布置作业真源也放公开顶层（只有作业内容/科目/日期，无学生隐私）：
        老加密块还没重发时，家长端可先用顶层 assign 立即显示真正布置的作业。 */
     doc.assign = snap.assign || [];
