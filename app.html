@@ -2057,6 +2057,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <select id="qzCatFilter" onchange="qzRender()" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px"></select>
         <button class="btn2 sm primary" onclick="qzAdd()">➕ 新增题目</button>
         <button class="btn2 sm" onclick="qzOpenImport()">📥 批量导入</button>
+        <button class="btn2 sm" onclick="qzOpenExport()" title="导出题库：TXT 与导入格式完全一致，可原样再导入；CSV 用 Excel 打开">📤 导出题库</button>
         <button class="btn2 sm ghost" style="color:#c2410c" onclick="qzPurgeAll()" title="清空全部题目（已加过的分不受影响）">🧹 清空题库</button>
         <span class="sctip" id="qzBankTip"></span>
       </div>
@@ -21421,9 +21422,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v275';
-var WB_MY_VER = '优化版 vT275 · 恢复旧页面自动刷新';
-var WB_BUILD_DATE = '11-21', WB_BUILD_NO = '2.6.261';
+var WB_VER_TAG = 'v276';
+var WB_MY_VER = '优化版 vT276 · 题库可导出';
+var WB_BUILD_DATE = '11-21', WB_BUILD_NO = '2.6.262';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -27357,7 +27358,7 @@ function cwInit(){
   function qzParse(text) {
     var out = [];
     String(text || '').split(/\r?\n/).forEach(function (line) {
-      var s = String(line || '').trim();
+      var s = String(line || '').replace(/^\ufeff/, '').trim();   /* vT276：去掉可能混进来的 BOM（导出/记事本另存时常见） */
       if (!s || s.charAt(0) === '#') return;
       var p = s.split(/[|｜\t]/).map(function (x) { return x.trim(); });
       if (p.length < 6) return;
@@ -27743,6 +27744,139 @@ function cwInit(){
       document.body.appendChild(a); a.click(); a.remove();
     } catch (e) { alert('导出失败：' + e.message); }
   }
+  /* ================= vT276 导出题库 =================
+     两种格式，各管一件事：
+     · TXT：与「📥 批量导入」完全同格式（题干|A|B|C|D|答案|解析|分类|出处），
+            导出的文件能原样粘回导入框 —— 备份、搬去别的班都靠它。
+            只含启用中的题（导入格式没有「停用」这个字段）。
+     · CSV：带 BOM 的表格，Excel 双击即开、中文不乱码，含停用题与已讲标记，
+            供老师在 Excel 里审阅、批量改完再粘回导入。 */
+  function qzExportRows(includeOff) {
+    return ntRows('s-quiz').filter(function (r) {
+      if (!r || r.deleted || !r.stem || !Array.isArray(r.opts) || r.opts.length < 2) return false;
+      if (!includeOff && r.on === false) return false;
+      return true;
+    }).sort(function (a, b) {
+      var ca = QZ_CATS.indexOf(a.cat), cb = QZ_CATS.indexOf(b.cat);
+      if (ca !== cb) return (ca < 0 ? 99 : ca) - (cb < 0 ? 99 : cb);
+      return String(a.stem).localeCompare(String(b.stem), 'zh');
+    });
+  }
+  function qzExportTxtText() {
+    var fixed = 0;
+    function safe(s) {
+      var t = String(s == null ? '' : s);
+      if (/[|｜\t]/.test(t)) fixed++;          /* 竖线/制表符会把导入的字段切开，只能替换 */
+      return t.replace(/[\r\n]+/g, ' ').replace(/[|｜\t]/g, '丨').trim();
+    }
+    var rows = qzExportRows(false);
+    var lines = rows.map(function (r) {
+      var o = (r.opts || []).slice(0, 4);
+      while (o.length < 4) o.push('');
+      var ai = Number(r.ans); if (!(ai >= 0 && ai < 4)) ai = 0;
+      return [safe(r.stem), safe(o[0]), safe(o[1]), safe(o[2]), safe(o[3]),
+        'ABCD'.charAt(ai), safe(r.exp), safe(r.cat || ''), safe(r.src || '')].join('|');
+    });
+    return { text: lines.join('\r\n'), n: rows.length, fixed: fixed };
+  }
+  function qzExportCsvText() {
+    function q(s) { return '"' + String(s == null ? '' : s).replace(/"/g, '""').replace(/[\r\n]+/g, ' ') + '"' }
+    function day(x) { if (!x) return ''; var d = new Date(x); return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10) }
+    var rows = qzExportRows(true);
+    var lines = ['序号,分类,题干,A,B,C,D,正确答案,正确答案内容,解析,出处,状态,已讲解'];
+    rows.forEach(function (r, i) {
+      var o = (r.opts || []).slice(0, 4); while (o.length < 4) o.push('');
+      var ai = Number(r.ans); if (!(ai >= 0 && ai < 4)) ai = 0;
+      lines.push([i + 1, q(r.cat || ''), q(r.stem), q(o[0]), q(o[1]), q(o[2]), q(o[3]),
+        'ABCD'.charAt(ai), q(o[ai]), q(r.exp || ''), q(r.src || ''),
+        r.on === false ? '停用' : '启用', day(r.taughtAt)].join(','));
+    });
+    return { text: lines.join('\r\n'), n: rows.length };
+  }
+  function qzExportDownload(name, text, mime, bom) {
+    try {
+      var blob = new Blob([(bom ? '\ufeff' : '') + text], { type: mime });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { try { URL.revokeObjectURL(url) } catch (e) {} }, 2000);
+      return true;
+    } catch (e) { alert('导出失败：' + ((e && e.message) || e)); return false }
+  }
+  function qzOpenExport() {
+    var all = qzExportRows(true), use = qzExportRows(false);
+    var byCat = {};
+    use.forEach(function (r) { var k = r.cat || '未分类'; byCat[k] = (byCat[k] || 0) + 1 });
+    var catLine = QZ_CATS.concat(['未分类']).filter(function (c) { return byCat[c] })
+      .map(function (c) { return c + ' ' + byCat[c] }).join(' · ');
+    var off = all.length - use.length;
+    var box = document.getElementById('qzExportBox');
+    if (!box) { box = document.createElement('div'); box.id = 'qzExportBox'; document.body.appendChild(box); }
+    box.innerHTML =
+      '<div style="position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:9999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)qzCloseExport()">' +
+      '<div style="background:#fff;border-radius:14px;padding:20px;width:580px;max-width:94vw;max-height:90vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.25)">' +
+      '<h3 style="margin:0 0 6px;font-size:16px">📤 导出题库</h3>' +
+      '<div class="sub" style="margin-bottom:10px">启用中 <b>' + use.length + '</b> 题' +
+        (off ? '（另有 <b>' + off + '</b> 题停用，只有 CSV 会带上）' : '') +
+        (catLine ? '<br>' + esc(catLine) : '') + '</div>' +
+      (use.length ? '' : '<div class="sub" style="color:#c2410c;margin-bottom:10px">题库里还没有启用中的题目，先导入或新增。</div>') +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">' +
+        '<button class="btn2 sm primary" onclick="qzExportTxt()">📄 下载 TXT（可直接再导入）</button>' +
+        '<button class="btn2 sm" onclick="qzExportCsv()">📊 下载 CSV（Excel 打开）</button>' +
+        '<button class="btn2 sm ghost" onclick="qzExportCopy()">📋 复制 TXT</button>' +
+      '</div>' +
+      '<div class="sub" style="line-height:1.8;background:#f6faf7;border-radius:10px;padding:10px 12px">' +
+        '<b>TXT</b>：一题一行，与「批量导入」完全同格式 —— <code style="font-size:12px">题干|A|B|C|D|答案|解析|分类|出处</code>；' +
+        '存下来备份、搬去别的班，都能直接粘回导入框。<br>' +
+        '<b>CSV</b>：带 BOM，Excel 双击即开不乱码；多出「状态」「已讲解」两列，含停用题，适合审阅和批量整理。<br>' +
+        '<span style="color:#8a6d3b">题干里若含竖线，TXT 会替换成「丨」以免把字段切开（CSV 不受影响）。</span>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn2" onclick="qzCloseExport()">关闭</button></div>' +
+      '</div></div>';
+  }
+  function qzCloseExport() { var b = document.getElementById('qzExportBox'); if (b) b.innerHTML = '' }
+  function qzExportTxt() {
+    var r = qzExportTxtText();
+    if (!r.n) { toastMsg('题库里还没有启用中的题目'); return }
+    var name = '竞答题库_' + qzToday() + '.txt';
+    if (!qzExportDownload(name, r.text, 'text/plain;charset=utf-8', false)) return;
+    toastMsg('📄 已导出 ' + r.n + ' 题：' + name + (r.fixed ? '（' + r.fixed + ' 处竖线已替换为「丨」）' : ''));
+  }
+  function qzExportCsv() {
+    var r = qzExportCsvText();
+    if (!r.n) { toastMsg('题库是空的'); return }
+    var name = '竞答题库_' + qzToday() + '.csv';
+    if (!qzExportDownload(name, r.text, 'text/csv;charset=utf-8', true)) return;
+    toastMsg('📊 已导出 ' + r.n + ' 题：' + name);
+  }
+  function qzExportCopy() {
+    var r = qzExportTxtText();
+    if (!r.n) { toastMsg('题库里还没有启用中的题目'); return }
+    qzCopyText(r.text);
+  }
+  function qzCopyText(txt) {
+    function fb() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = txt;
+        ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        var okc = document.execCommand('copy');
+        ta.remove();
+        toastMsg(okc ? '📋 已复制，可直接粘贴到「批量导入」框' : '⚠️ 复制失败，请改用「下载 TXT」');
+      } catch (e) { toastMsg('⚠️ 复制失败，请改用「下载 TXT」') }
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(function () {
+          toastMsg('📋 已复制，可直接粘贴到「批量导入」框');
+        }, fb);
+        return;
+      }
+    } catch (e) {}
+    fb();
+  }
   function qzInit() {
     var seeded = qzSeedIfEmpty();
     var purged = 0;
@@ -27764,6 +27898,10 @@ function cwInit(){
   window.qzRender = qzRender; window.qzRenderToday = qzRenderToday; window.qzAdd = qzAdd; window.qzEdit = qzEdit;
   window.qzSaveForm = qzSaveForm; window.qzDel = qzDel; window.qzCloseForm = qzCloseForm;
   window.qzOpenImport = qzOpenImport; window.qzCloseImport = qzCloseImport;
+  window.qzOpenExport = qzOpenExport; window.qzCloseExport = qzCloseExport;      /* vT276 导出题库 */
+  window.qzExportTxt = qzExportTxt; window.qzExportCsv = qzExportCsv; window.qzExportCopy = qzExportCopy;
+  window.qzParse = qzParse;                                                       /* vT276 供验收复用同一套解析 */
+  window.qzExportTxtText = qzExportTxtText; window.qzExportCsvText = qzExportCsvText; window.qzExportRows = qzExportRows;
   window.qzImportPreview = qzImportPreview; window.qzImportDo = qzImportDo; window.qzSaveCfg = qzSaveCfg;
   window.qzWrongRender = qzWrongRender; window.qzWrongExport = qzWrongExport;   /* vT215 错题库 */
   window.qzExplainOpen = qzExplainOpen; window.qzExplainClose = qzExplainClose;  /* vT270 错题放大讲解 */
