@@ -17054,7 +17054,8 @@ function flowClass(reason, score, source){
     var feed=/喂养|米饭|胡萝卜|进化/.test(rs);
     return {c:'consume',s:feed?'csFeed':'csDraw',sub:feed?'喂养':'抽奖'};
   }
-  if(source==='hw')return v>=0?{c:'reward',s:'rwHw',sub:'作业加分'}:{c:'penalty',s:'pnHw',sub:'作业扣分'};
+  /* vT271 作业「合格」等 0 分等级：加分为 0，流水标签不叫「作业加分」，改叫「作业合格」（淡蓝） */
+  if(source==='hw')return v>0?{c:'reward',s:'rwHw',sub:'作业加分'}:v<0?{c:'penalty',s:'pnHw',sub:'作业扣分'}:{c:'reward',s:'rwHw',sub:'作业合格'};
   if(/成绩达标|达目标|目标达成/.test(rs))return {c:'reward',s:'rwGoal',sub:'目标达成'};
   if(/竞答/.test(rs))return v>=0?{c:'reward',s:'rwQuiz',sub:'每日竞答'}:{c:'penalty',s:'pnOther',sub:'其他扣分'};
   if(/座位悬浮球|课堂加分|课堂参与|积极发言|举手|课前展示/.test(rs))return {c:'reward',s:'rwClass',sub:'课堂参与'};
@@ -17542,7 +17543,8 @@ function openStuPanel(name){
     var li=document.createElement('li');
     li.appendChild(el('span','d',f.d||''));
     var _tag=el('span',null,_fc.sub+' · ');
-    _tag.style.cssText='font-size:11px;color:'+(f.cat==='reward'?'#0f7a46':f.cat==='penalty'?'#b91c1c':f.cat==='consume'?'#c26a12':'#76867e')+';';
+    /* vT271 「作业合格」用淡蓝，区别于「作业加分」的绿 */
+    _tag.style.cssText='font-size:11px;color:'+(_fc.sub==='作业合格'?'#4b84dd':f.cat==='reward'?'#0f7a46':f.cat==='penalty'?'#b91c1c':f.cat==='consume'?'#c26a12':'#76867e')+';';
     li.appendChild(_tag);
     li.appendChild(el('span','t',f.t));
     li.appendChild(el('span','v '+(f.v>=0?'pos':'neg'),(f.v>0?'+':'')+f.v));
@@ -21395,7 +21397,7 @@ try {
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
 var WB_VER_TAG = 'v257';
-var WB_MY_VER = '优化版 vT270 · 错题放大讲解+已讲解入库 · 家长端班级玫瑰';
+var WB_MY_VER = '优化版 vT271 · 作业合格淡蓝标签 + 清理流水多余「灵宠」';
 var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.259';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
@@ -35661,6 +35663,8 @@ function cwInit(){
       /* vT269 三分类：家长端流水带 c(大类)/ct(子类)，与老师端/小程序同口径 */
       var _src = (kind === 'hw') ? 'hw' : (kind === 'rw' ? 'st' : 'manual');
       var _fc = flowClass(ttl.replace(/·(灵宠|.*)$/, ''), v, _src);
+      /* vT271 「·灵宠」只在真正的灵宠消费上追加；竞答等带 pet 标记的奖励不再挂这个词 */
+      if (_fc.c === 'consume' && !/·\s*灵宠$/.test(ttl)) ttl = ttl + '·灵宠';
       (ptFlowMap[nm] || (ptFlowMap[nm] = [])).push({ k: kind, d: dt, t: ttl, v: v, c: _fc.c, ct: _fc.sub });
     }
     try {
@@ -35678,8 +35682,8 @@ function cwInit(){
         vF2 = Math.round(vF2 * 10) / 10;
         var rsnF2 = fval(rF2, '奖惩事项') || '老师奖惩';
         var dtF2 = String(fval(rF2, '日期') || '').slice(0, 10);
-        var petF2 = /灵宠|启灵|抽卡|喂养|进化|竞答/.test(String(rsnF2));
-        if (vF2) pushFlow(nmF2, dtF2, 'rw', vF2, String(rsnF2) + (petF2 ? '·灵宠' : ''));
+        /* vT271 不再按「带 pet 标记」就加 ·灵宠（竞答会被误标）；由 pushFlow 按分类决定 */
+        if (vF2) pushFlow(nmF2, dtF2, 'rw', vF2, String(rsnF2));
         var skF2 = (typeof stTombKeyOf === 'function') ? stTombKeyOf(nmF2, rsnF2, dtF2, vF2) : '';
         if (skF2) _fStSeen[skF2] = 1;
       });
