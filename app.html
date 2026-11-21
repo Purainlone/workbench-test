@@ -21418,16 +21418,18 @@ try {
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
 /* vT67 版本真源：由 tools/sync_version.py 统一写入，勿手改。
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
-   WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
-var WB_VER_TAG = 'v257';
-var WB_MY_VER = '优化版 vT274 · 修复版本号重复';
-var WB_BUILD_DATE = '11-21', WB_BUILD_NO = '2.6.260';
+   WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
+   ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
+     它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
+var WB_VER_TAG = 'v275';
+var WB_MY_VER = '优化版 vT275 · 恢复旧页面自动刷新';
+var WB_BUILD_DATE = '11-21', WB_BUILD_NO = '2.6.261';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
   try{ if(typeof WB_BUILD_DATE==='undefined')return; var el=document.getElementById('appVer');
-    /* vT274：显示行不再拼 WB_VER_TAG。WB_MY_VER 已含 vTnnn，而 WB_VER_TAG 停在 v257（它只供
-       releaseVer / 旧标签页自检，wbBuildNum 只认 v+数字），拼上来就变成「vT274 … v257」两个版本号。
+    /* vT274：显示行永远不拼 WB_VER_TAG。WB_MY_VER 已含 vTnnn，再拼 WB_VER_TAG 就是两个版本号
+       （vT274 之前它一直停在 v257，屏幕上就是「vT273 … v257」）。它不是显示量，是自检比较量。
        原设计（tools/sync_version.py 的 VER_LINE）本来只有「标题 · 构建号 · 日期」三段。 */
     if(el) el.textContent='✨ 教室工作台 · '+WB_MY_VER+' · '+WB_BUILD_NO+' · '+WB_BUILD_DATE; }catch(_){}
 }
@@ -21472,6 +21474,21 @@ window.addEventListener('unhandledrejection', function (ev) {
 /* 2.6.60 构建号解析：只认 v数字 格式（如 v124）；旧格式版本串（如 '2.6.15'）返回 0，
    视为「比本页旧」—— 老页面写回的脏标记不再能触发新页面刷新 */
 function wbBuildNum(v) { var m = /^v(\d+)$/.exec(String(v || '')); return m ? +m[1] : 0 }
+/* vT275 自动刷新熔断：同一个目标版本最多自动刷新 2 次。
+   背景：vT275 把 WB_VER_TAG 从停滞的 v257 恢复到当下版本，自检链路重新通电后，
+   那些开着的旧标签页会各自刷一次（这是想要的效果）。但要防住一种情况 ——
+   某台设备拿到的始终是旧文件（CDN 边缘缓存 / 浏览器强缓存还没过期），
+   刷新后仍是旧版 → 下次同步又判「云端更新」→ 再刷，变成每隔一会儿闪一次。
+   这里用 localStorage 记次数（sessionStorage 刷新后还在，但关掉标签页就没了，不够稳）。
+   超过上限不再自动刷新，只提示手动按 F5。 */
+function wbRelAllow(ver) {
+  var k = 'wb_rel_n_' + ver, n = 0;
+  try { n = +localStorage.getItem(k) || 0 } catch (_e) {}
+  if (n >= 2) return false;
+  try { localStorage.setItem(k, String(n + 1)) } catch (_e) {}
+  return true;
+}
+try { window.wbRelAllow = wbRelAllow; } catch (_e) {}
 function giteeUrl(cfg) {
   return GITEE_API + '/repos/' + encodeURIComponent(cfg.owner) + '/' + encodeURIComponent(cfg.repo) +
          '/contents/' + cfg.path.split('/').map(encodeURIComponent).join('/');
@@ -22249,16 +22266,32 @@ function syncCycleCore(manual) {
             新页面读到旧标记 → 刷新 → 再读到 → 再刷新，无限循环；
          ② 桌面版等拿不到新文件的场合，刷新后还是旧版，同样死循环。
          现在改为：只认 v数字 构建号，且仅当云端构建号“比本页新”才刷新；
-         同一目标版本 1 分钟内最多自动刷新一次；旧标记静默忽略（本页写回时自愈）。 */
+         同一目标版本 1 分钟内最多自动刷新一次；旧标记静默忽略（本页写回时自愈）。
+         vT275 再补一道熔断：同一目标版本累计自动刷新不超过 2 次（wbRelAllow），
+         超限只提示手动刷新 —— 防「拿到的始终是旧文件」那种反复闪屏。 */
       if (!res.empty && doc.releaseVer && doc.releaseVer !== WB_VER_TAG) {
-        var _rvN = wbBuildNum(doc.releaseVer), _myN = wbBuildNum(WB_VER_TAG), _needRl = false;
+        var _rvN = wbBuildNum(doc.releaseVer), _myN = wbBuildNum(WB_VER_TAG), _needRl = false, _rlBlocked = false;
         if (_rvN > 0 && _rvN > _myN) {
           var _rlKey = 'wb_rel_rl_' + doc.releaseVer, _rlAt = 0;
           try { _rlAt = +sessionStorage.getItem(_rlKey) || 0 } catch (_rlE1) {}
           if (Date.now() - _rlAt > 60000) {
-            try { sessionStorage.setItem(_rlKey, String(Date.now())) } catch (_rlE2) {}
-            _needRl = true;
+            if (wbRelAllow(doc.releaseVer)) {
+              try { sessionStorage.setItem(_rlKey, String(Date.now())) } catch (_rlE2) {}
+              _needRl = true;
+            } else {
+              _rlBlocked = true;
+            }
           }
+        }
+        if (_rlBlocked) {
+          /* 自动刷新已用满次数：只提示，不再刷（每个目标版本每个会话提示一次） */
+          try {
+            var _wk = 'wb_rel_warn_' + doc.releaseVer;
+            if (!sessionStorage.getItem(_wk)) {
+              sessionStorage.setItem(_wk, '1');
+              toastMsg('🔄 有新版本 ' + doc.releaseVer + '，自动刷新已达上限，请手动刷新页面（F5）');
+            }
+          } catch (_e6) {}
         }
         if (_needRl) {
           try { console.warn('[gitee-sync] 本页面是旧版 ' + WB_VER_TAG + '，数据中心已是 ' + doc.releaseVer + '，自动刷新') } catch (_v) {}
