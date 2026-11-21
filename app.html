@@ -2004,10 +2004,10 @@ table.paper td.l{text-align:left;font-weight:600}
     </details>
   </section>
 
-  <!-- ============ vT187 每日竞答（家长端每日 N 题，答对 0.5 分，同一题只计一次） ============ -->
+  <!-- ============ vT187 每日竞答（家长端每日 N 题，按答对题数阶梯计净分，同一题只计一次） ============ -->
   <section class="section" id="s-quiz">
-    <h2>每日竞答 <span style="font-size:13px;font-weight:400;color:#1d5c8f;background:#e8f0fb;border-radius:8px;padding:2px 10px;vertical-align:middle">家长端 · 答对 0.5 分 · 乱答阶梯扣分</span></h2>
-    <div class="sub">家长端每天一套选择题（默认 6 题，可调 1~10），内容取自六上语文课内知识、常见古文词语、文学文化常识、快乐读书吧。答对一题 +0.5 分；<b>为防乱答：一次提交中答错 1 题不扣分，答错 2 题扣 0.5 分，答错 3 题及以上扣 1 分</b>。答错当场给答案与解析；<b>同一题只算一次分</b>，答多少算多少，不要求答完。题目按日期自动更换，全班同一天题目一致。</div>
+    <h2>每日竞答 <span style="font-size:13px;font-weight:400;color:#1d5c8f;background:#e8f0fb;border-radius:8px;padding:2px 10px;vertical-align:middle">家长端 · 按答对题数给分 · 单次一条净分流水</span></h2>
+    <div class="sub">家长端每天一套选择题（默认 6 题，可调 1~10），内容取自六上语文课内知识、常见古文词语、文学文化常识、快乐读书吧。<b>按答对题数一次算一个净分（只记一条流水）：以 6 题为例，答对 6 题 +3、5 题 +2、4 题 +1、3 题 0、2 题 −0.5、1 题 −1、0 题 −1.5</b>。答错当场给答案与解析；<b>同一题只算一次分</b>。题目按日期自动更换，全班同一天题目一致。</div>
 
     <div class="chartbox" style="margin:10px 0">
       <h3 style="font-size:14px">⚙️ 竞答设置</h3>
@@ -21305,7 +21305,7 @@ try {
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
 var WB_VER_TAG = 'v257';
-var WB_MY_VER = '优化版 vT260 · 抽卡真即时揭晓 + 三端CAS对称';
+var WB_MY_VER = '优化版 vT261 · 竞答按答对题数阶梯计净分';
 var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.259';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
@@ -26940,10 +26940,12 @@ function cwInit(){
 
   /* ================= vT187 每日竞答（家长端）=================
      数据表：s-quiz 题库 / s-quizdone 每生每题只答一次 / s-quizlog 每日出题记录 / s-quizcfg 设置。
-     规则（老师已确认）：每天 1~10 题（默认 6）；答对 0.5 分；vT217 防乱答阶梯扣分——一次提交错 1 题不扣、错 2 题扣 0.5、错 3 题及以上扣 1；答错给答案；同一题跨天也只计一次分；
+     规则（老师已确认）：每天 1~10 题（默认 6）；vT261 按答对题数阶梯计净分（单次一条流水）——6 题 +3 / 5 题 +2 / 4 题 +1 / 3 题 0 / 2 题 −0.5 / 1 题 −1 / 0 题 −1.5，非 6 题按同一曲线外推；答错给答案；同一题跨天也只计一次分；
      普通题 60 天内不重复，高频错题可提前重复；同一天全班题目一致。 */
   var QZ_CATS = ['课内知识', '古文词语', '文学文化常识', '快乐读书吧'];
   var QZ_PER_SCORE = 0.5;
+  /* vT261 满分 = 全对（答对题数=n）对应的净分，用与计分同一条曲线 */
+  function qzFullScore(n) { n = Math.max(0, parseInt(n, 10) || 0); return Math.round(((n <= 3 ? (n * 0.5 - 1.5) : (n - 3))) * 10) / 10; }
   /* 首批内置题库（60 题，四类各 15）。老师可在题库管理里增删改，或批量导入扩充。 */
   /* vT189 老师反馈内置题难度过低、质量不达标：内置题库清空，改为老师自行录入/批量导入。
      旧的内置种子题会在打开本页时自动软删除（只删 updatedBy=seed 的记录，不误伤老师自己录的题）。 */
@@ -27089,7 +27091,7 @@ function cwInit(){
     var rows = qzTodaySet();
     if (!rows.length) { box.innerHTML = '<div class="sub">题库为空，先导入题目。</div>'; return; }
     qzLogDay(qzToday(), rows.map(function (r) { return r.id; }));
-    box.innerHTML = '<div class="sub" style="margin-bottom:6px">' + qzToday() + ' · 共 ' + rows.length + ' 题 · 满分 ' + (rows.length * QZ_PER_SCORE) + ' 分</div>' +
+    box.innerHTML = '<div class="sub" style="margin-bottom:6px">' + qzToday() + ' · 共 ' + rows.length + ' 题 · 全对 ' + qzFullScore(rows.length) + ' 分</div>' +
       rows.map(function (r, i) {
         return '<div style="padding:7px 0;border-bottom:1px dashed #e3ede7">' +
           '<div style="font-size:13px;font-weight:600">' + (i + 1) + '. ' + esc(r.stem || '') +
@@ -27227,7 +27229,7 @@ function cwInit(){
     rec.updatedAt = new Date().toISOString(); rec.updatedBy = 'teacher';
     ntUpsert('s-quizcfg', rec);
     qzRender(); qzRenderToday(); ntChanged();
-    toastMsg('✅ 已保存：' + (on ? '每天 ' + v + ' 题（满分 ' + (v * QZ_PER_SCORE) + ' 分）' : '家长端已关闭竞答'));
+    toastMsg('✅ 已保存：' + (on ? '每天 ' + v + ' 题（全对 ' + qzFullScore(v) + ' 分）' : '家长端已关闭竞答'));
   }
   /* vT189 清空内置种子题：只软删 updatedBy=seed 的记录，老师自己录/导入的题不受影响；
      用 s-quizcfg.purgedSeed 记住已清理，避免每次打开都扫一遍。 */
@@ -27395,11 +27397,11 @@ function cwInit(){
     var cfg = qzCfg();
     if (onEl) onEl.checked = cfg.on !== false;
     if (perEl) perEl.value = qzPerDay();
-    var full = document.getElementById('qzFull'); if (full) full.textContent = qzPerDay() * QZ_PER_SCORE;
+    var full = document.getElementById('qzFull'); if (full) full.textContent = qzFullScore(qzPerDay());
     var stat = document.getElementById('qzStat');
     if (stat) {
       var doneN = ntRows('s-quizdone').filter(function (r) { return r && !r.deleted; }).length;
-      stat.innerHTML = '题库 <b>' + qzBank().length + '</b> 题 · 每天 <b>' + qzPerDay() + '</b> 题 · 每题 <b>0.5</b> 分 · 累计已答记录 <b>' + doneN + '</b> 条' +
+      stat.innerHTML = '题库 <b>' + qzBank().length + '</b> 题 · 每天 <b>' + qzPerDay() + '</b> 题 · 全对 <b>' + qzFullScore(qzPerDay()) + '</b> 分 · 累计已答记录 <b>' + doneN + '</b> 条' +
         (purged ? '　<span style="color:#c2410c">已清除 ' + purged + ' 道内置题，请重新导入</span>' : '') +
         (seeded ? '　<span style="color:#2d7a4f">已内置 ' + seeded + ' 题</span>' : '');
     }
@@ -30169,7 +30171,7 @@ function cwInit(){
     return { ok: true, bal: bal, need: need };
   }
   window.ptAfford = ptAfford;
-  window.ptAddManual = ptAddManual;   /* vT217 竞答乱答扣分走同一条积分流水通道 */
+  window.ptAddManual = ptAddManual;   /* vT261 竞答净分（正/负）走同一条积分流水通道 */
   function ptNames() {
     var stus = (typeof stuRoster === 'function') ? stuRoster() : [];
     return stus.map(function (x) { return x.姓名; }).filter(Boolean);
@@ -34015,12 +34017,20 @@ function cwInit(){
       return { ok: true, msg: r.msg, cost: j.cost, who: j.who, act: r.actName, log: log };
     });
   }
-  /* vT187 竞答加分：直接写个人积分（奖惩表），与抽卡 / 喂养同一本账；0.5 分/题 */
-  window.ptQuizBonus = function (name, correctN) {
+  /* vT261 老师新规：按答对题数算「净分」，一次竞答只写一条流水（可能为正或负）。
+     答对 6→+3 / 5→+2 / 4→+1 / 3→0 / 2→−0.5 / 1→−1 / 0→−1.5。
+     题数不是 6 时沿用同一条曲线（答对≤3: n×0.5−1.5；答对>3: n−3）线性外推。 */
+  function qzNetScore(correctN) {
     var n = Math.max(0, parseInt(correctN, 10) || 0);
-    if (!n) return Promise.resolve({ ok: true, add: 0 });
-    var add = Math.round(n * 0.5 * 10) / 10;
-    return ptAddManual(name, '每日竞答 · 答对 ' + n + ' 题', add).then(function () { return { ok: true, add: add }; });
+    var v = (n <= 3) ? (n * 0.5 - 1.5) : (n - 3);
+    return Math.round(v * 10) / 10;
+  }
+  window.qzNetScore = qzNetScore;
+  /* 写竞答净分流水：val 是已经算好的净分（正/负/0）；0 由调用方直接跳过不写 */
+  window.ptQuizBonus = function (name, val) {
+    var add = Math.round((Number(val) || 0) * 10) / 10;
+    if (!add) return Promise.resolve({ ok: true, add: 0 });
+    return ptAddManual(name, '每日竞答（按答对题数计分）', add).then(function () { return { ok: true, add: add }; });
   };
   function ptAutoCfgSave() {
     var c = ptCfg();
@@ -36022,8 +36032,8 @@ function cwInit(){
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     }).then(function (r) { if (!r.ok) throw new Error('回写状态失败 ' + r.status); return true; });
   }
-  /* vT187 竞答提案：服务端按题库复核答案（不信任前端传的 ok），按 0.5 分/题加个人积分，
-     并写 s-quizdone 保证「同一题跨天也只计一次分」。加分失败时不写已答记录，家长可重试。 */
+  /* vT187 竞答提案：服务端按题库复核答案（不信任前端传的 ok），vT261 按答对题数算一个净分写个人积分，
+     并写 s-quizdone 保证「同一题跨天也只计一次分」。入账失败时不写已答记录，家长可重试。 */
   function ptaQuizHandle(cfg, fname, sha, rec) {
     var who0 = String(rec.studentName || rec.studentId || '').trim();
     if (!who0) return Promise.resolve({ ok: false, msg: '提案缺少学生姓名' });
@@ -36064,12 +36074,11 @@ function cwInit(){
       if (right) correct++;
     });
     if (!todo.length) return Promise.resolve({ ok: true, msg: '这些题之前已经答过，本次不重复计分' });
-    /* vT217 防乱答阶梯扣分（老师定的规则）：本次提交中错 1 题不扣、错 2 题扣 0.5 分、错 3 题及以上扣 1 分。
-       答对部分照常 0.5 分/题；净得分 = 答对得分 − 扣分（可能为负，体现在奖惩流水里）。 */
-    var wrong = todo.length - correct;
-    var base = Math.round(correct * 0.5 * 10) / 10;
-    var pen = (wrong >= 3) ? 1 : (wrong === 2 ? 0.5 : 0);
-    var add = Math.round((base - pen) * 10) / 10;
+    /* vT261 老师新规：不再「答对加分 + 乱答扣分」两条流水，改为按答对题数算一个净分，只写一条。
+       答对 6 题 +3 / 5 题 +2 / 4 题 +1 / 3 题 0 / 2 题 −0.5 / 1 题 −1 / 0 题 −1.5。
+       等价公式：net = 答对≤3 ? (答对×0.5−1.5) : (答对−3)；题数非 6 时按同一条曲线线性外推。 */
+    var net = window.qzNetScore ? window.qzNetScore(correct) : (correct <= 3 ? (correct * 0.5 - 1.5) : (correct - 3));
+    net = Math.round(net * 10) / 10;
     var writeDone = function () {
       var now = Date.now(), iso = new Date(now).toISOString();
       todo.forEach(function (x, i) {
@@ -36080,24 +36089,16 @@ function cwInit(){
       });
       try { window.ntChanged(); } catch (e3) {}
       var msg = '答对 ' + correct + ' / ' + todo.length + ' 题';
-      if (base > 0) msg += '，+' + base + ' 分';
-      if (pen > 0) msg += '；答错 ' + wrong + ' 题，乱答扣 ' + pen + ' 分';
-      if (base === 0 && pen === 0) msg += '，本次没有新增得分';
-      else if (add !== base && add !== 0) msg += '（净 ' + (add > 0 ? '+' : '') + add + ' 分）';
-      else if (add === 0 && base > 0) msg += '（正负相抵，本次净 0 分）';
-      return { ok: true, msg: msg };
+      if (net > 0) msg += '，+' + net + ' 分';
+      else if (net < 0) msg += '，' + net + ' 分';
+      else msg += '，本次不计分';
+      return { ok: true, msg: msg, net: net };
     };
-    var jobs = [];
-    if (base > 0) {
-      if (typeof window.ptQuizBonus !== 'function') return Promise.resolve({ ok: false, msg: '积分模块未就绪' });
-      jobs.push(window.ptQuizBonus(who, correct));
-    }
-    if (pen > 0) {
-      if (typeof window.ptAddManual !== 'function') return Promise.resolve({ ok: false, msg: '积分模块未就绪' });
-      jobs.push(window.ptAddManual(who, '每日竞答 · 答错 ' + wrong + ' 题（乱答扣分）', -pen));
-    }
-    if (!jobs.length) return Promise.resolve(writeDone());   /* 全错且未达扣分线也要记「已答」，避免反复刷同一题 */
-    return Promise.all(jobs).then(function () {
+    /* 净分为 0（答对 3 题）也记「已答」，避免反复刷同一题，只是不写积分流水 */
+    if (net === 0) return Promise.resolve(writeDone());
+    if (typeof window.ptQuizBonus !== 'function') return Promise.resolve({ ok: false, msg: '积分模块未就绪' });
+    /* 只写一条：正分或负分都走同一个奖惩流水通道（ptQuizBonus 内部即 ptAddManual） */
+    return window.ptQuizBonus(who, net).then(function () {
       var r = writeDone();
       /* vT257：提案已在 ptaQuizHandle 里抢占标记为 done，此处仅把真实结果补写进去（不再改动状态） */
       try { ptaMark(cfg, fname, null, rec, { status: 'done', result: r.msg, doneAt: Date.now(), doneBy: 'auto' }) } catch (eM) {}
