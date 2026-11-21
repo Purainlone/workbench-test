@@ -21397,7 +21397,7 @@ try {
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
 var WB_VER_TAG = 'v257';
-var WB_MY_VER = '优化版 vT271 · 作业合格淡蓝标签 + 清理流水多余「灵宠」';
+var WB_MY_VER = '优化版 vT272 · 错题先出题后揭晓（答案与解析点击才显示）';
 var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.259';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
@@ -27415,6 +27415,12 @@ function cwInit(){
       '#qzExplain .qx-opt .k{font-weight:800;color:#8a9b92;flex:none}',
       '#qzExplain .qx-opt.ok{border-color:#2d7a4f;background:#eaf6ee}',
       '#qzExplain .qx-opt.ok .k{color:#2d7a4f}',
+      /* vT272 揭晓前不露答案：✓ 标记默认藏起来，只有 .ok 才显示 */
+      '#qzExplain .qx-okmark{display:none;font-size:14px;color:#2d7a4f;font-weight:800}',
+      '#qzExplain .qx-opt.ok .qx-okmark{display:inline}',
+      '#qzExplain .qx-reveal{width:100%;margin:8px 0 2px;padding:15px 18px;border-radius:14px;border:2px dashed #bfe0cd;background:#f6fbf8;color:#1f6b47;font-size:18px;font-weight:800;cursor:pointer;transition:background .12s,border-color .12s}',
+      '#qzExplain .qx-reveal:hover{background:#eef8f2;border-color:#8cccaa}',
+      '#qzExplain .qx-reveal.on{border-style:solid;border-color:#e3ede7;background:#fbfdfc;color:#6b7c72;font-size:15px;font-weight:600;padding:10px 14px}',
       '#qzExplain .qx-exp{font-size:16px;line-height:1.8;color:#41544a;background:#f5f9f6;border-radius:12px;padding:12px 14px;margin-top:6px}',
       '#qzExplain .qx-wrongs{font-size:15px;color:#c2410c;margin-top:14px;line-height:1.8}',
       '#qzExplain .qx-foot{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:18px;padding-top:14px;border-top:1px dashed #e3ede7}',
@@ -27447,6 +27453,28 @@ function cwInit(){
     if (!qzTeachMark(qid, on)) { try { (typeof toast === 'function') && toast('这道题已不在题库里，无法标记'); } catch (e) {} return; }
     try { (typeof toast === 'function') && toast(on ? '✅ 已讲解，已入库并从待讲列表隐藏' : '已撤销讲解标记，题目回到待讲区'); } catch (e2) {}
   }
+  /* vT272 揭晓 / 收起答案：默认不露答案，老师讲完让学生作答后再点。可反复切换，方便重讲。 */
+  function qzExplainReveal() {
+    var el = document.getElementById('qzExplain'); if (!el) return;
+    var card = el.querySelector('.qx-card'); if (!card) return;
+    var btn = document.getElementById('qxRevealBtn');
+    var on = !!(btn && btn.classList.contains('on'));
+    var ansIdx = Number(card.getAttribute('data-ans'));
+    var optEls = card.querySelectorAll('.qx-opt');
+    var exp = document.getElementById('qxExpBox');
+    var i;
+    if (on) {
+      for (i = 0; i < optEls.length; i++) optEls[i].classList.remove('ok');
+      if (exp) exp.style.display = 'none';
+      if (btn) { btn.classList.remove('on'); btn.textContent = '👀 揭晓答案与解析'; }
+      try { card.scrollTop = 0; } catch (e0) {}
+      return;
+    }
+    for (i = 0; i < optEls.length; i++) { if (i === ansIdx) optEls[i].classList.add('ok'); }
+    if (exp) exp.style.display = '';
+    if (btn) { btn.classList.add('on'); btn.textContent = '🙈 收起答案与解析'; }
+    try { (exp || card).scrollIntoView({ block: 'nearest' }); } catch (e1) {}
+  }
   function qzExplainClose() {
     var el = document.getElementById('qzExplain');
     if (el) { el.style.display = 'none'; el.innerHTML = ''; }
@@ -27469,7 +27497,7 @@ function cwInit(){
       var dd = String(r.date || '').slice(0, 10); if (dd) nd[dd] = (nd[dd] || 0) + 1;
     });
     var dateList = Object.keys(nd).sort().map(function (dd) { return dd.slice(5) + '（' + nd[dd] + '人）'; }).join('、');
-    var h = '<div class="qx-card" onclick="event.stopPropagation()">';
+    var h = '<div class="qx-card" data-ans="' + ansIdx + '" onclick="event.stopPropagation()">';
     h += '<div class="qx-head">' +
       '<span style="padding:2px 8px;border-radius:6px;background:#fdeee8;color:#c2410c">错 ' + wrong.length + ' 人 / 共 ' + all.length + ' 人答</span>' +
       (q && q.cat ? '<span style="padding:2px 8px;border-radius:6px;background:#eef4ff;color:#3b6fb0">' + esc(q.cat) + '</span>' : '') +
@@ -27477,11 +27505,13 @@ function cwInit(){
       '<button class="qx-x" onclick="qzExplainClose()" title="关闭（Esc）">✕</button></div>';
     h += '<div class="qx-stem">' + esc((q && q.stem) || ('（' + qid + '：题目可能已被删除）')) + '</div>';
     opts.forEach(function (t, i) {
-      var okk = (i === ansIdx);
-      h += '<div class="qx-opt' + (okk ? ' ok' : '') + '"><span class="k">' + 'ABCD'.charAt(i) + '</span>' +
-        '<span style="flex:1">' + esc(t) + (okk ? '<b style="font-size:14px;color:#2d7a4f">　✓ 正确答案</b>' : '') + '</span></div>';
+      /* vT272 打开时一律不平铺答案：✓ 标记由 CSS 藏起，正确项也不加 ok 类 */
+      h += '<div class="qx-opt"><span class="k">' + 'ABCD'.charAt(i) + '</span>' +
+        '<span style="flex:1">' + esc(t) + '<span class="qx-okmark">　✓ 正确答案</span></span></div>';
     });
-    if (q && q.exp) h += '<div class="qx-exp"><b>解析：</b>' + esc(q.exp) + '</div>';
+    /* 解析也先藏着，点了「揭晓答案」才显示 */
+    if (q && q.exp) h += '<div class="qx-exp" id="qxExpBox" style="display:none"><b>解析：</b>' + esc(q.exp) + '</div>';
+    h += '<button type="button" class="qx-reveal" id="qxRevealBtn" onclick="qzExplainReveal()">👀 揭晓答案与解析</button>';
     h += '<div class="qx-wrongs">答错的 ' + names.length + ' 名学生：' + (esc(names.join('、')) || '—') +
       (dateList ? '<br><span style="color:#9aa8a0;font-size:13px">错误日期：' + esc(dateList) + '</span>' : '') + '</div>';
     h += '<div class="qx-foot">' +
@@ -27678,6 +27708,7 @@ function cwInit(){
   window.qzImportPreview = qzImportPreview; window.qzImportDo = qzImportDo; window.qzSaveCfg = qzSaveCfg;
   window.qzWrongRender = qzWrongRender; window.qzWrongExport = qzWrongExport;   /* vT215 错题库 */
   window.qzExplainOpen = qzExplainOpen; window.qzExplainClose = qzExplainClose;  /* vT270 错题放大讲解 */
+  window.qzExplainReveal = qzExplainReveal;                                       /* vT272 揭晓/收起答案 */
   window.qzTeachQuick = qzTeachQuick;
   window.qzTab = qzTab;                                                          /* vT215c 页面切换 */
   try { qzInit(); } catch (e) { console.warn('[quiz] 初始化失败', e); }
