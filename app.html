@@ -21420,13 +21420,16 @@ try {
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
 var WB_VER_TAG = 'v257';
-var WB_MY_VER = '优化版 vT273 · 抽卡消费与灵宠/灵杰卡双向联动 + 恢复班级玫瑰';
-var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.259';
+var WB_MY_VER = '优化版 vT274 · 修复版本号重复';
+var WB_BUILD_DATE = '11-21', WB_BUILD_NO = '2.6.260';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
   try{ if(typeof WB_BUILD_DATE==='undefined')return; var el=document.getElementById('appVer');
-    if(el) el.textContent='✨ 教室工作台 · '+WB_MY_VER+' · '+WB_BUILD_NO+' · '+WB_BUILD_DATE+' · '+WB_VER_TAG; }catch(_){}
+    /* vT274：显示行不再拼 WB_VER_TAG。WB_MY_VER 已含 vTnnn，而 WB_VER_TAG 停在 v257（它只供
+       releaseVer / 旧标签页自检，wbBuildNum 只认 v+数字），拼上来就变成「vT274 … v257」两个版本号。
+       原设计（tools/sync_version.py 的 VER_LINE）本来只有「标题 · 构建号 · 日期」三段。 */
+    if(el) el.textContent='✨ 教室工作台 · '+WB_MY_VER+' · '+WB_BUILD_NO+' · '+WB_BUILD_DATE; }catch(_){}
 }
 function wbShowFatal(stage, e, loc){
   try{
