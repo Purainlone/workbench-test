@@ -21305,7 +21305,7 @@ try {
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
 var WB_VER_TAG = 'v257';
-var WB_MY_VER = '优化版 vT265 · 竞答移除错题优先（答错不提前重复）+ 分层回避出题';
+var WB_MY_VER = '优化版 vT267 · 抽卡流水按记录id去重（修复家长端抽卡重复扣分）';
 var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.259';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
@@ -23308,9 +23308,16 @@ function mpToDesk(tables) {
                 '奖惩分值': mpNum(r.score || 0), '日期': mpTxt(String(r.date || '').slice(0, 10)),
                 '备注': mpTxt(r.pet ? '宠物' : String(r.note || '')) };
       var _rs = String(r.reason || '');
+      /* vT267 抽卡双扣根因修复②：消费类流水按源记录 id 做稳定键，日期不进键。
+         原来 MPS_ 键 = 姓名|事项|日期|分值，同一笔抽卡的真源(有日期)与
+         同步桥副本(日期丢失)会生成两个不同的 MPS_ id → 云端并存 → 重复扣。
+         消费流水(id 形如 Lmwpy4...)本身就是唯一身份，直接拿它做键，
+         真源和副本会收敛到同一个 MPS_ id，并集自动去重。 */
+      var _spendId = ((typeof stIsSpendReason === 'function') && stIsSpendReason(_rs) && r.id)
+        ? ('|id:' + String(r.id)) : '';
       var _ks = [dv(p, '姓名'), dv(p, '奖惩事项'),
-                 (_rs.indexOf('成绩达标') === 0 ? '' : dv(p, '日期')),
-                 String(Number(r.score) || 0)].join('|');
+                 (_spendId ? '' : (_rs.indexOf('成绩达标') === 0 ? '' : dv(p, '日期'))),
+                 String(Number(r.score) || 0)].join('|') + _spendId;
       var _h = 5381; for (var _i = 0; _i < _ks.length; _i++) _h = ((_h << 5) + _h + _ks.charCodeAt(_i)) >>> 0;
       _stRows.push({ id: 'MPS_' + _h.toString(36), properties: p });
     });
@@ -23361,11 +23368,21 @@ function mpBizKey(k, r) {
     if (!nm) return '';
     var _rz = s(r.reason), _id = String(r.id == null ? '' : r.id);
     var _pre = (k === 'st') ? 'st|' : 'man|';
+    var _isSpend = (k === 'st') && stIsSpendReason(_rz);
+    /* vT267 抽卡双扣根因修复：消费类流水（启灵图鉴/成长灵宠）一旦带 id，
+       id 就是这笔交易的唯一身份 —— 日期绝不能进键。
+       原来键含 date：同一笔抽卡的真源(带 2026-11-21)与同步桥副本(日期丢失成 '')，
+       id 相同却被当成两条不同记录，并集时双双留在云端 → 每抽一次扣 3 遍
+       （带date真源 + 同id空date副本 + MPS_ 桥副本）。11-21 六个学生 6 笔真抽卡
+       被写成 21 条流水，就是这条键规则造成的。
+       有 id 的消费流水：键 = 前缀|姓名|事项|分值|id，完全忽略 date；
+       无 id 的老数据仍按日期业务键兜底（与历史数据兼容）。 */
+    if (_isSpend && _id) return _pre + nm + '|' + _rz + '|' + (Number(r.score) || 0) + '|id:' + _id;
     var _base = _pre + nm + '|' + _rz +
       ((k === 'st' && _rz.indexOf('成绩达标') === 0) ? '' : ('|' + s(r.date).slice(0, 10))) +
       '|' + (Number(r.score) || 0);
     /* 成绩达标：历史重复写入事故 → 仍按业务键合；其余：有 id 就按 id 区分每一笔 */
-    if (_rz.indexOf('成绩达标') === 0 || !_id || !stIsSpendReason(_rz)) return _base;
+    if (_rz.indexOf('成绩达标') === 0 || !_id || !_isSpend) return _base;
     return _base + '|id:' + _id;
   }
   /* 2.6.82 班务记录：日期+类型+标题+学生姓名（与 recBizKey 的 aff| 键同构） */
