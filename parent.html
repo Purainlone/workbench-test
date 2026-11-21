@@ -51,6 +51,9 @@
   .points .big{font-size:34px;font-weight:800;color:var(--g);line-height:1}
   .points .big small{font-size:13px;font-weight:500;color:var(--ink2);margin-left:3px}
   .points .side{font-size:12px;color:var(--ink2);line-height:1.7;padding-bottom:3px}
+  /* vT269 三分类（奖励/扣罚/消费）子类明细 */
+  .ptsub{font-size:11px;color:#7d8a82;line-height:1.75;margin-top:7px;padding:7px 9px;background:#f7faf8;border-radius:9px}
+  .ptsub b{font-weight:600;color:var(--ink2);margin-right:3px}
   .kpis{display:flex;gap:8px;margin-top:12px}
   .kpi{flex:1;background:#f7faf8;border-radius:12px;padding:9px 10px;text-align:center}
   .kpi b{display:block;font-size:18px;color:var(--ink)}
@@ -400,7 +403,7 @@
 
   var GITEE = 'https://gitee.com/api/v5';
   var SNAP = 'wb_parent_snap.json';
-  var PA_PAGE_VER = 'v247';   /* vT269：积分流水三分类(奖励/扣罚/消费)标签与汇总 */
+  var PA_PAGE_VER = 'v248';   /* vT269：积分卡改三分类(奖励/扣罚/消费)+子类明细，与流水同口径 */
   try { window.PA_PAGE_VER = PA_PAGE_VER; } catch (e) {}
   var K_ACCESS = 'wb_pa_access', K_NAME = 'wb_pa_name', K_CODE = 'wb_pa_code', K_PEND = 'wb_pa_pending';
 
@@ -1605,10 +1608,45 @@
     }
     /* 积分 */
     if (on('points')) {
-      h += '<div class="card"><h2>积分 <em>作业 + 奖惩 + 小组</em></h2>' +
-        '<div class="points"><div class="big">' + Math.round(v.points.total || 0) + '<small>分</small></div>' +
-        '<div class="side">作业 ' + Math.round(v.points.hw || 0) + ' · 平时 ' + Math.round(v.points.manual || 0) +
-        (v.points.ga ? ' · 小组 ' + Math.round(v.points.ga) : '') + '</div></div>' +
+      /* vT269 积分卡改三分类口径：奖励 − 扣罚 − 消费（小组平摊另计），与老师端 / 小程序 / 桌面同一本账。
+         数据优先用快照下发的 cls（老师端算好）；老快照无 cls 时退而从 ptFlow 逐笔 c 字段汇总；
+         再老（连 c 也没有）沿用原「作业 / 平时」写法，保证老快照不白屏。 */
+      h += '<div class="card"><h2>积分 <em>奖励 − 扣罚 − 消费</em></h2>' +
+        (function () {
+          var P9 = v.points || {}, C9 = P9.cls || null, fl9 = v.ptFlow || [];
+          if (!C9 && fl9.length) {
+            var s9 = { reward: 0, penalty: 0, consume: 0 }, has9 = false;
+            fl9.forEach(function (x9) {
+              if (x9.c) has9 = true;
+              var a9 = Math.abs(Number(x9.v) || 0);
+              if (x9.c === 'reward') s9.reward += a9; else if (x9.c === 'penalty') s9.penalty += a9; else if (x9.c === 'consume') s9.consume += a9;
+            });
+            if (has9) C9 = s9;
+          }
+          var R9 = function (x) { return Math.round((Number(x) || 0) * 10) / 10; };
+          var ga9 = P9.ga ? (' · 小组 ' + R9(P9.ga)) : '';
+          var side9 = C9
+            ? ('奖励 +' + R9(C9.reward) + ' · 扣罚 −' + R9(C9.penalty) + ' · 消费 −' + R9(C9.consume) + ga9)
+            : ('作业 ' + R9(P9.hw) + ' · 平时 ' + R9(P9.manual) + ga9);
+          var o9 = '<div class="points"><div class="big">' + Math.round(P9.total || 0) + '<small>分</small></div>' +
+            '<div class="side">' + side9 + '</div></div>';
+          /* 子类明细只在快照带子类字段时展示（从 ptFlow 兜底算出的大类没有子类拆分，交给下方流水看） */
+          if (C9 && (C9.rwHw != null || C9.pnHw != null || C9.csDraw != null)) {
+            var nz9 = function (x) { return Math.abs(x) >= 0.05; };
+            var seg9 = function (label, items) {
+              var hit9 = items.filter(function (it) { return nz9(it[1]); });
+              if (!hit9.length) return label + ' —';
+              return label + ' ' + hit9.map(function (it) { return it[0] + ' ' + R9(it[1]); }).join(' · ');
+            };
+            var sub9 = [
+              seg9('奖励', [['作业加分', C9.rwHw || 0], ['目标达成', C9.rwGoal || 0], ['课堂参与', C9.rwClass || 0], ['每日竞答', C9.rwQuiz || 0], ['其他奖励', C9.rwOther || 0]]),
+              seg9('扣罚', [['作业扣分', C9.pnHw || 0], ['课堂扣分', C9.pnClass || 0], ['其他扣分', C9.pnOther || 0]]),
+              seg9('消费', [['抽奖', C9.csDraw || 0], ['喂养', C9.csFeed || 0]])
+            ];
+            o9 += '<div class="ptsub">' + sub9.join('　｜　') + '</div>';
+          }
+          return o9;
+        })() +
         '<div class="kpis"><div class="kpi"><b>' + v.hwDone + '/' + v.hwN + '</b><span>今日作业完成</span></div>' +
         '<div class="kpi"><b>' + (v.rcLegacy ? v.rc.length : (v.rcDoneN + '/' + v.rcPlanN)) + '</b><span>' + (v.rcLegacy ? '今日诵读' : '诵读进度') + '</span></div>' +
         '<div class="kpi"><b>' + petN + '</b><span>已养灵宠</span></div>' +
