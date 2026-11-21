@@ -55,6 +55,17 @@
   .ptsub{font-size:11px;color:#6f7c74;line-height:1.75;margin-top:7px;padding:7px 9px;background:#f7faf8;border-radius:9px}
   .ptsub>div+div{margin-top:1px}
   .ptsub b{font-weight:600;margin-right:5px}
+  /* vT270 班级玫瑰 */
+  .pa-rose{width:266px;max-width:84%;margin:2px auto 0;aspect-ratio:1/1}
+  .pa-rose svg{width:100%;height:100%;display:block}
+  .pa-stage{text-align:center;font-size:16px;font-weight:700;color:#b8324f;margin-top:4px}
+  .pa-pts{text-align:center;font-size:12.5px;color:var(--ink2);margin-top:3px}
+  .pa-pts b{color:#b8324f;font-size:14px}
+  .pa-bar{height:7px;background:#f0f4f1;border-radius:99px;overflow:hidden;margin:10px 0 9px}
+  .pa-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#f3b3c6,#b8324f);transition:width .6s ease}
+  .pa-tip{font-size:11.5px;color:#8a9b92;line-height:1.8;text-align:center}
+  .pa-tw{animation:paTw 1.7s ease-in-out infinite}
+  @keyframes paTw{0%,100%{opacity:.3;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
   .kpis{display:flex;gap:8px;margin-top:12px}
   .kpi{flex:1;background:#f7faf8;border-radius:12px;padding:9px 10px;text-align:center}
   .kpi b{display:block;font-size:18px;color:var(--ink)}
@@ -404,7 +415,7 @@
 
   var GITEE = 'https://gitee.com/api/v5';
   var SNAP = 'wb_parent_snap.json';
-  var PA_PAGE_VER = 'v248';   /* vT269：积分卡改三分类(奖励/扣罚/消费)+子类明细，与流水同口径 */
+  var PA_PAGE_VER = 'v249';   /* vT270：新增「🌹 班级玫瑰」（页面最末，老师可开关）；vT269 积分卡三分类+v248 */
   try { window.PA_PAGE_VER = PA_PAGE_VER; } catch (e) {}
   var K_ACCESS = 'wb_pa_access', K_NAME = 'wb_pa_name', K_CODE = 'wb_pa_code', K_PEND = 'wb_pa_pending';
 
@@ -796,7 +807,9 @@
       /* vT163 本周表现：三类奖惩明细按本周（周一 00:00 起）过滤汇总 */
       weekly: weekOf(per),
       /* vT262 积分流水（折叠查看）：老师端随加密块下发的该生逐笔流水；老快照无此字段 → 不显示 */
-      ptFlow: per.ptFlow || null
+      ptFlow: per.ptFlow || null,
+      /* vT270 班级守护玫瑰：全班累计积分 + 五阶段阈值（公开层，不含任何学生个人分） */
+      guard: (ST.snap && ST.snap.guard) || null
     };
   }
 
@@ -1574,6 +1587,182 @@
   }
   window.qzPick = qzPick; window.qzSubmit = qzSubmit;
 
+  /* ===== vT270 班级玫瑰（家长端）=====
+     和网页老师端「班级守护」/ 教室桌面 / 小程序同一套玫瑰绘制：五阶段、玻璃钟罩、星光。
+     讲的是「全班一起养的一朵花」——积分涨一点，花就舒展一点，家长能看到孩子在集体里的位置。 */
+  var PA_NS = 'http://www.w3.org/2000/svg', PA_RCX = 150, PA_RCY = 170, PA_RMAX = 3000;
+  var PA_RSTAGES = [
+    { name: '🌱 花苞', min: 0, scale: .5 },
+    { name: '🌸 小玫瑰', min: 300, scale: .72 },
+    { name: '🌹 盛放玫瑰', min: 800, scale: .9 },
+    { name: '✨ 星光玫瑰', min: 1600, scale: 1.02, stars: true },
+    { name: '👑 终极花园玫瑰', min: 3000, scale: 1.14, stars: true, glow: true }
+  ];
+  function paRel(t, a) { var e = document.createElementNS(PA_NS, t); for (var k in a) { if (a.hasOwnProperty(k)) e.setAttribute(k, a[k]); } return e; }
+  function paRgrad(id, stops) {
+    var g = paRel('radialGradient', { id: id, cx: '50%', cy: '38%', r: '70%' });
+    stops.forEach(function (s) {
+      var st = paRel('stop', { offset: s[0], 'stop-color': s[1] });
+      if (s[2] != null) st.setAttribute('stop-opacity', s[2]);
+      g.appendChild(st);
+    });
+    return g;
+  }
+  function paStarPath(x, y, r) {
+    var d = '';
+    for (var i = 0; i < 10; i++) {
+      var rr = i % 2 ? r * .45 : r, a = -Math.PI / 2 + i * Math.PI / 5;
+      d += (i ? 'L' : 'M') + (x + rr * Math.cos(a)).toFixed(1) + ' ' + (y + rr * Math.sin(a)).toFixed(1) + ' ';
+    }
+    return d + 'Z';
+  }
+  function paPetalPath(L, Wd) {
+    var bx = PA_RCX, by = PA_RCY, tx = PA_RCX, ty = PA_RCY - L;
+    return 'M' + bx + ' ' + by + ' C ' + (bx - Wd) + ' ' + (by - L * 0.42) + ', ' + (bx - Wd * 0.5) + ' ' + ty + ', ' + tx + ' ' + ty +
+      ' C ' + (bx + Wd * 0.5) + ' ' + ty + ', ' + (bx + Wd) + ' ' + (by - L * 0.42) + ', ' + bx + ' ' + by + ' Z';
+  }
+  function paSpiralPath(cx, cy, turns, r0, r1) {
+    var d = '', steps = turns * 24;
+    for (var i = 0; i <= steps; i++) {
+      var t = i / steps, ang = t * turns * 2 * Math.PI, a = r0 + (r1 - r0) * t;
+      d += (i ? 'L' : 'M') + (cx + Math.cos(ang) * a).toFixed(1) + ' ' + (cy + Math.sin(ang) * a).toFixed(1) + ' ';
+    }
+    return d + 'Z';
+  }
+  function paRoseBuild(svg) {
+    svg.innerHTML = '';
+    var defs = paRel('defs', {});
+    defs.appendChild(paRgrad('paGPetalOuter', [['0%', '#e98aa6'], ['55%', '#f3b3c6'], ['100%', '#fbeede']]));
+    defs.appendChild(paRgrad('paGPetalInner', [['0%', '#cf5b78'], ['60%', '#e98aa6'], ['100%', '#f7c9d6']]));
+    defs.appendChild(paRgrad('paGCenter', [['0%', '#b8324f'], ['70%', '#e0607e'], ['100%', '#f6c34d']]));
+    defs.appendChild(paRgrad('paGGlow', [['0%', '#ffd9a0', 0.62], ['100%', '#ffd9a0', 0]]));
+    defs.appendChild(paRgrad('paGLeaf', [['0%', '#7cc079'], ['100%', '#4f9d5b']]));
+    var gg = paRel('linearGradient', { id: 'paGGlass', x1: '0%', y1: '0%', x2: '22%', y2: '100%' });
+    gg.appendChild(paRel('stop', { offset: '0%', 'stop-color': '#ffffff', 'stop-opacity': .34 }));
+    gg.appendChild(paRel('stop', { offset: '45%', 'stop-color': '#dff0ff', 'stop-opacity': .15 }));
+    gg.appendChild(paRel('stop', { offset: '100%', 'stop-color': '#bfe0f5', 'stop-opacity': .24 }));
+    defs.appendChild(gg);
+    svg.appendChild(defs);
+
+    svg.appendChild(paRel('ellipse', { cx: PA_RCX, cy: PA_RCY + 74, rx: 74, ry: 11, fill: '#000', 'fill-opacity': .05 }));
+    svg.appendChild(paRel('path', { d: 'M' + PA_RCX + ' ' + PA_RCY + ' C ' + (PA_RCX - 3) + ' ' + (PA_RCY + 24) + ', ' + (PA_RCX + 4) + ' ' + (PA_RCY + 52) + ', ' + PA_RCX + ' ' + (PA_RCY + 74), stroke: 'url(#paGLeaf)', 'stroke-width': 9, fill: 'none', 'stroke-linecap': 'round' }));
+    svg.appendChild(paRel('path', { d: 'M' + (PA_RCX - 3) + ' ' + (PA_RCY + 34) + ' q -30 -2 -40 -26 q 30 2 40 18 z', fill: 'url(#paGLeaf)' }));
+    svg.appendChild(paRel('path', { d: 'M' + (PA_RCX + 3) + ' ' + (PA_RCY + 44) + ' q 30 -2 40 -26 q -30 2 -40 18 z', fill: 'url(#paGLeaf)' }));
+
+    var glow = paRel('circle', { cx: PA_RCX, cy: PA_RCY - 4, r: 58, fill: 'url(#paGGlow)', opacity: 0 });
+    svg._glow = glow; svg.appendChild(glow);
+
+    var bg = paRel('g', { id: 'paBloom' }); svg._bloom = bg; svg.appendChild(bg);
+    for (var k = 0; k < 3; k++) {
+      var gp = paRel('g', { transform: 'rotate(' + (k * 120) + ' ' + PA_RCX + ' ' + PA_RCY + ')' });
+      gp.appendChild(paRel('path', { d: 'M' + (PA_RCX - 3) + ' ' + (PA_RCY + 1) + ' q -11 9 -7 24 q 13 -7 13 -21 z', fill: 'url(#paGLeaf)' }));
+      bg.appendChild(gp);
+    }
+    var layers = [{ n: 8, L: 56, W: 29, grad: 'paGPetalOuter', rot: 0 }, { n: 8, L: 45, W: 24, grad: 'paGPetalOuter', rot: 22.5 },
+                  { n: 6, L: 32, W: 19, grad: 'paGPetalInner', rot: 11 }, { n: 5, L: 20, W: 14, grad: 'paGPetalInner', rot: 0 }];
+    var total = 0; layers.forEach(function (L0) { total += L0.n; });
+    svg._petals = []; var gi = 0;
+    layers.forEach(function (L0) {
+      for (var i = 0; i < L0.n; i++) {
+        var open = L0.rot + i * (360 / L0.n), closed = (gi - (total - 1) / 2) * 3.2;
+        var g2 = paRel('g', { transform: 'rotate(' + closed + ' ' + PA_RCX + ' ' + PA_RCY + ')' });
+        var p = paRel('path', { d: paPetalPath(L0.L, L0.W), fill: 'url(#' + L0.grad + ')', opacity: .98, stroke: 'rgba(198,110,135,0.18)', 'stroke-width': 1 });
+        p._g = g2; p._open = open; p._closed = closed;
+        g2.appendChild(p); bg.appendChild(g2); svg._petals.push(p); gi++;
+      }
+    });
+    bg.appendChild(paRel('circle', { cx: PA_RCX, cy: PA_RCY - 4, r: 14, fill: 'url(#paGCenter)' }));
+    for (var k2 = 0; k2 < 3; k2++) {
+      var g3 = paRel('g', { transform: 'rotate(' + (k2 * 120) + ' ' + PA_RCX + ' ' + (PA_RCY - 4) + ')' });
+      g3.appendChild(paRel('path', { d: paPetalPath(18, 12), fill: 'url(#paGPetalInner)', opacity: .95, stroke: 'rgba(180,80,110,.25)', 'stroke-width': 1 }));
+      bg.appendChild(g3);
+    }
+    bg.appendChild(paRel('path', { d: paSpiralPath(PA_RCX, PA_RCY - 4, 2.3, 2, 12), fill: 'none', stroke: '#9c2746', 'stroke-width': 2.4, 'stroke-opacity': .55, 'stroke-linecap': 'round' }));
+
+    var cl = paRel('g', { id: 'paCloche', style: 'transition:opacity .8s ease' }); svg._cloche = cl;
+    var topY = PA_RCY - 120, botY = PA_RCY + 96, rx = 104;
+    cl.appendChild(paRel('path', { d: 'M' + (PA_RCX - rx) + ' ' + botY + ' C ' + (PA_RCX - rx) + ' ' + (topY + 44) + ', ' + (PA_RCX - 44) + ' ' + topY + ', ' + PA_RCX + ' ' + topY + ' C ' + (PA_RCX + 44) + ' ' + topY + ', ' + (PA_RCX + rx) + ' ' + (topY + 44) + ', ' + (PA_RCX + rx) + ' ' + botY + ' Z', fill: 'url(#paGGlass)', stroke: 'rgba(150,200,235,0.5)', 'stroke-width': 2 }));
+    cl.appendChild(paRel('path', { d: 'M' + (PA_RCX - rx + 14) + ' ' + (botY - 8) + ' C ' + (PA_RCX - rx + 10) + ' ' + (topY + 54) + ', ' + (PA_RCX - 38) + ' ' + (topY + 10) + ', ' + (PA_RCX - 28) + ' ' + (topY + 24), fill: 'none', stroke: '#ffffff', 'stroke-opacity': .6, 'stroke-width': 5, 'stroke-linecap': 'round' }));
+    cl.appendChild(paRel('line', { x1: PA_RCX, y1: topY, x2: PA_RCX, y2: topY - 12, stroke: 'rgba(150,200,235,0.6)', 'stroke-width': 3 }));
+    cl.appendChild(paRel('circle', { cx: PA_RCX, cy: topY - 16, r: 4, fill: 'rgba(150,200,235,0.7)' }));
+    cl.appendChild(paRel('ellipse', { cx: PA_RCX, cy: botY, rx: rx, ry: 9, fill: 'none', stroke: 'rgba(150,200,235,0.55)', 'stroke-width': 2 }));
+    cl.setAttribute('opacity', 0);
+    svg.appendChild(cl);
+
+    var sg = paRel('g', { id: 'paStars' }); svg._starsG = sg; svg._stars = [];
+    var SP = [[0, 0], [40, 18], [-44, 22], [30, -40], [-34, -38], [60, 52], [-62, 50], [12, 70], [-14, 68], [70, -8], [-70, -6], [52, -30], [-54, -28]];
+    SP.forEach(function (pp, i) {
+      var x = PA_RCX + pp[0], y = PA_RCY - 6 + pp[1], r = 4 + (i % 3) * 2.2, col = i % 4 === 0 ? '#ffd34d' : '#ffffff';
+      var s = paRel('path', { class: 'pa-tw', d: paStarPath(x, y, r), fill: col, style: 'animation-delay:' + (i * 0.21).toFixed(2) + 's' });
+      sg.appendChild(s); svg._stars.push(s);
+    });
+    for (var i2 = 0; i2 < 6; i2++) {
+      var a2 = i2 * 1.05;
+      sg.appendChild(paRel('circle', { cx: PA_RCX + Math.cos(a2) * 84, cy: PA_RCY - 6 + Math.sin(a2) * 84, r: 1.6, fill: '#fff', 'fill-opacity': .8 }));
+    }
+    svg.appendChild(sg);
+  }
+  function paRoseUpdate(svg, points, th) {
+    points = Math.max(0, Number(points) || 0);
+    th = (th && th.length === 5) ? th : [0, 300, 800, 1600, 3000];
+    var st = 0;
+    for (var i = 0; i < th.length; i++) if (points >= th[i]) st = i;
+    var stage = PA_RSTAGES[st];
+    var ofac = Math.max(0, Math.min(1, points / (th[th.length - 1] || PA_RMAX)));
+    var e = ofac * ofac * (3 - 2 * ofac);
+    var sc = 0.34 + ofac * 0.80;
+    svg._bloom.setAttribute('transform', 'translate(' + PA_RCX + ' ' + PA_RCY + ') scale(' + sc + ') translate(' + (-PA_RCX) + ' ' + (-PA_RCY) + ')');
+    svg._petals.forEach(function (p) {
+      var ang = p._closed + (p._open - p._closed) * e;
+      p._g.setAttribute('transform', 'rotate(' + ang.toFixed(2) + ' ' + PA_RCX + ' ' + PA_RCY + ')');
+    });
+    svg._cloche.setAttribute('opacity', st >= 3 ? 0.92 : 0);
+    svg._starsG.setAttribute('opacity', stage.stars ? 1 : 0);
+    svg._glow.setAttribute('opacity', stage.glow ? 1 : 0);
+    return { stage: stage, idx: st, ofac: ofac };
+  }
+  /* 玫瑰卡：插在页面最后一张卡的位置（点评之后、页脚之前） */
+  function paRoseCard(g) {
+    if (!g || typeof g.pts !== 'number') return '';
+    var th = (g.th && g.th.length === 5) ? g.th : [0, 300, 800, 1600, 3000];
+    var next = null, idx = 0;
+    for (var i = 0; i < th.length; i++) {
+      if (g.pts >= th[i]) idx = i;
+    }
+    next = (idx + 1 < th.length) ? { name: PA_RSTAGES[idx + 1].name, min: th[idx + 1] } : null;
+    var base = th[idx] || 0, top = next ? next.min : (th[4] || 3000);
+    var pct = next ? Math.max(0, Math.min(100, (g.pts - base) / (top - base) * 100)) : 100;
+    var gapTxt = next ? ('再攒 <b>' + (Math.round((next.min - g.pts) * 10) / 10) + '</b> 分，玫瑰就长成 ' + next.name)
+                      : '已经是最高阶段，玫瑰开成了整座花园 👑';
+    return '<div class="card"><h2>🌹 班级玫瑰 <em>全班一起养</em></h2>' +
+      '<div class="pa-rose"><svg id="paRose" viewBox="0 0 300 300" aria-label="班级玫瑰"></svg></div>' +
+      '<div class="pa-stage" id="paStage">' + PA_RSTAGES[idx].name + '</div>' +
+      '<div class="pa-pts">班级累计 <b>' + (Math.round(g.pts * 10) / 10) + '</b> 分' + (g.at ? (' · 老师 ' + paAgo(g.at) + '更新') : '') + '</div>' +
+      '<div class="pa-bar"><i id="paBar" style="width:' + pct.toFixed(1) + '%"></i></div>' +
+      '<div class="pa-tip">' + gapTxt + '<br>玫瑰读的是全班同学积分总和（作业 + 课堂 + 奖惩，不含灵宠消费）。孩子在集体里认真一点，这朵花就多开一瓣。</div>' +
+      '</div>';
+  }
+  function paAgo(ts) {
+    try {
+      var m = Math.round((Date.now() - Number(ts)) / 60000);
+      if (m < 1) return '刚刚';
+      if (m < 60) return m + ' 分钟前';
+      var hh = Math.round(m / 60);
+      if (hh < 24) return hh + ' 小时前';
+      return Math.round(hh / 24) + ' 天前';
+    } catch (e) { return ''; }
+  }
+  function paRoseMount(v) {
+    try {
+      var svg = document.getElementById('paRose');
+      if (!svg || !v || !v.guard) return;
+      paRoseBuild(svg);
+      var r = paRoseUpdate(svg, v.guard.pts, v.guard.th);
+      var se = document.getElementById('paStage');
+      if (se) se.textContent = r.stage.name;
+    } catch (e) {}
+  }
+
   function renderMain() {
     var v = buildView(ST.per, ST.name);
     ST.view = v;
@@ -1907,10 +2096,13 @@
       }).join('') : '<div class="empty">暂无点评</div>';
       h += '</div>';
     }
+    /* vT270 班级玫瑰：放在页面最末一张卡（点评之后、页脚之前）；老师可在「家长端显示设置 → 🌹 班级玫瑰」关掉 */
+    if (on('guard')) { h += paRoseCard(v.guard); }
     h += '<div class="foot">数据由老师发布，仅供本班家长查看<br>换手机或清缓存后需重新填写接入码' +
-      '<br><span style="opacity:.55;font-size:11px">页面版本 v246</span></div>';
+      '<br><span style="opacity:.55;font-size:11px">页面版本 ' + PA_PAGE_VER + '</span></div>';
 
     document.getElementById('app').innerHTML = '<div class="wrap">' + h + '</div>';
+    paRoseMount(v);   /* vT270 玫瑰要等 SVG 进 DOM 后再画 */
     /* vT210 取消灵宠迎宾弹窗：改为置顶板块内联欢迎（见上方 pethero 卡），不再弹 */
     document.getElementById('btnRefresh').onclick = function () { refresh(); };
     document.getElementById('btnOut').onclick = function () { goLogin(); };
