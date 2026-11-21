@@ -21305,7 +21305,7 @@ try {
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
 var WB_VER_TAG = 'v257';
-var WB_MY_VER = '优化版 vT257 · 宣纸证书 + 竞答单次入账';
+var WB_MY_VER = '优化版 vT260 · 抽卡真即时揭晓 + 三端CAS对称';
 var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.259';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
@@ -30235,7 +30235,7 @@ function cwInit(){
     if (n === 1) return 0.35;     /* 第二抽：稀有几率明显提高 */
     return 0.45;                  /* 第三次起：稳定高一点，靠 5 抽保底兜底 */
   }
-  function ptCardDrawOne(s, who, fromParent) {
+  function ptCardDrawOne(s, who, fromParent, forceDefId) {
     var taken = cardTakenDefIds(s);
     var pool = ptCardDrawPool(s).filter(function (p) { return !taken[p.id]; });
     if (!pool.length) return null;
@@ -30244,13 +30244,20 @@ function cwInit(){
     var pity = ptPityOf(who, s);
     var force = hidden.length > 0 && pity >= PT_CARD_PITY - 1;   /* 第 5 抽：从隐藏池里直接挑 */
     var sp = null;
-    if (force) {
-      sp = hidden[Math.floor(Math.random() * hidden.length)];
-    } else {
-      var wantHidden = hidden.length > 0 && Math.random() < cardHiddenProb(cardDrawCount(s, who));
-      var pickFrom = wantHidden ? hidden : (normals.length ? normals : hidden);
-      if (!pickFrom.length) return null;
-      sp = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+    /* vT260 采信家长端预抽结果：提案带的 pickDefId 此刻仍在池且未被占用 → 直接用它，
+       保证学生动画里看到的就是入账的；撞卡（已被别人拿走）就退回正常随机。 */
+    if (forceDefId) {
+      sp = pool.filter(function (p) { return p.id === forceDefId; })[0] || null;
+    }
+    if (!sp) {
+      if (force) {
+        sp = hidden[Math.floor(Math.random() * hidden.length)];
+      } else {
+        var wantHidden = hidden.length > 0 && Math.random() < cardHiddenProb(cardDrawCount(s, who));
+        var pickFrom = wantHidden ? hidden : (normals.length ? normals : hidden);
+        if (!pickFrom.length) return null;
+        sp = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+      }
     }
     var cid = ptCardIdOf(who, sp.id);
     var ex = (s.petCards || []).filter(function (c) { return c && c.id === cid; })[0];
@@ -30285,6 +30292,47 @@ function cwInit(){
     res.pityN = next;
     res.pityLeft = PT_CARD_PITY - next;
     return res;
+  }
+  /* ===== vT260 真即时揭晓：只读预抽（挑出这一次会抽到的 def，绝不写状态）=====
+     选卡判定与 ptCardDrawOne / ptParentGrowDraw 完全同源，但只返回「会抽到哪张/哪只」，
+     不扣保底、不占卡、不入册。真实占用发生在家长提案批准那一刻。
+     结果随快照写进该生加密块 per.preDraw，家长端动画放完立即揭晓。 */
+  function ptPreDraw(s, who) {
+    var out = { card: null, pet: null };
+    try {
+      /* --- 抽灵杰卡：与 ptCardDrawOne 同样的池/隐藏/保底判定 --- */
+      var taken = cardTakenDefIds(s);
+      var pool = ptCardDrawPool(s).filter(function (p) { return !taken[p.id]; });
+      if (pool.length) {
+        var hidden = pool.filter(function (p) { return (p.tier || '普通') === '隐藏'; });
+        var normals = pool.filter(function (p) { return (p.tier || '普通') !== '隐藏'; });
+        var pity = ptPityOf(who, s);
+        var force = hidden.length > 0 && pity >= PT_CARD_PITY - 1;
+        var sp = null;
+        if (force) {
+          sp = hidden[Math.floor(Math.random() * hidden.length)];
+        } else {
+          var wantHidden = hidden.length > 0 && Math.random() < cardHiddenProb(cardDrawCount(s, who));
+          var pickFrom = wantHidden ? hidden : (normals.length ? normals : hidden);
+          sp = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+        }
+        if (sp) out.card = { defId: sp.id, name: sp.name, img: sp.img || '', tier: sp.tier || '普通',
+                             series: sp.series || '', isHidden: (sp.tier || '普通') === '隐藏' };
+      }
+    } catch (_e) {}
+    try {
+      /* --- 抽成长灵宠：与 ptParentGrowDraw 同样的池/权重判定 --- */
+      if (!ptPetHasYoung(s, who)) {
+        var owned = ptPetOwnedDefIds(s, who);
+        var ppool = ptGrowthDrawPool(s).filter(function (p) { return !owned[p.id]; });
+        if (ppool.length) {
+          var gsp = ptGrowWeightedPick(ppool);
+          if (gsp) out.pet = { defId: gsp.id, name: gsp.name, img: gsp.img || '',
+                              tier: gsp.tier || '普通', series: gsp.series || '' };
+        }
+      }
+    } catch (_e2) {}
+    return out;
   }
   /* vT112 历史数据迁移：以前「唤醒」出来的灵杰没有卡记录，补一张，
      否则合并后学生的图鉴亮着、卡册却是空的。返回补了几张。 */
@@ -33737,13 +33785,15 @@ function cwInit(){
     return { ok: true, pet: pet, food: food, cost: Math.min(food.v, gs.left), gs: gs };
   }
   /* vT137 家长抽灵宠：与老师端 ptPetDraw 同一套规则（未成年只能养一只 / 不抽已有物种 / 扣 petDraw 分） */
-  function ptParentGrowDraw(s, who) {
+  function ptParentGrowDraw(s, who, forceDefId) {
     var cost = ptCost('petDraw');
     if (ptPetHasYoung(s, who)) return { ok: false, reason: who + ' 还有未成年的灵宠，先养到成年才能再抽一只' };
     var owned = ptPetOwnedDefIds(s, who);
     var pool = ptGrowthDrawPool(s).filter(function (p) { return !owned[p.id]; });
     if (!pool.length) return { ok: false, reason: '没有可抽的成长灵宠了（已全部拥有）' };
-    return { ok: true, cost: cost, sp: ptGrowWeightedPick(pool) };
+    /* vT260 采信家长端预抽的灵宠：仍在池且未被占用就直接用，撞卡则回退权重随机 */
+    var sp = forceDefId ? (pool.filter(function (p) { return p.id === forceDefId; })[0] || null) : null;
+    return { ok: true, cost: cost, sp: sp || ptGrowWeightedPick(pool) };
   }
   /* vT111 审批核心：UI 手动批准与「自动批准」共用同一套入账逻辑（扣积分 + 唤醒/集卡 + 落库）。
      resolve 值 { ok, act, actName, who, cost, msg } ；已处理过的提案返回 { ok:true, dup:true }。 */
@@ -33791,7 +33841,7 @@ function cwInit(){
     /* vT137 家长抽灵宠：扣 petDraw 分，抽一只成长灵宠（奶团子态） */
     if (it.action === 'growdraw') {
       if (ptCfg().parentDraw === false) return Promise.reject(new Error('家长端抽灵宠已关闭'));
-      var g = ptParentGrowDraw(s, who);
+      var g = ptParentGrowDraw(s, who, it.pickDefId || '');
       if (!g.ok) return Promise.reject(new Error(g.reason));
       var _afPG = ptAfford(who, g.cost);
       if (!_afPG.ok) return Promise.reject(new Error(who + ' 积分不足：抽灵宠要 ' + g.cost + ' 分，现有 ' + _afPG.bal + ' 分'));
@@ -33813,7 +33863,7 @@ function cwInit(){
     var actName = '抽卡';
     return ptAddManual(who, '启灵图鉴 · 家长' + actName + (byAuto ? '（自动批准）' : ''), -cost).then(function () {
       var cardMsg = '';
-      var cr = ptCardDrawOne(s, who, true);   /* 家长端提案：标记来源，桌面延迟到早上集中显示 */
+      var cr = ptCardDrawOne(s, who, true, it.pickDefId || '');   /* vT260 采信预抽 def；家长端提案标记来源，桌面延迟到早上集中显示 */
       if (cr) {
         cardMsg = cr.isNew
           ? ('，抽到新卡「' + cr.def.name + '」' + (cr.awakened ? '并唤醒上墙' : ''))
@@ -34924,6 +34974,9 @@ function cwInit(){
   window.ptParentPermSave = ptParentPermSave;
   window.ptParentFeedPlan = ptParentFeedPlan;
   window.ptParentGrowDraw = ptParentGrowDraw;
+  /* vT260 真即时揭晓：预抽函数与采信入账，供验收测试与快照发布复用 */
+  window.ptPreDraw = ptPreDraw;
+  window.ptApproveParentCore = ptApproveParentCore;
   window.ptRejectParent = ptRejectParent;
   window.ptApproveSub = ptApproveSub;
   window.ptRejectSub = ptRejectSub;
@@ -35548,6 +35601,10 @@ function cwInit(){
             });
             return qd;
           } catch (_qd) { return []; }
+        })(),
+        /* vT260 真即时揭晓：老师端只读预抽，随加密块下发；家长端动画后立即显示，不泄露给别的孩子 */
+        preDraw: (function () {
+          try { return ptPreDraw(ptGet(), st.name) } catch (_pd) { return { card: null, pet: null } }
         })()
       };
       blocks[st.name] = { code: String(st.code || '').toUpperCase(), data: seal(per, st.code || st.name) };
@@ -36048,6 +36105,37 @@ function cwInit(){
     });
   }
   window.ptaQuizHandle = ptaQuizHandle;   /* vT217 暴露便于验收测试与后续复用 */
+  /* vT259 抽卡提案 CAS 抢占：与竞答 ptaQuizHandle、小程序 autoApproveProposals 完全对称。
+     原来抽卡是「先入账后标 done」：网页这边扣了分，done 却被小程序抢先标记，
+     两端各批一次 → 同一笔抽卡扣两次、多给一张卡。vT255 的「二次读」只是把窗口压小，没堵死。
+     现在谁先用带 sha 的 PUT 把 pq/{id}.json 从 pending 标成 done，谁才有入账权；
+     另一端 CAS 409 失败 → 直接跳过，绝不写第二笔。
+     v：CAS 之前 ptAutoJudge 的判定结果（只读配置/额度/余额，不扣分）。 */
+  function ptaDrawHandle(cfg, fname, sha, rec, v) {
+    if (!v || !v.ok) return Promise.resolve({ ok: false, skip: true });
+    /* 先带 sha 抢占：status=done 是入账权凭证，result 只是占位说明，入账成功后再补写真实结果 */
+    return ptaMark(cfg, fname, sha, rec, {
+      status: 'done', doneAt: Date.now(), doneBy: 'auto', result: '已锁定，正在入账'
+    }).then(function () {
+      return window.ptAutoApproveOne(rec.id).then(function (r) {
+        if (r && r.ok) {
+          /* 占位时已标 done，此处仅补写真实结果（不带 sha，不再改动状态） */
+          try { ptaMark(cfg, fname, null, rec, { status: 'done', result: r.msg, doneAt: Date.now(), doneBy: 'auto' }) } catch (eM) {}
+          return { ok: true, msg: r.msg };
+        }
+        /* 判定通过但入账返回失败：标 held 写明原因 */
+        try { ptaMark(cfg, fname, null, rec, { status: 'held', heldReason: (r && r.msg) || '未通过判定', heldAt: Date.now() }) } catch (eH) {}
+        return { ok: false, held: true, msg: (r && r.msg) || '未通过判定' };
+      }).catch(function (e) {
+        /* 入账异常：放回 pending，家长可重试，不留下「已批准却没扣分/没给卡」 */
+        try { ptaMark(cfg, fname, null, rec, { status: 'pending', result: '' }) } catch (e2) {}
+        return { ok: false, held: true, msg: '入账失败：' + ((e && e.message) || e) };
+      });
+    }).catch(function () {
+      return { ok: false, skip: true, msg: '提案已被另一端处理，本端不重复扣分' };
+    });
+  }
+  window.ptaDrawHandle = ptaDrawHandle;   /* 暴露便于验收测试 */
   function ptaScan(manual) {
     if (PTA.busy) return Promise.resolve();
     if (typeof window.ptAutoCfg !== 'function') return Promise.resolve();
@@ -36096,26 +36184,18 @@ function cwInit(){
                 heldN++;
                 return ptaMark(cfg, f.name, got.sha, rec, { status: 'held', heldReason: v.reason, heldAt: Date.now() });
               }
-              /* vT255 入账前再读一次文件：小程序端也会自动批准（老师不开电脑时），
-                 两边同时批有极小概率各批一次（会多给一张卡）。这里动手前确认文件仍是
-                 pending —— 手机刚标过 done 就直接跳过，把窗口压到一次 GET 的时间。 */
-              return ptaGet(cfg, f.name).then(function (now2) {
-                var st2 = (now2 && now2.rec && (now2.rec.status || 'pending')) || 'pending';
-                if (now2 && now2.rec && st2 !== 'pending') { dupN++; return null }
-                return window.ptAutoApproveOne(rec.id).then(function (r) {
-                  if (r && r.ok) {
-                    okN++;
-                    return ptaMark(cfg, f.name, got.sha, rec, { status: 'done', doneAt: Date.now(), result: r.msg, doneBy: 'auto' });
-                  }
-                  heldN++;
-                  return ptaMark(cfg, f.name, got.sha, rec, { status: 'held', heldReason: (r && r.msg) || '未通过判定', heldAt: Date.now() });
-                });
-              }).catch(function (e) {
-                /* vT241 入账异常也必须落状态：否则文件永远 pending、下一轮又被 seen 跳过 */
+              /* vT259 CAS 抢占：取代原「二次读」软检查（那只是把并发窗口压小，没堵死）。
+                 ptaDrawHandle 先带 sha 把提案标 done 占位，CAS 成功才入账；
+                 小程序/桌面抢先则 409 跳过，绝不重复扣分 / 多给卡。判 held 由它内部完成。 */
+              return ptaDrawHandle(cfg, f.name, got.sha, rec, v).then(function (r) {
+                if (r && r.skip) { dupN++; return null; }   /* 另一端已抢到入账权，本端不动账 */
+                if (r && r.ok) { okN++; return null; }        /* 提案已由入账流程自己标 done */
                 heldN++;
-                var msg = (e && e.message) || '入账异常';
-                try { console.warn('[家长提案] 入账失败', rec.id, msg) } catch (_e1) {}
-                return ptaMark(cfg, f.name, got.sha, rec, { status: 'held', heldReason: msg, heldAt: Date.now() });
+                return null;                                  /* held 状态已由 ptaDrawHandle 写回 */
+              }).catch(function (e) {
+                heldN++;
+                try { console.warn('[家长提案] 处理失败', rec.id, e) } catch (_e1) {}
+                return null;
               });
             }).catch(function (e) { console.warn('[家长提案] 单条处理失败', f.name, e); });
           });
