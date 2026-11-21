@@ -21305,7 +21305,7 @@ try {
    WB_VER_TAG 专供 releaseVer / 旧标签页自检（wbBuildNum 只认 v+数字），
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。 */
 var WB_VER_TAG = 'v257';
-var WB_MY_VER = '优化版 vT263 · 积分流水/本周表现改用作业等级新口径（优秀/不错/合格/欠佳/补交）';
+var WB_MY_VER = '优化版 vT264 · 每日竞答分层回避出题（错题隔离7天，相邻天不重复）';
 var WB_BUILD_DATE = '11-20', WB_BUILD_NO = '2.6.259';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
@@ -26998,17 +26998,24 @@ function cwInit(){
     ntUpsert('s-quizcfg', c);
     return QZ_SEED.length;
   }
-  /* 抽题：同一天全班一致；普通题 60 天内不重复；高频错题可提前重复（最多占一半） */
+  /* 抽题：同一天全班一致；vT264 分层回避——优先 60 天没出过 → 其次 7 天没出过 →
+     再次昨天没出过 → 最后才兜底；错题提前重复也必须隔开 7 天（vT263 前：错题不受限，
+     仅有的几道高频错题天天上榜，导致相邻天重复一半）。 */
   function qzPickDay(dateStr, n) {
     dateStr = dateStr || qzToday();
     n = Math.max(1, Math.min(10, parseInt(n, 10) || qzPerDay()));
     var bank = qzBank();
     if (!bank.length) return [];
-    var from = qzDstr(qzDayNum(dateStr) - 60), recent = {};
-    ntRows('s-quizlog').forEach(function (r) {
-      if (!r || r.deleted || !r.date || String(r.date).slice(0, 10) < from) return;
-      (r.qids || []).forEach(function (q) { recent[q] = 1; });
-    });
+    var dnum = qzDayNum(dateStr);
+    function recentSet(days) {
+      var from = qzDstr(dnum - days), s = {};
+      ntRows('s-quizlog').forEach(function (r) {
+        if (!r || r.deleted || !r.date || String(r.date).slice(0, 10) < from) return;
+        (r.qids || []).forEach(function (q) { s[q] = 1; });
+      });
+      return s;
+    }
+    var recent60 = recentSet(60), recent7 = recentSet(7), recent1 = recentSet(1);
     var wrong = {};
     ntRows('s-quizdone').forEach(function (r) {
       if (r && !r.deleted && r.ok === false && r.qid) wrong[r.qid] = (wrong[r.qid] || 0) + 1;
@@ -27016,14 +27023,27 @@ function cwInit(){
     var seed = qzHash(dateStr + '|' + n), rank = {};
     bank.forEach(function (x) { rank[x.id] = qzRand(seed ^ qzHash(x.id)); });
     var pool = bank.slice().sort(function (a, b) { return rank[a.id] - rank[b.id]; });
-    var fresh = pool.filter(function (x) { return !recent[x.id]; });
-    var stale = pool.filter(function (x) { return recent[x.id]; });
-    /* vT187 错题优先：很多人错的题不受 60 天回避限制，可按错误人数提前重复（最多占一半） */
-    var wrongAll = pool.filter(function (x) { return wrong[x.id] > 0; })
+    /* vT264 错题提前重复也设隔离期：只挑最近 7 天没出过的错题，仍最多占一半 */
+    var wrongAll = pool.filter(function (x) { return wrong[x.id] > 0 && !recent7[x.id]; })
       .sort(function (a, b) { return (wrong[b.id] || 0) - (wrong[a.id] || 0); });
     var picks = wrongAll.slice(0, Math.min(wrongAll.length, Math.ceil(n / 2)));
-    fresh.forEach(function (x) { if (picks.length < n && picks.indexOf(x) < 0) picks.push(x); });
-    stale.forEach(function (x) { if (picks.length < n) picks.push(x); });
+    function take(list) {
+      list.forEach(function (x) { if (picks.length < n && picks.indexOf(x) < 0) picks.push(x); });
+    }
+    take(pool.filter(function (x) { return !recent60[x.id]; }));   /* ① 60 天没出过 */
+    take(pool.filter(function (x) { return !recent7[x.id]; }));    /* ② 7 天没出过 */
+    take(pool.filter(function (x) { return !recent1[x.id]; }));    /* ③ 昨天没出过 */
+    /* ④ 兜底：题库太小被迫重复时，按「最久没出过优先」（LRU），宁可重复老题也不撞昨天 */
+    var lastUsed = {};
+    ntRows('s-quizlog').forEach(function (r) {
+      if (!r || r.deleted || !r.date || !Array.isArray(r.qids)) return;
+      var dL4 = String(r.date).slice(0, 10);
+      r.qids.forEach(function (q) { if (!lastUsed[q] || dL4 > lastUsed[q]) lastUsed[q] = dL4; });
+    });
+    take(pool.slice().sort(function (a, b) {
+      var la = lastUsed[a.id] || '', lb = lastUsed[b.id] || '';
+      return la < lb ? -1 : la > lb ? 1 : (rank[a.id] - rank[b.id]);
+    }));
     return picks.slice(0, n);
   }
   /* 记录当日出题（供 60 天回避使用）；题目没变则不写 */
