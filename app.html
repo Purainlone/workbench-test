@@ -1426,7 +1426,7 @@ table.paper td.l{text-align:left;font-weight:600}
     <button data-s="notice">📢 <span class="lbl">通知中心</span><span class="new">新</span></button>
     <button data-s="desk">🖥️ <span class="lbl">教室桌面</span><span class="new">新</span></button>
     <button data-s="classic">📜 <span class="lbl">经典内容</span><span class="new">新</span></button>
-    <button data-s="quiz">🧠 <span class="lbl">每日竞答</span><span class="new">新</span></button>
+    <button data-s="quiz">🧠 <span class="lbl">每日竞答</span><span class="new" id="navQuizBadge">新</span></button>
     <button data-s="detain">⏰ <span class="lbl">留堂名单</span><span class="new">新</span></button>
     <button data-s="comment">✍️ <span class="lbl">学生评语</span><span class="new">新</span></button>
 
@@ -2061,7 +2061,7 @@ table.paper td.l{text-align:left;font-weight:600}
   <!-- ============ vT187 每日竞答（家长端每日 N 题，按答对题数阶梯计净分，同一题只计一次） ============ -->
   <section class="section" id="s-quiz">
     <h2>每日竞答 <span style="font-size:13px;font-weight:400;color:#1d5c8f;background:#e8f0fb;border-radius:8px;padding:2px 10px;vertical-align:middle">家长端 · 按答对题数给分 · 单次一条净分流水</span></h2>
-    <div class="sub">家长端每天一套选择题（默认 6 题，可调 1~10），内容取自六上语文课内知识、常见古文词语、文学文化常识、快乐读书吧。<b>按答对题数一次算一个净分（只记一条流水）：以 6 题为例，答对 6 题 +3、5 题 +2、4 题 +1、3 题 0、2 题 −0.5、1 题 −1、0 题 −1.5</b>。答错当场给答案与解析；<b>同一题只算一次分</b>。题目按日期自动更换，全班同一天题目一致。</div>
+    <div class="sub">家长端每天一套选择题（默认 6 题，可调 1~10），内容取自六上语文课内知识、常见古文词语、文学文化常识、快乐读书吧。<b>按答对题数一次算一个净分（只记一条流水）：以 6 题为例，答对 6 题 +3、5 题 +2、4 题 +1、3 题 0、2 题 −0.5、1 题 −1、0 题 −1.5</b>。答错当场给答案与解析；<b>同一个学生一道题只答一次（vT284 起硬性不重复：不再拿重复题凑满，也不拿错题回头再考）</b>。题目按日期自动更换，全班同一天题目一致。<b>题库余量不够今天的题量时自动暂停，家长端显示「📚 补充题库中」，并在本页与左侧导航提醒你补题。</b></div>
 
     <div class="chartbox" style="margin:10px 0">
       <h3 style="font-size:14px">⚙️ 竞答设置</h3>
@@ -22084,9 +22084,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v283';
-var WB_MY_VER = '优化版 vT283 · 流水补全日期（抽卡等消费流水不再没有时间）';
-var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.269';
+var WB_VER_TAG = 'v284';
+var WB_MY_VER = '优化版 vT284 · 竞答一律不重复（题库不足自动暂停显示补充题库中）';
+var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.270';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -27794,8 +27794,8 @@ function cwInit(){
 
   /* ================= vT187 每日竞答（家长端）=================
      数据表：s-quiz 题库 / s-quizdone 每生每题只答一次 / s-quizlog 每日出题记录 / s-quizcfg 设置。
-     规则（老师已确认）：每天 1~10 题（默认 6）；vT261 按答对题数阶梯计净分（单次一条流水）——6 题 +3 / 5 题 +2 / 4 题 +1 / 3 题 0 / 2 题 −0.5 / 1 题 −1 / 0 题 −1.5，非 6 题按同一曲线外推；答错给答案；同一题跨天也只计一次分；
-     普通题 60 天内不重复，vT265 起不再错题优先（答错不提前重复）；同一天全班题目一致。 */
+     规则（老师已确认）：每天 1~10 题（默认 6）；vT261 按答对题数阶梯计净分（单次一条流水）——6 题 +3 / 5 题 +2 / 4 题 +1 / 3 题 0 / 2 题 −0.5 / 1 题 −1 / 0 题 −1.5，非 6 题按同一曲线外推；答错给答案；
+     vT284 起硬性「一律不重复」：答过的题永不再出，也不再用「错题回头考」；题库凑不满今日题量就少给 → 家长端暂停显示「补充题库中」并提醒老师补题；同一天全班题目一致。 */
   var QZ_CATS = ['课内知识', '古文词语', '文学文化常识', '快乐读书吧'];
   var QZ_PER_SCORE = 0.5;
   /* vT261 满分 = 全对（答对题数=n）对应的净分，用与计分同一条曲线 */
@@ -27852,9 +27852,9 @@ function cwInit(){
     ntUpsert('s-quizcfg', c);
     return QZ_SEED.length;
   }
-  /* 抽题：同一天全班一致；vT265 移除「错题优先」（不再因答错提前重复），
-     分层回避——优先 60 天没出过 → 其次 7 天没出过 → 再次昨天没出过 →
-     最后按最久未出（LRU）兜底。相邻天尽量零重复。 */
+  /* 抽题：同一天全班一致；vT265 移除「错题优先」（不再因答错提前重复）。
+     vT284 老师新规「一律不允许重复」：去掉原来的 LRU 兜底（题库太小就重复老题），
+     只从「没出过」的题里取；凑不满 n 就少给，由调用方标记「题库不足 → 暂停竞答」。 */
   function qzPickDay(dateStr, n) {
     dateStr = dateStr || qzToday();
     n = Math.max(1, Math.min(10, parseInt(n, 10) || qzPerDay()));
@@ -27888,18 +27888,44 @@ function cwInit(){
     take(pool.filter(function (x) { return !recent60[x.id]; }));   /* ① 60 天没出过 */
     take(pool.filter(function (x) { return !recent7[x.id]; }));    /* ② 7 天没出过 */
     take(pool.filter(function (x) { return !recent1[x.id]; }));    /* ③ 昨天没出过 */
-    /* ④ 兜底：题库太小被迫重复时，按「最久没出过优先」（LRU），宁可重复老题也不撞昨天 */
-    var lastUsed = {};
-    ntRows('s-quizlog').forEach(function (r) {
-      if (!r || r.deleted || !r.date || !Array.isArray(r.qids)) return;
-      var dL4 = String(r.date).slice(0, 10);
-      r.qids.forEach(function (q) { if (!lastUsed[q] || dL4 > lastUsed[q]) lastUsed[q] = dL4; });
-    });
-    take(pool.slice().sort(function (a, b) {
-      var la = lastUsed[a.id] || '', lb = lastUsed[b.id] || '';
-      return la < lb ? -1 : la > lb ? 1 : (rank[a.id] - rank[b.id]);
-    }));
+    /* vT284：到此为止。宁可今天只出 3 题（→ 暂停），也不拿重复题凑满 6 题。 */
     return picks.slice(0, n);
+  }
+  /* vT284 题库余量体检（老师端提醒 + 家长端「补充题库中」共用同一口径）：
+     每个学生独立消耗（一题只答一次、跨天不复用），所以
+       余量 = 题库可用题数 − 该生已答数（只算还在题库里的题）
+       够几天 = floor(余量 / 每天题数)
+     返回 { bank, perDay, worst:{name,done,left,days}, days, short, names }
+     short = 有学生今天连 perDay 题都凑不出来 → 该生家长端显示「补充题库中」 */
+  function qzBankStat() {
+    var bank = qzBank(), tot = bank.length, per = qzPerDay();
+    var alive = {};
+    bank.forEach(function (x) { alive[x.id] = 1; });
+    var seen = {}, cnt = {};
+    ntRows('s-quizdone').forEach(function (r) {
+      if (!r || r.deleted || !r.qid) return;
+      var nm = String(r.name || '').trim(); if (!nm) return;
+      if (!alive[r.qid]) return;                       /* 题已从题库删掉，不占余量 */
+      if (seen[nm + '|' + r.qid]) return;               /* 同题多条记录只算一次 */
+      seen[nm + '|' + r.qid] = 1;
+      cnt[nm] = (cnt[nm] || 0) + 1;
+    });
+    var names = Object.keys(cnt), worst = null;
+    names.forEach(function (nm) {
+      var left = tot - cnt[nm];
+      var o = { name: nm, done: cnt[nm], left: left, days: Math.floor(left / per) };
+      if (!worst || o.left < worst.left) worst = o;
+    });
+    var maxDone = worst ? worst.done : 0;
+    return {
+      bank: tot, perDay: per,
+      maxDone: maxDone,
+      left: tot - maxDone,
+      days: Math.floor((tot - maxDone) / per),
+      worst: worst,
+      short: tot - maxDone < per,
+      names: names.length
+    };
   }
   /* 记录当日出题（供 60 天回避使用）；题目没变则不写 */
   function qzLogDay(dateStr, ids) {
@@ -27920,6 +27946,7 @@ function cwInit(){
     return out;
   }
   window.qzPickDay = qzPickDay;
+  window.qzBankStat = qzBankStat;   /* vT284 题库余量体检 */
   window.qzTodaySet = qzTodaySet;
   window.qzBank = qzBank;
   window.qzPerDay = qzPerDay;
@@ -27963,10 +27990,19 @@ function cwInit(){
   }
   function qzRenderToday() {
     var box = document.getElementById('qzToday'); if (!box) return;
-    var rows = qzTodaySet();
+    var rows = qzTodaySet(), per = qzPerDay();
     if (!rows.length) { box.innerHTML = '<div class="sub">题库为空，先导入题目。</div>'; return; }
     qzLogDay(qzToday(), rows.map(function (r) { return r.id; }));
-    box.innerHTML = '<div class="sub" style="margin-bottom:6px">' + qzToday() + ' · 共 ' + rows.length + ' 题 · 全对 ' + qzFullScore(rows.length) + ' 分</div>' +
+    var bs = qzBankStat();
+    /* vT284：不允许重复 → 凑不满今日题量就停在这里，并且必须让老师看见 */
+    var warn = rows.length < per
+      ? '<div style="background:#fdecea;border:1px solid #f0b4ac;border-radius:10px;padding:10px 12px;font-size:13px;color:#a3352e;margin-bottom:8px;line-height:1.7">' +
+        '⚠️ <b>题库不够了</b>：今天按「不重复」只能出 <b>' + rows.length + '</b> / ' + per + ' 题。' +
+        '已按你的要求停在这里，不再拿重复题凑数 —— 家长端会显示「📚 补充题库中」。' +
+        '<br>题库还剩 <b>' + bs.left + '</b> 题可出（够 <b>' + bs.days + '</b> 天）。请到「📚 题库管理」补充或批量导入。' +
+        '</div>'
+      : '';
+    box.innerHTML = warn + '<div class="sub" style="margin-bottom:6px">' + qzToday() + ' · 共 ' + rows.length + ' 题 · 全对 ' + qzFullScore(rows.length) + ' 分</div>' +
       rows.map(function (r, i) {
         return '<div style="padding:7px 0;border-bottom:1px dashed #e3ede7">' +
           '<div style="font-size:13px;font-weight:600">' + (i + 1) + '. ' + esc(r.stem || '') +
@@ -28575,12 +28611,34 @@ function cwInit(){
     if (perEl) perEl.value = qzPerDay();
     var full = document.getElementById('qzFull'); if (full) full.textContent = qzFullScore(qzPerDay());
     var stat = document.getElementById('qzStat');
+    var bsQz = qzBankStat();
     if (stat) {
       var doneN = ntRows('s-quizdone').filter(function (r) { return r && !r.deleted; }).length;
-      stat.innerHTML = '题库 <b>' + qzBank().length + '</b> 题 · 每天 <b>' + qzPerDay() + '</b> 题 · 全对 <b>' + qzFullScore(qzPerDay()) + '</b> 分 · 累计已答记录 <b>' + doneN + '</b> 条' +
+      var bs = bsQz;
+      /* vT284：题库余量体检 —— 每个学生独立消耗，最紧张的那个决定「还够几天」 */
+      var lowCol = bs.short ? '#a3352e' : (bs.days <= 7 ? '#8a6420' : '#25574a');
+      stat.innerHTML = '题库 <b>' + bs.bank + '</b> 题 · 每天 <b>' + bs.perDay + '</b> 题 · 全对 <b>' + qzFullScore(bs.perDay) + '</b> 分 ' +
+        '· 每人还能答 <b style="color:' + lowCol + '">' + bs.left + '</b> 题（约 <b style="color:' + lowCol + '">' + bs.days + '</b> 天，按「一题只答一次、不重复」算）' +
+        '· 累计已答记录 <b>' + doneN + '</b> 条' +
         (purged ? '　<span style="color:#c2410c">已清除 ' + purged + ' 道内置题，请重新导入</span>' : '') +
         (seeded ? '　<span style="color:#2d7a4f">已内置 ' + seeded + ' 题</span>' : '');
+      if (bs.short) {
+        stat.innerHTML += '<div style="background:#fdecea;border:1px solid #f0b4ac;border-radius:10px;padding:9px 12px;font-size:13px;color:#a3352e;margin-top:8px;line-height:1.7">' +
+          '⚠️ <b>题库不够了，今日竞答已暂停</b>：' + esc(bs.worst ? bs.worst.name : '有学生') + ' 只剩 <b>' + (bs.worst ? bs.worst.left : 0) + '</b> 题可答，' +
+          '连今天的 ' + bs.perDay + ' 题都凑不满。该生家长端显示「📚 补充题库中」，不会重复出题。<br>' +
+          '请到下面「📚 题库管理」补充题目（可批量导入），补够 ' + bs.perDay + ' 题后会自动恢复。</div>';
+      } else if (bs.days <= 7) {
+        stat.innerHTML += '<div style="background:#fff8e8;border:1px solid #f0dcae;border-radius:10px;padding:9px 12px;font-size:13px;color:#8a6420;margin-top:8px">' +
+          '⏳ 题库只够 <b>' + bs.days + '</b> 天了（答得最多的 ' + esc(bs.worst ? bs.worst.name : '') + ' 已答 ' + bs.maxDone + ' 题）。建议提前补充，避免竞答中途停下。</div>';
+      }
     }
+    try {
+      var nb = document.getElementById('navQuizBadge');
+      if (nb) {
+        if (bsQz.short) { nb.textContent = '缺题'; nb.style.background = '#c2410c'; nb.style.color = '#fff'; }
+        else { nb.textContent = '新'; nb.style.background = ''; nb.style.color = ''; }
+      }
+    } catch (_nb) {}
     qzRender(); qzRenderToday(); qzWrongRender(); qzTab('today');
   }
   window.qzRender = qzRender; window.qzRenderToday = qzRenderToday; window.qzAdd = qzAdd; window.qzEdit = qzEdit;
@@ -37017,6 +37075,19 @@ function cwInit(){
           on: true, perDay: (typeof window.qzPerDay === 'function') ? window.qzPerDay() : 6,
           score: 0.5, date: today, today: qrows.map(function (r) { return r.id; }),
           recent: qRecent, wrong: qWrong,
+          /* vT284：全班已答并集。家长端在老师没发新快照、自己兜底抽题时，
+             必须和老师端 qzPickDay 用同一份回避集（不重复），否则又会抽到孩子答过的题。 */
+          doneAll: (function () {
+            try {
+              var m = {};
+              (window.ntRows('s-quizdone') || []).forEach(function (r) {
+                if (r && !r.deleted && r.qid) m[r.qid] = 1;
+              });
+              return Object.keys(m);
+            } catch (_qa) { return []; }
+          })(),
+          /* vT284：今日题组是否被题库卡住（不足 perDay → 家长端统一显示「补充题库中」） */
+          short: (qrows.length < ((typeof window.qzPerDay === 'function') ? window.qzPerDay() : 6)),
           bank: qbank.map(function (r) {
             return { id: r.id, cat: r.cat || '', stem: r.stem || '', opts: r.opts || [], ans: r.ans, exp: r.exp || '', src: r.src || '' };
           })
