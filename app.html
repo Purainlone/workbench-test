@@ -17634,8 +17634,8 @@ function stuBoardRender() {
     '</div>';
   /* KPI */
   h += '<div class="sbkpis">' +
-    '<div class="sbkpi"><div class="k">奖励合计</div><div class="v" style="color:#0f7a46">+' + A.pos + '</div><div class="s">' + A.posCnt + ' 条加分</div></div>' +
-    '<div class="sbkpi"><div class="k">扣罚合计</div><div class="v" style="color:#b91c1c">−' + A.neg + '</div><div class="s">' + A.negCnt + ' 条扣分</div></div>' +
+    '<div class="sbkpi"><div class="k">奖励合计</div><div class="v" style="color:#0f7a46">' + (A.pos ? '+' + A.pos : '0') + '</div><div class="s">' + A.posCnt + ' 条加分</div></div>' +
+    '<div class="sbkpi"><div class="k">扣罚合计</div><div class="v" style="color:#b91c1c">' + (A.neg ? '−' + A.neg : '0') + '</div><div class="s">' + A.negCnt + ' 条扣分</div></div>' +
     '<div class="sbkpi"><div class="k">净变化</div><div class="v" style="color:' + (net >= 0 ? '#0f7a46' : '#b91c1c') + '">' + sbSigned(net) + '</div><div class="s">奖励 − 扣罚</div></div>' +
     '<div class="sbkpi"><div class="k">人均变化</div><div class="v">' + (stuN ? sbSigned(net / stuN) : '0') + '</div><div class="s">' + stuN + ' 人 · ' + A.cnt + ' 条流水</div></div>' +
     '</div>';
@@ -17660,7 +17660,7 @@ function stuBoardRender() {
         '<i style="width:' + (w - w * wp / 100) + '%;background:#f08383"></i></div></td></tr>';
   });
   var sumP = sbNum(A.pos), sumN = sbNum(A.neg);
-  h += '<tr style="background:#fafcfb;font-weight:700"><td>合计</td><td class="pos">+' + sumP + '</td><td class="neg">−' + sumN + '</td>' +
+  h += '<tr style="background:#fafcfb;font-weight:700"><td>合计</td><td class="pos">' + (sumP ? '+' + sumP : '0') + '</td><td class="neg">' + (sumN ? '−' + sumN : '0') + '</td>' +
     '<td style="color:' + (net >= 0 ? '#0f7a46' : '#b91c1c') + '">' + sbSigned(net) + '</td><td style="color:#5c6b63">' + A.cnt + '</td><td></td></tr>';
   h += '</tbody></table></div>';
   /* 趋势 */
@@ -21889,7 +21889,7 @@ try {
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
 var WB_VER_TAG = 'v277';
 var WB_MY_VER = '优化版 vT277 · 学生数据看板';
-var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.263';
+var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.264';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
