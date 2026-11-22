@@ -3646,7 +3646,7 @@ table.paper td.l{text-align:left;font-weight:600}
     var inTerm=function(x){var d=String((x&&x.date)||'').slice(0,10);return (!ts||!d||d>=ts)};
     var t=0;
     (c.hw||[]).forEach(function(x){if(!x||x.deleted||!inTerm(x))return;t+=Number(x.score)||0});
-    (c.hwadj||[]).forEach(function(x){if(!x||x.deleted||!inTerm(x))return;t+=Number(x.delta)||0});
+    (c.hwadj||[]).forEach(function(x){if(!x||x.deleted||!inTerm(x))return;if(typeof hwAdjDead==='function'&&hwAdjDead(x.id))return;t+=Number(x.delta)||0});
     /* vT254：st 与 manual 里同键的副本只算一次（小程序/桌面直接两张表相加，会重复计分） */
     var _cStKey={};
     (c.st||[]).forEach(function(x){
@@ -3688,7 +3688,7 @@ table.paper td.l{text-align:left;font-weight:600}
       try{
         var _adjDb=JSON.parse(localStorage.getItem('wb_nt_v1')||'{}');
         var _adj=Array.isArray(_adjDb['s-hwadj'])?_adjDb['s-hwadj']:[];
-        _adj.forEach(function(r){if(!r||r.deleted)return;t+=Number(r.delta)||0});
+        _adj.forEach(function(r){if(!r||r.deleted)return;if(typeof hwAdjDead==='function'&&hwAdjDead(r.id))return;t+=Number(r.delta)||0});
       }catch(_e1){}
       var _c2=gdCloud();
       if(_c2&&Array.isArray(_c2.manual))_c2.manual.forEach(function(x){
@@ -14991,18 +14991,25 @@ function stMpsShadowKey(r) {
 }
 function stStripMpsSpendShadows(rows) {
   if (!Array.isArray(rows)) return rows;
-  var realKey = {}, out = [];
+  var realKey = {}, datedKey = {}, out = [];
   rows.forEach(function (r) {
     if (!r || stIsMpsRow(r)) return;
     var rs = String(stSpendField(r, '奖惩事项', 'reason') || '');
     if (stIsSpendReason(rs)) realKey[stMpsShadowKey(r)] = 1;
+    /* vT279：带日期的真源登记「姓名|事项|分值」键 —— 无日期的 MPS_ 副本靠它识别 */
+    var d = String(stSpendField(r, '日期', 'date') || '').slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) datedKey[stMpsShadowKey(r)] = 1;
   });
-  if (!Object.keys(realKey).length) return rows;   /* 没有真源 → 全部保留（真交易不能丢） */
+  if (!Object.keys(realKey).length && !Object.keys(datedKey).length) return rows;   /* 没有真源 → 全部保留（真交易不能丢） */
   rows.forEach(function (r) {
     if (!r) return;
     if (stIsMpsRow(r)) {
       var rs = String(stSpendField(r, '奖惩事项', 'reason') || '');
       if (stIsSpendReason(rs) && realKey[stMpsShadowKey(r)]) return;  /* 有真源的 MPS_ 副本 → 影子，剔除 */
+      /* vT279：竞答 / 奖惩的 MPS_ 副本日期丢失（刘睿萱 11-21 +3 有两个 +3 的病根），
+         同姓名+同事项+同分值已有带日期真源 → 无日期这条就是副本，剔除，积分不再虚高。 */
+      var d = String(stSpendField(r, '日期', 'date') || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) && datedKey[stMpsShadowKey(r)]) return;
     }
     out.push(r);
   });
@@ -17108,8 +17115,12 @@ function clsSyncFromData(){
 /* ================= 学生管理 ================= */
 /* ===== vT269 统一流水分类（网页/小程序/家长端三端口径一致）=====
    奖励 = 作业加分+目标达成+课堂参与+每日竞答+其他奖励(诵读/手动加分)
-   扣罚 = 作业扣分+课堂扣分(座位表)+其他扣分(违纪/手动扣分)
-   消费 = 抽奖+喂养。注意竞答+2 带 pet 但是正分 → 奖励；消费须「负分+消费关键词」。 */
+   扣罚 = 作业扣分+课堂扣分(座位表)+竞答扣分+其他扣分(违纪/手动扣分)
+   消费 = 抽奖+喂养。注意竞答+2 带 pet 但是正分 → 奖励；消费须「负分+消费关键词」。
+   vT279 修两处误判：
+   ① 竞答扣分原先进「其他扣分」→ 现单列 pnQuiz（看板归「每日竞答」分类）；
+   ② 「课堂扣分（座位悬浮球）」含加分关键词，原来被上面的课堂加分正则先命中、
+      整条判成「课堂参与」奖励 → 现先把负分的扣分项判掉，再判加分。 */
 function flowClass(reason, score, source){
   var v=Number(score)||0, rs=String(reason==null?'':reason);
   var consumeKw=/启灵图鉴|成长灵宠|灵宠|抽卡|抽奖|喂养|进化|米饭|胡萝卜/;
@@ -17120,11 +17131,26 @@ function flowClass(reason, score, source){
   /* vT271 作业「合格」等 0 分等级：加分为 0，流水标签不叫「作业加分」，改叫「作业合格」（淡蓝） */
   if(source==='hw')return v>0?{c:'reward',s:'rwHw',sub:'作业加分'}:v<0?{c:'penalty',s:'pnHw',sub:'作业扣分'}:{c:'reward',s:'rwHw',sub:'作业合格'};
   if(/成绩达标|达目标|目标达成/.test(rs))return {c:'reward',s:'rwGoal',sub:'目标达成'};
-  if(/竞答/.test(rs))return v>=0?{c:'reward',s:'rwQuiz',sub:'每日竞答'}:{c:'penalty',s:'pnOther',sub:'其他扣分'};
+  if(/竞答/.test(rs))return v>=0?{c:'reward',s:'rwQuiz',sub:'每日竞答'}:{c:'penalty',s:'pnQuiz',sub:'竞答扣分'};
+  /* 负分先判扣分类（vT279）：作业扣分 → 课堂扣分，避免被加分词抢走 */
+  if(v<0&&/作业/.test(rs))return {c:'penalty',s:'pnHw',sub:'作业扣分'};
+  if(v<0&&/课堂扣分|座位悬浮球|课堂参与|课堂加分/.test(rs))return {c:'penalty',s:'pnClass',sub:'课堂扣分'};
   if(/座位悬浮球|课堂加分|课堂参与|积极发言|举手|课前展示/.test(rs))return {c:'reward',s:'rwClass',sub:'课堂参与'};
   if(/课堂扣分/.test(rs))return {c:'penalty',s:'pnClass',sub:'课堂扣分'};
   if(/诵读/.test(rs))return {c:'reward',s:'rwOther',sub:'其他奖励'};
   return v>=0?{c:'reward',s:'rwOther',sub:'其他奖励'}:{c:'penalty',s:'pnOther',sub:'其他扣分'};
+}
+/* vT279 科任作业调整（s-hwadj）删除墓碑：与成绩 / 奖惩共用同一份墓碑清单（t='hwadj'，k=记录 id）。
+   场景：老师把测试遗留的加减分从云端删掉后，别的设备 localStorage 里还留着活副本 ——
+   以前会在流水里继续显示、下次同步还会被推回云端。有了墓碑：云端 deletes 里的
+   {t:'hwadj'} 会随 tomMerge 并入各端本机清单，读取处一律过滤。 */
+function hwAdjDead(id){
+  if(!id)return false;
+  try{
+    var a=tomLoad();
+    for(var i=0;i<a.length;i++) if(a[i].t==='hwadj'&&a[i].k===id)return true;
+  }catch(e){}
+  return false;
 }
 /* 积分构成：作业 + 小组 + 手动奖惩 */
 function stuPoints(){
@@ -17133,7 +17159,7 @@ function stuPoints(){
   /* vT269 三分类聚合（旧字段 hw/rw/inc/exp 一律不动，合计口径不变） */
   var clsP={};
   function clsOf(n){ return clsP[n]||(clsP[n]={reward:0,penalty:0,consume:0,
-    rwHw:0,rwGoal:0,rwClass:0,rwQuiz:0,rwOther:0,pnHw:0,pnClass:0,pnOther:0,csDraw:0,csFeed:0}); }
+    rwHw:0,rwGoal:0,rwClass:0,rwQuiz:0,rwOther:0,pnHw:0,pnClass:0,pnQuiz:0,pnOther:0,csDraw:0,csFeed:0}); }
   /* vT174 收入/支出：收入=所有正分流水之和，支出=所有负分流水（扣分+灵宠消费）的绝对值之和。
      只能在这里逐条流水累计 —— hw/rw 是净额，事后拆不出正负。 */
   function bill(n,v,reason,source){
@@ -17159,7 +17185,7 @@ function stuPoints(){
   (function(){ try{
     var _db=JSON.parse(localStorage.getItem('wb_nt_v1')||'{}');
     var _a=Array.isArray(_db['s-hwadj'])?_db['s-hwadj']:[];
-    _a.forEach(function(r){ if(!r||r.deleted||!r.name)return; var v=Number(r.delta)||0; if(!v)return; hwP[r.name]=(hwP[r.name]||0)+v; bill(r.name,v,r.reason||'', 'hw'); });
+    _a.forEach(function(r){ if(!r||r.deleted||!r.name)return; if(hwAdjDead(r.id))return; var v=Number(r.delta)||0; if(!v)return; hwP[r.name]=(hwP[r.name]||0)+v; bill(r.name,v,r.reason||'', 'hw'); });
   }catch(e){} })();
   /* vT236 成绩达标类同键重复行只算一次分（11-16 重复加分事故修复，与流水显示同口径） */
   /* vT254 关键修复：把「本机奖惩流水的业务键」记下来，供下面 manual 去重用。
@@ -17387,7 +17413,7 @@ var SB_CATS = [
   { k: 'hw', t: '📝 作业情况', d: '作业登记 + 科任作业调整' },
   { k: 'class', t: '🙋 课堂情况', d: '座位表悬浮球 / 发言 / 课堂扣分' },
   { k: 'goal', t: '🎯 目标达成', d: '考试目标达成加分' },
-  { k: 'quiz', t: '⚡ 每日竞答', d: '每日竞答得分' },
+  { k: 'quiz', t: '⚡ 每日竞答', d: '每日竞答得分 / 扣分' },
   { k: 'other', t: '🎁 其他奖惩', d: '学生管理里的手动加减分' },
   { k: 'use', t: '🦊 灵宠消费', d: '抽卡 / 喂养（只花积分，不算奖惩）' }
 ];
@@ -17458,6 +17484,7 @@ function stuBoardRows() {
     var adj = Array.isArray(db['s-hwadj']) ? db['s-hwadj'] : [];
     adj.forEach(function (r) {
       if (!r || r.deleted || !r.name) return;
+      if (hwAdjDead(r.id)) return;                    /* vT279 已清理的测试遗留流水 */
       var v = Number(r.delta) || 0; if (!v) return;
       push(r.name, r.date, v, 'hw', r.reason || ('科任作业调整' + (r.subject ? ('·' + r.subject) : '')));
     });
@@ -17520,7 +17547,7 @@ function stuBoardAgg(from, to) {
     if (r.s === 'rwHw' || r.s === 'pnHw') return 'hw';
     if (r.s === 'rwClass' || r.s === 'pnClass') return 'class';
     if (r.s === 'rwGoal') return 'goal';
-    if (r.s === 'rwQuiz') return 'quiz';
+    if (r.s === 'rwQuiz' || r.s === 'pnQuiz') return 'quiz';
     return 'other';
   }
   rows.forEach(function (r) {
@@ -17895,7 +17922,7 @@ function stuBoardCsv(kind) {
       if (r.s === 'rwHw' || r.s === 'pnHw') return 'hw';
       if (r.s === 'rwClass' || r.s === 'pnClass') return 'class';
       if (r.s === 'rwGoal') return 'goal';
-      if (r.s === 'rwQuiz') return 'quiz';
+      if (r.s === 'rwQuiz' || r.s === 'pnQuiz') return 'quiz';
       return 'other';
     };
     A.rows.slice().sort(function (a, b) { return String(a.d).localeCompare(String(b.d)) }).forEach(function (r) {
@@ -18057,7 +18084,7 @@ function openStuPanel(name){
   panel.appendChild(grid);
   /* vT269 三分类子类明细 */
   var sub=el('div',null,'奖励 · 作业加分'+(_c.rwHw||0)+' / 目标达成'+(_c.rwGoal||0)+' / 课堂参与'+(_c.rwClass||0)+' / 每日竞答'+(_c.rwQuiz||0)+' / 其他'+(_c.rwOther||0)+
-    '　扣罚 · 作业扣分'+(_c.pnHw||0)+' / 课堂扣分'+(_c.pnClass||0)+' / 其他扣分'+(_c.pnOther||0)+
+    '　扣罚 · 作业扣分'+(_c.pnHw||0)+' / 课堂扣分'+(_c.pnClass||0)+' / 竞答扣分'+(_c.pnQuiz||0)+' / 其他扣分'+(_c.pnOther||0)+
     '　消费 · 抽奖'+(_c.csDraw||0)+' / 喂养'+(_c.csFeed||0));
   sub.style.cssText='font-size:11px;color:#76867e;line-height:1.7;margin:2px 0 8px;';
   panel.appendChild(sub);
@@ -18091,7 +18118,7 @@ function openStuPanel(name){
   _flowHw.forEach(function(r){
     if(fval(r,'学生姓名')!==name)return;
     var v=parseFloat(fval(r,'分值'));if(isNaN(v))v=HW_SCORE[fval(r,'等级')]||0;
-    flow.push({d:fval(r,'日期'),t:'作业 · '+fval(r,'作业名称')+'（'+fval(r,'等级')+'）',v:v,src:'hw',id:recId(r)});
+    flow.push({d:fval(r,'日期'),t:'作业 · '+fval(r,'作业名称')+'（'+hwLvName(fval(r,'等级'))+'）',v:v,src:'hw',id:recId(r)});
   });
   var gs=groupList();
   var myg=gs.filter(function(g){return g.members.indexOf(name)>=0})[0];
@@ -18115,7 +18142,7 @@ function openStuPanel(name){
   (function(){ try{
     var _db=JSON.parse(localStorage.getItem('wb_nt_v1')||'{}');
     var _a=Array.isArray(_db['s-hwadj'])?_db['s-hwadj']:[];
-    _a.forEach(function(r){ if(!r||r.deleted||r.name!==name)return; var v=Number(r.delta)||0; if(!v)return; flow.push({d:r.date,t:'作业积分 · '+(r.subject||'')+(r.reason?'（'+r.reason+'）':''),v:v,src:'hwadj',id:r.id}); });
+    _a.forEach(function(r){ if(!r||r.deleted||r.name!==name)return; if(hwAdjDead(r.id))return; var v=Number(r.delta)||0; if(!v)return; flow.push({d:r.date,t:'作业积分 · '+(r.subject||'')+(r.reason?'（'+r.reason+'）':''),v:v,src:'hwadj',id:r.id}); });
   }catch(e){} })();
   /* vT173 手动积分并入流水显示：悬浮球加分/扣分、手机/桌面手动奖惩写在云端
      manual 表（vT169 设计，写 manual 不写档案），此前工作台流水里看不到，
@@ -22025,9 +22052,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v278';
-var WB_MY_VER = '优化版 vT278 · 看板按分类排名';
-var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.265';
+var WB_VER_TAG = 'v279';
+var WB_MY_VER = '优化版 vT279 · 扣分分类纠正';
+var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.266';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24649,6 +24676,7 @@ function mpFromDeskBuild(o) {
     var _adj = Array.isArray(_adjDb['s-hwadj']) ? _adjDb['s-hwadj'] : [];
     _adj.forEach(function (r) {
       if (!r || r.deleted || !r.name) return;
+      if (typeof hwAdjDead === 'function' && hwAdjDead(r.id)) return;   /* vT279：已清理的遗留流水不再推回云端 */
       hwadjOut.push({ id: r.id || '', name: r.name, delta: Number(r.delta) || 0, reason: r.reason || '', date: r.date || '' });
     });
   } catch (_he) {}
@@ -36618,7 +36646,7 @@ function cwInit(){
                  cls: _c ? { reward: _r1(_c.reward), penalty: _r1(_c.penalty), consume: _r1(_c.consume),
                              rwHw: _r1(_c.rwHw), rwGoal: _r1(_c.rwGoal), rwClass: _r1(_c.rwClass),
                              rwQuiz: _r1(_c.rwQuiz), rwOther: _r1(_c.rwOther),
-                             pnHw: _r1(_c.pnHw), pnClass: _r1(_c.pnClass), pnOther: _r1(_c.pnOther),
+                             pnHw: _r1(_c.pnHw), pnClass: _r1(_c.pnClass), pnQuiz: _r1(_c.pnQuiz), pnOther: _r1(_c.pnOther),
                              csDraw: _r1(_c.csDraw), csFeed: _r1(_c.csFeed) } : null };
       });
     } catch (_pe) {
@@ -36654,6 +36682,7 @@ function cwInit(){
       var _wNt = (typeof ntRows === 'function') ? ntRows('s-hwadj') : [];
       _wNt.forEach(function (r) {
         if (!r || r.deleted || !r.name) return;
+        if (typeof hwAdjDead === 'function' && hwAdjDead(r.id)) return;   /* vT279 已清理的遗留流水 */
         pushWeekly(r.name, r.date, 'hw', Number(r.delta) || 0, '科任调整' + (r.subject ? ('·' + r.subject) : '') + (r.reason ? ('·' + r.reason) : ''));
       });
     } catch (_we) {}
