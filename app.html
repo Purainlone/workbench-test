@@ -15042,6 +15042,53 @@ function stStripMpsSpendShadows(rows) {
   });
   return out;
 }
+/* ===== vT286：删「MPS_ 桥接影子」时，连云端真源 id 一起封掉 =====
+   病根（11-22 蒋子霆复盘，老师一句「删除只影响了网页、没影响云端」点中要害）：
+     家长抽卡在云端 doc.tables.st 里是 Lmw* 真源，网页本地却桥接出一条
+     MPS_* 影子；老师点删除，stDelRow 只按影子 id 写 stid 墓碑，云端真源
+     id 对不上 → stDropIdDead 出站时真源仍在 → doc.tables.st 原样推回，
+     分数 / 教室桌面 / 家长端全部纹丝不动，看起来就是「删了没用」。
+   反查源用 gdCloud().st（每轮同步缓存下来的云端 st 表，扁平
+   {id,name,score,reason,date}）—— 比 ST_ROWS 可靠：真源常常只存在云端，
+   本地学生档案表里压根没有这一行。
+   四道安全闸，宁可不动也不连坐：
+     ① 只处理 MPS_ 开头的影子；② 只处理抽卡 / 灵宠消费类；
+     ③ name|reason|score 全等，日期两边都有时必须相等；
+     ④ 命中的真源恰好 1 条才写；0 条（本就没真源）或 >1 条
+        （同一天多笔同价抽卡）一律跳过，保持旧行为。 */
+function stDeadAddShadowSources(r, cloudSt) {
+  try {
+    if (!r || typeof stIsMpsRow !== 'function' || !stIsMpsRow(r)) return [];
+    var rid = String((typeof recId === 'function') ? recId(r) : (r.id || ''));
+    if (!rid) return [];
+    var rs = String(stSpendField(r, '奖惩事项', 'reason') || '');
+    if (typeof stIsSpendReason === 'function' && !stIsSpendReason(rs)) return [];
+    var nm = String(stSpendField(r, '姓名', 'name') || '').replace(/\s+/g, '');
+    var v = Math.round((Number(stSpendField(r, '奖惩分值', 'score')) || 0) * 10) / 10;
+    var d = String(stSpendField(r, '日期', 'date') || '').slice(0, 10);
+    if (!nm) return [];
+    var src = cloudSt;
+    if (!Array.isArray(src)) {
+      var gc = (typeof gdCloud === 'function') ? gdCloud() : null;
+      src = (gc && Array.isArray(gc.st)) ? gc.st : [];
+    }
+    var hits = [];
+    src.forEach(function (x) {
+      if (!x || String(x.id || '').indexOf('MPS_') === 0) return;
+      var xid = String(x.id || '');
+      if (!xid || xid === rid) return;
+      if (String(x.name || '').replace(/\s+/g, '') !== nm) return;
+      if (String(x.reason || '').replace(/\s+/g, '') !== rs.replace(/\s+/g, '')) return;
+      if (Math.round((Number(x.score) || 0) * 10) / 10 !== v) return;
+      var xd = String(x.date || '').slice(0, 10);
+      if (d && xd && d !== xd) return;
+      hits.push(xid);
+    });
+    if (hits.length !== 1) return [];
+    stDeadAdd(hits[0]);
+    return hits;
+  } catch (e) { return [] }
+}
 function stBonusRowKey(r) {
   return stTombKeyOf(fval(r, '姓名'), fval(r, '奖惩事项'), syncDateOnly(fval(r, '日期')), parseFloat(fval(r, '奖惩分值')));
 }
@@ -18254,6 +18301,8 @@ function openStuPanel(name){
           }
         }catch(_te){}
         try{ if(typeof stDeadAdd==='function'&&f.id) stDeadAdd(f.id); }catch(_te2){}
+        /* vT286：删的是 MPS_ 影子时，连云端真源 id 一起封 —— 否则只封影子、云端没变 */
+        try{ if(_r&&typeof stDeadAddShadowSources==='function') stDeadAddShadowSources(_r); }catch(_te4){}
         stDelRow(_r||{id:f.id},false).then(function(){
           /* vT273：先按扣分记录 id 收回同源灵宠 / 灵杰卡；旧数据没有 srcId 时按「同学生+同一天+唯一」兜底 */
           var _rev=0,_leg=-2;
@@ -22086,9 +22135,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v285';
-var WB_MY_VER = '优化版 vT285 · 删掉的流水不再复活（跨端墓碑改为并集）';
-var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.271';
+var WB_VER_TAG = 'v286';
+var WB_MY_VER = '优化版 vT286 · 删流水真正落到云端（影子行连真源一起封）';
+var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.272';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -34678,6 +34727,8 @@ function cwInit(){
     return rows.reduce(function (p, r) {
       return p.then(function () {
         try { if (typeof stDeadAdd === 'function') stDeadAdd(String(recId(r))); } catch (e) {}
+        /* vT286：影子行连云端真源 id 一起封，保证删除真的落到 doc.tables.st */
+        try { if (typeof stDeadAddShadowSources === 'function') stDeadAddShadowSources(r); } catch (e) {}
         return stDelRow(r, false).then(function (k) { n += (k ? 1 : 0); });
       });
     }, Promise.resolve()).then(function () {
