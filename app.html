@@ -14951,6 +14951,19 @@ function stIdDead(id) {
   } catch (e2) {}
   return false;
 }
+/* vT283：出站过滤 —— 已按 id 删掉的流水，绝不再被本机整表推回云端。
+   病根：写回时 out.tables.st = 本机 ∪ 云端，云端还把那条留着（删除只写了墓碑），
+   于是 union 又把它并回来、下一轮直接推回去 → 「删了明天又复活」。
+   stPurge 只在显示/积分口径上过滤，出站这条路以前没人管。 */
+function stDropIdDead(rows) {
+  if (!Array.isArray(rows) || !rows.length) return rows;
+  return rows.filter(function (r) {
+    try {
+      var id = (typeof recId === 'function') ? String(recId(r) || '') : String((r && r.id) || '');
+      return !(id && stIdDead(id));
+    } catch (e) { return true }
+  });
+}
 /* ===== vT236 目标加分（成绩达标类）流水去重 =====
    病根（11-19 复盘）：stTombKeyOf 对成绩达标键不含日期（一场考试一个键）。
    同一学生在飞书里存在两条同键行（如 11-16 的旧行 + 撤销后重加的新行）时：
@@ -23317,9 +23330,16 @@ function syncCycleCore(manual) {
           var merged = mpUnionTable(k, out.tables[k], tables[k]);
           /* vT268：st 并集后再剔一次 MPS_ 抽卡影子 —— 远端旧缓存仍带副本时，这里挡住并集把它救活 */
           if (k === 'st' && typeof stStripMpsSpendShadows === 'function') merged = stStripMpsSpendShadows(merged);
+          if (k === 'st' && typeof stDropIdDead === 'function') merged = stDropIdDead(merged);   /* vT283：按 id 删掉的不再并回来 */
           if (merged.length !== mineN) unionLog.push(k + ' ' + mineN + '∪' + remoteM + '→' + merged.length);
           out.tables[k] = merged;
         });
+        /* vT283：云端没有 st（或没进并集）时也要过滤 —— 本机那份里可能还留着已删的行 */
+        if (Array.isArray(out.tables.st) && typeof stDropIdDead === 'function') {
+          var _stN0 = out.tables.st.length;
+          out.tables.st = stDropIdDead(out.tables.st);
+          if (out.tables.st.length !== _stN0) unionLog.push('st 剔除已删 ' + (_stN0 - out.tables.st.length) + ' 条');
+        }
         /* vT254 三端同账：manual 里若有一条与奖惩流水（st）完全同键
            （姓名|事项|日期|分值），它只是 st 的同源副本。
            小程序 / 教室桌面是 hw + st + manual 三张表直接相加、不认同源，
