@@ -22066,9 +22066,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v280';
-var WB_MY_VER = '优化版 vT280 · 删流水不再复活';
-var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.267';
+var WB_VER_TAG = 'v281';
+var WB_MY_VER = '优化版 vT281 · 竞答题量不足按正确率计分';
+var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.268';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -27834,6 +27834,14 @@ function cwInit(){
       ntRows('s-quizlog').forEach(function (r) {
         if (!r || r.deleted || !r.date || String(r.date).slice(0, 10) < from) return;
         (r.qids || []).forEach(function (q) { s[q] = 1; });
+      });
+      /* vT281：学生实际答过的题也算「出过」。原来只看 s-quizlog（当天的整组题），
+         一旦家长端走兜底抽题、题组与 log 不同源，孩子答过的题就不在回避范围内，
+         下一次又被抽到 —— 孩子看到的 6 题里有几题是「以前答过」，提交时被跳过，
+         结果整组只交 3 题、按 3 题算分（11-22 刘睿萱的 0 分就是这么来的）。 */
+      ntRows('s-quizdone').forEach(function (r) {
+        if (!r || r.deleted || !r.qid || !r.date || String(r.date).slice(0, 10) < from) return;
+        s[r.qid] = 1;
       });
       return s;
     }
@@ -35377,6 +35385,22 @@ function cwInit(){
     return Math.round(v * 10) / 10;
   }
   window.qzNetScore = qzNetScore;
+  /* vT281 题量不足时按正确率折算：
+     家长端兜底抽题可能只剩几条（抽到她以前答过的题被跳过），若仍按「答对 3 题 = 0 分」
+     直算，全对的孩子反而拿不到分（11-22 刘睿萱就是这么被算成 0 分的）。
+     total < perDay 时先按正确率折算成 perDay 制的答对数，再套同一条曲线：
+     6 题制、本次 3 题全对 → 折算 6 题 → +3；3 题对 2 → 折算 4 题 → +1。 */
+  function qzBatchScore(correct, total, perDay) {
+    var c = Math.max(0, parseInt(correct, 10) || 0);
+    var t = Math.max(1, parseInt(total, 10) || 1);
+    var p = Math.max(1, Math.min(10, parseInt(perDay, 10) || 6));
+    if (t >= p) return { score: qzNetScore(c), eff: c, scaled: false, perDay: p, total: t };
+    var eff = Math.round(c * p / t);
+    if (eff > p) eff = p;
+    if (eff < 0) eff = 0;
+    return { score: qzNetScore(eff), eff: eff, scaled: true, perDay: p, total: t };
+  }
+  window.qzBatchScore = qzBatchScore;
   /* 写竞答净分流水：val 是已经算好的净分（正/负/0）；0 由调用方直接跳过不写 */
   window.ptQuizBonus = function (name, val) {
     var add = Math.round((Number(val) || 0) * 10) / 10;
@@ -37530,8 +37554,13 @@ function cwInit(){
     /* vT261 老师新规：不再「答对加分 + 乱答扣分」两条流水，改为按答对题数算一个净分，只写一条。
        答对 6 题 +3 / 5 题 +2 / 4 题 +1 / 3 题 0 / 2 题 −0.5 / 1 题 −1 / 0 题 −1.5。
        等价公式：net = 答对≤3 ? (答对×0.5−1.5) : (答对−3)；题数非 6 时按同一条曲线线性外推。 */
-    var net = window.qzNetScore ? window.qzNetScore(correct) : (correct <= 3 ? (correct * 0.5 - 1.5) : (correct - 3));
-    net = Math.round(net * 10) / 10;
+    /* vT281：本次提交的题数少于每日题量（家长端兜底抽题只剩几条）时，按正确率折算后再算分，
+       否则「3 题全对」会被算成 0 分，和老师「全对就该得满分」的直觉相反。 */
+    var _perDay = (typeof window.qzPerDay === 'function') ? window.qzPerDay() : 6;
+    var _bs = (typeof window.qzBatchScore === 'function')
+      ? window.qzBatchScore(correct, todo.length, _perDay)
+      : { score: (typeof window.qzNetScore === 'function' ? window.qzNetScore(correct) : (correct <= 3 ? (correct * 0.5 - 1.5) : (correct - 3))), eff: correct, scaled: false };
+    var net = Math.round((Number(_bs.score) || 0) * 10) / 10;
     var writeDone = function () {
       var now = Date.now(), iso = new Date(now).toISOString();
       todo.forEach(function (x, i) {
@@ -37542,6 +37571,7 @@ function cwInit(){
       });
       try { window.ntChanged(); } catch (e3) {}
       var msg = '答对 ' + correct + ' / ' + todo.length + ' 题';
+      if (_bs.scaled) msg += '（题量不足 ' + _bs.perDay + ' 题，按正确率折算为答对 ' + _bs.eff + ' 题）';
       if (net > 0) msg += '，+' + net + ' 分';
       else if (net < 0) msg += '，' + net + ' 分';
       else msg += '，本次不计分';
