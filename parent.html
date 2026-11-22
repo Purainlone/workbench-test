@@ -415,7 +415,7 @@
 
   var GITEE = 'https://gitee.com/api/v5';
   var SNAP = 'wb_parent_snap.json';
-  var PA_PAGE_VER = 'v251';   /* vT279：扣罚子类补「竞答扣分」；v250 作业合格淡蓝、竞答行去掉多余「灵宠」 */
+  var PA_PAGE_VER = 'v252';   /* vT279：扣罚子类补「竞答扣分」；v250 作业合格淡蓝、竞答行去掉多余「灵宠」 */
   try { window.PA_PAGE_VER = PA_PAGE_VER; } catch (e) {}
   var K_ACCESS = 'wb_pa_access', K_NAME = 'wb_pa_name', K_CODE = 'wb_pa_code', K_PEND = 'wb_pa_pending';
 
@@ -1399,9 +1399,15 @@
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
   /* 与老师端同规则的兜底抽题：快照里的题组过期（老师电脑没开）时，家长端自己也能按日期换题 */
-  function qzPickLocal(q, day) {
+  function qzPickLocal(q, day, done) {
     var n = Math.max(1, Math.min(10, parseInt(q.perDay, 10) || 6));
-    var recent = {}, wrong = q.wrong || {}, bank = q.bank || [];
+    var recent = {}, wrong = q.wrong || {}, all = q.bank || [];
+    /* vT281：兜底抽题先排除该生答过的题。原来只避开「全班最近 60 天出过的题」，
+       抽到她个人答过、但不在出题记录里的老题时，页面会显示成「以前答过」，
+       结果整组 6 题只有 3 题能交（11-22 刘睿萱 / 甄俊泓题组就撞了这 3 题）。
+       题库太小、全都答过时才退回全量，避免抽不出题。 */
+    var fresh0 = all.filter(function (x) { return !(done && done[x.id]) });
+    var bank = fresh0.length >= n ? fresh0 : (fresh0.length ? fresh0 : all);
     (q.recent || []).forEach(function (id) { recent[id] = 1; });
     var seed = qzHash(day + '|' + n), rank = {};
     bank.forEach(function (x) { rank[x.id] = qzRand(seed ^ qzHash(x.id)); });
@@ -1437,7 +1443,7 @@
     if (q.date === st.date && Array.isArray(q.today) && q.today.length) {
       items = q.today.map(function (id) { return map[id]; }).filter(Boolean);
     } else {
-      items = qzPickLocal(q, st.date);
+      items = qzPickLocal(q, st.date, qzDoneAll());
     }
     st.items = items; st.perDay = q.perDay || items.length; st.score = Number(q.score) || 0.5;
     try {
@@ -1464,23 +1470,38 @@
     if (card) card.outerHTML = qzCardHtml();
   }
   function qzStat() {
-    var st = qzState(), n = 0, right = 0, done = qzDoneAll();
+    var st = qzState(), n = 0, right = 0, done = qzDoneAll(), live = 0;
     st.items.forEach(function (q) {
       if (!q) return;
-      if (done[q.id]) { n++; return; }
+      /* vT281：以前答过的题既不算「已作答」、也不进分母。
+         原先把 done 的题当成已作答（n++），孩子只要答完剩下的几条就满足
+         answered === total，提交后却只带那几条 —— 页面显示「答完 6 题」，
+         实际只交了 3 条，批准端按 3 题算分（11-22 刘睿萱就是这么变成 0 分的）。 */
+      if (done[q.id]) return;
+      live++;
       var p = st.picked[q.id];
       if (p == null) return;
       n++; if (Number(p) === Number(q.ans)) right++;
     });
-    return { answered: n, right: right, add: qzNetScore(right), total: st.items.length };
+    /* vT281：实际题量少于每日题量时，按正确率折算后再算分（与老师端/桌面同一口径） */
+    var perDay = Math.max(1, Math.min(10, parseInt(st.perDay, 10) || 6));
+    var eff = (live >= perDay) ? right : Math.max(0, Math.min(perDay, Math.round(right * perDay / Math.max(1, live))));
+    return {
+      answered: n, right: right, add: qzNetScore(eff), total: live,
+      eff: eff, scaled: live < perDay, perDay: perDay, skipped: st.items.length - live
+    };
   }
   function qzCardHtml() {
     var st = qzState();
     if (!st.has) return '';
     var done = qzDoneAll(), s = qzStat();
-    var h = '<div class="card" id="quizCard"><h2>🧠 每日竞答挑战 <em>' + esc(st.date) + ' · ' + st.items.length + ' 题</em></h2>';
+    var h = '<div class="card" id="quizCard"><h2>🧠 每日竞答挑战 <em>' + esc(st.date) + ' · ' + s.total + ' 题</em></h2>';
+    /* vT281：题组里有以前答过的题时，明确告诉家长「本次只需答几题」，避免误以为少答了 */
+    if (s.skipped > 0) {
+      h += '<div style="background:#fff8e8;border:1px solid #f0dcae;border-radius:10px;padding:9px 11px;font-size:12.5px;color:#8a6420;margin-bottom:8px">今日题组 ' + st.items.length + ' 题，其中 <b>' + s.skipped + '</b> 题以前答过（不再计分），本次只需答 <b>' + s.total + '</b> 题。</div>';
+    }
     /* vT235：全部做完才能提交。作答阶段只勾选不判卷，提交后统一揭晓答案 —— 防止只挑会做的题、边答边抄答案 */
-    h += '<div style="font-size:12.5px;color:#7a8a80;line-height:1.7;margin-bottom:6px"><b>按答对题数给分（以 ' + st.items.length + ' 题为例）：答对 ' + st.items.length + ' 题 +' + qzNetScore(st.items.length) + '、' + Math.max(0, st.items.length - 1) + ' 题 +' + qzNetScore(st.items.length - 1) + '、' + Math.max(0, st.items.length - 2) + ' 题 +' + qzNetScore(st.items.length - 2) + ' …… 全错 ' + qzNetScore(0) + ' 分</b>，一次提交只记一条净分流水。<b>全部题目作答后才能提交；提交前不显示对错（可以改选），提交后统一揭晓答案与解析</b>；同一题只算一次分。</div>';
+    h += '<div style="font-size:12.5px;color:#7a8a80;line-height:1.7;margin-bottom:6px"><b>按答对题数给分（以 ' + s.perDay + ' 题为例）：答对 ' + s.perDay + ' 题 +' + qzNetScore(s.perDay) + '、' + Math.max(0, s.perDay - 1) + ' 题 +' + qzNetScore(s.perDay - 1) + '、' + Math.max(0, s.perDay - 2) + ' 题 +' + qzNetScore(s.perDay - 2) + ' …… 全错 ' + qzNetScore(0) + ' 分</b>，一次提交只记一条净分流水。<b>全部题目作答后才能提交；提交前不显示对错（可以改选），提交后统一揭晓答案与解析</b>；同一题只算一次分' + (s.scaled ? '；<b>本次题量不足 ' + s.perDay + ' 题，按正确率折算计分</b>' : '') + '。</div>';
     if (st.submitted) {
       h += '<div style="background:#eef7f2;border:1px solid #cfe7db;border-radius:10px;padding:9px 11px;font-size:13px;color:#25574a;margin-bottom:8px">✅ 已提交：' + esc(st.msg || '等待老师端入账') + '</div>';
     }
@@ -1576,8 +1597,12 @@
         answers.forEach(function (a) { dm[a.q] = 1; });
         try { localStorage.setItem(QZ_LS + '_done', JSON.stringify(dm)); } catch (e2) {}
         st.submitted = true;
-        var _net = qzNetScore(right);
-        st.msg = '答对 ' + right + ' / ' + answers.length + ' 题，' + (_net > 0 ? '+' : '') + _net + ' 分，等待入账';
+        var _p = Math.max(1, Math.min(10, parseInt(st.perDay, 10) || 6));
+        var _eff = (answers.length >= _p) ? right : Math.max(0, Math.min(_p, Math.round(right * _p / Math.max(1, answers.length))));
+        var _net = qzNetScore(_eff);
+        st.msg = '答对 ' + right + ' / ' + answers.length + ' 题' +
+          (answers.length < _p ? '（题量不足 ' + _p + ' 题，按正确率折算为 ' + _eff + ' 题）' : '') +
+          '，' + (_net > 0 ? '+' : '') + _net + ' 分，等待入账';
         qzSave();
         ST.pending = { id: rec.id, name: ST.name, action: 'quiz', label: '每日竞答', at: rec.at, status: 'pending' };
         savePending(); renderMain(); startPoll();
