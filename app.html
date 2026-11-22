@@ -24102,6 +24102,9 @@ function mpToDesk(tables) {
       if (!r || !String(r.name || '').trim()) return;
       var _tkIn = (typeof stTombKeyOf === 'function') ? stTombKeyOf(r.name, r.reason, String(r.date || '').slice(0, 10), r.score) : '';
       if (_tkIn && _stTomIn[_tkIn]) return;
+      /* vT280：已删记录 id（含云端透传的 stid 墓碑）不再桥接出去 —— 抽卡这类不能按业务键
+         删的流水，全靠这条挡住「删了又被整表推回」。 */
+      if (typeof stIdDead === 'function' && stIdDead(r.id)) return;
       var p = { '姓名': mpTxt(r.name), '奖惩事项': mpTxt(r.reason || ''),
                 '奖惩分值': mpNum(r.score || 0), '日期': mpTxt(String(r.date || '').slice(0, 10)),
                 '备注': mpTxt(r.pet ? '宠物' : String(r.note || '')) };
