@@ -1346,7 +1346,7 @@ table.paper td.l{text-align:left;font-weight:600}
 .sbchip:hover{border-color:var(--primary2);color:var(--primary)}
 .sbchip.on{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
 .sbdate{border:1px solid var(--line);border-radius:8px;padding:4px 7px;font-size:12.5px;font-family:inherit;color:#41544c;background:#fff}
-.sbkpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:4px}
+.sbkpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:4px}
 .sbkpi{background:#fbfdfc;border:1px solid var(--line);border-radius:12px;padding:10px 13px}
 .sbkpi .k{font-size:12px;color:var(--muted)}
 .sbkpi .v{font-size:21px;font-weight:700;margin-top:3px;letter-spacing:-.4px}
@@ -1358,8 +1358,12 @@ table.paper td.l{text-align:left;font-weight:600}
 .sbtable th:first-child,.sbtable td:first-child{text-align:left}
 .sbtable td{padding:7px 8px;border-top:1px solid #eef3f0;text-align:center}
 .sbtable td.nm{font-weight:600}
+.sbtable td.rk{color:#8a9a92;font-variant-numeric:tabular-nums}
 .sbtable .pos{color:#0f7a46}
 .sbtable .neg{color:#b91c1c}
+.sbtable .use{color:#b45309}
+.sbtable tbody tr.pick{cursor:pointer}
+.sbtable tbody tr.pick:hover{background:#f4faf7}
 .sbbar{height:7px;border-radius:4px;background:#eef3f0;overflow:hidden;display:flex;min-width:70px}
 .sbbar i{display:block;height:100%}
 .sbchart{display:flex;gap:3px;align-items:flex-start;overflow-x:auto;padding:4px 0 2px}
@@ -1370,6 +1374,12 @@ table.paper td.l{text-align:left;font-weight:600}
 .sbdn{position:absolute;left:18%;right:18%;top:66px;background:linear-gradient(0deg,#f19b9b,#dc2626);border-radius:0 0 4px 4px}
 .sbx{font-size:10px;color:#8a9a92;margin-top:3px;white-space:nowrap}
 .sbrank{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+/* vT278 分类排行：分类 chip + 排序 chip */
+.sbtabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 7px}
+.sbtabs .sbchip{padding:4px 10px;font-size:12px}
+.sbsorthint{margin-left:auto;font-size:12px;color:#7b8b83}
+.sbsum{font-size:12px;color:#7b8b83;margin:0 0 7px}
+.sbsum b{font-weight:700}
 .sbrk{background:#fbfdfc;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
 .sbrk .h{font-size:12.5px;font-weight:700;color:#41544c;margin-bottom:6px}
 .sbrk .r{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0}
@@ -1378,6 +1388,7 @@ table.paper td.l{text-align:left;font-weight:600}
 .sbrk .r .vv{width:42px;text-align:right;flex-shrink:0;font-weight:600}
 .sbnote{font-size:12px;color:var(--muted);line-height:1.8;margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}
 .sbempty{font-size:12.5px;color:var(--muted);padding:16px 0;text-align:center}
+@media(max-width:980px){.sbkpis{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:720px){.sbkpis{grid-template-columns:repeat(2,1fr)}.sbrank{grid-template-columns:1fr}}
 </style>
 </head>
@@ -2185,7 +2196,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2 sm" onclick="stuClearPoints()" title="把全班积分清零（可撤回）">🧹 清空积分</button>
       <button class="btn2 sm" id="stuUndoBtn" onclick="stuUndoClear()" style="display:none" title="恢复上一次清空前全部积分记录">↩️ 撤回清空</button>
       <button class="btn2 sm" onclick="wbPointsReconcile()" title="逐人对比「学生管理」与「小程序 / 教室桌面」显示的积分，并指出云端哪里多算或少算">🔍 积分对账</button>
-      <button class="btn2 sm" onclick="stuBoardOpen()" title="按作业 / 课堂 / 目标达成 / 其他奖惩分类统计，可按本周、本月、本学期或自定义区间看">📊 数据看板</button>
+      <button class="btn2 sm" onclick="stuBoardOpen()" title="按分类看学生的加分 / 扣罚 / 排名（灵宠消费单独统计），可按本周、本月、本学期或自定义区间看">📊 数据看板</button>
       <select id="stuGroup" onchange="renderStu()" style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px;font-family:inherit">
         <option value="">全部小组</option>
       </select>
@@ -17370,14 +17381,18 @@ function wbPointsReconcile() {
      · 消费 = 灵宠抽卡 / 喂养，单列，不计入奖励或扣罚
    小组积分不进个人账（vT174 口径），故不统计。 */
 var SB_PRESET = 'term', SB_GRAN = 'auto', SB_FROM = '', SB_TO = '', SB_LAST = null, SB_ESC = false;
+/* 排行面板状态：看哪个分类、按什么排序、是否展开全部 */
+var SB_RANK_CAT = 'all', SB_RANK_SORT = 'net', SB_RANK_ALL = false;
 var SB_CATS = [
   { k: 'hw', t: '📝 作业情况', d: '作业登记 + 科任作业调整' },
   { k: 'class', t: '🙋 课堂情况', d: '座位表悬浮球 / 发言 / 课堂扣分' },
   { k: 'goal', t: '🎯 目标达成', d: '考试目标达成加分' },
   { k: 'quiz', t: '⚡ 每日竞答', d: '每日竞答得分' },
   { k: 'other', t: '🎁 其他奖惩', d: '学生管理里的手动加减分' },
-  { k: 'use', t: '🦊 灵宠消费', d: '抽卡 / 喂养（单列，不算奖惩）' }
+  { k: 'use', t: '🦊 灵宠消费', d: '抽卡 / 喂养（只花积分，不算奖惩）' }
 ];
+var SB_SUB = { hw: '作业', class: '课堂', goal: '目标达成', quiz: '每日竞答', other: '其他奖惩', use: '灵宠消费' };
+var SB_TAB = { all: '全部', hw: '📝 作业', class: '🙋 课堂', goal: '🎯 目标', quiz: '⚡ 竞答', other: '🎁 其他', use: '🦊 消费' };
 function stuBoardToday() {
   try { return ymd(new Date()) } catch (e) {
     var d = new Date(), p = function (n) { return String(n).padStart(2, '0') };
@@ -17482,7 +17497,9 @@ function stuBoardRows() {
   } catch (e) {}
   return out;
 }
-/* 聚合：分类合计 / 逐笔明细 / 学生排行 / 趋势桶 */
+/* 聚合：分类合计 / 逐笔明细 / 学生排行 / 趋势桶
+   vT278 起「灵宠消费」与「扣罚」彻底分离：consume 只进 u（消费），永不进 n/neg，
+   学生个人的扣分、趋势桶、合计行都不含消费。 */
 function stuBoardAgg(from, to) {
   var all = stuBoardRows(), rows = [], undated = 0, minD = '', maxD = '';
   all.forEach(function (r) {
@@ -17495,8 +17512,9 @@ function stuBoardAgg(from, to) {
   });
   var f2 = from || minD || stuBoardToday();
   var t2 = to || maxD || stuBoardToday();
-  var cats = {}, items = {}, stu = {}, pos = 0, neg = 0, posCnt = 0, negCnt = 0, zeroCnt = 0;
-  SB_CATS.forEach(function (c) { cats[c.k] = { p: 0, n: 0, c: 0, z: 0 } });
+  var cats = {}, items = {}, stu = {};
+  var pos = 0, neg = 0, use = 0, posCnt = 0, negCnt = 0, useCnt = 0, zeroCnt = 0;
+  SB_CATS.forEach(function (c) { cats[c.k] = { p: 0, n: 0, u: 0, c: 0, z: 0 } });
   function catOf(r) {
     if (r.c === 'consume') return 'use';
     if (r.s === 'rwHw' || r.s === 'pnHw') return 'hw';
@@ -17507,19 +17525,28 @@ function stuBoardAgg(from, to) {
   }
   rows.forEach(function (r) {
     var k = catOf(r), o = cats[k];
+    var isUse = (r.c === 'consume');
     o.c++;
-    if (r.sub === '作业合格') { o.z++; zeroCnt++ }
+    if (isUse) {
+      /* 消费：正数（退回 / 返还）冲减消费额，负数（花掉）累加；始终不进奖惩 */
+      o.u -= r.v; use -= r.v;
+      if (r.v < 0) useCnt++;
+    }
+    else if (r.sub === '作业合格') { o.z++; zeroCnt++ }
     else if (r.v > 0) { o.p += r.v; pos += r.v; posCnt++ }
     else if (r.v < 0) { o.n -= r.v; neg -= r.v; negCnt++ }
     var ik = k + '|' + r.sub + '|' + r.r.replace(/\s+/g, '');
-    var it = items[ik] || (items[ik] = { k: k, sub: r.sub, r: r.r, cnt: 0, p: 0, n: 0 });
+    var it = items[ik] || (items[ik] = { k: k, sub: r.sub, r: r.r, cnt: 0, p: 0, n: 0, u: 0 });
     it.cnt++;
-    if (r.v > 0) it.p += r.v; else if (r.v < 0) it.n -= r.v;
-    var so = stu[r.n] || (stu[r.n] = { name: r.n, p: 0, n: 0, cnt: 0, cats: {} });
-    so.cnt++;
-    if (r.v > 0) { so.p += r.v; so.cats[k] = (so.cats[k] || 0) + r.v }
-    else if (r.v < 0) { so.n -= r.v; so.cats[k] = (so.cats[k] || 0) - r.v }
-    else if (r.sub === '作业合格') { so.cats[k] = so.cats[k] || 0 }
+    if (isUse) it.u -= r.v;
+    else if (r.v > 0) it.p += r.v; else if (r.v < 0) it.n -= r.v;
+    var so = stu[r.n] || (stu[r.n] = { name: r.n, p: 0, n: 0, u: 0, cnt: 0, cats: {} });
+    var sc = so.cats[k] || (so.cats[k] = { p: 0, n: 0, u: 0, c: 0, z: 0 });
+    so.cnt++; sc.c++;
+    if (isUse) { so.u -= r.v; sc.u -= r.v }
+    else if (r.sub === '作业合格') { sc.z++ }
+    else if (r.v > 0) { so.p += r.v; sc.p += r.v }
+    else if (r.v < 0) { so.n -= r.v; sc.n -= r.v }
   });
   /* 趋势粒度：自动 = 一个月内按日、四个月内按周、再长按月 */
   var days = Math.round((new Date(t2 + 'T00:00:00') - new Date(f2 + 'T00:00:00')) / 864e5) + 1;
@@ -17538,19 +17565,123 @@ function stuBoardAgg(from, to) {
     while (ymd(dd) <= t2 && keys.length < 70) { pushK(ymd(dd).slice(0, 7)); dd.setMonth(dd.getMonth() + 1) }
   }
   var bk = {};
-  keys.forEach(function (k) { bk[k] = { p: 0, n: 0, c: 0 } });
+  keys.forEach(function (k) { bk[k] = { p: 0, n: 0, u: 0, c: 0 } });
   rows.forEach(function (r) {
     var k = gran === 'month' ? r.d.slice(0, 7) : (gran === 'week' ? ymd(mondayOf(new Date(r.d + 'T00:00:00'))) : r.d);
     if (!bk[k]) return;
     bk[k].c++;
-    if (r.v > 0) bk[k].p += r.v; else if (r.v < 0) bk[k].n -= r.v;
+    if (r.c === 'consume') bk[k].u -= r.v;
+    else if (r.v > 0) bk[k].p += r.v; else if (r.v < 0) bk[k].n -= r.v;
   });
   return {
     rows: rows, cats: cats, items: items, stu: stu, keys: keys, bk: bk, gran: gran,
-    from: f2, to: t2, undated: undated, pos: sbNum(pos), neg: sbNum(neg),
-    posCnt: posCnt, negCnt: negCnt, zeroCnt: zeroCnt, cnt: rows.length
+    from: f2, to: t2, undated: undated,
+    pos: sbNum(pos), neg: sbNum(neg), use: sbNum(use),
+    posCnt: posCnt, negCnt: negCnt, useCnt: useCnt, zeroCnt: zeroCnt, cnt: rows.length
   };
 }
+/* ---- 学生排行：按分类取数 ---- */
+function sbRankRows(A, cat) {
+  var out = [];
+  Object.keys(A.stu).forEach(function (k) {
+    var s = A.stu[k];
+    if (cat === 'all') {
+      if (!s.cnt) return;
+      out.push({ name: s.name, p: sbNum(s.p), n: sbNum(s.n), u: sbNum(s.u), cnt: s.cnt });
+    } else {
+      var c = s.cats[cat]; if (!c || !c.c) return;
+      out.push({ name: s.name, p: sbNum(c.p), n: sbNum(c.n), u: sbNum(c.u), cnt: c.c });
+    }
+  });
+  return out;
+}
+function sbRankSortBy(list, cat) {
+  if (cat === 'use') {
+    list.sort(function (a, b) { return b.u - a.u || b.cnt - a.cnt || a.name.localeCompare(b.name) });
+    return;
+  }
+  var s = SB_RANK_SORT;
+  list.sort(function (a, b) {
+    var va = s === 'p' ? a.p : (s === 'n' ? a.n : (a.p - a.n));
+    var vb = s === 'p' ? b.p : (s === 'n' ? b.n : (b.p - b.n));
+    return vb - va || (b.p + b.n) - (a.p + a.n) || a.name.localeCompare(b.name);
+  });
+}
+function sbRankHtml(A) {
+  var cat = SB_RANK_CAT, isUse = (cat === 'use');
+  var tabs = '';
+  Object.keys(SB_TAB).forEach(function (k) {
+    tabs += '<button class="sbchip' + (cat === k ? ' on' : '') + '" onclick="stuBoardPickCat(\'' + k + '\')">' + SB_TAB[k] + '</button>';
+  });
+  var list = sbRankRows(A, cat);
+  sbRankSortBy(list, cat);
+  /* 该分类的小计（用分类合计，不受「只看前 12 人」影响） */
+  var co = isUse ? null : (cat === 'all'
+    ? { p: A.pos, n: A.neg, u: A.use, c: A.cnt }
+    : A.cats[cat]);
+  var sumTxt;
+  if (isUse) sumTxt = '消费合计 <b style="color:#b45309">−' + sbNum(A.use) + '</b> · ' + list.length + ' 人 · ' + A.useCnt + ' 条';
+  else sumTxt = '加分合计 <b style="color:#0f7a46">+' + sbNum(co.p) + '</b> · 扣罚合计 <b style="color:#b91c1c">−' + sbNum(co.n) + '</b>' +
+    (cat === 'all' && A.use ? ' · 消费另计 <b style="color:#b45309">−' + sbNum(A.use) + '</b>' : '') +
+    ' · ' + list.length + ' 人';
+  var h = '<div class="sbtabs">' + tabs;
+  if (!isUse) {
+    h += '<span class="sbsorthint">排序</span>' +
+      [['net', '净变化'], ['p', '加分'], ['n', '扣罚']].map(function (x) {
+        return '<button class="sbchip' + (SB_RANK_SORT === x[0] ? ' on' : '') + '" onclick="stuBoardPickSort(\'' + x[0] + '\')">' + x[1] + '</button>';
+      }).join('');
+  }
+  h += '</div>';
+  h += '<div class="sbsum">' + sumTxt + '</div>';
+  if (!list.length) return h + '<div class="sbempty">这个分类在区间内还没有记录</div>';
+  var showU = (cat === 'all' && A.use > 0);
+  h += '<table class="sbtable"><thead><tr><th style="width:52px">名次</th><th>学生</th>' +
+    (isUse ? '<th>消费积分</th>' : '<th>加分</th><th>扣罚</th><th>净变化</th>' + (showU ? '<th>消费</th>' : '')) +
+    '<th>次数</th><th style="width:20%">' + (isUse ? '消费量对比' : '加分 / 扣罚对比') + '</th></tr></thead><tbody>';
+  var maxV = 1;
+  list.forEach(function (x) {
+    maxV = Math.max(maxV, isUse ? x.u : x.p, isUse ? 0 : x.n);
+  });
+  var cap = SB_RANK_ALL ? list.length : Math.min(12, list.length);
+  for (var i = 0; i < cap; i++) {
+    var x = list[i];
+    var w = function (v) { return v > 0 ? Math.max(2, Math.round(v / maxV * 100)) : 0 };
+    var bar = isUse
+      ? '<div class="sbbar" title="消费 ' + sbNum(x.u) + '"><i style="width:' + w(x.u) + '%;background:#e0a03c"></i></div>'
+      : '<div class="sbbar" title="加分 ' + sbNum(x.p) + ' / 扣罚 ' + sbNum(x.n) + '"><i style="width:' + w(x.p) + '%;background:#3fbf84"></i><i style="width:' + w(x.n) + '%;background:#f08383"></i></div>';
+    h += '<tr><td class="rk">' + (i + 1) + '</td><td class="nm">' + sbEsc(x.name) + '</td>';
+    if (isUse) {
+      h += '<td class="use">' + (x.u ? '−' + sbNum(x.u) : '—') + '</td>';
+    } else {
+      h += '<td class="pos">' + (x.p ? '+' + sbNum(x.p) : '—') + '</td>' +
+        '<td class="neg">' + (x.n ? '−' + sbNum(x.n) : '—') + '</td>' +
+        '<td style="font-weight:600;color:' + ((x.p - x.n) > 0 ? '#0f7a46' : ((x.p - x.n) < 0 ? '#b91c1c' : '#8a9a92')) + '">' +
+        ((x.p - x.n) ? sbSigned(x.p - x.n) : '0') + '</td>' +
+        (showU ? '<td class="use">' + (x.u ? '−' + sbNum(x.u) : '—') + '</td>' : '');
+    }
+    h += '<td style="color:#5c6b63">' + x.cnt + '</td><td>' + bar + '</td></tr>';
+  }
+  h += '</tbody></table>';
+  if (list.length > 12) {
+    h += '<div style="text-align:center;margin-top:8px"><button class="btn2 sm" onclick="stuBoardRankMore()">' +
+      (SB_RANK_ALL ? '收起，只看前 12 人' : '展开全部 ' + list.length + ' 人') + '</button></div>';
+  }
+  return h;
+}
+function stuBoardRankRefresh() {
+  var box = document.getElementById('sbRank');
+  if (box && SB_LAST) box.innerHTML = sbRankHtml(SB_LAST);
+}
+function stuBoardPickCat(k, scroll) {
+  SB_RANK_CAT = k; SB_RANK_ALL = false;
+  stuBoardRankRefresh();
+  if (scroll) {
+    var el = document.getElementById('sbRankSec');
+    if (el && el.scrollIntoView) try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }) } catch (e) { el.scrollIntoView() }
+  }
+}
+function stuBoardPickSort(s) { SB_RANK_SORT = s; stuBoardRankRefresh() }
+function stuBoardRankMore() { SB_RANK_ALL = !SB_RANK_ALL; stuBoardRankRefresh() }
 function stuBoardOpen() {
   var old = document.getElementById('sbOv'); if (old) old.remove();
   var PRESETS = [['week', '本周'], ['lastweek', '上周'], ['month', '本月'], ['lastmonth', '上月'],
@@ -17563,7 +17694,7 @@ function stuBoardOpen() {
   ov.innerHTML =
     '<div class="sbbox">' +
       '<div class="sbhead"><h3>📊 学生数据看板</h3>' +
-        '<span style="font-size:12.5px;color:#76867e">作业 / 课堂 / 目标达成 / 其他奖惩分类统计</span>' +
+        '<span style="font-size:12.5px;color:#76867e">按分类看学生的加分 / 扣罚 / 排名，消费单独统计</span>' +
         '<span style="margin-left:auto;display:flex;gap:6px">' +
           '<button class="btn2 sm" id="sbCsvStu">⬇ 学生汇总</button>' +
           '<button class="btn2 sm" id="sbCsvRow">⬇ 流水明细</button>' +
@@ -17622,7 +17753,6 @@ function stuBoardRender() {
   var rg = stuBoardRange();
   var A = stuBoardAgg(rg.from, rg.to);
   SB_LAST = A;
-  var SUBT = { hw: '作业', class: '课堂', goal: '目标达成', quiz: '每日竞答', other: '其他奖惩', use: '灵宠消费' };
   var net = sbNum(A.pos - A.neg);
   var stuN = Object.keys(A.stu).length;
   var h = '';
@@ -17632,43 +17762,59 @@ function stuBoardRender() {
     ' · 共 ' + A.cnt + ' 条流水' + (stuN ? (' · ' + stuN + ' 名学生') : '') +
     (A.undated ? (' · <span style="color:#a15c00">另有 ' + A.undated + ' 条没有日期，未计入</span>') : '') +
     '</div>';
-  /* KPI */
+  /* KPI：消费单独一张卡，不并进扣罚 */
   h += '<div class="sbkpis">' +
     '<div class="sbkpi"><div class="k">奖励合计</div><div class="v" style="color:#0f7a46">' + (A.pos ? '+' + A.pos : '0') + '</div><div class="s">' + A.posCnt + ' 条加分</div></div>' +
-    '<div class="sbkpi"><div class="k">扣罚合计</div><div class="v" style="color:#b91c1c">' + (A.neg ? '−' + A.neg : '0') + '</div><div class="s">' + A.negCnt + ' 条扣分</div></div>' +
+    '<div class="sbkpi"><div class="k">扣罚合计</div><div class="v" style="color:#b91c1c">' + (A.neg ? '−' + A.neg : '0') + '</div><div class="s">' + A.negCnt + ' 条扣罚</div></div>' +
     '<div class="sbkpi"><div class="k">净变化</div><div class="v" style="color:' + (net >= 0 ? '#0f7a46' : '#b91c1c') + '">' + sbSigned(net) + '</div><div class="s">奖励 − 扣罚</div></div>' +
-    '<div class="sbkpi"><div class="k">人均变化</div><div class="v">' + (stuN ? sbSigned(net / stuN) : '0') + '</div><div class="s">' + stuN + ' 人 · ' + A.cnt + ' 条流水</div></div>' +
+    '<div class="sbkpi"><div class="k">灵宠消费</div><div class="v" style="color:#b45309">' + (A.use ? '−' + sbNum(A.use) : '0') + '</div><div class="s">' + A.useCnt + ' 条 · 不计奖惩</div></div>' +
+    '<div class="sbkpi"><div class="k">人均净变化</div><div class="v">' + (stuN ? sbSigned(net / stuN) : '0') + '</div><div class="s">' + stuN + ' 人</div></div>' +
     '</div>';
-  /* 分类表 */
-  var maxPN = 0;
-  SB_CATS.forEach(function (c) { var o = A.cats[c.k]; maxPN = Math.max(maxPN, o.p + o.n) });
-  maxPN = maxPN || 1;
-  h += '<div class="sbsec"><h4>分类统计</h4><table class="sbtable"><thead><tr>' +
-    '<th>分类</th><th>加分</th><th>扣分</th><th>净变化</th><th>次数</th><th style="width:22%">占比</th>' +
+  /* 分类表：消费单列，不进扣罚 */
+  var maxTot = 0;
+  SB_CATS.forEach(function (c) { var o = A.cats[c.k]; maxTot = Math.max(maxTot, o.p + o.n + o.u) });
+  maxTot = maxTot || 1;
+  h += '<div class="sbsec"><h4>分类统计 <span style="font-weight:400;font-size:12px;color:#7b8b83">（点一行 → 看这个分类的班级排名）</span></h4>' +
+    '<table class="sbtable"><thead><tr>' +
+    '<th>分类</th><th>加分</th><th>扣罚</th><th>消费</th><th>净变化</th><th>次数</th><th style="width:20%">占比</th>' +
     '</tr></thead><tbody>';
   SB_CATS.forEach(function (c) {
-    var o = A.cats[c.k], tot = o.p + o.n, w = Math.round(tot / maxPN * 100);
-    var wp = tot ? Math.round(o.p / tot * 100) : 0;
-    var cnt = o.c + (c.k === 'hw' && o.z ? ' <span style="font-size:11px;color:#4b84dd">含合格 ' + o.z + '</span>' : '');
-    h += '<tr><td class="nm">' + c.t + '<div style="font-size:11px;color:#8a9a92;font-weight:400">' + c.d + '</div></td>' +
+    var o = A.cats[c.k], isUse = (c.k === 'use');
+    var tot = o.p + o.n + o.u, w = Math.round(tot / maxTot * 100);
+    var w1 = tot ? Math.round(o.p / tot * w) : 0;
+    var w2 = tot ? Math.round(o.n / tot * w) : 0;
+    var w3 = Math.max(0, w - w1 - w2);
+    var netV = isUse ? 0 : sbNum(o.p - o.n);
+    var cntTxt = o.c + (c.k === 'hw' && o.z ? ' <span style="font-size:11px;color:#4b84dd">含合格 ' + o.z + '</span>' : '');
+    h += '<tr class="pick" onclick="stuBoardPickCat(\'' + c.k + '\',1)" title="看「' + c.t + '」的学生排名">' +
+      '<td class="nm">' + c.t + '<div style="font-size:11px;color:#8a9a92;font-weight:400">' + c.d + '</div></td>' +
       '<td class="pos">' + (o.p ? '+' + sbNum(o.p) : '—') + '</td>' +
       '<td class="neg">' + (o.n ? '−' + sbNum(o.n) : '—') + '</td>' +
-      '<td style="font-weight:600;color:' + ((o.p - o.n) > 0 ? '#0f7a46' : ((o.p - o.n) < 0 ? '#b91c1c' : '#8a9a92')) + '">' +
-        (o.p - o.n ? sbSigned(o.p - o.n) : '0') + '</td>' +
-      '<td style="color:#5c6b63">' + cnt + '</td>' +
-      '<td><div class="sbbar" title="加分 ' + sbNum(o.p) + ' / 扣分 ' + sbNum(o.n) + '"><i style="width:' + (w * wp / 100) + '%;background:#3fbf84"></i>' +
-        '<i style="width:' + (w - w * wp / 100) + '%;background:#f08383"></i></div></td></tr>';
+      '<td class="use">' + (o.u ? '−' + sbNum(o.u) : '—') + '</td>' +
+      '<td style="font-weight:600;color:' + (isUse ? '#8a9a92' : (netV > 0 ? '#0f7a46' : (netV < 0 ? '#b91c1c' : '#8a9a92'))) + '">' +
+      (isUse ? '—' : (netV ? sbSigned(netV) : '0')) + '</td>' +
+      '<td style="color:#5c6b63">' + cntTxt + '</td>' +
+      '<td><div class="sbbar" title="加分 ' + sbNum(o.p) + ' / 扣罚 ' + sbNum(o.n) + (o.u ? (' / 消费 ' + sbNum(o.u)) : '') + '">' +
+      '<i style="width:' + w1 + '%;background:#3fbf84"></i>' +
+      '<i style="width:' + w2 + '%;background:#f08383"></i>' +
+      (w3 ? '<i style="width:' + w3 + '%;background:#e0a03c"></i>' : '') +
+      '</div></td></tr>';
   });
-  var sumP = sbNum(A.pos), sumN = sbNum(A.neg);
-  h += '<tr style="background:#fafcfb;font-weight:700"><td>合计</td><td class="pos">' + (sumP ? '+' + sumP : '0') + '</td><td class="neg">' + (sumN ? '−' + sumN : '0') + '</td>' +
-    '<td style="color:' + (net >= 0 ? '#0f7a46' : '#b91c1c') + '">' + sbSigned(net) + '</td><td style="color:#5c6b63">' + A.cnt + '</td><td></td></tr>';
+  var sumP = sbNum(A.pos), sumN = sbNum(A.neg), sumU = sbNum(A.use);
+  h += '<tr style="background:#fafcfb;font-weight:700"><td>合计</td>' +
+    '<td class="pos">' + (sumP ? '+' + sumP : '0') + '</td>' +
+    '<td class="neg">' + (sumN ? '−' + sumN : '0') + '</td>' +
+    '<td class="use">' + (sumU ? '−' + sumU : '0') + '</td>' +
+    '<td style="color:' + (net >= 0 ? '#0f7a46' : '#b91c1c') + '">' + sbSigned(net) + '</td>' +
+    '<td style="color:#5c6b63">' + A.cnt + '</td><td></td></tr>';
   h += '</tbody></table></div>';
-  /* 趋势 */
+  /* 趋势：只画加分 / 扣罚，消费不进这张图 */
   var GN = { day: '按日', week: '按周', month: '按月' };
   var maxSide = 1;
   A.keys.forEach(function (k) { maxSide = Math.max(maxSide, A.bk[k].p, A.bk[k].n) });
   var step = Math.max(1, Math.ceil(A.keys.length / 18));
-  h += '<div class="sbsec"><h4>变化趋势 <span style="font-weight:400;font-size:12px;color:#7b8b83">（' + GN[A.gran] + ' · 绿=加分 / 红=扣分）</span></h4>';
+  h += '<div class="sbsec"><h4>变化趋势 <span style="font-weight:400;font-size:12px;color:#7b8b83">（' + GN[A.gran] +
+    ' · 绿=加分 / 红=扣罚' + (A.use ? '，灵宠消费 −' + sbNum(A.use) + ' 另计不入图' : '') + '）</span></h4>';
   if (!A.keys.length) h += '<div class="sbempty">这个区间没有流水</div>';
   else {
     h += '<div class="sbchart">';
@@ -17678,48 +17824,37 @@ function stuBoardRender() {
       var hd = b.n ? Math.max(2, Math.round(b.n / maxSide * 62)) : 0;
       var lab = A.gran === 'month' ? (Number(k.slice(5)) + '月') : (k.slice(5).replace('-', '/'));
       var show = (i % step === 0) || i === A.keys.length - 1;
-      var tip = k + '：加分 ' + sbNum(b.p) + '，扣分 ' + sbNum(b.n) + '，' + b.c + ' 条';
+      var tip = k + '：加分 ' + sbNum(b.p) + '，扣罚 ' + sbNum(b.n) + (b.u ? ('，消费 ' + sbNum(b.u)) : '') + '，' + b.c + ' 条';
       h += '<div class="sbcol" title="' + sbEsc(tip) + '"><div class="sbbars"><div class="sbmid"></div>' +
         (hu ? '<div class="sbup" style="height:' + hu + 'px"></div>' : '') +
         (hd ? '<div class="sbdn" style="height:' + hd + 'px"></div>' : '') +
         '</div><div class="sbx">' + (show ? sbEsc(lab) : '') + '</div></div>';
     });
     h += '</div>';
-    h += '<div style="font-size:11.5px;color:#8a9a92;margin-top:2px">单柱最高：加分 ' + sbNum(Math.max.apply(null, A.keys.map(function (k) { return A.bk[k].p }))) +
-      ' · 扣分 ' + sbNum(Math.max.apply(null, A.keys.map(function (k) { return A.bk[k].n }))) + '</div>';
+    h += '<div style="font-size:11.5px;color:#8a9a92;margin-top:2px">单柱最高：加分 ' +
+      sbNum(Math.max.apply(null, A.keys.map(function (k) { return A.bk[k].p }))) +
+      ' · 扣罚 ' + sbNum(Math.max.apply(null, A.keys.map(function (k) { return A.bk[k].n }))) + '</div>';
   }
   h += '</div>';
-  /* 学生排行 */
-  var arr = Object.keys(A.stu).map(function (k) { return A.stu[k] });
-  var topP = arr.filter(function (x) { return x.p > 0 }).sort(function (a, b) { return b.p - a.p }).slice(0, 7);
-  var topN = arr.filter(function (x) { return x.n > 0 }).sort(function (a, b) { return b.n - a.n }).slice(0, 7);
-  var mp = topP.length ? topP[0].p : 1, mn = topN.length ? topN[0].n : 1;
-  h += '<div class="sbsec"><h4>学生排行</h4><div class="sbrank">';
-  h += '<div class="sbrk"><div class="h">🏅 加分最多</div>' + (topP.length ? topP.map(function (x) {
-    return '<div class="r"><span class="nm">' + sbEsc(x.name) + '</span>' +
-      '<span class="b" style="width:' + Math.max(3, Math.round(x.p / mp * 100)) + 'px;background:#3fbf84"></span>' +
-      '<span class="vv pos" style="color:#0f7a46">+' + sbNum(x.p) + '</span></div>';
-  }).join('') : '<div class="sbempty">无</div>') + '</div>';
-  h += '<div class="sbrk"><div class="h">⚠️ 扣分最多</div>' + (topN.length ? topN.map(function (x) {
-    return '<div class="r"><span class="nm">' + sbEsc(x.name) + '</span>' +
-      '<span class="b" style="width:' + Math.max(3, Math.round(x.n / mn * 100)) + 'px;background:#f08383"></span>' +
-      '<span class="vv" style="color:#b91c1c">−' + sbNum(x.n) + '</span></div>';
-  }).join('') : '<div class="sbempty">无</div>') + '</div>';
-  h += '</div></div>';
+  /* 学生排行：可按分类看 */
+  h += '<div class="sbsec" id="sbRankSec"><h4>🏆 学生排行 <span style="font-weight:400;font-size:12px;color:#7b8b83">（切分类看该分类的加分 / 扣罚排名）</span></h4>' +
+    '<div id="sbRank">' + sbRankHtml(A) + '</div></div>';
   /* 事项明细 */
   var its = Object.keys(A.items).map(function (k) { return A.items[k] })
-    .sort(function (a, b) { return (b.p + b.n) - (a.p + a.n) || b.cnt - a.cnt }).slice(0, 14);
+    .sort(function (a, b) { return (b.p + b.n + Math.max(0, b.u)) - (a.p + a.n + Math.max(0, a.u)) || b.cnt - a.cnt }).slice(0, 14);
   h += '<div class="sbsec"><h4>事项明细 <span style="font-weight:400;font-size:12px;color:#7b8b83">（按金额排前 14 项）</span></h4>';
   if (!its.length) h += '<div class="sbempty">这个区间没有记录</div>';
   else {
-    h += '<table class="sbtable"><thead><tr><th>事项</th><th>分类</th><th>次数</th><th>加分</th><th>扣分</th><th>净</th></tr></thead><tbody>';
+    h += '<table class="sbtable"><thead><tr><th>事项</th><th>分类</th><th>次数</th><th>加分</th><th>扣罚</th><th>消费</th><th>净</th></tr></thead><tbody>';
     its.forEach(function (it) {
+      var isUse = (it.k === 'use');
       h += '<tr><td class="nm">' + sbEsc(it.r || '—') + '</td>' +
-        '<td style="color:#5c6b63;font-size:12px">' + SUBT[it.k] + ' · ' + sbEsc(it.sub) + '</td>' +
+        '<td style="color:#5c6b63;font-size:12px">' + SB_SUB[it.k] + ' · ' + sbEsc(it.sub) + '</td>' +
         '<td>' + it.cnt + '</td>' +
         '<td class="pos">' + (it.p ? '+' + sbNum(it.p) : '—') + '</td>' +
         '<td class="neg">' + (it.n ? '−' + sbNum(it.n) : '—') + '</td>' +
-        '<td style="font-weight:600">' + sbSigned(it.p - it.n) + '</td></tr>';
+        '<td class="use">' + (it.u ? '−' + sbNum(it.u) : '—') + '</td>' +
+        '<td style="font-weight:600">' + (isUse ? '—' : (it.p - it.n ? sbSigned(it.p - it.n) : '0')) + '</td></tr>';
     });
     h += '</tbody></table>';
   }
@@ -17727,8 +17862,9 @@ function stuBoardRender() {
   /* 口径说明 */
   h += '<div class="sbnote">' +
     '<b>口径：</b>作业 = 作业登记（同键重复只算一次）+ 科任作业调整；课堂 = 座位表悬浮球 / 积极发言 / 举手 / 课堂参与 / 课前展示 / 课堂扣分；' +
-    '目标达成 = 奖惩事项含「成绩达标 / 达目标」；其他奖惩 = 学生档案奖惩流水 + 手机 / 教室桌面录入的手动加减分（同键副本只算一次）。' +
-    '灵宠抽卡与喂养单列，不计入奖励或扣罚。小组积分不进个人账，故不统计。<br>' +
+    '目标达成 = 奖惩事项含「成绩达标 / 达目标」；其他奖惩 = 学生档案奖惩流水 + 手机 / 教室桌面录入的手动加减分（同键副本只算一次）。<br>' +
+    '<b>消费与扣罚分家：</b>灵宠抽卡 / 喂养花掉的积分只进「消费」列，<b>不算作扣罚</b>，也不进净变化、不算进趋势图、不算进各分类的扣罚合计；' +
+    '消费退回（返还）会冲减消费额。小组积分不进个人账，故不统计。<br>' +
     '<b>说明：</b>作业「合格」是 0 分，会算进作业次数但不进加减分；没有日期的记录只在「全部」里看不进区间统计。' +
     '</div>';
   body.innerHTML = h;
@@ -17740,21 +17876,20 @@ function stuBoardCsv(kind) {
   var cell = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"' };
   var lines = [], fn = '';
   if (kind === 'stu') {
-    var SUBT = { hw: '作业', class: '课堂', goal: '目标达成', quiz: '每日竞答', other: '其他奖惩', use: '灵宠消费' };
-    lines.push(['学生', '加分', '扣分', '净变化', '记录数'].concat(SB_CATS.map(function (c) { return SUBT[c.k] })).map(cell).join(','));
+    lines.push(['学生', '记录数', '加分合计', '扣罚合计', '净变化', '作业净', '课堂净', '目标净', '竞答净', '其他净', '灵宠消费'].map(cell).join(','));
     Object.keys(A.stu).map(function (k) { return A.stu[k] })
       .sort(function (a, b) { return (b.p - b.n) - (a.p - a.n) }).forEach(function (x) {
-        var row = [x.name, sbNum(x.p), sbNum(x.n), sbSigned(x.p - x.n), x.cnt];
-        SB_CATS.forEach(function (c) {
-          var v = x.cats[c.k];
-          row.push(v == null ? 0 : (v === 0 ? 0 : sbSigned(v)));
+        var row = [x.name, x.cnt, sbNum(x.p), sbNum(x.n), sbSigned(x.p - x.n)];
+        ['hw', 'class', 'goal', 'quiz', 'other'].forEach(function (k) {
+          var c = x.cats[k]; var v = c ? sbNum(c.p - c.n) : 0;
+          row.push(v ? sbSigned(v) : 0);
         });
+        row.push(sbNum(x.u));
         lines.push(row.map(cell).join(','));
       });
     fn = '学生数据看板_汇总_' + A.from + '_' + A.to + '.csv';
   } else {
-    lines.push(['日期', '学生', '分类', '子项', '事项', '分值'].map(cell).join(','));
-    var SUBT2 = { hw: '作业', class: '课堂', goal: '目标达成', quiz: '每日竞答', other: '其他奖惩', use: '灵宠消费' };
+    lines.push(['日期', '学生', '分类', '子项', '事项', '性质', '分值'].map(cell).join(','));
     var catOf = function (r) {
       if (r.c === 'consume') return 'use';
       if (r.s === 'rwHw' || r.s === 'pnHw') return 'hw';
@@ -17764,7 +17899,8 @@ function stuBoardCsv(kind) {
       return 'other';
     };
     A.rows.slice().sort(function (a, b) { return String(a.d).localeCompare(String(b.d)) }).forEach(function (r) {
-      lines.push([r.d, r.n, SUBT2[catOf(r)], r.sub, r.r, r.v].map(cell).join(','));
+      var kind2 = (r.c === 'consume') ? '消费' : (r.v > 0 ? '加分' : (r.v < 0 ? '扣罚' : (r.sub === '作业合格' ? '合格' : '0 分')));
+      lines.push([r.d, r.n, SB_SUB[catOf(r)], r.sub, r.r, kind2, r.v].map(cell).join(','));
     });
     fn = '学生数据看板_明细_' + A.from + '_' + A.to + '.csv';
   }
@@ -17779,6 +17915,8 @@ function stuBoardCsv(kind) {
 }
 window.stuBoardOpen = stuBoardOpen; window.stuBoardClose = stuBoardClose;
 window.stuBoardAgg = stuBoardAgg; window.stuBoardRows = stuBoardRows;
+window.stuBoardPickCat = stuBoardPickCat; window.stuBoardPickSort = stuBoardPickSort;
+window.stuBoardRankMore = stuBoardRankMore; window.sbRankRows = sbRankRows;
 
 function renderStu(){
   var box=document.getElementById('stuTable');
@@ -21887,9 +22025,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v277';
-var WB_MY_VER = '优化版 vT277 · 学生数据看板';
-var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.264';
+var WB_VER_TAG = 'v278';
+var WB_MY_VER = '优化版 vT278 · 看板按分类排名';
+var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.265';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
