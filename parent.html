@@ -415,7 +415,7 @@
 
   var GITEE = 'https://gitee.com/api/v5';
   var SNAP = 'wb_parent_snap.json';
-  var PA_PAGE_VER = 'v252';   /* vT279：扣罚子类补「竞答扣分」；v250 作业合格淡蓝、竞答行去掉多余「灵宠」 */
+  var PA_PAGE_VER = 'v253';   /* vT283：流水日期为空时显式标「无日期」；v252 竞答按正确率折算；v250 作业合格淡蓝 */
   try { window.PA_PAGE_VER = PA_PAGE_VER; } catch (e) {}
   var K_ACCESS = 'wb_pa_access', K_NAME = 'wb_pa_name', K_CODE = 'wb_pa_code', K_PEND = 'wb_pa_pending';
 
@@ -1886,7 +1886,7 @@
           return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed #e5e8e2;">' +
             '<span style="flex:none;font-size:11px;padding:2px 7px;border-radius:4px;background:' + bg9 + ';color:' + c9 + ';">' + tag9 + '</span>' +
             '<span style="flex:1;min-width:0;font-size:13px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(f9.t) + '</span>' +
-            '<span style="flex:none;font-size:11px;color:#999;">' + esc(String(f9.d || '').slice(5)) + '</span>' +
+            '<span style="flex:none;font-size:11px;color:#999;">' + esc(String(f9.d || '').slice(5) || '无日期') + '</span>' +
             '<span style="flex:none;font-size:13px;font-weight:600;color:' + col9 + ';min-width:36px;text-align:right;">' + (pos9 ? '+' : '') + f9.v + '</span></div>';
         }).join('');
         var sumR9 = 0, sumP9 = 0, sumC9 = 0, hasCls9 = false;
