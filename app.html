@@ -20567,7 +20567,9 @@ function tomLoad() {
   } catch (e) { return [] }
 }
 function tomSave(a) {
-  try { localStorage.setItem('wb_mp_tombstones', JSON.stringify((a || []).filter(function (x) { return !wbScoreTombBanned(x) }).slice(-500))) } catch (e) {}
+  /* vT285：上限 500 → 2000。原来墓碑满 500 后每写一条就挤掉最老的一条，
+     被挤掉的那条记录下一轮就「复活」—— 这是「删了又回来」的第二个缺口。 */
+  try { localStorage.setItem('wb_mp_tombstones', JSON.stringify((a || []).filter(function (x) { return !wbScoreTombBanned(x) }).slice(-2000))) } catch (e) {}
 }
 /* vT220 墓碑 LWW 统一语义（三端同一条不变量）：
    墓碑只杀「比它旧」的记录（record.ts < tomb.at）。记录比墓碑新 → 记录赢，
@@ -22084,9 +22086,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v284';
-var WB_MY_VER = '优化版 vT284 · 竞答一律不重复（题库不足自动暂停显示补充题库中）';
-var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.270';
+var WB_VER_TAG = 'v285';
+var WB_MY_VER = '优化版 vT285 · 删掉的流水不再复活（跨端墓碑改为并集）';
+var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.271';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
