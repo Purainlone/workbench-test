@@ -415,7 +415,7 @@
 
   var GITEE = 'https://gitee.com/api/v5';
   var SNAP = 'wb_parent_snap.json';
-  var PA_PAGE_VER = 'v250';   /* vT271：作业合格淡蓝标签、竞答行去掉多余「灵宠」；vT270 班级玫瑰 v249 */
+  var PA_PAGE_VER = 'v251';   /* vT279：扣罚子类补「竞答扣分」；v250 作业合格淡蓝、竞答行去掉多余「灵宠」 */
   try { window.PA_PAGE_VER = PA_PAGE_VER; } catch (e) {}
   var K_ACCESS = 'wb_pa_access', K_NAME = 'wb_pa_name', K_CODE = 'wb_pa_code', K_PEND = 'wb_pa_pending';
 
@@ -1833,7 +1833,7 @@
             };
             o9 += '<div class="ptsub">' +
               row9('奖励', '#12a150', [['作业加分', C9.rwHw || 0], ['目标达成', C9.rwGoal || 0], ['课堂参与', C9.rwClass || 0], ['每日竞答', C9.rwQuiz || 0], ['其他奖励', C9.rwOther || 0]]) +
-              row9('扣罚', '#c62828', [['作业扣分', C9.pnHw || 0], ['课堂扣分', C9.pnClass || 0], ['其他扣分', C9.pnOther || 0]]) +
+              row9('扣罚', '#c62828', [['作业扣分', C9.pnHw || 0], ['课堂扣分', C9.pnClass || 0], ['竞答扣分', C9.pnQuiz || 0], ['其他扣分', C9.pnOther || 0]]) +
               row9('消费', '#c77700', [['抽奖', C9.csDraw || 0], ['喂养', C9.csFeed || 0]]) +
               '</div>';
           }
