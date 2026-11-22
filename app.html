@@ -18193,7 +18193,12 @@ function openStuPanel(name){
     var _fc=flowClass(_reason,f.v,f.src==='hw'||f.src==='hwadj'?'hw':(f.src==='ga'?'hw':f.src));
     f.cat=_fc.c;f.ctag=_fc.sub;
     var li=document.createElement('li');
-    li.appendChild(el('span','d',f.d||''));
+    /* vT283：日期为空的流水不再留一片空白（抽卡 / 家长抽卡这类流水曾被旧版端写成没日期，
+       老师看到「下面没有时间」以为数据坏了）。有日期照常显示，没日期显式标「无日期」。 */
+    var _dTxt=String(f.d||'').trim();
+    var _dEl=el('span','d',_dTxt||'无日期');
+    if(!_dTxt){ _dEl.style.fontSize='10.5px'; _dEl.style.color='#b0b8b2'; _dEl.title='这条流水写入时没有带日期'; }
+    li.appendChild(_dEl);
     var _tag=el('span',null,_fc.sub+' · ');
     /* vT271 「作业合格」用淡蓝，区别于「作业加分」的绿 */
     _tag.style.cssText='font-size:11px;color:'+(_fc.sub==='作业合格'?'#4b84dd':f.cat==='reward'?'#0f7a46':f.cat==='penalty'?'#b91c1c':f.cat==='consume'?'#c26a12':'#76867e')+';';
@@ -22066,9 +22071,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v281';
-var WB_MY_VER = '优化版 vT281 · 竞答题量不足按正确率计分';
-var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.268';
+var WB_VER_TAG = 'v283';
+var WB_MY_VER = '优化版 vT283 · 流水补全日期（抽卡等消费流水不再没有时间）';
+var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.269';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24214,6 +24219,13 @@ function mpUnionTable(k, mine, remote) {
       /* 同一条记录两边都有 */
       if (from === 'mine' && idx[bk] !== undefined) {
         if (_lww && tsOf(r) > 0 && tsOf(out[idx[bk]]) > tsOf(r)) return;   /* 本机这份更旧 → 保留云端新版 */
+        /* vT283：本机这条日期是空的、云端那条有日期 → 保留云端日期，别把日期抹成空白。
+           抽卡流水的日期就这么丢的：旧版端本地那份没日期，整表推回时把云端的日期盖掉了。 */
+        if (k === 'st' && !String(r && r.date || '').trim() && String((out[idx[bk]] || {}).date || '').trim()) {
+          var _r2 = {}; for (var _kk in r) { if (Object.prototype.hasOwnProperty.call(r, _kk)) _r2[_kk] = r[_kk] }
+          _r2.date = out[idx[bk]].date;
+          r = _r2;
+        }
         out[idx[bk]] = r;
       }
       return;
