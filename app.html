@@ -22237,9 +22237,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v287';
-var WB_MY_VER = '优化版 vT287 · 诵读加分与已喂食标签修正，修复影子流水重复';
-var WB_BUILD_DATE = '11-23', WB_BUILD_NO = '2.6.273';
+var WB_VER_TAG = 'v288';
+var WB_MY_VER = '优化版 vT288 · 诵读加分 + 修同 id 流水重复计分 + 灵杰灵宠抽卡分家';
+var WB_BUILD_DATE = '11-23', WB_BUILD_NO = '2.6.274';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -24356,13 +24356,21 @@ function mpBizKey(k, r) {
        被写成 21 条流水，就是这条键规则造成的。
        有 id 的消费流水：键 = 前缀|姓名|事项|分值|id，完全忽略 date；
        无 id 的老数据仍按日期业务键兜底（与历史数据兼容）。 */
-    if (_isSpend && _id) return _pre + nm + '|' + _rz + '|' + (Number(r.score) || 0) + '|id:' + _id;
+    /* vT287：只要有记录 id，就用 id 认这一笔的身份、**键里绝不含日期**。
+       原来只有「消费类 + 有 id」走这条，非消费类（每日竞答、诵读奖励、记忆王者…）
+       落到下面的业务键，而业务键含日期 → 同一条记录「有日期」与「空日期」算成两个
+       不同键，并集时双双保留：11-23 陈发霖 每日竞答 +2 出现两条同 id 副本
+       （Lmwt2bkpp7peei 一条 2026-11-23、一条空），分数算了两遍。
+       现在同 id 必然同键，空日期副本在并集时直接并掉，vT283 的「保云端日期」兜底
+       再把有日期那份的日期留下来。id 是 uuid，不会让两笔真实记录相撞。
+       例外：成绩达标历史上存在「同一件事被重复写入、id 各不相同」的事故，仍按业务键合。 */
+    if (_id && _rz.indexOf('成绩达标') !== 0) {
+      return _pre + nm + '|' + _rz + '|' + (Number(r.score) || 0) + '|id:' + _id;
+    }
     var _base = _pre + nm + '|' + _rz +
       ((k === 'st' && _rz.indexOf('成绩达标') === 0) ? '' : ('|' + s(r.date).slice(0, 10))) +
       '|' + (Number(r.score) || 0);
-    /* 成绩达标：历史重复写入事故 → 仍按业务键合；其余：有 id 就按 id 区分每一笔 */
-    if (_rz.indexOf('成绩达标') === 0 || !_id || !_isSpend) return _base;
-    return _base + '|id:' + _id;
+    return _base;
   }
   /* 2.6.82 班务记录：日期+类型+标题+学生姓名（与 recBizKey 的 aff| 键同构） */
   if (k === 'affairs') return (s(r.title) || s(r.body)) ? ('aff|' + s(r.date).slice(0, 10) + '|' + s(r.type) + '|' + s(r.title) + '|' + s(r.stu)) : '';
