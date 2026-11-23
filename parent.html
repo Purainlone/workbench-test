@@ -415,7 +415,7 @@
 
   var GITEE = 'https://gitee.com/api/v5';
   var SNAP = 'wb_parent_snap.json';
-  var PA_PAGE_VER = 'v255';   /* vT287：积分卡加「诵读奖励」子类（流水标签由老师端 flowClass 下发 rwRecite） */
+  var PA_PAGE_VER = 'v256';   /* vT293：灵宠图镜像 SHA 换新（078~112 重新抠图，去白底）+ 缓存键 v=121 */
   try { window.PA_PAGE_VER = PA_PAGE_VER; } catch (e) {}
   var K_ACCESS = 'wb_pa_access', K_NAME = 'wb_pa_name', K_CODE = 'wb_pa_code', K_PEND = 'wb_pa_pending';
 
@@ -815,12 +815,12 @@
 
   /* ---------- 图鉴图源（与小程序 codeximg.js 一致的三级回退） ---------- */
   var MIRRORS = [
-    'https://testingcf.jsdelivr.net/gh/Purainlone/workbench-test@b6b3fde9bfd6a8155f90646194d33ced1e603cff/',
-    'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@b6b3fde9bfd6a8155f90646194d33ced1e603cff/',
+    'https://testingcf.jsdelivr.net/gh/Purainlone/workbench-test@766fad806f3943230d54a46145ca318a5ee10acf/',
+    'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@766fad806f3943230d54a46145ca318a5ee10acf/',
     'https://purainlone.github.io/workbench-test/'
   ];
   /* vT116：卡面换血后 CDN 主源仍缓存旧图，URL 加版本号强制回源 */
-  var CX_Q = 'v=119';
+  var CX_Q = 'v=121';
   function cxUrl(b, rel) { return b + rel + (rel.indexOf('?') >= 0 ? '&' : '?') + CX_Q; }
   /* vT128 成长灵宠三阶段图 petimg/NNN_S.png 与图鉴卡面走同一套镜像；
      老快照里只有 imgs{baby,teen,adult}、没有 img，这里按 stage 兜底拼一次。 */
