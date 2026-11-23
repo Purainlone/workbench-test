@@ -850,16 +850,29 @@ table.rc tfoot td.foc{background:#fff8e8!important;color:#8a5a00}
 .rcstage table.rc td.cell.extra.on{background:#f0b429}
 .rcstage table.rc td.cell.extra.on .mk{color:#fff}
 .rcstage table.rc tfoot td.extra{background:#fffae8;color:#9a6b00}
-/* vT287 篇目末尾的奖励按钮：小角标贴在格子右下角，不遮挡中间的 ✓。
-   未背完灰、背完实色（橙金）、已奖过深绿显示「✓分值」。 */
-table.rc td.cell .rcbonus{position:absolute;right:1px;bottom:1px;z-index:2;margin:0;padding:0 2px;
-  font-size:calc(8px*var(--rc-s));line-height:calc(10px*var(--rc-s));height:calc(11px*var(--rc-s));
-  min-width:calc(12px*var(--rc-s));border:0;border-radius:3px;cursor:pointer;font-weight:800;
-  background:#9aa7a0;color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.5)}
-table.rc td.cell .rcbonus.off{background:#c2ccc6;color:#eef3f0;cursor:not-allowed}
-table.rc td.cell .rcbonus:not(.off):hover{background:#c77700;transform:scale(1.12)}
-table.rc td.cell .rcbonus.done{background:#0d6b3c;color:#dff5e8;cursor:default}
-table.rc td.cell.on .rcbonus:not(.off):not(.done){background:#c77700}
+/* vT289 行末「诵读奖励」列：每个学生一行一个按钮（不再往每个涂色格里塞 +30）。
+   没背完＝灰不可点；有背完未奖的篇目＝金实色可点；全部奖过＝灰「✓ 已加分」。 */
+.rcstage table.rc th.bonus{width:calc(62px*var(--rc-s));max-width:calc(62px*var(--rc-s));
+  background:#fff6e2;color:#9a6b00;border-bottom-color:#f3dca8;font-weight:700}
+.rcstage table.rc td.bonus{width:calc(62px*var(--rc-s));min-width:calc(54px*var(--rc-s));
+  max-width:calc(62px*var(--rc-s));padding:0 calc(3px*var(--rc-s));text-align:center;vertical-align:middle;
+  background:#fffdf7;border-left:1px dashed #f0e2c2}
+.rcstage table.rc td.bonus button{
+  display:block;width:100%;margin:0;border:0;border-radius:calc(6px*var(--rc-s));
+  padding:calc(2px*var(--rc-s)) 0;font-family:inherit;font-weight:800;cursor:pointer;
+  font-size:calc(10px*var(--rc-s));line-height:1.3;white-space:nowrap;transition:.14s}
+.rcstage table.rc td.bonus button.off{background:#eceff0;color:#aab4b0;cursor:not-allowed;box-shadow:none}
+.rcstage table.rc td.bonus button.ready{background:linear-gradient(180deg,#ffd977,#f0a91e);color:#5a3a00;
+  box-shadow:0 1px 5px rgba(240,169,30,.42)}
+.rcstage table.rc td.bonus button.ready:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.rcstage table.rc td.bonus button.ready:active{transform:translateY(0) scale(.98)}
+.rcstage table.rc td.bonus button.done{background:#e3f5ea;color:#1a7a4e;cursor:default}
+.rcstage table.rc td.bonus button.busy{background:#f3ede0;color:#b09a6a;cursor:progress}
+.rcstage table.rc tfoot td.bonus{background:#fff6e2;color:#9a6b00;font-size:calc(9px*var(--rc-s));border-left:1px dashed #f0e2c2}
+.rcstage.compact table.rc th.bonus{width:46px;max-width:46px;font-size:10px}
+.rcstage.compact table.rc td.bonus{width:46px;min-width:42px;max-width:46px;padding:0 2px}
+.rcstage.compact table.rc td.bonus button{font-size:8.5px;padding:1px 0;border-radius:4px}
+.rcstage.compact table.rc tfoot td.bonus{font-size:8px}
 /* 管理面板：课内/课外选择 + 类型徽标 */
 .rcmgr .rcseg{display:flex;border:1px solid #e2ece7;border-radius:9px;overflow:hidden;flex:0 0 auto}
 .rcmgr .rcseg button{border:0;background:#fff;color:var(--muted);padding:10px 12px;font-size:13px;cursor:pointer}
@@ -13675,6 +13688,7 @@ var RC_KEY='rc_titles_v1';              /* 篇目清单存本机；打卡记录�
 var RC_MODE_KEY='rc_mode_v1';           /* 登记模式开关也记在本机，刷新后保持 */
 var RC_TITLES=[];
 var RC_MAP={};                          /* '姓名||篇目' → 记录 _id */
+var RC_DATE={};                         /* '姓名||篇目' → 打卡日期（区分「今天新背完」和「往期历史打卡」） */
 var RC_BUSY={};                         /* 正在提交的格子，防连点重复写 */
 var RC_SAVING=0;
 var RC_MODE=false;                      /* false=浏览（只读） / true=登记（可涂色） */
@@ -13686,6 +13700,32 @@ var RC_BONUS_KEY='wb_rc_bonus_score_v1';    /* 每次奖励分值（默认 30）
 var RC_BONUS_DONE_KEY='wb_rc_bonus_done_v1';/* { '姓名||篇目': 分值 } */
 var RC_BONUS_DONE={};
 var RC_BONUS_BUSY={};
+/* vT289 历史基线：行末奖励刚上线时，全班已有几十上百条「往期打卡」，
+   如果全算待奖，一列几十个 +30 会一起亮（老师也永远等不到「点击后显示已加分」）。
+   所以第一次拉到打卡数据时，把「今天以前」的打卡记成基线，默认不进待奖队列；
+   今天新打的卡不受影响。需要给往期补奖时，到「🏆 奖励设置」里打开开关即可。 */
+var RC_BONUS_BASE_KEY='wb_rc_bonus_base_v1';
+var RC_BONUS_HIST_KEY='wb_rc_bonus_hist_v1';
+var RC_BONUS_BASE=(function(){
+  try{ var o=JSON.parse(localStorage.getItem(RC_BONUS_BASE_KEY)||'null'); if(o&&typeof o==='object')return o }catch(e){}
+  return null;                         /* null = 还没建立基线 */
+})();
+var RC_BONUS_HIST=(function(){ try{ return localStorage.getItem(RC_BONUS_HIST_KEY)==='1' }catch(e){ return false } })();
+function rcBonusBaseSave(){ try{ localStorage.setItem(RC_BONUS_BASE_KEY,JSON.stringify(RC_BONUS_BASE||{})) }catch(e){} }
+function rcBonusHistSet(on){ RC_BONUS_HIST=!!on; try{ localStorage.setItem(RC_BONUS_HIST_KEY,RC_BONUS_HIST?'1':'0') }catch(e){} }
+/* 拉到打卡数据后调用一次：基线还没建就按「早于今天 / 没有规范日期」建一次。
+   注意：云表里有 580 条老数据的「打卡日期」是「导入自腾讯文档」这种脏值，
+   直接字符串比较会被判成「未来」→ 全部算成今天新背的，一列 +30 全亮。所以只认 YYYY-MM-DD。 */
+function rcBonusBaseInit(){
+  if(RC_BONUS_BASE)return;
+  RC_BONUS_BASE={};
+  var today=ymd(new Date());
+  Object.keys(RC_MAP).forEach(function(k){
+    var d=String(RC_DATE[k]||'').trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(d)||d<today)RC_BONUS_BASE[k]=1;
+  });
+  rcBonusBaseSave();
+}
 function rcBonusVal(){ var v=30; try{ v=Number(localStorage.getItem(RC_BONUS_KEY))||30 }catch(e){} return v>0?v:30 }
 function rcBonusSetVal(v){ v=Math.round(Number(v)||0); if(v<1)v=30; try{localStorage.setItem(RC_BONUS_KEY,String(v))}catch(e){} return v }
 function rcBonusLoadDone(){ try{ RC_BONUS_DONE=JSON.parse(localStorage.getItem(RC_BONUS_DONE_KEY)||'{}')||{} }catch(e){RC_BONUS_DONE={}} }
@@ -14019,12 +14059,13 @@ function rcKey(name,title){return name+'||'+title}
 function loadReciteFromDB(){
   var box=document.getElementById('rcTable');
   pullRecite(function(rows){
-    RC_MAP={};
+    RC_MAP={}; RC_DATE={};
     rows.forEach(function(r){
       var n=r['学生姓名'],t=r['篇目'];
       var rid=recId(r);          /* 字段名可能是 id / record_id / _id，统一取 */
-      if(n&&t&&rid)RC_MAP[rcKey(n,t)]=rid;
+      if(n&&t&&rid){ RC_MAP[rcKey(n,t)]=rid; RC_DATE[rcKey(n,t)]=String(r['打卡日期']||''); }
     });
+    rcBonusBaseInit();           /* vT289 首次拉到打卡数据时建立「往期」基线 */
     renderRecite();
   },function(err){
     dbFail('诵读',err);
@@ -14129,6 +14170,94 @@ function rcCheckCelebrate(name,prevDone,prevAllDone){
 }
 
 /* ---------- vT287 诵读通关奖励（背完一篇 → 点「+分」→ 记诵读奖励流水 + 祝贺窗） ---------- */
+/* vT289 奖励入口改成「每个学生行末一个按钮」：
+   - 待奖 = 该生已背完、但还没加过分的篇目（按「全部篇目」算，不受「全班背完自动隐藏」影响，
+     否则篇目被自动隐藏后那笔奖就再也点不到了）
+   - 没背完任何一篇 → 灰色不可点；有待奖 → 金实色；全部奖过 → 灰「✓ 已加分」 */
+function rcBonusPend(name){
+  var out=[];
+  RC_TITLES.forEach(function(t){
+    var tn=rcTName(t), k=rcKey(name,tn);
+    if(!RC_MAP[k]||RC_BONUS_DONE[k])return;
+    if(!RC_BONUS_HIST&&RC_BONUS_BASE&&RC_BONUS_BASE[k])return;   /* 往期打卡默认不排队待奖 */
+    out.push(tn);
+  });
+  return out;
+}
+/* 该生有多少「往期打卡但没发过奖励」的篇目（只在提示里说明，不进待奖队列） */
+function rcBonusHistCount(name){
+  var n=0;
+  RC_TITLES.forEach(function(t){
+    var k=rcKey(name,rcTName(t));
+    if(RC_MAP[k]&&!RC_BONUS_DONE[k]&&RC_BONUS_BASE&&RC_BONUS_BASE[k])n++;
+  });
+  return n;
+}
+function rcBonusAwardedCount(name){
+  var n=0;
+  RC_TITLES.forEach(function(t){ if(RC_BONUS_DONE[rcKey(name,rcTName(t))])n++; });
+  return n;
+}
+function rcBonusCell(name){
+  var td=el('td','bonus');
+  var pend=rcBonusPend(name), doneN=rcBonusAwardedCount(name), val=rcBonusVal(), histN=rcBonusHistCount(name);
+  var b=document.createElement('button');
+  b.type='button';
+  var cls='off', txt='+'+val, tip='还没有背完的篇目，背完后才能加分';
+  if(pend.length){
+    cls='ready';
+    txt='+'+val;    /* 只写分值，不堆「·N」——一列几十个按钮，数字堆起来太吵；篇目数放 title 和弹窗里 */
+    tip=pend.length>1
+      ? ('有 '+pend.length+' 篇背完待奖：'+pend.join('、')+'（点一次奖一篇）')
+      : ('背完《'+pend[0]+'》了！点此奖励 '+val+' 分（诵读奖励）');
+  }else if(doneN){
+    cls='done'; txt='✓ 已加分';
+    tip='已发放 '+doneN+' 篇诵读奖励。如判错，到学生管理里删掉那条「诵读奖励 · 篇目」流水再重加';
+    if(histN)tip+='。另有 '+histN+' 篇往期打卡未发奖励（不计入待奖）';
+  }else if(histN){
+    tip='有 '+histN+' 篇往期打卡未发奖励。要给往期补奖，到工具栏「🏆 奖励设置」里打开「往期打卡也计入待奖」';
+  }
+  b.className=cls; b.textContent=txt; b.title=tip;
+  b.setAttribute('data-stu',name);
+  b.setAttribute('data-pend',String(pend.length));
+  if(cls!=='ready')b.disabled=true;
+  b.onclick=function(ev){
+    ev.stopPropagation();                 /* 别把点击传给整行，避免误触发别的动作 */
+    if(!pend.length)return;
+    if(RC_BONUS_BUSY[rcKey(name,pend[0])])return;   /* 同一篇正写着，别重复触发 */
+    if(pend.length===1){ rcBonusAdd(name,pend[0]); return }
+    rcBonusPick(name,pend);               /* 多篇待奖：弹窗让老师选奖哪一篇 */
+  };
+  td.appendChild(b);
+  if(typeof rcStatExcluded==='function'&&rcStatExcluded(name))td.title='（不参与「全班背完自动隐藏」判定，但照常可以加分）';
+  return td;
+}
+/* 一个学生有多篇待奖时，弹窗选篇目（每篇各奖一次，不做「一键全奖」，防止一次加一大笔分） */
+function rcBonusPick(name,pend){
+  var box=document.getElementById('rcBonusPickBox');
+  if(!box){ box=document.createElement('div'); box.id='rcBonusPickBox'; document.body.appendChild(box) }
+  var val=rcBonusVal();
+  window.__rcPickList=pend.slice(); window.__rcPickName=name;
+  var rows=pend.map(function(t,i){
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #eef3f0">'+
+      '<span style="flex:1;font-size:14px;color:#2d4a3a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(String(t))+'</span>'+
+      '<button class="btn2 primary" onclick="rcBonusPickGo('+i+')" style="padding:5px 14px;font-size:13px;white-space:nowrap">+'+val+' 分</button></div>';
+  }).join('');
+  box.innerHTML='<div style="position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:10002;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)rcBonusPickClose()">'+
+    '<div style="background:#fff;border-radius:14px;padding:20px 22px;width:430px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.25)">'+
+    '<h3 style="margin:0 0 4px;font-size:16px">🏆 '+esc(String(name))+' · 选择奖励篇目</h3>'+
+    '<div style="font-size:12px;color:#7a8a80;margin-bottom:10px">共 '+pend.length+' 篇背完待奖，点哪篇就奖哪篇（每篇 '+val+' 分）</div>'+
+    '<div style="max-height:46vh;overflow:auto">'+rows+'</div>'+
+    '<div style="display:flex;justify-content:flex-end;margin-top:14px"><button class="btn2" onclick="rcBonusPickClose()">关闭</button></div>'+
+    '</div></div>';
+}
+function rcBonusPickGo(i){
+  var list=window.__rcPickList||[], name=window.__rcPickName, t=list[i];
+  rcBonusPickClose();
+  if(t&&name)rcBonusAdd(name,t);
+}
+function rcBonusPickClose(){ var b=document.getElementById('rcBonusPickBox'); if(b)b.innerHTML='' }
+
 function rcBonusAdd(name,title){
   var k=rcKey(name,title);
   if(RC_BONUS_BUSY[k])return;
@@ -14145,8 +14274,14 @@ function rcBonusAdd(name,title){
     if(okv===false){ toastMsg('⚠️ 加分没成功，可再点一次'); return }
     RC_BONUS_DONE[k]=val; rcBonusSaveDone();
     rcBonusCongrats(name,title,val);
-    /* 刷诵读表按钮状态：已奖的格子按钮变灰（整表重绘时读 RC_BONUS_DONE） */
-    try{ renderRecite() }catch(e){}
+    /* 刷诵读表按钮状态（整表重绘读 RC_BONUS_DONE），但记住滚动位置——
+       课堂上正滚到第 30 个学生，点完分不能一下跳回表头 */
+    try{
+      var sc=document.querySelector('.rcstage .rcwrap')||document.getElementById('rcTable');
+      var st=sc?sc.scrollTop:0, sl=sc?sc.scrollLeft:0;
+      renderRecite();
+      if(sc){ sc.scrollTop=st; sc.scrollLeft=sl }
+    }catch(e){}
   },function(){
     delete RC_BONUS_BUSY[k];
     toastMsg('⚠️ 加分没成功，可再点一次');
@@ -14173,18 +14308,26 @@ function rcBonusConfig(){
   box.innerHTML='<div style="position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:10002;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)rcBonusCfgClose()">'+
     '<div style="background:#fff;border-radius:14px;padding:22px;width:360px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.25)">'+
     '<h3 style="margin:0 0 12px;font-size:16px">🏆 诵读通关奖励设置</h3>'+
-    '<div style="font-size:12px;color:#7a8a80;margin-bottom:10px;line-height:1.6">背完篇目后点格子末尾的「+分」按钮，按此分值记一笔「诵读奖励」流水。默认 30 分，改完立即生效。</div>'+
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px"><label style="font-size:14px">每次加分</label>'+
+    '<div style="font-size:12px;color:#7a8a80;margin-bottom:10px;line-height:1.6">每个学生行末「诵读奖励」那一栏有一个按钮：没背完是灰的不可点，背完后变金色可点，点一下给最近背完的那篇记一笔「诵读奖励」；多篇待奖时会弹窗让你选。默认 30 分，改完立即生效。</div>'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><label style="font-size:14px">每次加分</label>'+
     '<input id="rcBonusScoreInput" type="number" min="1" max="999" value="'+rcBonusVal()+'" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px"><span style="font-size:13px;color:#7a8a80">分</span></div>'+
+    '<label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;margin-bottom:16px;color:#3d5a45;line-height:1.5;cursor:pointer">'+
+    '<input id="rcBonusHistChk" type="checkbox"'+(RC_BONUS_HIST?' checked':'')+' style="width:15px;height:15px;margin-top:2px;accent-color:#1a9c5b;flex:0 0 auto">'+
+    '<span>往期打卡也计入待奖<br><span style="color:#8a9a90">默认只奖励今天新背完的篇目；打开后以前背完没发过奖的也会亮起来（一列会有很多 +30）</span></span></label>'+
     '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn2" onclick="rcBonusCfgClose()">取消</button>'+
     '<button class="btn2 primary" onclick="rcBonusCfgSave()">保存</button></div></div></div>';
 }
 function rcBonusCfgClose(){ var b=document.getElementById('rcBonusCfgBox'); if(b)b.innerHTML='' }
 function rcBonusCfgSave(){
   var inp=document.getElementById('rcBonusScoreInput');
+  var chk=document.getElementById('rcBonusHistChk');
   var v=rcBonusSetVal(inp?inp.value:30);
+  var hist=!!(chk&&chk.checked);
+  var changed=(hist!==RC_BONUS_HIST);
+  rcBonusHistSet(hist);
   rcBonusCfgClose();
-  toastMsg('✅ 诵读奖励已设为每次 +'+v+' 分');
+  if(changed){ try{ renderRecite() }catch(e){} }
+  toastMsg('✅ 诵读奖励已设为每次 +'+v+' 分'+(hist?' · 往期打卡也计入待奖':' · 只奖励今天新背完的'));
 }
 
 /* ---------- 庆祝特效与音效结束 ---------- */
@@ -14540,7 +14683,7 @@ function renderRecite(){
     var tb=document.createElement('tbody');
     var tr=document.createElement('tr');
     var td=el('td','empty-tip',stuAll.length?'还没有篇目，点「管理篇目」添加':'还没有学生数据');
-    td.colSpan=Math.max(2,RC_TITLES.length+2);tr.appendChild(td);tb.appendChild(tr);box.appendChild(tb);
+    td.colSpan=Math.max(3,RC_TITLES.length+3);tr.appendChild(td);tb.appendChild(tr);box.appendChild(tb);
     rcRefreshStat();rcRenderRank();return;
   }
   /* vT101 全班都背完的篇目默认自动隐藏：分母只算「计入已背完判定」的同学。
@@ -14567,6 +14710,9 @@ function renderRecite(){
     hr.appendChild(th);
   });
   hr.appendChild(el('th',null,'已完成'));
+  var hb=el('th','bonus','诵读奖励');
+  hb.title='背完篇目后点右边的按钮加「诵读奖励」分（默认 '+rcBonusVal()+' 分，可在工具栏设置）';
+  hr.appendChild(hb);
   thead.appendChild(hr);
   /* 表体 */
   var tbody=document.createElement('tbody');
@@ -14584,23 +14730,8 @@ function renderRecite(){
       var k=rcKey(s.姓名,nm2),on=!!RC_MAP[k];
       var td=el('td','cell'+(on?' on':'')+(isExtra?' extra':(on?'':' core')));
       if(on)td.appendChild(el('span','mk','✓'));
-      /* vT287 篇目末尾的奖励按钮：没背完灰、背完实色、已奖过显示「已奖 +N」。
-         按钮独占一行（换行），不与 ✓ 争夺格子的点选区域；点按钮 stopPropagation 不触发取消打卡。 */
-      var bk=rcKey(s.姓名,nm2), awarded=RC_BONUS_DONE[bk];
-      var rb=el('button','rcbonus'+(on?'':' off')+(awarded?' done':''),
-        awarded?('✓'+awarded):(on?('+'+rcBonusVal()):'+'));
-      rb.type='button';
-      rb.setAttribute('data-stu',s.姓名);
-      rb.setAttribute('data-t',nm2);
-      rb.title=awarded?('已奖 '+awarded+' 分（如判错，到学生积分流水里删掉「诵读奖励 · '+nm2+'」再重加）')
-        :(on?('背完了！点此奖励 '+rcBonusVal()+' 分（诵读奖励）'):'还没背完，背完后才能加分');
-      if(!on||awarded)rb.disabled=true;
-      rb.onclick=function(ev){
-        ev.stopPropagation();
-        if(!on||RC_BONUS_DONE[bk])return;
-        rcBonusAdd(s.姓名,nm2);
-      };
-      td.appendChild(rb);
+      /* vT289 奖励按钮已从每个格子里挪到「行末单独一列」（见下面 tr.appendChild(rcBonusCell(...))），
+         格子里只留 ✓，点格子就是纯打卡 —— 之前每格一个 +30 角标，一屏几十个，太吵。 */
       td.setAttribute('data-t',nm2);       /* vT115 当前登记列 */
       td.setAttribute('role','checkbox');
       td.setAttribute('aria-checked',on?'true':'false');
@@ -14616,6 +14747,7 @@ function renderRecite(){
       tr.appendChild(td);
     });
     tr.appendChild(el('td','sum',cnt?String(cnt):'—'));
+    tr.appendChild(rcBonusCell(s.姓名));
     tbody.appendChild(tr);
   });
   /* vT87 不参与名单：排表尾、默认折叠；展开只读，点格子只提示不改数据 */
@@ -14637,6 +14769,7 @@ function renderRecite(){
       tr.appendChild(td);
     });
     tr.appendChild(el('td','sum',cnt?String(cnt):'—'));
+    tr.appendChild(el('td','bonus'));    /* 不参与名单不给加分按钮，占位保持列对齐 */
     tbody.appendChild(tr);
   });
   /* 表尾：每篇完成人数 */
@@ -14650,6 +14783,11 @@ function renderRecite(){
     fr.appendChild(td);
   });
   fr.appendChild(el('td','sum',''));
+  var fbn=0;
+  stu.forEach(function(s){fbn+=rcBonusAwardedCount(s.姓名)});
+  var fbd=el('td','bonus',fbn?('已奖 '+fbn):'—');
+  fbd.title='已发放的诵读奖励篇目数（人次）';
+  fr.appendChild(fbd);
   tfoot.appendChild(fr);
   box.textContent='';
   box.appendChild(thead);box.appendChild(tbody);box.appendChild(tfoot);
@@ -22249,9 +22387,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v288';
-var WB_MY_VER = '优化版 vT288 · 诵读加分 + 修同 id 流水重复计分 + 灵杰灵宠抽卡分家';
-var WB_BUILD_DATE = '11-23', WB_BUILD_NO = '2.6.274';
+var WB_VER_TAG = 'v289';
+var WB_MY_VER = '优化版 vT289 · 诵读奖励改到行末按钮';
+var WB_BUILD_DATE = '11-23', WB_BUILD_NO = '2.6.275';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
