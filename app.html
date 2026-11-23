@@ -774,15 +774,29 @@ table.rc td.cell.pulse{animation:rcPulse .5s ease}
 .rcmode.reg{background:#fff4e6;border-color:#ffd8a8;color:#c2410c;font-weight:600}
 .rcmode .mt{margin-left:auto;font-size:12px;font-weight:400;opacity:.85}
 .rcmode .btn2.sm{padding:5px 11px;font-size:12.5px}
-/* 全屏登记：表格区铺满整屏，隐藏侧边栏与标题，只留一条紧凑工具条 */
-body.rcfull{overflow:hidden}
+/* 全屏登记：登记窗口铺满整屏，隐藏侧边栏与标题，只留一条紧凑工具条。
+   vT291 修正：以前只把外面那层铺满，表格卡片还停在以前拖过的大小（wb_rc_size），
+   全屏后只占左上角一小块、右边一大片空白，看着不像全屏。现在纵向 flex 撑满，
+   内联宽高由 rcFullOn() 临时清掉、退出时还原。 */
+body.rcfull{overflow:hidden;background:#f6fbf8}
 body.rcfull aside{display:none}
-body.rcfull main{max-width:none;padding:0;height:100vh;overflow:hidden}
-body.rcfull #s-recite.active{display:flex;flex-direction:column;height:100vh;padding:10px 12px 12px}
+/* 顶部那条「桌面版 · 数据保存在本机」和值日提醒也收起来，否则它会把登记区往下推 46px，
+   整块内容超出视口、表格底部被切掉一截 */
+body.rcfull #wbLocalBar,body.rcfull #dutyAlert{display:none!important}
+body.rcfull main{position:fixed;inset:0;height:auto;max-width:none;padding:0;overflow:hidden}
+body.rcfull #s-recite.active{display:flex;flex-direction:column;height:100vh;height:100dvh;padding:8px 10px 10px;background:#f6fbf8}
 body.rcfull #s-recite>h2,body.rcfull #s-recite>.sub{display:none}
-body.rcfull #rcMode{margin-bottom:8px;padding:7px 11px}
-body.rcfull .rcctl{margin-bottom:8px}
-body.rcfull .rcwrap{flex:1;min-height:0;max-height:none;border-radius:10px;resize:none}
+body.rcfull #rcMode{margin-bottom:6px;padding:5px 10px}
+body.rcfull .rcctl{margin-bottom:6px;gap:7px}
+body.rcfull .rcctl .btn2{padding:5px 10px;font-size:12.5px}
+body.rcfull #rcStage{flex:1 1 auto;min-height:0;align-items:stretch;gap:10px}
+body.rcfull #rcStage .rcmain{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column}
+body.rcfull .rcwrap{flex:1 1 auto;width:auto!important;height:auto!important;max-height:none!important;
+  min-height:0;border-radius:10px;resize:none}
+body.rcfull #rcGrip{display:none}
+body.rcfull #rcRank{max-height:100%}
+/* 表格整体铺满宽度后，最右那列按钮别被拉成一条长条，居中做成胶囊更像按钮 */
+body.rcfull table.rc td.bonus button{max-width:calc(60px*var(--rc-s));margin-left:auto;margin-right:auto}
 /* 全屏后抬头与列头仍然吸附，格子略微放大更好点 */
 body.rcfull table.rc td.cell{height:42px}
 body.rcfull table.rc{font-size:13.5px}
@@ -14439,18 +14453,30 @@ function toggleRCMode(){
 }
 
 /* ---------- 全屏登记 ---------- */
-/* 两层叠加：① 页面内沉浸（隐藏侧栏、表格铺满，任何环境都可用）
-             ② 浏览器原生全屏（能用就顺手打开，按 Esc 直接退出） */
-var RC_FULL=false;
+/* 两层叠加：① 页面内沉浸（隐藏侧栏、登记窗口铺满，任何环境都可用）
+             ② 浏览器原生全屏（能用就顺手打开，按 Esc 直接退出）
+   vT291：全屏时把表格卡片上「以前拖出来的内联宽高」临时清空，交给 CSS flex 撑满整屏；
+   退出时原样还原——老师平时习惯的窗口大小不会被改动。
+   （以前没清，全屏后卡片还停在 980×460，只有左上角一块，右边一大片空白。） */
+var RC_FULL=false, RC_FULL_PREV=null;
 function rcFullOn(){
   RC_FULL=true;
+  var w=document.getElementById('rcWrap');
+  if(w&&!RC_FULL_PREV){
+    RC_FULL_PREV={w:w.style.width,h:w.style.height,mh:w.style.maxHeight};
+    w.style.width='';w.style.height='';w.style.maxHeight='';
+  }
   document.body.classList.add('rcfull');
   /* 进来就顺手切到登记模式，省一次点击 */
   if(!RC_MODE){RC_MODE=true;rcPersistMode();rcPaintMode();renderRecite()}
-  var el=document.getElementById('s-recite');
-  if(el&&el.requestFullscreen&&!document.fullscreenElement){
-    var p=el.requestFullscreen();
-    if(p&&p.catch)p.catch(function(){/* 内嵌 iframe 里可能被拒，页面内沉浸已生效，忽略 */});
+  /* 整页真全屏：连浏览器地址栏/标签栏一起收掉，登记区能多用一截高度。
+     内嵌 iframe 里可能被拒（没 allowfullscreen），页面内沉浸已生效，忽略即可。 */
+  if(!document.fullscreenElement){
+    var el=document.documentElement;
+    if(el&&el.requestFullscreen){
+      var p=el.requestFullscreen();
+      if(p&&p.catch)p.catch(function(){});
+    }
   }
   rcPaintFullBtn();
   toastMsg('⛶ 已全屏 · 按 Esc 或点「退出全屏」返回');
@@ -14459,6 +14485,14 @@ function rcFullOn(){
 function rcFullOff(){
   RC_FULL=false;
   document.body.classList.remove('rcfull');
+  /* 还原进全屏前表格卡片的大小 */
+  var w=document.getElementById('rcWrap');
+  if(w&&RC_FULL_PREV){
+    w.style.width=RC_FULL_PREV.w||'';
+    w.style.height=RC_FULL_PREV.h||'';
+    w.style.maxHeight=RC_FULL_PREV.mh||'';
+    RC_FULL_PREV=null;
+  }
   if(document.fullscreenElement&&document.exitFullscreen){
     var p=document.exitFullscreen();
     if(p&&p.catch)p.catch(function(){});
@@ -22412,9 +22446,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v290';
-var WB_MY_VER = '优化版 vT290 · 诵读通关奖（整本背完才可奖）';
-var WB_BUILD_DATE = '11-23', WB_BUILD_NO = '2.6.276';
+var WB_VER_TAG = 'v291';
+var WB_MY_VER = '优化版 vT291 · 全屏登记（登记窗口真铺满整屏）';
+var WB_BUILD_DATE = '11-23', WB_BUILD_NO = '2.6.277';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
