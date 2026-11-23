@@ -415,7 +415,7 @@
 
   var GITEE = 'https://gitee.com/api/v5';
   var SNAP = 'wb_parent_snap.json';
-  var PA_PAGE_VER = 'v254';   /* vT284：竞答一律不重复，题库不足显示「补充题库中」；v253 流水空日期标「无日期」 */
+  var PA_PAGE_VER = 'v255';   /* vT287：积分卡加「诵读奖励」子类（流水标签由老师端 flowClass 下发 rwRecite） */
   try { window.PA_PAGE_VER = PA_PAGE_VER; } catch (e) {}
   var K_ACCESS = 'wb_pa_access', K_NAME = 'wb_pa_name', K_CODE = 'wb_pa_code', K_PEND = 'wb_pa_pending';
 
@@ -1868,7 +1868,7 @@
               return '<div><b style="color:' + color + '">' + label + '</b> ' + body9 + '</div>';
             };
             o9 += '<div class="ptsub">' +
-              row9('奖励', '#12a150', [['作业加分', C9.rwHw || 0], ['目标达成', C9.rwGoal || 0], ['课堂参与', C9.rwClass || 0], ['每日竞答', C9.rwQuiz || 0], ['其他奖励', C9.rwOther || 0]]) +
+              row9('奖励', '#12a150', [['作业加分', C9.rwHw || 0], ['目标达成', C9.rwGoal || 0], ['课堂参与', C9.rwClass || 0], ['每日竞答', C9.rwQuiz || 0], ['诵读奖励', C9.rwRecite || 0], ['其他奖励', C9.rwOther || 0]]) +
               row9('扣罚', '#c62828', [['作业扣分', C9.pnHw || 0], ['课堂扣分', C9.pnClass || 0], ['竞答扣分', C9.pnQuiz || 0], ['其他扣分', C9.pnOther || 0]]) +
               row9('消费', '#c77700', [['抽奖', C9.csDraw || 0], ['喂养', C9.csFeed || 0]]) +
               '</div>';
