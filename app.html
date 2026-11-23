@@ -13823,24 +13823,48 @@ function rcDoneTitles(name){
 }
 /* vT247 证书篇目：原来是把篇名用全角空格串成一行，篇目一多就挤成一团黑。
    现在按课内 / 课外分组，编号 + 自动列数（≤6 篇两列、≤18 篇三列、再多四列），
-   每格右端超长省略，整页看上去像一份清单而不是一段话。 */
+   每格右端超长省略，整页看上去像一份清单而不是一段话。
+   vT292 老师要求：篇名一律不带书名号（录入时有的写了《》、有的没写，证书上不统一）。 */
+function rcCertCleanTitle(t){
+  return String(t == null ? '' : t)
+    .replace(/（课外）/g, '')
+    .replace(/[《》〈〉]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 function rcCertListHtml(items){
   var core = [], extra = [];
   items.forEach(function(x){ (x.k === 'extra' ? extra : core).push(x); });
+  var total = items.length;
+  /* 每列至少 46mm 才排得下「六月二十七日望湖楼醉书」这种 11 字篇名（12pt）。
+     按这个下限挑行数：篇目少且组够宽 → 少行多列横向铺开；组本身很窄（如课外组）
+     → 老实回到 11 行一列，不然拆两列反而把篇名挤断。 */
+  function rowsFor(n){
+    var groupW = (n >= total) ? 250 : 243 * n / total;
+    for (var r = 3; r <= 11; r++) {
+      var cols = Math.ceil(n / r);
+      if (cols > 6) continue;
+      if (groupW / cols - 4 >= 46) return r;
+    }
+    return 11;
+  }
   var seq = 0;
   function cells(arr){
     return arr.map(function(x){
       seq++;
-      var nm = String(x.t).replace(/（课外）/g, '');
+      var nm = rcCertCleanTitle(x.t);
       return '<div class="it"><i>' + (seq < 10 ? '0' : '') + seq + '</i><span>' + esc(nm) + '</span></div>';
     }).join('');
   }
   function grp(title, arr){
     if(!arr.length) return '';
-    /* 每栏两列、每列最多 11 行 —— 39 篇刚好四列排满一页，不再溢出 */
-    return '<section class="grp">' +
+    /* 每栏两列、每列最多 11 行 —— 39 篇刚好四列排满一页，不再溢出。
+       vT292 课堂实测：两组各占一半时每列只有 25mm 宽，11 字的长篇名（六月二十七日望湖楼醉书）
+       必然被省略号吃掉。改成**按篇数比例分宽度**（课内 32 篇 : 课外 7 篇），
+       课内自动拿到 3 列 × 64mm，字号放大到 12pt 也排得下。 */
+    return '<section class="grp" style="flex:' + arr.length + ' 1 0">' +
       '<h3>' + title + ' <b>' + arr.length + '</b> 篇</h3>' +
-      '<div class="grid">' + cells(arr) + '</div>' +
+      '<div class="grid" style="grid-template-rows:repeat(' + rowsFor(arr.length) + ',1fr);height:' + (rowsFor(arr.length) * 8.72).toFixed(1) + 'mm">' + cells(arr) + '</div>' +
     '</section>';
   }
   return '<div class="lists">' + grp('课内必背', core) + grp('课外拓展', extra) + '</div>';
@@ -13854,6 +13878,20 @@ var RC_CERT_PRAISES = [
 ];
 /* 宣纸底：极淡的竖排诗句水印，避免整页空白又压不住正文 */
 var RC_CERT_WM = ['春风又绿江南岸','江畔何人初见月','腹有诗书气自华','书山有路勤为径','长风破浪会有时','流水落花春去也','明月何时照我还','白云千载空悠悠','竹外桃花三两枝','为有源头活水来','会当凌绝顶','少壮不努力'];
+/* vT292 证书编号：按班级名单顺序自动生成（同一名学生每次打印都是同一个号，
+   不会因为谁先打印就乱序），弹窗里仍可手改。 */
+function rcCertAutoNo(name){
+  var list = rcStudents().map(function(s){ return String((s && (s.姓名 || s.name)) || s); });
+  var i = list.indexOf(String(name));
+  var n = i >= 0 ? i + 1 : 1;
+  var y = new Date().getFullYear();
+  return 'SY-' + y + '-' + (n < 10 ? '00' : n < 100 ? '0' : '') + n;
+}
+function rcCertSyncNo(){
+  var v = (document.getElementById('rcCertStu') || {}).value || '';
+  var el = document.getElementById('rcCertNo');
+  if (el && v) el.value = rcCertAutoNo(v);
+}
 function rcOpenCert(){
   var rows = rcStudents().map(function(s){ var nm=(s&&(s.姓名||s.name))||s; return { nm:nm, done:rcDoneTitles(nm) }; })
     .filter(function(x){ return x.done.length; })
@@ -13869,9 +13907,11 @@ function rcOpenCert(){
     '<div style="background:#fff;border-radius:14px;padding:22px;width:460px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.25)">' +
     '<h3 style="margin:0 0 14px;font-size:16px">📜 诵读通关荣誉证书</h3>' +
     '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">颁给谁（按背完篇数排序）</div>' +
-    '<select id="rcCertStu" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px">' +
+    '<select id="rcCertStu" onchange="rcCertSyncNo()" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px">' +
     rows.map(function(x){ return '<option value="'+esc(x.nm)+'">'+esc(x.nm)+'（已背 '+x.done.length+' 篇）</option>'; }).join('') +
     '</select></div>' +
+    '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">证书编号（按班级名单顺序自动生成，可改）</div>' +
+    '<input id="rcCertNo" value="' + esc(rcCertAutoNo(rows[0].nm)) + '" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px"></div>' +
     '<div style="margin-bottom:10px"><div style="font-size:12px;color:#7a8a80;margin-bottom:4px">称号（推荐「雅韵少年」：与证书上的深红匾额最相配）</div>' +
     '<select id="rcCertHonor" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:14px">' +
     RC_CERT_HONORS.map(function(hn){ return '<option value="'+hn+'"'+(hn==='雅韵少年'?' selected':'')+'>'+hn+'</option>'; }).join('') +
@@ -13896,6 +13936,7 @@ function rcMakeCert(){
   var term=((document.getElementById('rcCertTerm')||{}).value||'').trim()||RC_CERT_TERM;
   var items=rcDoneItems(name), done=items.map(function(x){return x.t});
   if(!name||!done.length){ toastMsg('这位同学还没有背完的篇目'); return; }
+  var no=((document.getElementById('rcCertNo')||{}).value||'').trim()||rcCertAutoNo(name);
   var d=new Date();
   var ds=d.getFullYear()+' 年 '+(d.getMonth()+1)+' 月 '+d.getDate()+' 日';
   var w=window.open('','_blank');
@@ -13929,29 +13970,28 @@ function rcMakeCert(){
     +'.cnr{position:absolute;width:17mm;height:17mm;pointer-events:none}'
     +'.c1{left:4mm;top:4mm}.c2{right:4mm;top:4mm;transform:scaleX(-1)}'
     +'.c3{left:4mm;bottom:4mm;transform:scaleY(-1)}.c4{right:4mm;bottom:4mm;transform:scale(-1,-1)}'
-    +'.ttl{text-align:center;font-size:38pt;font-weight:700;letter-spacing:6pt;color:#9c2418;margin-top:12mm;'
+    +'.ttl{text-align:center;font-size:40pt;font-weight:700;letter-spacing:6pt;color:#9c2418;margin-top:11mm;'
     +'font-family:"STXinwei","STKaiti","KaiTi",serif}'
-    +'.sub{text-align:center;margin-top:2.5mm;font-size:11.5pt;color:#3d3024;letter-spacing:1.2pt}'
-    +'.honor{width:132mm;height:12mm;margin:6mm auto 0;display:flex;align-items:center;justify-content:center}'
+    +'.sub{text-align:center;margin-top:2.5mm;font-size:12.5pt;color:#3d3024;letter-spacing:1.2pt}'
+    +'.honor{width:132mm;height:12mm;margin:5mm auto 0;display:flex;align-items:center;justify-content:center}'
     +'.honor .side{width:16mm;height:8mm;border-top:.7mm solid #a9794f;border-bottom:.7mm solid #a9794f;position:relative}'
     +'.honor .side:before,.honor .side:after{content:"";position:absolute;top:2.4mm;width:4mm;height:3mm;border:.5mm solid #a9794f}'
     +'.honor .side:before{left:0;border-right:0}.honor .side:after{right:0;border-left:0}'
     +'.honor .bar{flex:1;height:12mm;background:#9c2418;display:flex;align-items:center;justify-content:center;'
-    +'color:#f8e9cd;font-size:17pt;font-weight:700;letter-spacing:3pt;'
+    +'color:#f8e9cd;font-size:18pt;font-weight:700;letter-spacing:3pt;'
     +'box-shadow:inset 0 0 0 .6mm rgba(255,240,210,.35),0 .6mm 1.2mm rgba(80,30,20,.18)}'
-    +'.body{width:230mm;margin:5.5mm auto 0;font-size:12pt;line-height:1.85;text-indent:2em}'
-    +'.nm{font-size:17pt;font-weight:700;color:#9c2418;text-indent:0}'
-    +'.lists{display:flex;gap:7mm;width:232mm;height:92mm;margin:3.5mm auto 0}'
-    +'.grp{flex:1;min-width:0}'
-    +'.grp h3{text-align:center;font-size:14pt;font-weight:700;color:#9c2418;margin:0 0 2mm;letter-spacing:2pt}'
-    +'.grp h3 b{font-weight:400;font-size:12pt}'
-    +'.grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(11,1fr);height:84mm;column-gap:4mm}'
-    +'.it{font-size:10pt;color:#3d3024;white-space:nowrap;overflow:hidden;line-height:1.05}'
-    +'.it i{font-style:normal;font-family:Georgia,"Times New Roman",serif;font-size:9pt;color:#9c6a3f;margin-right:2mm}'
-    +'.it span{display:inline-block;max-width:calc(100% - 9mm);overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}'
-    +'.foot{position:absolute;left:18mm;right:18mm;bottom:13mm;display:flex;align-items:flex-end;font-size:11pt;color:#4a3b2a}'
-    +'.foot div{flex:1}.foot .no{text-align:left}.foot .sig{text-align:center}.foot .dt{text-align:right;padding-right:20mm}'
-    +'.seal{position:absolute;right:16mm;bottom:10mm;width:31mm;height:31mm;transform:rotate(-7deg);opacity:.9;mix-blend-mode:multiply;pointer-events:none}'
+    +'.body{width:230mm;margin:4.5mm auto 0;font-size:13.5pt;line-height:1.8;text-indent:2em}'
+    +'.nm{font-size:18pt;font-weight:700;color:#9c2418;text-indent:0}'
+    +'.lists{display:flex;gap:7mm;width:250mm;margin:3mm auto 0}'
+    +'.grp{flex:1;min-width:56mm;display:flex;flex-direction:column}'
+    +'.grp h3{text-align:center;font-size:15pt;font-weight:700;color:#9c2418;margin:0 0 2mm;letter-spacing:2pt}'
+    +'.grp h3 b{font-weight:400;font-size:13pt}'
+    +'.grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(11,1fr);height:96mm;column-gap:4mm}'
+    +'.it{display:flex;align-items:center;font-size:12pt;color:#3d3024;white-space:nowrap;overflow:hidden;line-height:1.1}'
+    +'.it i{flex:0 0 auto;font-style:normal;font-family:Georgia,"Times New Roman",serif;font-size:10pt;color:#9c6a3f;margin-right:1.8mm}'
+    +'.it span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}'
+    +'.foot{position:absolute;left:18mm;right:18mm;bottom:12mm;display:flex;align-items:flex-end;font-size:12.5pt;color:#4a3b2a}'
+    +'.foot div{flex:1}.foot .no{text-align:left}.foot .sig{text-align:center}.foot .dt{text-align:right}'
     +'</style></head><body><div class="cert">'
     +'<div class="wm">'+watermark+'</div>'
     +'<div class="bd"></div>'+cornerSvg('c1')+cornerSvg('c2')+cornerSvg('c3')+cornerSvg('c4')
@@ -13961,17 +14001,8 @@ function rcMakeCert(){
     +'<div class="body"><span class="nm">'+esc(name)+'</span> 同学：'+esc(praise)
     +'经考核，你已熟练背诵以下 <b>'+items.length+'</b> 篇，特授予「'+esc(honor)+'」称号，以资鼓励。</div>'
     + rcCertListHtml(items)
-    +'<div class="foot"><div class="no">编号：SY-2026-____________</div>'
+    +'<div class="foot"><div class="no">编号：'+esc(no)+'</div>'
     +'<div class="sig">教师签名：____________</div><div class="dt">'+esc(ds)+'</div></div>'
-    +'<svg class="seal" viewBox="0 0 400 400">'
-    +'<circle cx="200" cy="200" r="192" fill="none" stroke="#b12b20" stroke-width="7"/>'
-    +'<circle cx="200" cy="200" r="177" fill="none" stroke="#b12b20" stroke-width="2.5"/>'
-    +'<path id="sealArc" d="M 68,200 A 132,132 0 0,1 332,200" fill="none"/>'
-    +'<text fill="#b12b20" font-size="42" font-weight="700" letter-spacing="4" font-family="KaiTi,serif">'
-    +'<textPath href="#sealArc" startOffset="50%" text-anchor="middle">经典诵读</textPath></text>'
-    +'<text x="200" y="256" text-anchor="middle" fill="#b12b20" font-size="82" font-weight="700" font-family="STXinwei,KaiTi,serif">认证</text>'
-    +'<path d="M78 222q12-14 24 0q-12 14-24 0zM298 222q12-14 24 0q-12 14-24 0z" fill="#b12b20" opacity=".85"/>'
-    +'</svg>'
     +'</div></body></html>';
   w.document.open(); w.document.write(h); w.document.close();
   setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 500);
@@ -22446,9 +22477,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v291';
-var WB_MY_VER = '优化版 vT291 · 全屏登记（登记窗口真铺满整屏）';
-var WB_BUILD_DATE = '11-23', WB_BUILD_NO = '2.6.277';
+var WB_VER_TAG = 'v292';
+var WB_MY_VER = '优化版 vT292 · 通关证书（去书名号/去印章/字号加大/编号自动）';
+var WB_BUILD_DATE = '11-23', WB_BUILD_NO = '2.6.278';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
