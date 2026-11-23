@@ -14136,14 +14136,21 @@ function rcBonusAdd(name,title){
   if(RC_BONUS_DONE[k]){ toastMsg('这篇已经奖过 '+RC_BONUS_DONE[k]+' 分了'); return }
   var val=rcBonusVal();
   RC_BONUS_BUSY[k]=1;
+  var p;
   /* 走学生管理同一条写入链路（防重复提交 / 创建登记 / 即时推云端 / 三端同账） */
-  var before=STU_RW_GUARD[String(name)+'|诵读奖励 · '+title+'|'+val];
-  try{ stuAddRw(name, '诵读奖励 · '+title, val) }catch(e){ delete RC_BONUS_BUSY[k]; toastMsg('⚠️ 加分失败'); return }
-  RC_BONUS_DONE[k]=val; rcBonusSaveDone();
-  delete RC_BONUS_BUSY[k];
-  rcBonusCongrats(name,title,val);
-  /* 刷诵读表按钮状态：已奖的格子按钮变灰（整表重绘时读 RC_BONUS_DONE） */
-  try{ renderRecite() }catch(e){}
+  try{ p=stuAddRw(name, '诵读奖励 · '+title, val) }catch(e){ delete RC_BONUS_BUSY[k]; toastMsg('⚠️ 加分失败'); return }
+  /* vT288：只有真的写进数据表才记「已奖」，否则按钮会被标灰而分数没动，学生再也加不上 */
+  Promise.resolve(p).then(function(okv){
+    delete RC_BONUS_BUSY[k];
+    if(okv===false){ toastMsg('⚠️ 加分没成功，可再点一次'); return }
+    RC_BONUS_DONE[k]=val; rcBonusSaveDone();
+    rcBonusCongrats(name,title,val);
+    /* 刷诵读表按钮状态：已奖的格子按钮变灰（整表重绘时读 RC_BONUS_DONE） */
+    try{ renderRecite() }catch(e){}
+  },function(){
+    delete RC_BONUS_BUSY[k];
+    toastMsg('⚠️ 加分没成功，可再点一次');
+  });
 }
 function rcBonusCongrats(name,title,val){
   try{ if(typeof rcConfetti==='function')rcConfetti(50); if(typeof rcSoundSingle==='function')rcSoundSingle() }catch(e){}
@@ -18446,13 +18453,16 @@ function kickSyncAfterScore(){
    同一人同一事项同一分值 3 秒内只认第一次，第二次直接忽略并轻提示。
    超过 3 秒的重复是老师真的想再加一次（如「家长喂食两次」），照常写入。 */
 var STU_RW_GUARD = {};
+/* vT288：返回值改为 Promise<boolean>（true=真的写进去了）。诵读加分要靠它判断成功与否，
+   否则「没连数据表/被防重拦下」也会被当成加成功，按钮被标「已奖」而分数没动，学生再也加不上。
+   其余老调用点都忽略返回值，不受影响。 */
 function stuAddRw(name,title,val){
-  if(!dbReady){toastMsg('⚠️ 未连接数据表');return}
+  if(!dbReady){toastMsg('⚠️ 未连接数据表');return Promise.resolve(false)}
   var _gk = String(name||'')+'|'+String(title||'')+'|'+String(Number(val)||0);
   var _now = Date.now();
   if(STU_RW_GUARD[_gk] && (_now - STU_RW_GUARD[_gk]) < 3000){
     toastMsg('⏳ 刚才已经加过了，这次重复点击已忽略');
-    return;
+    return Promise.resolve(false);
   }
   STU_RW_GUARD[_gk] = _now;
   var stu=stuRosterInfo(name);   /* vT173：花名册→座位表两段查找，别再轻易写全空记录 */
@@ -18460,7 +18470,7 @@ function stuAddRw(name,title,val){
     stu={学号:'',组别:'',职务:''};
     toastMsg('⚠️ 花名册里找不到「'+name+'」，已按无学号记录写入（备注 roster-miss）');
   }
-  db.addRecord({databaseId:'2mthbbHsJeABzmnerNt6sK',properties:{
+  return db.addRecord({databaseId:'2mthbbHsJeABzmnerNt6sK',properties:{
     '学号':{text:stu.学号||''},'姓名':{text:name},'组别':{text:stu.组别||''},
     '职务':{text:stu.职务||''},'奖惩事项':{text:title},'奖惩分值':{number:val},
     '日期':{date:ymd(new Date())},'备注':{text:(stu.学号||stu.组别||stu.职务?'':'roster-miss')}
@@ -18474,10 +18484,12 @@ function stuAddRw(name,title,val){
     renderStu();openStuPanel(name);
     toastMsg((val>=0?'+':'')+val+'　'+name+' · '+title);
     kickSyncAfterScore();   /* vT230 立刻推云端，小程序/桌面几秒内可见 */
+    return true;
   }).catch(function(err){
     console.error('[database] 奖惩写入失败:',err);
     try{ delete STU_RW_GUARD[_gk] }catch(_ge){}   /* 没写成功 → 放行重试 */
     toastMsg('⚠️ 没保存成功');
+    return false;
   });
 }
 
