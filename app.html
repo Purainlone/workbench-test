@@ -22477,9 +22477,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v292';
-var WB_MY_VER = '优化版 vT292 · 通关证书（去书名号/去印章/字号加大/编号自动）';
-var WB_BUILD_DATE = '11-23', WB_BUILD_NO = '2.6.278';
+var WB_VER_TAG = 'v293';
+var WB_MY_VER = '优化版 vT293 · 灵宠抠图修复（078~112 去白底）';
+var WB_BUILD_DATE = '11-23', WB_BUILD_NO = '2.6.279';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -36033,8 +36033,8 @@ function cwInit(){
      之前后台图鉴一片空白/发灰，图片加载失败也是原因之一。 */
   var PT_CODEX_BASE = 'https://purainlone.github.io/workbench-test/';
   var PT_CODEX_MIRRORS = [
-    'https://testingcf.jsdelivr.net/gh/Purainlone/workbench-test@7052eab5641314145127f5c26344e7d256cac555/',
-    'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@7052eab5641314145127f5c26344e7d256cac555/',
+    'https://testingcf.jsdelivr.net/gh/Purainlone/workbench-test@766fad806f3943230d54a46145ca318a5ee10acf/',
+    'https://fastly.jsdelivr.net/gh/Purainlone/workbench-test@766fad806f3943230d54a46145ca318a5ee10acf/',
     PT_CODEX_BASE
   ];
   var PT_CX_SRCS = {};
@@ -36042,7 +36042,7 @@ function cwInit(){
      故镜像源锁定到含新卡的 commit；换卡面时同步改这里的 SHA 与 PT_CX_Q。
      卡面 URL 再加版本参数（最长 12h），
      给候选 URL 加版本参数，CDN 当作全新资源回源，保证立刻看到新图。 */
-  var PT_CX_Q = 'v=120';   /* vT119 成长灵宠 petimg 上线，顺带刷新图鉴缓存键 */
+  var PT_CX_Q = 'v=121';   /* vT293 灵宠 078~112 重新抠图（去白底），换图必须改这个键 */
   function ptCxUrl(b, rel) { return b + rel + (rel.indexOf('?') >= 0 ? '&' : '?') + PT_CX_Q; }
   /* vT78 隐藏/典藏卡优先加载动态卡面 codeximg/NNN.gif（vT78 生成的光效版），
      404 时按候选顺序自动回落静态 png；普通卡不产生多余请求。 */
