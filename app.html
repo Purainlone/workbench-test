@@ -850,6 +850,16 @@ table.rc tfoot td.foc{background:#fff8e8!important;color:#8a5a00}
 .rcstage table.rc td.cell.extra.on{background:#f0b429}
 .rcstage table.rc td.cell.extra.on .mk{color:#fff}
 .rcstage table.rc tfoot td.extra{background:#fffae8;color:#9a6b00}
+/* vT287 篇目末尾的奖励按钮：小角标贴在格子右下角，不遮挡中间的 ✓。
+   未背完灰、背完实色（橙金）、已奖过深绿显示「✓分值」。 */
+table.rc td.cell .rcbonus{position:absolute;right:1px;bottom:1px;z-index:2;margin:0;padding:0 2px;
+  font-size:calc(8px*var(--rc-s));line-height:calc(10px*var(--rc-s));height:calc(11px*var(--rc-s));
+  min-width:calc(12px*var(--rc-s));border:0;border-radius:3px;cursor:pointer;font-weight:800;
+  background:#9aa7a0;color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.5)}
+table.rc td.cell .rcbonus.off{background:#c2ccc6;color:#eef3f0;cursor:not-allowed}
+table.rc td.cell .rcbonus:not(.off):hover{background:#c77700;transform:scale(1.12)}
+table.rc td.cell .rcbonus.done{background:#0d6b3c;color:#dff5e8;cursor:default}
+table.rc td.cell.on .rcbonus:not(.off):not(.done){background:#c77700}
 /* 管理面板：课内/课外选择 + 类型徽标 */
 .rcmgr .rcseg{display:flex;border:1px solid #e2ece7;border-radius:9px;overflow:hidden;flex:0 0 auto}
 .rcmgr .rcseg button{border:0;background:#fff;color:var(--muted);padding:10px 12px;font-size:13px;cursor:pointer}
@@ -1545,6 +1555,7 @@ table.paper td.l{text-align:left;font-weight:600}
       <button class="btn2 sm ghost" id="rcIgnBtn" onclick="hmToggleIgnoreRows()" title="不参加诵读的同学（默认柯骏豪）：折叠、只读。徐曼桦、方浩轩已恢复参加诵读，可在名单设置里调整">🙈 不参与名单</button>
       <button class="btn2 sm ghost" onclick="openIgnorePicker()" title="三份名单：不参加诵读 / 不计入已背完判定 / 不参与作业登记">⚙️ 名单设置</button>
       <button class="btn2" onclick="rcOpenCert()" title="为背完篇目的同学生成精美通关证书，可打印">📜 通关证书</button>
+      <button class="btn2" onclick="rcBonusConfig()" title="设置背完篇目后的奖励分值（默认 30 分），归入诵读奖励流水">🏆 奖励设置</button>
       <button data-page-node-id="G5GdPMfht73z7907cW81gf" class="btn2 ghost" onclick="rcClearAll()"><!--pnid:J35nXVodFWDtyRxsfFvnS2-->🧹 清空本表打卡</button>
       <span data-page-node-id="SKrlV8316R18sUOxbCyWVn" class="rcstat" id="rcStat"></span>
     </div>
@@ -13667,6 +13678,18 @@ var RC_MAP={};                          /* '姓名||篇目' → 记录 _id */
 var RC_BUSY={};                         /* 正在提交的格子，防连点重复写 */
 var RC_SAVING=0;
 var RC_MODE=false;                      /* false=浏览（只读） / true=登记（可涂色） */
+/* vT287 诵读通关奖励：背完一篇目后点格子末尾的「+分」按钮，记一笔「诵读奖励 · <篇目>」，
+   走学生档案奖惩流水标准链路（stuAddRw），三端同账。默认 30 分，可在诵读工具栏改。
+   RC_BONUS_DONE 记「姓名||篇目」→ 已奖分值，防止同一篇目重复点击重复加分；
+   加过的按钮变「已奖 +N」（灰），取消打卡后再背完仍不重复发奖（真要重发去流水里删旧记录）。 */
+var RC_BONUS_KEY='wb_rc_bonus_score_v1';    /* 每次奖励分值（默认 30） */
+var RC_BONUS_DONE_KEY='wb_rc_bonus_done_v1';/* { '姓名||篇目': 分值 } */
+var RC_BONUS_DONE={};
+var RC_BONUS_BUSY={};
+function rcBonusVal(){ var v=30; try{ v=Number(localStorage.getItem(RC_BONUS_KEY))||30 }catch(e){} return v>0?v:30 }
+function rcBonusSetVal(v){ v=Math.round(Number(v)||0); if(v<1)v=30; try{localStorage.setItem(RC_BONUS_KEY,String(v))}catch(e){} return v }
+function rcBonusLoadDone(){ try{ RC_BONUS_DONE=JSON.parse(localStorage.getItem(RC_BONUS_DONE_KEY)||'{}')||{} }catch(e){RC_BONUS_DONE={}} }
+function rcBonusSaveDone(){ try{localStorage.setItem(RC_BONUS_DONE_KEY,JSON.stringify(RC_BONUS_DONE))}catch(e){} }
 /* vT115 当前登记列：点篇目名或登记时点格子把该篇目高亮，整列淡黄方便对齐打勾。
    存的是篇目名（不是列号），隐藏列 / 新增篇目后位置变了也不会指错。 */
 var RC_FOCUS_KEY='wb_rc_focus_title';
@@ -14105,6 +14128,58 @@ function rcCheckCelebrate(name,prevDone,prevAllDone){
   }
 }
 
+/* ---------- vT287 诵读通关奖励（背完一篇 → 点「+分」→ 记诵读奖励流水 + 祝贺窗） ---------- */
+function rcBonusAdd(name,title){
+  var k=rcKey(name,title);
+  if(RC_BONUS_BUSY[k])return;
+  if(!RC_MAP[k]){ toastMsg('还没背完这篇，背完才能加分哦'); return }   /* 双保险：没背完不给加 */
+  if(RC_BONUS_DONE[k]){ toastMsg('这篇已经奖过 '+RC_BONUS_DONE[k]+' 分了'); return }
+  var val=rcBonusVal();
+  RC_BONUS_BUSY[k]=1;
+  /* 走学生管理同一条写入链路（防重复提交 / 创建登记 / 即时推云端 / 三端同账） */
+  var before=STU_RW_GUARD[String(name)+'|诵读奖励 · '+title+'|'+val];
+  try{ stuAddRw(name, '诵读奖励 · '+title, val) }catch(e){ delete RC_BONUS_BUSY[k]; toastMsg('⚠️ 加分失败'); return }
+  RC_BONUS_DONE[k]=val; rcBonusSaveDone();
+  delete RC_BONUS_BUSY[k];
+  rcBonusCongrats(name,title,val);
+  /* 刷诵读表按钮状态：已奖的格子按钮变灰（整表重绘时读 RC_BONUS_DONE） */
+  try{ renderRecite() }catch(e){}
+}
+function rcBonusCongrats(name,title,val){
+  try{ if(typeof rcConfetti==='function')rcConfetti(50); if(typeof rcSoundSingle==='function')rcSoundSingle() }catch(e){}
+  var box=document.getElementById('rcBonusBox');
+  if(!box){ box=document.createElement('div'); box.id='rcBonusBox'; document.body.appendChild(box) }
+  var safeTitle=esc(String(title||''));
+  box.innerHTML='<div style="position:fixed;inset:0;background:rgba(15,40,30,.5);z-index:10001;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)rcBonusClose()">'+
+    '<div style="background:linear-gradient(135deg,#fffdf5,#f3fbef);border:2px solid #c9932a;border-radius:18px;padding:26px 34px;max-width:90vw;width:420px;text-align:center;box-shadow:0 14px 50px rgba(0,0,0,.28)">'+
+    '<div style="font-size:46px;line-height:1;margin-bottom:8px">🎉</div>'+
+    '<div style="font-size:22px;font-weight:800;color:#9c2418;margin-bottom:10px">恭喜 '+esc(name)+'！</div>'+
+    '<div style="font-size:15px;color:#3d5a45;line-height:1.7;margin-bottom:6px">成功背诵《'+safeTitle+'》<br>诵读奖励 <b style="color:#12a150;font-size:20px">+'+val+'</b> 分已到账</div>'+
+    '<div style="font-size:12px;color:#8a9a90;margin-bottom:18px">已计入学生积分流水 · 三端同步可见</div>'+
+    '<button class="btn2 primary" onclick="rcBonusClose()" style="padding:8px 28px">太棒了，继续加油！</button></div></div>';
+}
+function rcBonusClose(){ var b=document.getElementById('rcBonusBox'); if(b)b.innerHTML='' }
+/* 诵读工具栏的奖励分值设置弹窗 */
+function rcBonusConfig(){
+  var box=document.getElementById('rcBonusCfgBox');
+  if(!box){ box=document.createElement('div'); box.id='rcBonusCfgBox'; document.body.appendChild(box) }
+  box.innerHTML='<div style="position:fixed;inset:0;background:rgba(15,40,30,.45);z-index:10002;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)rcBonusCfgClose()">'+
+    '<div style="background:#fff;border-radius:14px;padding:22px;width:360px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.25)">'+
+    '<h3 style="margin:0 0 12px;font-size:16px">🏆 诵读通关奖励设置</h3>'+
+    '<div style="font-size:12px;color:#7a8a80;margin-bottom:10px;line-height:1.6">背完篇目后点格子末尾的「+分」按钮，按此分值记一笔「诵读奖励」流水。默认 30 分，改完立即生效。</div>'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px"><label style="font-size:14px">每次加分</label>'+
+    '<input id="rcBonusScoreInput" type="number" min="1" max="999" value="'+rcBonusVal()+'" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px"><span style="font-size:13px;color:#7a8a80">分</span></div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn2" onclick="rcBonusCfgClose()">取消</button>'+
+    '<button class="btn2 primary" onclick="rcBonusCfgSave()">保存</button></div></div></div>';
+}
+function rcBonusCfgClose(){ var b=document.getElementById('rcBonusCfgBox'); if(b)b.innerHTML='' }
+function rcBonusCfgSave(){
+  var inp=document.getElementById('rcBonusScoreInput');
+  var v=rcBonusSetVal(inp?inp.value:30);
+  rcBonusCfgClose();
+  toastMsg('✅ 诵读奖励已设为每次 +'+v+' 分');
+}
+
 /* ---------- 庆祝特效与音效结束 ---------- */
 
 function rcToggleCell(td,name,title){
@@ -14502,6 +14577,23 @@ function renderRecite(){
       var k=rcKey(s.姓名,nm2),on=!!RC_MAP[k];
       var td=el('td','cell'+(on?' on':'')+(isExtra?' extra':(on?'':' core')));
       if(on)td.appendChild(el('span','mk','✓'));
+      /* vT287 篇目末尾的奖励按钮：没背完灰、背完实色、已奖过显示「已奖 +N」。
+         按钮独占一行（换行），不与 ✓ 争夺格子的点选区域；点按钮 stopPropagation 不触发取消打卡。 */
+      var bk=rcKey(s.姓名,nm2), awarded=RC_BONUS_DONE[bk];
+      var rb=el('button','rcbonus'+(on?'':' off')+(awarded?' done':''),
+        awarded?('✓'+awarded):(on?('+'+rcBonusVal()):'+'));
+      rb.type='button';
+      rb.setAttribute('data-stu',s.姓名);
+      rb.setAttribute('data-t',nm2);
+      rb.title=awarded?('已奖 '+awarded+' 分（如判错，到学生积分流水里删掉「诵读奖励 · '+nm2+'」再重加）')
+        :(on?('背完了！点此奖励 '+rcBonusVal()+' 分（诵读奖励）'):'还没背完，背完后才能加分');
+      if(!on||awarded)rb.disabled=true;
+      rb.onclick=function(ev){
+        ev.stopPropagation();
+        if(!on||RC_BONUS_DONE[bk])return;
+        rcBonusAdd(s.姓名,nm2);
+      };
+      td.appendChild(rb);
       td.setAttribute('data-t',nm2);       /* vT115 当前登记列 */
       td.setAttribute('role','checkbox');
       td.setAttribute('aria-checked',on?'true':'false');
@@ -15020,10 +15112,17 @@ function stStripMpsSpendShadows(rows) {
   if (!Array.isArray(rows)) return rows;
   var realKey = {}, datedKey = {}, out = [];
   rows.forEach(function (r) {
-    if (!r || stIsMpsRow(r)) return;
+    if (!r) return;
     var rs = String(stSpendField(r, '奖惩事项', 'reason') || '');
-    if (stIsSpendReason(rs)) realKey[stMpsShadowKey(r)] = 1;
-    /* vT279：带日期的真源登记「姓名|事项|分值」键 —— 无日期的 MPS_ 副本靠它识别 */
+    /* 消费真源仍只认非 MPS_ 行（消费副本按 |id: 收敛，另有通路） */
+    if (!stIsMpsRow(r) && stIsSpendReason(rs)) realKey[stMpsShadowKey(r)] = 1;
+    /* vT287 结构性修复：带日期的行一律登记「姓名|事项|分值」键，不再排除 MPS_ 行。
+       本地模式下 st 表存的清一色是 MPS_ 影子（没有非 MPS_ 真源），vT279 那版
+       在登记 datedKey 前先 return 掉所有 MPS_ 行 → datedKey 永远空 → 无日期副本
+       剔不掉。老师 11-23 手动加「记忆王者 +30」出现一条有日期、一条无日期两条
+       （MPS_1vxbuz5 / MPS_1tjohqe），+30 被算两遍，就是这个漏洞。
+       有合法日期的 MPS_ 行登记后，下方第二遍即可把同键无日期副本剔除；
+       同键两条都带日期（真·分两次加）不命中剔除条件，照常保留，不会误伤。 */
     var d = String(stSpendField(r, '日期', 'date') || '').slice(0, 10);
     if (/^\d{4}-\d{2}-\d{2}$/.test(d)) datedKey[stMpsShadowKey(r)] = 1;
   });
@@ -17211,7 +17310,9 @@ function flowClass(reason, score, source){
   if(v<0&&/课堂扣分|座位悬浮球|课堂参与|课堂加分/.test(rs))return {c:'penalty',s:'pnClass',sub:'课堂扣分'};
   if(/座位悬浮球|课堂加分|课堂参与|积极发言|举手|课前展示/.test(rs))return {c:'reward',s:'rwClass',sub:'课堂参与'};
   if(/课堂扣分/.test(rs))return {c:'penalty',s:'pnClass',sub:'课堂扣分'};
-  if(/诵读/.test(rs))return {c:'reward',s:'rwOther',sub:'其他奖励'};
+  /* vT287 诵读奖励单列：加分事项统一写「诵读奖励 · <篇目>」，归 reward/rwRecite；
+     看板仍并进「其他奖惩」大类（catOf 走 other），不改 6 分类结构。 */
+  if(/诵读|背诵奖励/.test(rs))return {c:'reward',s:'rwRecite',sub:'诵读奖励'};
   return v>=0?{c:'reward',s:'rwOther',sub:'其他奖励'}:{c:'penalty',s:'pnOther',sub:'其他扣分'};
 }
 /* vT279 科任作业调整（s-hwadj）删除墓碑：与成绩 / 奖惩共用同一份墓碑清单（t='hwadj'，k=记录 id）。
@@ -17233,7 +17334,7 @@ function stuPoints(){
   /* vT269 三分类聚合（旧字段 hw/rw/inc/exp 一律不动，合计口径不变） */
   var clsP={};
   function clsOf(n){ return clsP[n]||(clsP[n]={reward:0,penalty:0,consume:0,
-    rwHw:0,rwGoal:0,rwClass:0,rwQuiz:0,rwOther:0,pnHw:0,pnClass:0,pnQuiz:0,pnOther:0,csDraw:0,csFeed:0}); }
+    rwHw:0,rwGoal:0,rwClass:0,rwQuiz:0,rwRecite:0,rwOther:0,pnHw:0,pnClass:0,pnQuiz:0,pnOther:0,csDraw:0,csFeed:0}); }
   /* vT174 收入/支出：收入=所有正分流水之和，支出=所有负分流水（扣分+灵宠消费）的绝对值之和。
      只能在这里逐条流水累计 —— hw/rw 是净额，事后拆不出正负。 */
   function bill(n,v,reason,source){
@@ -18157,7 +18258,7 @@ function openStuPanel(name){
   });
   panel.appendChild(grid);
   /* vT269 三分类子类明细 */
-  var sub=el('div',null,'奖励 · 作业加分'+(_c.rwHw||0)+' / 目标达成'+(_c.rwGoal||0)+' / 课堂参与'+(_c.rwClass||0)+' / 每日竞答'+(_c.rwQuiz||0)+' / 其他'+(_c.rwOther||0)+
+  var sub=el('div',null,'奖励 · 作业加分'+(_c.rwHw||0)+' / 目标达成'+(_c.rwGoal||0)+' / 课堂参与'+(_c.rwClass||0)+' / 每日竞答'+(_c.rwQuiz||0)+' / 诵读奖励'+(_c.rwRecite||0)+' / 其他'+(_c.rwOther||0)+
     '　扣罚 · 作业扣分'+(_c.pnHw||0)+' / 课堂扣分'+(_c.pnClass||0)+' / 竞答扣分'+(_c.pnQuiz||0)+' / 其他扣分'+(_c.pnOther||0)+
     '　消费 · 抽奖'+(_c.csDraw||0)+' / 喂养'+(_c.csFeed||0));
   sub.style.cssText='font-size:11px;color:#76867e;line-height:1.7;margin:2px 0 8px;';
@@ -18524,6 +18625,7 @@ function stuUndoClear(){
   rcLoadMode();
   rcLoadViewPrefs();
   rcLoadFocus();                 /* vT115 当前登记列（刷新后仍记得） */
+  rcBonusLoadDone();             /* vT287 诵读奖励已发记录（防重复加分） */
   rcPaintViewPrefs();
   renderRecite();
   if(window.__WB_LOCAL__){try{wbLocalStatus()}catch(e){}}
@@ -22135,9 +22237,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v286';
-var WB_MY_VER = '优化版 vT286 · 删流水真正落到云端（影子行连真源一起封）';
-var WB_BUILD_DATE = '11-22', WB_BUILD_NO = '2.6.272';
+var WB_VER_TAG = 'v287';
+var WB_MY_VER = '优化版 vT287 · 诵读加分与已喂食标签修正，修复影子流水重复';
+var WB_BUILD_DATE = '11-23', WB_BUILD_NO = '2.6.273';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -34248,9 +34350,25 @@ function cwInit(){
   function ptPetOwnedDefIds(s, who) {
     var set = {}; (s.pets || []).forEach(function (p) { if (p && !p.deleted && p.studentName === who) set[p.defId] = 1; }); return set;
   }
+  /* vT287 灵杰 / 灵宠彻底分家：判断「有没有未成年灵宠」时只看成长灵宠，
+     绝不能把灵杰（图鉴卡抽到、唤醒上墙的 fromCard 宠物）算进来。
+     之前抽一张灵杰卡会在 s.pets 里生成一只奶团子态灵杰，本函数把它当成
+     「未成年灵宠」，结果「有了灵杰就抽不了灵宠」——与老师规则相反。
+     标记优先 fromPetDraw/fromCard；老数据无标记时按 defId 是否在成长池兜底。 */
+  function ptIsGrowthPet(s, p) {
+    if (!p) return false;
+    if (p.fromPetDraw) return true;
+    if (p.fromCard) return false;
+    var def = (s.petPool || []).filter(function (d) { return d && d.id === p.defId; })[0];
+    if (def) return def.origin !== 'codex';
+    /* 既没标记也查不到定义：按图鉴卡册里有没有这张卡兜底（卡册里的=灵杰） */
+    var inCards = (s.petCards || []).some(function (c) { return c && c.defId === p.defId; });
+    return !inCards;
+  }
   function ptPetHasYoung(s, who) {
     return (s.pets || []).some(function (p) {
       if (!p || p.deleted || p.graduated || p.studentName !== who) return false;
+      if (!ptIsGrowthPet(s, p)) return false;   /* vT287 灵杰不占用「未成年灵宠」名额 */
       var st = PetCore.stageOf(p.level, p.graduated, ptStageCfg());
       return st === 'baby' || st === 'teen';
     });
@@ -36594,6 +36712,13 @@ function cwInit(){
   window.ptArcWish = ptArcWish;
   window.rcCertListHtml = rcCertListHtml;
   window.rcDoneItems = rcDoneItems;
+  /* vT287 诵读通关奖励（供自检 / 真机验收） */
+  window.rcBonusVal = rcBonusVal;
+  window.rcBonusSetVal = rcBonusSetVal;
+  window.rcBonusAdd = rcBonusAdd;
+  window.rcBonusLoadDone = rcBonusLoadDone;
+  window.rcBonusConfig = rcBonusConfig;
+  window.rcBonusCongrats = rcBonusCongrats;
   window.ptArchClose = ptArchClose;
   window.ptArchWish = ptArchWish;
   window.ptArcSetCls = ptArcSetCls;
@@ -36833,7 +36958,7 @@ function cwInit(){
                  total: stuTotal(_sp, s.name),
                  cls: _c ? { reward: _r1(_c.reward), penalty: _r1(_c.penalty), consume: _r1(_c.consume),
                              rwHw: _r1(_c.rwHw), rwGoal: _r1(_c.rwGoal), rwClass: _r1(_c.rwClass),
-                             rwQuiz: _r1(_c.rwQuiz), rwOther: _r1(_c.rwOther),
+                             rwQuiz: _r1(_c.rwQuiz), rwRecite: _r1(_c.rwRecite), rwOther: _r1(_c.rwOther),
                              pnHw: _r1(_c.pnHw), pnClass: _r1(_c.pnClass), pnQuiz: _r1(_c.pnQuiz), pnOther: _r1(_c.pnOther),
                              csDraw: _r1(_c.csDraw), csFeed: _r1(_c.csFeed) } : null };
       });
