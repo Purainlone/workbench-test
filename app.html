@@ -2861,6 +2861,7 @@ table.paper td.l{text-align:left;font-weight:600}
       </div>
       <div class="syncbtnrow" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
         <button class="btn2" onclick="giteeDiag()" title="打印 Gitee 原始返回，排查同步问题">🩺 诊断</button>
+        <button class="btn2" onclick="wbCleanLocalStale()" title="清理本机误杀标记，让云端正确的积分在网页显示（三台电脑各点一次）">🧹 清理本机旧数据</button>
         <button class="btn2" onclick="giteeCodeExport()">🔑 生成设置码（给小程序）</button>
         <button class="btn2" onclick="giteeCodeImport()">📥 导入设置码</button>
         <button class="btn2" onclick="wbSwitchToIsolated()" title="把数据中心换到旧版够不到的新文件，彻底断绝旧版污染">🛡 切到隔离数据中心</button>
@@ -17646,6 +17647,46 @@ function stuPoints(){
       if(_sk)_stSeen[_sk]=1;
     }catch(_skE){}
   });
+  /* vT300 网页端补齐云端 st：网页云端模式下 mpToDesk 不把快照 st 回写飞书，
+     导致云端有、网页本机缺的流水（如甄俊泓 11-19 背书 +6）在「学生管理」不显示。
+     这里在显示层把云端 st 中「本机 ST_ROWS 没有」的行并入 rwP —— 不写飞书、不推云端，
+     用 vT287 id 键 + 业务键双重去重，绝不重复计分。 */
+  (function(){ try{
+    var _gc2=(typeof gdCloud==='function')?gdCloud():null;
+    if(!_gc2||!Array.isArray(_gc2.st))return;
+    /* 本机已有身份：id 键 + 业务键（含日期） */
+    var _haveId={},_haveBiz={};
+    ST_ROWS.forEach(function(r){
+      var rid=String((r&&(r.id||r.record_id))||'');
+      var n=String(fval(r,'姓名')||'').replace(/\s+/g,'');
+      var rs=String(fval(r,'奖惩事项')||'');
+      var v=parseFloat(fval(r,'奖惩分值'))||0;
+      var d=String(fval(r,'日期')||'').slice(0,10);
+      if(rid&&rs.indexOf('成绩达标')!==0)_haveId['st|'+n+'|'+rs+'|'+v+'|id:'+rid]=1;
+      if(n&&rs)_haveBiz['st|'+n+'|'+rs+'|'+d+'|'+v]=1;
+    });
+    _gc2.st.forEach(function(x){
+      if(!x||!String(x.name||'').trim())return;
+      var n=String(x.name).replace(/\s+/g,'');
+      var rs=String(x.reason||'');
+      if(!rs)return;
+      var v=Number(x.score)||0, d=String(x.date||'').slice(0,10), rid=String(x.id||'');
+      /* 已删除的行不并入 */
+      if(typeof stTombKeyOf==='function'&&typeof stTombSet==='function'){
+        var tk=stTombKeyOf(n,rs,d,v),ts=stTombSet();
+        if(tk&&ts[tk])return;
+      }
+      var ik=(rid&&rs.indexOf('成绩达标')!==0)?('st|'+n+'|'+rs+'|'+v+'|id:'+rid):'';
+      if(ik&&_haveId[ik])return;
+      if(_haveBiz['st|'+n+'|'+rs+'|'+d+'|'+v])return;
+      /* 本机确实没有 → 并入显示（与小程序口径一致） */
+      rwP[n]=(rwP[n]||0)+v;
+      bill(n,v,rs,'st-cloud');
+      _stSeen['st|'+n+'|'+rs+'|'+d+'|'+v]=1;   /* 防止下面 manual 再把同一笔加一遍 */
+    });
+  }catch(_cse){}
+  })();
+
   /* vT156 个人积分统一口径：云端 manual 流水（手机/桌面录入的奖惩 + 启灵消费扣分）
      并进奖惩分。此前这张表只进小程序/桌面/家长端的账，工作台统计表看不到，
      两处「个人积分」一直对不上；现在两端同账 = 作业 + 小组 + 奖惩（含消费扣分）。 */
@@ -17685,6 +17726,34 @@ function stuTotal(p,name){
      · 小程序/桌面 = 云端 hw + 云端 st + 云端 manual 三张表直接相加
    只要云端 st 与 manual 里有「同源两条」，或者 st 缺行，两边就会差。
    这个面板把差额逐人摆出来，并标出「跨表重复」的金额，不用猜。 */
+/* ===== vT300 一键清理本机误杀标记 ===== */
+function wbCleanLocalStale() {
+  var tombs=[];
+  try{tombs=JSON.parse(localStorage.getItem('wb_mp_tombstones')||'[]')||[]}catch(e){}
+  var kept=[],killN=0;
+  tombs.forEach(function(x){
+    if(x&&x.t==='st'&&x.k){
+      var ps=String(x.k).split('|');
+      if(ps.length>=5&&ps[3]===''&&ps[2]!=='成绩达标'){killN++;return}
+    }
+    kept.push(x);
+  });
+  var dead={},shadowN=0;
+  try{dead=JSON.parse(localStorage.getItem('wb_st_dead_ids_v1')||'{}')||{}}catch(e){}
+  Object.keys(dead).forEach(function(id){if(String(id).indexOf('MPS_')===0){delete dead[id];shadowN++}});
+  if(!killN&&!shadowN){try{toastMsg('✅ 本机没有需要清理的旧标记')}catch(e){};return}
+  if(!confirm('发现 '+killN+' 条「空日期」误杀标记 + '+shadowN+' 条影子行标记。\n清理它们能让云端正确的积分在网页显示出来。\n\n只清误杀标记，不动正常删除记录、不动云端数据。继续吗？'))return;
+  if(killN){try{localStorage.setItem('wb_mp_tombstones',JSON.stringify(kept))}catch(e){}}
+  if(shadowN){try{localStorage.setItem('wb_st_dead_ids_v1',JSON.stringify(dead))}catch(e){}}
+  try{kept.forEach(function(x){if(x&&x.t==='st'&&typeof wbTombInvalidate==='function'){}})}catch(e){}
+  try{toastMsg('✅ 已清理 '+killN+' 条误杀标记 + '+shadowN+' 条影子标记，正在刷新…')}catch(e){}
+  try{loadST()}catch(e){}
+  try{renderStu&&renderStu()}catch(e){}
+  try{renderHome&&renderHome()}catch(e){}
+  try{syncCycle(1)}catch(e){}
+}
+try { window.wbCleanLocalStale = wbCleanLocalStale } catch (e) {}
+
 function wbPointsReconcile() {
   var p = stuPoints(), stu = stuRoster();
   var c = null;
@@ -22510,9 +22579,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v299';
-var WB_MY_VER = '优化版 vT299 · 积分不足拦截（家长端不提交无效抽卡/抽灵宠提案，老师端兜底拒批）';
-var WB_BUILD_DATE = '11-24', WB_BUILD_NO = '2.6.285';
+var WB_VER_TAG = 'v300';
+var WB_MY_VER = '优化版 vT300 · 网页补齐云端缺失流水 + 一键清理本机误杀标记';
+var WB_BUILD_DATE = '11-24', WB_BUILD_NO = '2.6.286';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
