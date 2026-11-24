@@ -15345,7 +15345,7 @@ function stMpsShadowKey(r) {
 }
 function stStripMpsSpendShadows(rows) {
   if (!Array.isArray(rows)) return rows;
-  var realKey = {}, datedKey = {}, out = [];
+  var realKey = {}, datedKey = {}, realDatedKey = {}, out = [];
   rows.forEach(function (r) {
     if (!r) return;
     var rs = String(stSpendField(r, '奖惩事项', 'reason') || '');
@@ -15359,7 +15359,15 @@ function stStripMpsSpendShadows(rows) {
        有合法日期的 MPS_ 行登记后，下方第二遍即可把同键无日期副本剔除；
        同键两条都带日期（真·分两次加）不命中剔除条件，照常保留，不会误伤。 */
     var d = String(stSpendField(r, '日期', 'date') || '').slice(0, 10);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) datedKey[stMpsShadowKey(r)] = 1;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      datedKey[stMpsShadowKey(r)] = 1;
+      /* vT298：非 MPS_ 真源 + 合法日期，登记精确键（含日期），供下方剔「带日期的桥接副本」。
+         只登记真源（不登记 MPS_），且按精确键计数，用于安全闸「必须恰好 1:1 配对」。 */
+      if (!stIsMpsRow(r)) {
+        var _rk = stMpsShadowKey(r) + '|' + d;
+        realDatedKey[_rk] = (realDatedKey[_rk] || 0) + 1;
+      }
+    }
   });
   if (!Object.keys(realKey).length && !Object.keys(datedKey).length) return rows;   /* 没有真源 → 全部保留（真交易不能丢） */
   rows.forEach(function (r) {
@@ -15371,6 +15379,15 @@ function stStripMpsSpendShadows(rows) {
          同姓名+同事项+同分值已有带日期真源 → 无日期这条就是副本，剔除，积分不再虚高。 */
       var d = String(stSpendField(r, '日期', 'date') || '').slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(d) && datedKey[stMpsShadowKey(r)]) return;
+      /* vT298 根治：带日期的 MPS_ 桥接副本（非消费类为主：每日竞答 / 背书 / 记忆王者）。
+         vT268 只剔消费类、vT287 只剔无日期副本、vT288 按 id 去重 —— 对
+         「同名|同事项|同分值|同日期，一条 Lm 真源 + 一条 MPS_ 副本」全都漏网，
+         11-24 体检 10 组重复流水即此形态。此处按含日期的精确键剔除副本。
+         安全闸：① 只处理 MPS_ 行；② 副本必须有合法日期；③ 同键非 MPS_ 真源
+         恰好 1 条（0 条 = 本地模式真交易保留，>1 条 = 同日多笔不连坐）；
+         ④ 真源也带合法日期。云端另有 31 条独立 MPS_ 行（成绩达标 / 竞答）
+         无同键真源，全部保留不误伤。 */
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d) && realDatedKey[stMpsShadowKey(r) + '|' + d] === 1) return;
     }
     out.push(r);
   });
@@ -22477,9 +22494,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v293';
-var WB_MY_VER = '优化版 vT293 · 灵宠抠图修复（078~112 去白底）';
-var WB_BUILD_DATE = '11-23', WB_BUILD_NO = '2.6.279';
+var WB_VER_TAG = 'v294';
+var WB_MY_VER = '优化版 vT294 · 重复流水根治（带日期的桥接副本）';
+var WB_BUILD_DATE = '11-24', WB_BUILD_NO = '2.6.280';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
