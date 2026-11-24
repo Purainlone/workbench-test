@@ -22510,9 +22510,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v297';
-var WB_MY_VER = '优化版 vT297 · 同步根治（网页写库补表级脏标记，加分不再被云端旧表盖掉）';
-var WB_BUILD_DATE = '11-24', WB_BUILD_NO = '2.6.284';
+var WB_VER_TAG = 'v299';
+var WB_MY_VER = '优化版 vT299 · 积分不足拦截（家长端不提交无效抽卡/抽灵宠提案，老师端兜底拒批）';
+var WB_BUILD_DATE = '11-24', WB_BUILD_NO = '2.6.285';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -35926,6 +35926,9 @@ function cwInit(){
     var pet = s.pets.filter(function (p) { return (p.studentId || p.studentName) === who && !p.deleted; })[0];
     /* vT112 抽卡即唤醒；vT124 兑换随商城下线，家长提案一律按「抽卡」入账 */
     var cost = ptCost('feed');
+    /* vT299 兜底：旧版家长端 / 小程序仍可能提交积分不足的抽卡提案，批准时一律拒绝，不让积分扣成负数 */
+    var _afPC = ptAfford(who, cost);
+    if (!_afPC.ok) return Promise.reject(new Error(_afPC.msg));
     var actName = '抽卡';
     return ptAddManual(who, '启灵图鉴 · 家长' + actName + (byAuto ? '（自动批准）' : ''), -cost).then(function (rid) {
       var cardMsg = '';
