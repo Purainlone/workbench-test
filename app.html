@@ -17636,7 +17636,10 @@ function stuPoints(){
      流水显示处（vT173）早就按「事项|日期|分值」去重了，总分这里却两份都加。 */
   var _stSeen = {};
   var _stKeep = stDedupBonus(ST_ROWS).keep;
+  /* vT301：无日期重复行（同姓名|事项|分值已有带日期的正确行）不计分，学生管理不再虚高 */
+  var _stDupRefs = (typeof stEmptyDupRows === 'function') ? stEmptyDupRows(ST_ROWS) : [];
   _stKeep.forEach(function(r){
+    if(_stDupRefs.indexOf(r)>=0)return;
     var n=fval(r,'姓名');if(!n)return;
     var v=parseFloat(fval(r,'奖惩分值'));
     if(isNaN(v))v=0;
@@ -17754,6 +17757,90 @@ function wbCleanLocalStale() {
 }
 try { window.wbCleanLocalStale = wbCleanLocalStale } catch (e) {}
 
+/* ===== vT301 空日期重复行识别与一键清理 =====
+   病根（11-24 记忆王者 +30 ×4）：网页学生管理 51.5、小程序 21.5，差 30。
+   云端 Gitee st 表其实是**对的**（每人一条 2026-11-23 记忆王者 +30）；
+   本机多了一条「日期为空」的同名同分值重复行，于是：
+     · stuPoints 把两份都加 → 学生管理虚高 30；
+     · 对账面板拿「空日期键」去比对云端「带日期键」，永远配不上 →
+       误报成「云端少了 4 条加分行」。这时点「补推」会把 30 变 60，绝不能点。
+   处理：同姓名+同事项+同分值，云端/本机只要存在带合法日期的行，
+   无日期的那条就是副本 —— 不计入学生管理总分、不再误报「云端少」，
+   并提供一键删除（按 id 删飞书行 + 记已删 id 防回魂）。
+   安全闸：① 只处理奖惩事项非空且非「成绩达标」的行（成绩达标空日期是合法形态）；
+   ② 只处理非消费类（抽卡/喂养无日期是常态，另有通路收敛）；
+   ③ 按「姓名|事项|分值」聚合后，无日期条数 ≤ 有日期的不同日期数才判副本，
+   多出来的无日期行保留不动（宁可漏杀不误杀）。 */
+function stBizTripleOf(n, rs, v) {
+  return String(n || '').replace(/\s+/g, '') + '|' + String(rs || '').replace(/\s+/g, '') + '|' + (Math.round((Number(v) || 0) * 10) / 10);
+}
+function stEmptyDupRows(rows) {
+  var out = [];
+  try {
+    rows = Array.isArray(rows) ? rows : (ST_ROWS || []);
+    var dated = {}, cnt = {};   /* 三元组 -> 出现过的不同日期集合 / 个数 */
+    function addDated(n, rs, v, d) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d || '').slice(0, 10))) return;
+      var k = stBizTripleOf(n, rs, v);
+      if (!k || k.charAt(0) === '|') return;
+      if (!dated[k]) { dated[k] = {}; cnt[k] = 0 }
+      if (!dated[k][String(d).slice(0, 10)]) { dated[k][String(d).slice(0, 10)] = 1; cnt[k]++ }
+    }
+    /* ① 云端带日期的行（小程序/桌面真源） */
+    var gc = (typeof gdCloud === 'function') ? gdCloud() : null;
+    if (gc && Array.isArray(gc.st)) gc.st.forEach(function (x) {
+      if (!x) return;
+      var rs = String(x.reason || '');
+      if (!rs || rs.indexOf('成绩达标') === 0) return;
+      if (typeof stIsSpendReason === 'function' && stIsSpendReason(rs)) return;
+      addDated(x.name, rs, x.score, x.date);
+    });
+    /* ② 本机带日期的行（本地模式云端没拉到时的兜底） */
+    rows.forEach(function (r) {
+      var rs = String(fval(r, '奖惩事项') || '').trim();
+      if (!rs || rs.indexOf('成绩达标') === 0) return;
+      if (typeof stIsSpendReason === 'function' && stIsSpendReason(rs)) return;
+      addDated(fval(r, '姓名'), rs, parseFloat(fval(r, '奖惩分值')), fval(r, '日期'));
+    });
+    /* ③ 找出命中条件的无日期副本行 */
+    rows.forEach(function (r) {
+      var rs = String(fval(r, '奖惩事项') || '').trim();
+      if (!rs || rs.indexOf('成绩达标') === 0) return;
+      if (typeof stIsSpendReason === 'function' && stIsSpendReason(rs)) return;
+      var d = String(fval(r, '日期') || '').slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return;               /* 有日期的行不是副本 */
+      var v = parseFloat(fval(r, '奖惩分值')); if (isNaN(v) || !v) return;
+      var k = stBizTripleOf(fval(r, '姓名'), rs, v);
+      if (cnt[k] > 0) { cnt[k]--; out.push(r) }                /* 无日期 ≤ 有日期数 → 判副本 */
+    });
+  } catch (e) {}
+  return out;
+}
+function wbDelEmptyDup() {
+  var dups = [];
+  try { dups = stEmptyDupRows(ST_ROWS) } catch (e) {}
+  if (!dups.length) { try { toastMsg('✅ 本机没有需要清理的重复行') } catch (e) {} return }
+  var sum = 0;
+  dups.forEach(function (r) { sum += (parseFloat(fval(r, '奖惩分值')) || 0) });
+  if (!confirm('发现 ' + dups.length + ' 条「无日期」重复行（合计 ' + (Math.round(sum * 10) / 10) + ' 分，都是重复算的）。\n\n删除后学生管理分数会和云端一致。\n带日期的正确记录不动、云端不动。继续吗？')) return;
+  var n = 0;
+  dups.forEach(function (r) {
+    var rid = String(recId(r) || '');
+    try { stDelRow(r, true) } catch (e) {}          /* 按 id 删飞书行；silent 不写业务键墓碑，不会连坐带日期的正确行 */
+    try { if (rid && typeof stDeadAdd === 'function') stDeadAdd(rid) } catch (e) {}   /* 记已删 id，防止镜像把这条副本再带回来 */
+    var i = ST_ROWS.indexOf(r); if (i >= 0) ST_ROWS.splice(i, 1);
+    n++;
+  });
+  try { wbMarkLocalDirty && wbMarkLocalDirty() } catch (e) {}
+  try { toastMsg('✅ 已删 ' + n + ' 条重复行，正在刷新…') } catch (e) {}
+  try { loadST && loadST() } catch (e) {}
+  try { renderStu && renderStu() } catch (e) {}
+  try { renderHome && renderHome() } catch (e) {}
+  try { syncCycle && syncCycle(1) } catch (e) {}
+}
+try { window.wbDelEmptyDup = wbDelEmptyDup } catch (e) {}
+try { window.stEmptyDupRows = stEmptyDupRows } catch (e) {}
+
 function wbPointsReconcile() {
   var p = stuPoints(), stu = stuRoster();
   var c = null;
@@ -17801,8 +17888,11 @@ function wbPointsReconcile() {
   var miss = [], sumMiss = 0;
   try {
     var _live = (typeof stDedupBonus === 'function') ? stDedupBonus(ST_ROWS).keep : (ST_ROWS || []);
+    /* vT301：无日期重复行不是「云端缺的」，是本机多算的 —— 不进缺失清单（否则会诱补推，30 变 60） */
+    var _dupRefs = (typeof stEmptyDupRows === 'function') ? stEmptyDupRows(ST_ROWS) : [];
     var _tomb = (typeof stTombSet === 'function') ? stTombSet() : {};
     (_live || []).forEach(function (r) {
+      if (_dupRefs.indexOf(r) >= 0) return;
       var n = S(fval(r, '姓名')); if (!n) return;
       var v = parseFloat(fval(r, '奖惩分值')) || 0; if (!v) return;
       var rs = S(fval(r, '奖惩事项')); if (!rs) return;
@@ -17850,6 +17940,35 @@ function wbPointsReconcile() {
       '<td style="text-align:center;padding:6px 8px;color:' + (r.dup ? '#c2410c' : '#94a3b8') + '">' + r.dup + '</td></tr>';
   });
   tb += '</tbody></table>';
+  /* vT301：本机「无日期」重复行 —— 云端是对的，网页多算的这几分，一键清掉 */
+  var dupRowsLocal = [], dupSumLocal = 0;
+  try {
+    ((typeof stEmptyDupRows === 'function') ? stEmptyDupRows(ST_ROWS) : []).forEach(function (r) {
+      dupRowsLocal.push({ n: S(fval(r, '姓名')), rs: String(fval(r, '奖惩事项') || ''), v: parseFloat(fval(r, '奖惩分值')) || 0 });
+      dupSumLocal += parseFloat(fval(r, '奖惩分值')) || 0;
+    });
+  } catch (e) {}
+  var dupHtml = '';
+  if (dupRowsLocal.length) {
+    dupHtml = '<div style="margin-top:14px;border-top:1px dashed #e5e7eb;padding-top:10px">' +
+      '<div style="font-size:13.5px;font-weight:700;color:#b45309;margin-bottom:6px">' +
+      '🧹 本机多算了 ' + dupRowsLocal.length + ' 条重复行（合计 +' + (Math.round(dupSumLocal * 10) / 10) + ' 分）—— 云端是对的，学生管理虚高</div>' +
+      '<div style="font-size:12.5px;color:#556;margin-bottom:6px">这些行<b>没有日期</b>，是带日期正确记录的重复副本（同一人、同一事项、同一分值）。' +
+      '带日期的正确记录和云端都不动，删掉的只是副本。</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
+      '<thead><tr style="background:#fffbeb;color:#78350f"><th style="text-align:left;padding:5px 8px">姓名</th>' +
+      '<th style="text-align:left;padding:5px 8px">奖惩事项</th><th style="padding:5px 8px">日期</th>' +
+      '<th style="padding:5px 8px">分值</th></tr></thead><tbody>';
+    dupRowsLocal.slice(0, 25).forEach(function (m) {
+      dupHtml += '<tr style="border-top:1px solid #f5f0e0"><td style="padding:5px 8px">' + m.n + '</td>' +
+        '<td style="padding:5px 8px;color:#78350f">' + m.rs + '</td>' +
+        '<td style="text-align:center;padding:5px 8px">—</td>' +
+        '<td style="text-align:center;padding:5px 8px">+' + m.v + '</td></tr>';
+    });
+    dupHtml += '</tbody></table>' +
+      '<button class="btn2 sm primary" onclick="wbDelEmptyDup()" style="margin-top:8px">🧹 一键删除这 ' + dupRowsLocal.length + ' 条重复行（学生管理立即回到与云端一致）</button>' +
+      '</div>';
+  }
   /* 云端缺失行明细：小程序/桌面少的那几分到底少在哪一条 */
   var missHtml = '';
   if (miss.length) {
@@ -17878,7 +17997,7 @@ function wbPointsReconcile() {
     '「其中跨表重复」不为 0，就是同一次加分在 st 和 manual 各存了一份，小程序把两份都加。<br>' +
     '<button class="btn2 sm primary" id="ptRecFix" style="margin-top:8px">🩹 删掉重复的手动分并推一次</button>' +
     '</div>';
-  bx.innerHTML = head + tb + missHtml + foot;
+  bx.innerHTML = head + tb + dupHtml + missHtml + foot;
   ov.appendChild(bx); document.body.appendChild(ov);
   function close() { try { ov.remove() } catch (e) {} }
   document.getElementById('ptRecX').onclick = close;
@@ -22579,9 +22698,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v300';
-var WB_MY_VER = '优化版 vT300 · 网页补齐云端缺失流水 + 一键清理本机误杀标记';
-var WB_BUILD_DATE = '11-24', WB_BUILD_NO = '2.6.286';
+var WB_VER_TAG = 'v301';
+var WB_MY_VER = '优化版 vT301 · 学生管理不再重复计无日期副本 + 对账一键删除重复行';
+var WB_BUILD_DATE = '11-24', WB_BUILD_NO = '2.6.287';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
