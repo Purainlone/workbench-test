@@ -5953,6 +5953,7 @@ function wbMakeLocalDB(){
       var o=all(),list=o[p.databaseId]||[];
       var rec={id:rid(),properties:p.properties||{}};
       list.push(rec);o[p.databaseId]=list;put(o);
+      try{if(typeof wbDirtyTableAdd==='function')wbDirtyTableAdd(p.databaseId)}catch(_dt){}
       try{wbScheduleSave()}catch(e){}
       return Promise.resolve({id:rec.id});
     },
@@ -5964,6 +5965,7 @@ function wbMakeLocalDB(){
         Object.keys(p.properties||{}).forEach(function(k){r.properties[k]=p.properties[k]});
       });
       o[p.databaseId]=list;put(o);
+      try{if(typeof wbDirtyTableAdd==='function')wbDirtyTableAdd(p.databaseId)}catch(_dt2){}
       try{wbScheduleSave()}catch(e){}
       return Promise.resolve({id:hit?hit.id:p.recordId});
     },
@@ -5971,6 +5973,7 @@ function wbMakeLocalDB(){
       var o=all();
       o[p.databaseId]=(o[p.databaseId]||[]).filter(function(r){return r.id!==p.recordId});
       put(o);
+      try{if(typeof wbDirtyTableAdd==='function')wbDirtyTableAdd(p.databaseId)}catch(_dt3){}
       try{wbScheduleSave()}catch(e){}
       return Promise.resolve({});
     },
@@ -22494,9 +22497,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v294';
-var WB_MY_VER = '优化版 vT294 · 重复流水根治（带日期的桥接副本）';
-var WB_BUILD_DATE = '11-24', WB_BUILD_NO = '2.6.280';
+var WB_VER_TAG = 'v295';
+var WB_MY_VER = '优化版 vT295 · 多云同步结构性重构（只推改过的表）';
+var WB_BUILD_DATE = '11-24', WB_BUILD_NO = '2.6.281';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -23176,6 +23179,92 @@ function wbAutoReloadOk() {
    ------------------------------------------------------------ */
 var WB_DIRTY_AT_KEY = 'wb_local_dirty_at';
 var WB_BOOT_ALIGNED = false;      /* 本页面是否已完成一次冷启动对齐 */
+/* ===== vT295 结构性重构：脏表登记 =====
+   事故复盘（2026-11-24 rev 8182）：办公室这台电脑第一次打开网页端，本机缓存是
+   几天前的旧快照 —— 于是它按「同键取本机」把 39 个学生的分组改回旧值、把 21 条
+   11-11 的成绩达标真源换成 17 条 11-16 的旧副本、还写了 13 条删除墓碑。
+   之后小程序写回原样、网页再改坏，每 8 秒一个来回（rev 8168→8194）。
+   根子只有一句话：**本机没改过的表，也在拿本机缓存覆盖云端。**
+   vT295 的铁律：
+     ① 只有「本机确实写过」的表才允许参与写回；没写过的表一律原样用云端。
+     ② 表级脏标记在 db 写入的唯一入口（addRecord/updateRecord/deleteRecord）打。
+     ③ 推送成功后清空脏表；推送失败保留，下轮重推。
+   这样换任何一台电脑打开，都不可能再用手上那份旧缓存改坏云端。 */
+var WB_DIRTY_TB_KEY = 'wb_dirty_tables_v1';
+function wbDirtyTablesLoad() {
+  try { return JSON.parse(localStorage.getItem(WB_DIRTY_TB_KEY) || '{}') || {} } catch (e) { return {} }
+}
+function wbDirtyTableAdd(ids) {
+  if (!ids) return;
+  var arr = Array.isArray(ids) ? ids : [ids];
+  var m = wbDirtyTablesLoad(), now = Date.now(), n = 0;
+  arr.forEach(function (id) { if (id) { m[String(id)] = now; n++ } });
+  if (!n) return;
+  /* 只保留最近 40 个表 id，防无限增长 */
+  var ks = Object.keys(m);
+  if (ks.length > 40) {
+    ks.sort(function (a, b) { return (m[a] || 0) - (m[b] || 0) });
+    ks.slice(0, ks.length - 40).forEach(function (k) { delete m[k] });
+  }
+  try { localStorage.setItem(WB_DIRTY_TB_KEY, JSON.stringify(m)) } catch (e) {}
+}
+function wbDirtyTableClear() {
+  try { localStorage.removeItem(WB_DIRTY_TB_KEY) } catch (e) {}
+}
+/* 推送成功只清「这次推送之前」的脏标记：推送过程中老师又改了东西，标记必须留着下轮再推 */
+function wbDirtyTableSettle(snap) {
+  if (!snap) { wbDirtyTableClear(); return }
+  var m = wbDirtyTablesLoad(), keep = {}, n = 0;
+  Object.keys(m).forEach(function (k) {
+    if (m[k] > (snap[k] || 0)) { keep[k] = m[k]; n++ }
+  });
+  try {
+    if (n) localStorage.setItem(WB_DIRTY_TB_KEY, JSON.stringify(keep));
+    else localStorage.removeItem(WB_DIRTY_TB_KEY);
+  } catch (e) {}
+}
+/* 逻辑表 → 底层表 id。students / st / manual 共用学生表（奖惩流水与档案同表），
+   hwItems 由作业派生、跟 hw 同源。 */
+function wbTableIdsOf(k) {
+  var T = (typeof MP_SYNC !== 'undefined' && MP_SYNC) ? MP_SYNC : {};
+  var stu = (T.stu && T.stu.table) || '2mthbbHsJeABzmnerNt6sK';
+  var hw = (T.hw && T.hw.table) || 'fCfl0cuMIVzFDi0iDuAEv2';
+  var sc = (T.score && T.score.table) || 'SI9EURtanpWC0y4lVipmQQ';
+  var rc = (T.rc && T.rc.table) || 'oVnl3FwN3QWFXeWcAwzaAt';
+  if (k === 'students' || k === 'st' || k === 'manual') return [stu];
+  if (k === 'hw' || k === 'hwItems') return [hw];
+  if (k === 'scores') return [sc];
+  if (k === 'rc') return [rc];
+  if (k === 'duty') return ['Q5nj0cY3EvMN4vjJwwClwu'];
+  if (k === 'affairs') return [(T.aff && T.aff.table) || 'Vb7kQm2xR9dLp5nTz3Hw4s'];
+  return null;   /* null = 不在「只推改过的表」管辖范围，维持旧行为 */
+}
+function wbDirtyTableIs(k) {
+  var ids = wbTableIdsOf(k);
+  if (!ids) return true;
+  var m = wbDirtyTablesLoad();
+  for (var i = 0; i < ids.length; i++) if (m[ids[i]]) return true;
+  return false;
+}
+/* vT295：写回时该表用「云端那份」还是「本机那份」。
+   本机自上次成功推送后没写过这张表 → 用云端（旧缓存在也不可能污染云端）。
+   写过的表 → 用本机的（走后面的并集/墓碑过滤）。 */
+function wbOutTableFor(k, mineRows, remoteRows) {
+  if (!wbDirtyTableIs(k) && Array.isArray(remoteRows) && remoteRows.length) return remoteRows.slice();
+  return mineRows;
+}
+/* 稳定序列化（键排序）——用于判断「这份内容是否真的变了」，不受对象键序影响 */
+function wbSigStable(v) {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v);
+  if (Array.isArray(v)) {
+    var a = [];
+    for (var i = 0; i < v.length; i++) a.push(wbSigStable(v[i]));
+    return '[' + a.join(',') + ']';
+  }
+  var ks = Object.keys(v).sort(), b = [];
+  for (var j = 0; j < ks.length; j++) b.push(JSON.stringify(ks[j]) + ':' + wbSigStable(v[ks[j]]));
+  return '{' + b.join(',') + '}';
+}
 /* vT252 升级过渡标记：升级后【第一次】打开时，本机那份「还没上云的现场」要先保下来
    （推一次云端，不删任何本机数据）；从下次打开起才启用「云端为准」的剪枝。
    这样升级当天不会把老师昨天没推上去的加分/作业直接剪掉。 */
@@ -23486,7 +23575,7 @@ function syncCycleCore(manual) {
              wb_dirty_at 存在 = 这台电脑有过没推上去的写入（哪怕时间对不上），
              宁可这轮不剪，也绝不把可能的未上云数据删掉。
              升级后的第一次打开一律不剪（先按老规矩把本机现场推上去保住）。 */
-          if (!_firstRunAlign && !res.empty && !WB_LOCAL_DIRTY && !wbDirtyAt()) {
+          if (!res.empty && !WB_LOCAL_DIRTY && !wbDirtyAt()) {
             var _alignN = wbAlignLocalToCloud(tables);
             if (_alignN > 0) {
               try { toastMsg('🧹 已按云端清理本机陈旧记录 ' + _alignN + ' 条'); } catch (_at) {}
@@ -23540,7 +23629,16 @@ function syncCycleCore(manual) {
            写回时按 at 取较新的一份；科任老师拿 token 硬改云端，
            下一轮网页端同步就会把正确的那份纠正回来。 */
         try { wbOwnerAuthMerge(out, 'web') } catch (_wae) {}
-        Object.keys(mine).forEach(function (k) { out.tables[k] = mine[k] });
+        /* ===== vT295 结构性重构核心：只推「本机改过的表」 =====
+           以前这里是 `out.tables[k] = mine[k]` —— 无条件拿本机缓存整表写回。
+           换一台电脑打开时，本机缓存是几天前的旧快照，于是一份旧数据盖掉了云端：
+           39 个学生分组被改回旧分组、21 条 11-11 成绩达标真源被 17 条 11-16 旧副本
+           替换（业务键「姓名|事项|分值」不含日期，同键即被本机赢）。
+           现在：本机自上次成功推送以来没写过这张表 → 原样用云端那份，一个字都不改。
+           只有真正写过的表（addRecord/updateRecord/deleteRecord 打过脏标记）才参与并集。 */
+        Object.keys(mine).forEach(function (k) {
+          out.tables[k] = wbOutTableFor(k, mine[k], tables[k]);
+        });
         try { if (typeof wbPetAttach === 'function') wbPetAttach(out, tables); } catch (_pae) {}
         /* vT28 本机墓碑必须一起上传：以前这里只带远端 doc.deletes，
            本机刚写的删除墓碑（刚删掉的那一列）根本没进云端 →
@@ -23904,7 +24002,11 @@ function syncCycleCore(manual) {
              ⑤ 电脑侧数据段（座位表/通讯录/上面那些设置）确实变了
            —— 内容指纹只用于日志观察，不再作为写回依据。 */
         var _firstRun = !wbAlignSeen();
-        var _unsent = WB_LOCAL_DIRTY || wbHasUnsentLocal(doc.updatedAt) || _firstRun;
+        /* vT295：_firstRun 不再作为写回依据。
+           以前「本机从没对齐过」= 强制推一次 → 新电脑第一次打开就把它那份旧缓存
+           整包推上云端（rev 8182 事故的直接触发条件）。老师定的规则是
+           「网页打开只拉云端，除非本机真的写了新东西」，所以这里只认脏标记。 */
+        var _unsent = WB_LOCAL_DIRTY || wbHasUnsentLocal(doc.updatedAt);
         var _localsDiff = wbLocalsSig(doc.locals) !== wbLocalsSig(out.locals);
         var _verDiff = String(doc.releaseVer || '') !== WB_VER_TAG;
         var _staleDoc = wbIsStaleDoc(doc);
@@ -23961,12 +24063,34 @@ function syncCycleCore(manual) {
           } else if (manual) { toastMsg('✅ 云端已是最新（' + remoteN + ' 条，无改动）') }
           return { skipped: 'nochange', rev: doc.rev };
         }
+        /* vT295 幂等闸：算出来的内容与云端逐字节等价（墓碑也一样）→ 本轮不写。
+           事故里的「每 8 秒一个来回」就是两端拿内容相同的整包互相覆盖 ——
+           每次 PUT 都 rev+1，云端看着像一直在变，其实是空转。 */
+        try {
+          if (!res.empty && !_localsDiff && String(doc.releaseVer || '') === WB_VER_TAG) {
+            var _sameTb = wbSigStable(out.tables) === wbSigStable(tables);
+            var _sameDl = wbSigStable(out.deletes || []) === wbSigStable(doc.deletes || []);
+            if (_sameTb && _sameDl) {
+              wbClearLocalDirty();
+              try { wbDirtyTableClear() } catch (_dc0) {}
+              wbSetRev(doc.rev);
+              var _tI = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+              var _msgI = '✅ 云端守望 ' + _tI + ' · 云端 ' + remoteN + ' 条 · 内容一致（未写回）';
+              setst(_msgI);
+              try { localStorage.setItem('wb_gitee_last', _msgI) } catch (_mI) {}
+              if (manual) toastMsg('✅ 与云端完全一致，无需写回（' + remoteN + ' 条）');
+              return { skipped: 'identical', rev: doc.rev };
+            }
+          }
+        } catch (_idem) {}
         /* vT252：先把脏标记清掉（本轮要写的内容已经打包好了）。
            推送失败时下面的 catch 会重新置脏，下次同步照样重推 —— 不会「清早了丢改动」。 */
         wbClearLocalDirty();
+        var _dtSnap = wbDirtyTablesLoad();
         return giteePut(out, res.empty ? '' : res.sha).then(function (r2) {
         GITEE_RETRY = 0;
         wbSnapSave(out); wbSetRev(out.rev);
+        try { wbDirtyTableSettle(_dtSnap) } catch (_dts) {}
         /* vT254：刚推上去的这份就是云端现状 → 顺手刷新「云端缓存」，
            否则积分对账面板要等下一轮拉取才看到新 st，会显示成"还差几分"的假象。 */
         try { if (typeof gdCloudCache === 'function') gdCloudCache(out.tables || {}) } catch (_gcc) {}
