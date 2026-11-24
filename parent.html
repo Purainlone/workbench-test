@@ -415,7 +415,7 @@
 
   var GITEE = 'https://gitee.com/api/v5';
   var SNAP = 'wb_parent_snap.json';
-  var PA_PAGE_VER = 'v256';   /* vT293：灵宠图镜像 SHA 换新（078~112 重新抠图，去白底）+ 缓存键 v=121 */
+  var PA_PAGE_VER = 'v257';   /* vT299：积分不够时家长端直接拒绝、不提交提案（老师端不再收到无效待批） */
   try { window.PA_PAGE_VER = PA_PAGE_VER; } catch (e) {}
   var K_ACCESS = 'wb_pa_access', K_NAME = 'wb_pa_name', K_CODE = 'wb_pa_code', K_PEND = 'wb_pa_pending';
 
@@ -2488,6 +2488,16 @@
   function submitProposal(action, cost, extra) {
     if (ST.busy) return;
     extra = extra || {};
+    /* vT299 / PA v257：积分不够直接拒绝，不写 pq 提案 —— 家长端不再给老师制造无效待批。
+       余额口径与老师端 ptAfford 同源：快照 points.total = stuTotal(stuPoints(), name)。
+       读不到余额（极老快照）时放行，由老师端批准时兜底拦截，避免误伤老数据。 */
+    var _balRaw = (ST.per && ST.per.points && ST.per.points.total);
+    var _bal = (typeof _balRaw === 'number' && isFinite(_balRaw)) ? Math.round(_balRaw * 10) / 10 : null;
+    var _need = Math.round((Number(cost) || 0) * 10) / 10;
+    if (_bal !== null && _need > 0 && _bal < _need) {
+      toast('积分不够：' + ST.name + ' 现有 ' + _bal + ' 分，这次要 ' + _need + ' 分，先加分再来（提案未提交；若刚加分请等页面自动刷新）');
+      return;
+    }
     if (!ST.snap.parentEssayToken || !ST.snap.parentEssayRepo) {
       toast('老师还没开通家长通道：请老师在「家长端显示设置 → 家长端权限」里填仓库和令牌');
       return;
