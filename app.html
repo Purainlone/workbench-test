@@ -21180,6 +21180,8 @@ function tomAdd(t, k) {
   if (!k) return;
   /* vT242：新墓碑 = 这次是真删 → 撤掉同键的「保名单」（否则出站会把它当存活行放行） */
   if (t === 'st' && typeof stKeptClear === 'function') stKeptClear(k);
+  /* vT295b：登记「本次会话新建的墓碑」，出站只推这一批（历史墓碑缓存不再整包重传） */
+  try { if (typeof wbSessTombsAdd === 'function') wbSessTombsAdd(t, k) } catch (_st) {}
   var a = tomLoad();
   for (var i = 0; i < a.length; i++) { if (a[i].t === t && a[i].k === k) { a[i].at = Date.now(); tomSave(a); return } }
   a.push({ t: t, k: k, at: Date.now() }); tomSave(a);
@@ -22498,8 +22500,8 @@ try {
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
 var WB_VER_TAG = 'v295';
-var WB_MY_VER = '优化版 vT295 · 多云同步结构性重构（只推改过的表）';
-var WB_BUILD_DATE = '11-24', WB_BUILD_NO = '2.6.281';
+var WB_MY_VER = '优化版 vT295 · 多云同步重构（只推本次改过的表）';
+var WB_BUILD_DATE = '11-24', WB_BUILD_NO = '2.6.282';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -23191,6 +23193,32 @@ var WB_BOOT_ALIGNED = false;      /* 本页面是否已完成一次冷启动对�
      ③ 推送成功后清空脏表；推送失败保留，下轮重推。
    这样换任何一台电脑打开，都不可能再用手上那份旧缓存改坏云端。 */
 var WB_DIRTY_TB_KEY = 'wb_dirty_tables_v1';
+/* vT295b：会话级写入登记（内存，不持久化）。
+   事故二次复盘：表级脏标记一旦落盘，一台电脑上周改过一次学生分组，
+   这个标记就永远在 —— 之后每次打开都拿旧缓存整表推云端。
+   所以「允不允许推」只认**本次打开页面之后**真正发生的写入：
+     · 页面打开后没动过任何数据 → 一个字都不推（只拉）
+     · 动过 → 只推动过的那张表
+   删除墓碑同理：只推本次会话里新建的墓碑，不把本机历史墓碑缓存整包重传
+   （第二次事故就是被旧墓碑把刚恢复的 21 条流水又删了一遍）。 */
+var WB_SESS_WRITE = {};      /* 表 id → 最近一次写入时间 */
+var WB_SESS_TOMBS = {};      /* 't|k' → at，本次会话新建的墓碑 */
+function wbSessWrite(tid) {
+  if (!tid) return;
+  WB_SESS_WRITE[String(tid)] = Date.now();
+  try { WB_LOCAL_DIRTY = true } catch (e) {}
+}
+function wbSessWriteAny() { return Object.keys(WB_SESS_WRITE).length > 0 }
+function wbSessTombsAdd(t, k) {
+  if (!t || !k) return;
+  WB_SESS_TOMBS[String(t) + '|' + String(k)] = Date.now();
+}
+function wbSessTombsList() {
+  return Object.keys(WB_SESS_TOMBS).map(function (kk) {
+    var i = kk.indexOf('|');
+    return { t: kk.slice(0, i), k: kk.slice(i + 1), at: WB_SESS_TOMBS[kk] };
+  });
+}
 function wbDirtyTablesLoad() {
   try { return JSON.parse(localStorage.getItem(WB_DIRTY_TB_KEY) || '{}') || {} } catch (e) { return {} }
 }
@@ -23198,7 +23226,7 @@ function wbDirtyTableAdd(ids) {
   if (!ids) return;
   var arr = Array.isArray(ids) ? ids : [ids];
   var m = wbDirtyTablesLoad(), now = Date.now(), n = 0;
-  arr.forEach(function (id) { if (id) { m[String(id)] = now; n++ } });
+  arr.forEach(function (id) { if (id) { m[String(id)] = now; n++; if (typeof wbSessWrite === 'function') wbSessWrite(id) } });
   if (!n) return;
   /* 只保留最近 40 个表 id，防无限增长 */
   var ks = Object.keys(m);
@@ -23242,8 +23270,8 @@ function wbTableIdsOf(k) {
 function wbDirtyTableIs(k) {
   var ids = wbTableIdsOf(k);
   if (!ids) return true;
-  var m = wbDirtyTablesLoad();
-  for (var i = 0; i < ids.length; i++) if (m[ids[i]]) return true;
+  /* vT295b：只认「本次打开页面之后的写入」（内存），不认落盘的旧脏标记 */
+  for (var i = 0; i < ids.length; i++) if (WB_SESS_WRITE[ids[i]]) return true;
   return false;
 }
 /* vT295：写回时该表用「云端那份」还是「本机那份」。
@@ -23645,7 +23673,12 @@ function syncCycleCore(manual) {
            下一轮拉取时云端没有墓碑 → 别的端/旧数据又被同步回来，删了复活。
            现在 = 远端墓碑 ∪ 本机墓碑（按 t+k 去重，保留较新的时间）。 */
         try {
-          var _mt = (typeof tomLoad === 'function') ? tomLoad() : [];
+          /* vT295b 结构性修复：出站只带**本次会话新建**的墓碑。
+             第二次事故：本机 `wb_mp_tombstones` 里存着上周的行删除墓碑，每次同步都整包重传 →
+             刚恢复的 21 条 11-11 流水被同一批旧墓碑又删了一遍（云端 deletes 594→577→594）。
+             墓碑的语义是「我现在删了这条」，不是「我记得这条曾被删过」，
+             所以历史缓存只能用于本机过滤，绝不能反复上云。 */
+          var _mt = (typeof wbSessTombsList === 'function') ? wbSessTombsList() : [];
           if (_mt && _mt.length) {
             var _dm = {};
             (out.deletes || []).forEach(function (x) { if (x && x.k) _dm[(x.t || 'score') + '|' + x.k] = x; });
@@ -23983,7 +24016,19 @@ function syncCycleCore(manual) {
           } catch (_g2) {}
         }
         /* 2.5.3：把墓碑清单写进 Gitee doc（双端各存一份，谁删的都算数） */
-        out.deletes = tomLoad();
+        /* vT295b：这一行原来是 `out.deletes = tomLoad()` —— 拿本机历史墓碑整包覆盖，
+           等于每次同步都把过去所有删除重新上云（旧墓碑反复删数据）。改成
+           「云端已有的 + 本次会话新建的」，历史缓存只留在本机过滤，不再上传。 */
+        try {
+          var _dmOut = {};
+          (out.deletes || []).forEach(function (x) { if (x && x.k) _dmOut[(x.t || 'score') + '|' + x.k] = x });
+          (typeof wbSessTombsList === 'function' ? wbSessTombsList() : []).forEach(function (x) {
+            if (!x || !x.k) return;
+            var kk = (x.t || 'score') + '|' + x.k;
+            if (!_dmOut[kk]) _dmOut[kk] = x;
+          });
+          out.deletes = Object.keys(_dmOut).map(function (k) { return _dmOut[k] });
+        } catch (_dmO) {}
         /* vT2 教室端新表：本机 wb_nt_v1 与远端逐表 LWW 合并后纳入写回 */
         try { if (typeof ntFillOut === 'function') ntFillOut(out, tables) } catch (_ntF) {}
         /* 2.6.56 电脑侧数据（座位表 / 通讯录 / 本机设置）并入云端 locals 段。
@@ -24006,7 +24051,7 @@ function syncCycleCore(manual) {
            以前「本机从没对齐过」= 强制推一次 → 新电脑第一次打开就把它那份旧缓存
            整包推上云端（rev 8182 事故的直接触发条件）。老师定的规则是
            「网页打开只拉云端，除非本机真的写了新东西」，所以这里只认脏标记。 */
-        var _unsent = WB_LOCAL_DIRTY || wbHasUnsentLocal(doc.updatedAt);
+        var _unsent = wbSessWriteAny() || WB_LOCAL_DIRTY;
         var _localsDiff = wbLocalsSig(doc.locals) !== wbLocalsSig(out.locals);
         var _verDiff = String(doc.releaseVer || '') !== WB_VER_TAG;
         var _staleDoc = wbIsStaleDoc(doc);
