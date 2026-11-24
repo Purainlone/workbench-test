@@ -5880,6 +5880,17 @@ function wrapDbForLww(){
       if(typeof db[name]!=='function'||db.__wbMtWrapped)return;
       var _f=db[name];
       db[name]=function(p){
+        /* vT297 根治：网页 SDK 模式写库必须打「表级脏标记」。
+           vT295「只推改过的表」上线后，wbOutTableFor 靠 WB_SESS_WRITE 决定
+           写回时这张表用「本机那份」还是「云端那份」。但表级标记原先只在
+           桌面本地模式的假 db 里打（5956/5968/5976），网页 Pages 用的是
+           平台 SDK 的 db，走这里，从来没标记 → 网页加分/改分/登记后，
+           同步写回时判定「这张表没改过」，直接用云端旧表覆盖本机新数据
+           → 网页加的分推不上云、删的行被云端旧表盖回来。
+           病根就在这里：把标记补在 db 层，覆盖所有 83 处写入路径。 */
+        try{
+          if(typeof wbDirtyTableAdd==='function' && p && p.databaseId) wbDirtyTableAdd(p.databaseId);
+        }catch(_dte){}
         var r=_f.call(db,p);
         if(r&&typeof r.then==='function')return r.then(function(x){stamp(p,x);vT210Kick();return x});
         stamp(p,r);vT210Kick();return r;
@@ -22499,9 +22510,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v296';
-var WB_MY_VER = '优化版 vT296 · 多云同步重构（只推本次改过的表）';
-var WB_BUILD_DATE = '11-24', WB_BUILD_NO = '2.6.283';
+var WB_VER_TAG = 'v297';
+var WB_MY_VER = '优化版 vT297 · 同步根治（网页写库补表级脏标记，加分不再被云端旧表盖掉）';
+var WB_BUILD_DATE = '11-24', WB_BUILD_NO = '2.6.284';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
