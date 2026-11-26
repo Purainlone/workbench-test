@@ -26554,6 +26554,7 @@ function wkRot(d) {
   WK_CUR = wkFind(r.id) || WK_CUR;
   var im = document.getElementById('wkVImg');
   if (im && im.style.display !== 'none') wkApplyRot(im, wkRotOf(WK_CUR, WK_VI));
+  else wkShowViewImg();   /* 图还没加载完就点了旋转：重新走一遍取图（命中缓存），带上新角度 */
   try { if (typeof syncScheduleSoon === 'function') syncScheduleSoon() } catch (e) {}
 }
 function wkClose() {
