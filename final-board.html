@@ -154,9 +154,9 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
   <header class="top">
     <div class="title">
       <h1><span class="badge">📊</span>语数英成绩分析看板</h1>
-      <p>三年级上 → 五年级下 · 共 6 个学期 · 聚焦语文 / 数学 / 英语三科的纵向追踪</p>
+      <p id="boardScope">三年级上 → 五年级下 · 共 6 个学期 · 聚焦语文 / 数学 / 英语三科的纵向追踪</p>
     </div>
-    <div class="semester-pill">数据范围 <b>3 个年级 · 6 个学期</b> · 每科满分 <b>100</b></div>
+    <div class="semester-pill" id="boardPill">数据范围 <b>3 个年级 · 6 个学期</b> · 每科满分 <b>100</b></div>
   </header>
 
   <section class="kpis" id="kpis"></section>
@@ -182,6 +182,7 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
       </div>
       <div id="chartTrend" class="chart tall"></div>
     </div>
+    <div id="examNote" style="display:none;margin:0 0 14px;padding:10px 14px;border:1px solid #f0c98a;border-radius:10px;background:#fff8e9;color:#8a5a13;font-size:13px"></div>
     <div class="insights">
       <div class="ins"><span class="tag info">数学</span><h4>强势上行，高位回落</h4><p>均分从 83.5 一路攀升至五上 96.6，优秀率达 91.5%；五下回落至 91.0。六学期总平均 <b>90.34</b>，三科第一。</p></div>
       <div class="ins"><span class="tag warn">英语</span><h4>持续下滑，最需关注</h4><p>从三下高点 92.9 一路跌至五下 81.5，优秀率由 80.9% 降至 34.8%。是三科中唯一明显走弱的科目。</p></div>
@@ -192,12 +193,7 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
   <!-- 科目对比 -->
   <section class="panel" id="p2">
     <div class="toolbar" style="justify-content:space-between">
-      <div class="seg" id="segSem">
-        <button data-sem="三上">三上</button><button data-sem="三下">三下</button>
-        <button data-sem="四上">四上</button><button data-sem="四下">四下</button>
-        <button data-sem="五上">五上</button><button data-sem="五下">五下</button>
-        <button class="active" data-sem="总体">六学期平均</button>
-      </div>
+      <div class="seg" id="segSem"><!-- 由 SEMS 动态生成：支持从工作台加入本学期考试列 --></div>
     </div>
     <div class="grid g23">
       <div class="card">
@@ -212,7 +208,7 @@ var Fr={},Gr={};var Wr,Hr=function(){function t(t,e,n){var i=this;this._sleepAft
       </div>
     </div>
     <div class="card" style="margin-top:18px">
-      <h3><span class="bar"></span>优秀率热力图 · 三科 × 六学期</h3>
+      <h3><span class="bar"></span><span id="heatTitle">优秀率热力图 · 三科 × 六学期</span></h3>
       <p class="desc">颜色越深代表优秀率越高，直观定位优势与薄弱区间</p>
       <div id="chartHeat" class="chart short"></div>
     </div>
@@ -404,18 +400,22 @@ function colOfMetric(m){ return m==='平均分'?['#e8635a','#3d7ff0','#12a37a']:
 
 /* ---------- KPI ---------- */
 function buildKPI(){
-  const overall = DATA.crossSubject['六学期总体平均'];
-  const avgAll = ((overall['语文']+overall['数学']+overall['英语'])/3).toFixed(1);
+  const overall = DATA.crossSubject['六学期总体平均'] || {};
+  const have = SUBJ.filter(s=>overall[s]!=null);
+  const avgAll = have.length ? (have.reduce((a,s)=>a+overall[s],0)/have.length).toFixed(1) : '—';
+  let best = have[0] || SUBJ[0], weak = have[0] || SUBJ[0];
+  have.forEach(s=>{ if(overall[s]>overall[best]) best=s; if(overall[s]<overall[weak]) weak=s; });
   const panel = DATA.studentPanel.data.filter(r=>r[2]);
   const sortByTotal = [...panel].sort((a,b)=>b[2][3]-a[2][3]);
-  const top = sortByTotal[0], worst = sortByTotal[sortByTotal.length-1];
+  const top = sortByTotal[0] || {0:'—',2:[0,0,0,0]}, worst = sortByTotal[sortByTotal.length-1] || {0:'—',2:[0,0,0,0]};
+  const nSem = SEMS.length;
   const items=[
-    {c:'k1',dot:'#3d7ff0',lab:'三科总平均',val:avgAll,sub:'六学期三科均分平均'},
-    {c:'k2',dot:'#3d7ff0',lab:'最强科目',val:'数学',sub:'总平均 <em style="color:#3d7ff0">90.34</em> 分'},
-    {c:'k3',dot:'#f0a35a',lab:'最需关注',val:'英语',sub:'六学期 <em style="color:#e8635a">持续下滑</em>'},
+    {c:'k1',dot:'#3d7ff0',lab:'三科总平均',val:avgAll,sub:nSem+'期三科均分平均'},
+    {c:'k2',dot:'#3d7ff0',lab:'最强科目',val:best,sub:'总平均 <em style="color:#3d7ff0">'+(overall[best]==null?'—':overall[best])+'</em> 分'},
+    {c:'k3',dot:'#f0a35a',lab:'最需关注',val:weak,sub:nSem+'期 <em style="color:#e8635a">均分最低</em>'},
     {c:'k4',dot:'#12a37a',lab:'进步之星',val:top[0],sub:'三科合计 <em style="color:#12a37a">+'+top[2][3]+'</em> 分'},
     {c:'k5',dot:'#e8635a',lab:'重点关注',val:worst[0],sub:'三科合计 <em style="color:#e8635a">'+worst[2][3]+'</em> 分'},
-    {c:'k6',dot:'#8b6fe0',lab:'分析规模',val:'48 人',sub:'6 学期 · 三科追踪'},
+    {c:'k6',dot:'#8b6fe0',lab:'分析规模',val:(DATA.studentPanel['有成绩学生数']||panel.length)+' 人',sub:nSem+' 期 · 三科追踪'},
   ];
   document.getElementById('kpis').innerHTML = items.map(i=>`
     <div class="kpi ${i.c}"><div class="lab"><span class="dot" style="background:${i.dot}"></span>${i.lab}</div>
@@ -432,6 +432,10 @@ function renderTrend(metric){
     data: SEMS.map((_,i)=>Number(DATA.trend[s][i][metric==='平均分'?0:metric==='及格率'?1:2].toFixed(2)))
   }));
   const isRate = metric!=='平均分';
+  const mi = metric==='平均分'?0:metric==='及格率'?1:2;
+  let low = 100;
+  SUBJ.forEach(s=>DATA.trend[s].forEach(v=>{ if(v && v[mi]!=null) low=Math.min(low,v[mi]); }));
+  const yMin = Math.max(0, Math.floor(low/10)*10-5);   /* 新增考试分数低时不被 70/80 截断 */
   mk('chartTrend').setOption({
     color:colOfMetric(metric),
     tooltip:{trigger:'axis',backgroundColor:'rgba(30,37,64,.94)',borderWidth:0,textStyle:{color:'#fff',fontSize:12},
@@ -439,7 +443,7 @@ function renderTrend(metric){
     legend:{data:SUBJ,top:0,right:10,itemWidth:14,itemHeight:8,textStyle:{color:'#5a6480',fontSize:12}},
     grid:{left:52,right:22,top:44,bottom:34},
     xAxis:{type:'category',data:SEMS,boundaryGap:false,...AXIS,axisLabel:{color:'#5a6480',fontSize:12.5,fontWeight:600}},
-    yAxis:{type:'value',...AXIS,min:isRate?80:70,max:100,axisLabel:{color:'#78839c',fontSize:11,formatter:'{value}'+(isRate?'%':'')}},
+    yAxis:{type:'value',...AXIS,min:yMin,max:100,axisLabel:{color:'#78839c',fontSize:11,formatter:'{value}'+(isRate?'%':'')}},
     series
   },true);
 }
@@ -455,7 +459,7 @@ function getExc(){ if(curSem==='总体') return SUBJ.map(s=>{let a=SEMS.map((_,i
 
 function renderCompare(){
   const avg=getCompare(),pass=getPass(),exc=getExc();
-  document.getElementById('semLabel').textContent = curSem==='总体'?'— 六学期平均':'— '+curSem;
+  document.getElementById('semLabel').textContent = curSem==='总体'?('— '+SEMS.length+'期平均'):'— '+curSem;
   mk('chartCompare').setOption({
     tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:'rgba(30,37,64,.94)',borderWidth:0,textStyle:{color:'#fff'}},
     legend:{data:['平均分','及格率','优秀率'],top:0,textStyle:{color:'#5a6480',fontSize:11.5}},
@@ -605,10 +609,29 @@ document.querySelectorAll('#segMetric button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#segMetric button').forEach(x=>x.classList.remove('active'));
   b.classList.add('active'); renderTrend(b.dataset.m);
 });
-document.querySelectorAll('#segSem button').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll('#segSem button').forEach(x=>x.classList.remove('active'));
-  b.classList.add('active'); curSem=b.dataset.sem; renderCompare();
-});
+/* ---------- 动态列支持：加入本学期考试后 SEMS 变长，标签、口径、KPI 都跟着变 ---------- */
+function buildSemTabs(){
+  const box=document.getElementById('segSem'); if(!box) return;
+  const labels=SEMS.map(s=>({v:s,lab:s})).concat([{v:'总体',lab:SEMS.length+'期平均'}]);
+  if(!labels.some(x=>x.v===curSem)) curSem='总体';
+  box.innerHTML=labels.map(x=>`<button data-sem="${x.v}" class="${x.v===curSem?'active':''}">${x.lab}</button>`).join('');
+  box.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    box.querySelectorAll('button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); curSem=b.dataset.sem; renderCompare();
+  });
+}
+function buildScope(){
+  const examTerms=SEMS.filter(s=>String(s).indexOf('考试·')===0);
+  const hasExam=examTerms.length>0, n=SEMS.length;
+  const sc=document.getElementById('boardScope');
+  if(sc) sc.textContent=(hasExam?('历次期末 + 本学期考试 · 共 '+n+' 列'):('三年级上 → 五年级下 · 共 '+n+' 个学期'))+' · 聚焦语文 / 数学 / 英语三科的纵向追踪';
+  const pill=document.getElementById('boardPill');
+  if(pill) pill.innerHTML='数据范围 <b>'+(hasExam?('期末+考试 '+n+' 列'):('3 个年级 · '+n+' 个学期'))+'</b> · 每科满分 <b>100</b>';
+  const ht=document.getElementById('heatTitle');
+  if(ht) ht.textContent='优秀率热力图 · 三科 × '+n+' 列';
+  const note=document.getElementById('examNote');
+  if(note && hasExam){ note.style.display='block'; note.textContent='📌 已加入本学期考试：'+examTerms.join('、')+'。下方文字解读仍按原六学期撰写，新增考试请以图表和表格为准。' }
+}
 document.querySelectorAll('#segSubjDist button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#segSubjDist button').forEach(x=>x.classList.remove('active'));
   b.classList.add('active'); distSubj=b.dataset.s; renderDist();
@@ -621,6 +644,8 @@ document.getElementById('stuSearch').oninput=renderTable;
 window.addEventListener('resize',()=>Object.values(charts).forEach(c=>c.resize()));
 
 /* ---------- 初始化 ---------- */
+buildScope();
+buildSemTabs();
 buildKPI();
 renderTrend('平均分');
 renderCompare();
