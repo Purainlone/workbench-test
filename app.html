@@ -1894,6 +1894,12 @@ table.paper td.l{text-align:left;font-weight:600}
           <b style="font-size:14px;color:#1d4f7c">🏁 期末成绩看板</b>
           <button class="btn2 sm primary" onclick="fnImportOpen()">📥 导入 / 追加期末成绩</button>
           <button class="btn2 sm" onclick="fnReload(true)" title="导入新成绩后点这里，看板按最新数据重算">🔄 按新成绩重算</button>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer;padding:4px 8px;border:1px solid #b9d4ee;border-radius:8px;background:#fff" title="把成绩管理里的一场本学期考试加入看板，与历次期末一起对比">
+            <input type="checkbox" id="fnExamOn" onchange="fnExamToggle()" style="margin:0"> 📊 加入本学期考试
+          </label>
+          <select id="fnExamSel" onchange="fnExamChoose()" style="display:none;max-width:230px"></select>
+          <button class="btn2 sm primary" id="fnExamBtn" style="display:none" onclick="fnExamApply()">➕ 加入并分析</button>
+          <button class="btn2 sm ghost" id="fnExamOff" style="display:none;color:#dc2626" onclick="fnExamClear()">✕ 移除考试列</button>
           <span class="sctip" id="fnTip"></span>
         </div>
         <iframe id="fnFrame" style="width:100%;height:860px;border:0;display:block" title="期末成绩分析看板"></iframe>
@@ -6580,7 +6586,7 @@ function scTab(t){
   if(t==='an')scRenderAn();
   if(t==='mg')scMgRefresh();
   if(t==='bonus')scBonusRender();
-  if(t==='final'){ try{ fnReload(false); }catch(e){} }
+  if(t==='final'){ try{ fnExamRefresh(); }catch(e){} try{ fnReload(false); }catch(e){} }
 }
 /* 录入方式切换：手动 / 上传文件 */
 function scMode(m){
@@ -8016,7 +8022,8 @@ function fnBuildData(rowsIn) {
       '及格线': PASS, '优秀线': EXC,
       '分数段': ['<60', '60-69', '70-79', '80-89', '90-100'],
       '三科合计满分': subs.length * 100,
-      '说明': '数据来自工作台「期末分析」独立录入（s-final），与日常成绩管理分开；及格≥60、优秀≥90；null 表示缺考或未录入。'
+      '说明': '数据来自工作台「期末分析」独立录入（s-final），与日常成绩管理分开；及格≥60、优秀≥90；null 表示缺考或未录入。' +
+        (terms.some(function (t) { return String(t).indexOf('考试·') === 0; }) ? '「考试·」列为本学期考试（从成绩管理加入），不是期末成绩。' : '')
     },
     statistics: statistics, trend: trend, crossSubject: crossSubject,
     studentPanel: {
@@ -8052,9 +8059,12 @@ function fnBaselineFromBoard(txt) {
 var FN_LOADING = false;
 function fnReload(force) {
   var fr = document.getElementById('fnFrame'); if (!fr) return;
-  var rows = fnRows(), terms = fnTerms(rows), tip = document.getElementById('fnTip');
+  /* vT304：把选中的本学期考试并进看板数据，作为「考试·考试名」额外一列，不影响 s-final 独立期末库 */
+  var exam = (typeof fnExamActive === 'function') ? fnExamActive() : '';
+  var examRows = (typeof fnExamRows === 'function') ? fnExamRows(exam) : [];
+  var rows = fnRows().concat(examRows), terms = fnTerms(rows), tip = document.getElementById('fnTip');
   if (tip) tip.textContent = rows.length
-    ? ('独立期末库：' + rows.length + ' 条 · ' + terms.join(' / '))
+    ? ('独立期末库：' + fnRows().length + ' 条' + (exam ? (' ＋ 考试「' + exam + '」' + examRows.length + ' 条') : '') + ' · ' + terms.join(' / '))
     : '独立期末库还是空的，当前显示的是原看板自带的 6 个学期数据';
   if (!rows.length) {
     if (force) fr.src = 'final-board.html?t=' + Date.now();
@@ -8084,6 +8094,143 @@ function fnReload(force) {
     fr.src = 'final-board.html' + (force ? ('?t=' + Date.now()) : '');
   }).then(function () { FN_LOADING = false; });
 }
+/* ---------- vT304 本学期考试加入期末看板（开关：从成绩管理选一场考试，加一列对比） ----------
+   不写回飞书成绩表；选中结果存独立 s-fnexam 表（随云端同步）。
+   看板把这场考试作为「考试·考试名」一列，排在三上~六下之后，与历次期末一起看趋势/分数段/学生变化。 */
+var FN_EXAM_TABLE = 's-fnexam';
+var FN_EXAM_SUBJ = ['语文', '数学', '英语'];
+function fnExamNormTerm(v) { return String(v == null ? '' : v).replace(/年级/g, '').replace(/\s/g, '').trim() }
+function fnExamCfg() {
+  var a = window.ntRows ? window.ntRows(FN_EXAM_TABLE) : [];
+  for (var i = 0; i < a.length; i++) if (a[i] && a[i].id === 'fn_exam_cfg' && !a[i].deleted) return a[i];
+  return null;
+}
+function fnExamActive() { var c = fnExamCfg(); return c && c.exam ? c.exam : '' }
+function fnExamTerm(exam) { return '考试·' + String(exam || '').trim() }
+function fnExamId(exam, name, sub) { return 'fx|' + exam + '|' + name + '|' + sub }
+function fnExamRows(exam) {
+  exam = exam || fnExamActive(); if (!exam) return [];
+  return (window.ntRows ? window.ntRows(FN_EXAM_TABLE) : []).filter(function (r) {
+    return r && !r.deleted && r.exam === exam && r.name && FN_EXAM_SUBJ.indexOf(r.subject) >= 0 &&
+      r.score != null && r.score !== '' && !isNaN(Number(r.score));
+  }).map(function (r) {
+    return { name: r.name, term: fnExamTerm(exam), subject: r.subject, score: Number(r.score), date: r.date || '' };
+  });
+}
+function fnExamList() {
+  var cur = scCurTerm ? scCurTerm() : '', map = {}, out = [];
+  (SC_ROWS || []).forEach(function (r) {
+    var exam = String(fval(r, '考试名称') || '').trim();
+    var name = String(fval(r, '学生姓名') || '').trim();
+    var sub = String(fval(r, '科目') || '').trim();
+    if (!exam || !name || FN_EXAM_SUBJ.indexOf(sub) < 0) return;
+    var term = fnExamNormTerm(fval(r, '学期'));
+    if (cur && term && term !== cur) return;   /* 只看本学期的考试 */
+    if (String(fval(r, '备注') || '') === '历次期末导入') return;
+    var m = map[exam] || (map[exam] = { exam: exam, subs: {}, names: {}, date: '', term: term });
+    m.subs[sub] = 1; m.names[name] = 1;
+    var d = String(fval(r, '考试日期') || '').slice(0, 10);
+    if (d && d > m.date) m.date = d;
+  });
+  Object.keys(map).forEach(function (k) { out.push(map[k]) });
+  out.sort(function (a, b) { return (b.date || '').localeCompare(a.date || '') || a.exam.localeCompare(b.exam, 'zh') });
+  return out;
+}
+function fnExamRefresh() {
+  var sel = document.getElementById('fnExamSel'); if (!sel) return;
+  var list = fnExamList(), active = fnExamActive(), cur = scCurTerm ? scCurTerm() : '';
+  sel.innerHTML = list.length ? list.map(function (x) {
+    return '<option value="' + esc(x.exam) + '">' + esc(x.exam) + '（' + Object.keys(x.subs).join('/') + ' · ' +
+      Object.keys(x.names).length + '人' + (x.date ? ' · ' + esc(x.date) : '') + '）</option>';
+  }).join('') : '<option value="">' + esc(cur ? (cur + ' 暂无可加入的考试') : '暂无可加入的考试') + '</option>';
+  if (active && list.some(function (x) { return x.exam === active; })) sel.value = active;
+  var tip = document.getElementById('fnTip');
+  if (tip && !tip.textContent) tip.textContent = list.length ? ('本学期可加入 ' + list.length + ' 场考试（来自成绩管理）') : '';
+}
+function fnExamToggle() {
+  var on = !!(document.getElementById('fnExamOn') || {}).checked;
+  ['fnExamSel', 'fnExamBtn', 'fnExamOff'].forEach(function (id) {
+    var e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none';
+  });
+  if (on) {
+    fnExamRefresh();
+    var active = fnExamActive(), sel = document.getElementById('fnExamSel');
+    if (active && sel) sel.value = active;
+    var tip = document.getElementById('fnTip');
+    if (tip && active) tip.textContent = '当前已加入：' + active + '（点「加入并分析」可按最新成绩重算）';
+  } else fnExamClear(true);
+}
+function fnExamChoose() {
+  var sel = document.getElementById('fnExamSel'), tip = document.getElementById('fnTip');
+  if (tip && sel && sel.value) tip.textContent = '已选：' + sel.value + '，点「加入并分析」写进看板';
+}
+function fnExamApply() {
+  var sel = document.getElementById('fnExamSel'), exam = sel ? String(sel.value || '').trim() : '';
+  if (!exam) { toastMsg('⚠️ 先选一场本学期考试（成绩管理里要有这场成绩）'); return }
+  if (!window.ntRows || !window.ntUpsert) { toastMsg('⚠️ 本机数据接口不可用'); return }
+  var todo = [], seen = {};
+  (SC_ROWS || []).forEach(function (r) {
+    if (String(fval(r, '考试名称') || '').trim() !== exam) return;
+    var name = String(fval(r, '学生姓名') || '').trim(), sub = String(fval(r, '科目') || '').trim();
+    var raw = String(fval(r, '分数') == null ? '' : fval(r, '分数')).trim();
+    if (!name || FN_EXAM_SUBJ.indexOf(sub) < 0 || raw === '') return;
+    var sc = Number(raw); if (!isFinite(sc)) return;
+    var full = Number(fval(r, '满分'));
+    if (isFinite(full) && full > 0 && full !== 100) sc = sc * 100 / full;   /* 看板统一 100 分制 */
+    var rec = { name: name, subject: sub, score: Math.round(sc * 100) / 100, date: String(fval(r, '考试日期') || '').slice(0, 10) };
+    var id = fnExamId(exam, name, sub);
+    if (seen[id]) return;
+    seen[id] = 1; todo.push(rec);
+  });
+  if (!todo.length) { toastMsg('⚠️ 这场考试没有语数英三科的分数，不能加入看板'); return }
+  var now = Date.now(), all = window.ntRows(FN_EXAM_TABLE);
+  /* 一次只看一场：其他考试的行做软删（不用物理删，避免被旧缓存复活） */
+  all.forEach(function (r) {
+    if (!r || r.id === 'fn_exam_cfg' || r.deleted || r.exam === exam) return;
+    r.deleted = true; r.ts = now; r.updatedAt = new Date(now).toISOString(); window.ntUpsert(FN_EXAM_TABLE, r);
+  });
+  var liveIds = {};
+  todo.forEach(function (x) { liveIds[fnExamId(exam, x.name, x.subject)] = 1 });
+  all.forEach(function (r) {
+    if (r && r.exam === exam && r.id !== 'fn_exam_cfg' && r.deleted && liveIds[r.id]) {
+      r.deleted = false; r.ts = now + 1; r.updatedAt = new Date(now + 1).toISOString(); window.ntUpsert(FN_EXAM_TABLE, r);
+    }
+  });
+  todo.forEach(function (x, i) {
+    window.ntUpsert(FN_EXAM_TABLE, {
+      id: fnExamId(exam, x.name, x.subject), exam: exam, term: scCurTerm ? scCurTerm() : '',
+      name: x.name, subject: x.subject, score: x.score, date: x.date, full: 100, deleted: false,
+      ts: now + 2 + i, updatedAt: new Date(now + 2 + i).toISOString(), updatedBy: 'teacher'
+    });
+  });
+  window.ntUpsert(FN_EXAM_TABLE, {
+    id: 'fn_exam_cfg', exam: exam, term: scCurTerm ? scCurTerm() : '', names: todo.length, deleted: false,
+    ts: now + 500, updatedAt: new Date(now + 500).toISOString(), updatedBy: 'teacher'
+  });
+  try { window.ntChanged(); } catch (e) {}
+  var tip = document.getElementById('fnTip');
+  if (tip) tip.textContent = '已加入：' + exam + ' · ' + todo.length + ' 条（语数英，100 分制）';
+  toastMsg('📊 已把「' + exam + '」加入看板，正在重算…');
+  fnReload(true);
+}
+function fnExamClear(silent) {
+  if (!window.ntRows || !window.ntUpsert) return;
+  var now = Date.now();
+  window.ntRows(FN_EXAM_TABLE).forEach(function (r) {
+    if (!r || r.deleted) return;
+    r.deleted = true; r.ts = now; r.updatedAt = new Date(now).toISOString(); window.ntUpsert(FN_EXAM_TABLE, r);
+  });
+  try { window.ntChanged(); } catch (e) {}
+  var sel = document.getElementById('fnExamSel'); if (sel) sel.value = '';
+  var tip = document.getElementById('fnTip');
+  if (tip && silent) tip.textContent = '已隐藏考试列，看板恢复为历次期末';
+  if (!silent) toastMsg('已移除考试列，看板恢复为历次期末');
+  fnReload(true);
+}
+window.fnExamToggle = fnExamToggle; window.fnExamRefresh = fnExamRefresh;
+window.fnExamChoose = fnExamChoose; window.fnExamApply = fnExamApply; window.fnExamClear = fnExamClear;
+window.fnExamActive = fnExamActive; window.fnExamRows = fnExamRows;
+
 /* ---------- 导入 / 追加期末成绩（写独立表，不进成绩管理） ---------- */
 function fnImportOpen() {
   var box = document.getElementById('fnImportBox');
@@ -22704,9 +22851,9 @@ try {
    WB_MY_VER 只管显示，两者不要混用，否则自动刷新会再次失效。
    ★ vT275 起恢复维护：WB_VER_TAG 必须跟着每次发版 +1（与 WB_MY_VER 的 vTnnn 数字保持一致），
      它长期停在 v257 时，云端 releaseVer 也永远是 v257 → 旧标签页自检从不触发、形同虚设。 */
-var WB_VER_TAG = 'v303';
-var WB_MY_VER = '优化版 vT303 · 学生作品旋转';
-var WB_BUILD_DATE = '11-26', WB_BUILD_NO = '2.6.289';
+var WB_VER_TAG = 'v304';
+var WB_MY_VER = '优化版 vT304 · 期末看板加入本学期考试';
+var WB_BUILD_DATE = '11-27', WB_BUILD_NO = '2.6.290';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -27286,7 +27433,7 @@ function cwInit(){
   if (window.__WB_NT_LOADED__) return; window.__WB_NT_LOADED__ = true;
 
   /* ---------- 数据层 ---------- */
-  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain', 's-train', 's-hwadj', 's-rcmd', 's-remedy', 's-quiz', 's-quizdone', 's-quizlog', 's-quizcfg', 's-final'];   /* vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 / s-train 展示训练营；vT17 + s-hwadj 科任端作业积分加减（并入作业积分汇总）；vT51 + s-rcmd 远程指令回执（桌面写、教师读）；vT57 + s-remedy 自省补责（指定学生 + 完成期限，网页/小程序布置，首页/桌面标签/教室大屏/小程序首页展示）；vT187 + s-quiz 竞答题库 / s-quizdone 每生每题只答一次 / s-quizlog 每日出题记录（60 天回避） / s-quizcfg 竞答设置；vT190 + s-final 历次期末成绩（独立看板，不进日常成绩管理） */
+  var NT_KEYS = ['s-rota', 's-safety', 's-speech', 's-notice', 's-msg', 's-desktop', 's-assign', 'c-comment', 's-classic', 's-csched', 's-detain', 's-train', 's-hwadj', 's-rcmd', 's-remedy', 's-quiz', 's-quizdone', 's-quizlog', 's-quizcfg', 's-final', 's-fnexam'];   /* vT304 + s-fnexam 本学期考试加入期末看板（从成绩管理读，独立存储）；vT13 + s-assign 布置作业；vT14 + c-comment 学生评语；vT15 + s-classic 经典内容库 / s-csched 每日安排；vT16 + s-detain 今日留堂 / s-train 展示训练营；vT17 + s-hwadj 科任端作业积分加减（并入作业积分汇总）；vT51 + s-rcmd 远程指令回执（桌面写、教师读）；vT57 + s-remedy 自省补责（指定学生 + 完成期限，网页/小程序布置，首页/桌面标签/教室大屏/小程序首页展示）；vT187 + s-quiz 竞答题库 / s-quizdone 每生每题只答一次 / s-quizlog 每日出题记录（60 天回避） / s-quizcfg 竞答设置；vT190 + s-final 历次期末成绩（独立看板，不进日常成绩管理） */
   var NT_STORE_KEY = 'wb_nt_v1';
   function ntLoad() {
     try { var o = JSON.parse(localStorage.getItem(NT_STORE_KEY) || '{}'); return (o && typeof o === 'object') ? o : {} } catch (e) { return {} }
